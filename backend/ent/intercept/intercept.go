@@ -13,6 +13,8 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/announcement"
 	"github.com/Wei-Shaw/sub2api/ent/announcementread"
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
+	"github.com/Wei-Shaw/sub2api/ent/ashevent"
+	"github.com/Wei-Shaw/sub2api/ent/ashusage"
 	"github.com/Wei-Shaw/sub2api/ent/authidentity"
 	"github.com/Wei-Shaw/sub2api/ent/authidentitychannel"
 	"github.com/Wei-Shaw/sub2api/ent/channelmonitor"
@@ -234,6 +236,60 @@ func (f TraverseAnnouncementRead) Traverse(ctx context.Context, q ent.Query) err
 		return f(ctx, q)
 	}
 	return fmt.Errorf("unexpected query type %T. expect *ent.AnnouncementReadQuery", q)
+}
+
+// The AshEventFunc type is an adapter to allow the use of ordinary function as a Querier.
+type AshEventFunc func(context.Context, *ent.AshEventQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f AshEventFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.AshEventQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.AshEventQuery", q)
+}
+
+// The TraverseAshEvent type is an adapter to allow the use of ordinary function as Traverser.
+type TraverseAshEvent func(context.Context, *ent.AshEventQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraverseAshEvent) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraverseAshEvent) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.AshEventQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.AshEventQuery", q)
+}
+
+// The AshUsageFunc type is an adapter to allow the use of ordinary function as a Querier.
+type AshUsageFunc func(context.Context, *ent.AshUsageQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f AshUsageFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.AshUsageQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.AshUsageQuery", q)
+}
+
+// The TraverseAshUsage type is an adapter to allow the use of ordinary function as Traverser.
+type TraverseAshUsage func(context.Context, *ent.AshUsageQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraverseAshUsage) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraverseAshUsage) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.AshUsageQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.AshUsageQuery", q)
 }
 
 // The AuthIdentityFunc type is an adapter to allow the use of ordinary function as a Querier.
@@ -1032,6 +1088,10 @@ func NewQuery(q ent.Query) (Query, error) {
 		return &query[*ent.AnnouncementQuery, predicate.Announcement, announcement.OrderOption]{typ: ent.TypeAnnouncement, tq: q}, nil
 	case *ent.AnnouncementReadQuery:
 		return &query[*ent.AnnouncementReadQuery, predicate.AnnouncementRead, announcementread.OrderOption]{typ: ent.TypeAnnouncementRead, tq: q}, nil
+	case *ent.AshEventQuery:
+		return &query[*ent.AshEventQuery, predicate.AshEvent, ashevent.OrderOption]{typ: ent.TypeAshEvent, tq: q}, nil
+	case *ent.AshUsageQuery:
+		return &query[*ent.AshUsageQuery, predicate.AshUsage, ashusage.OrderOption]{typ: ent.TypeAshUsage, tq: q}, nil
 	case *ent.AuthIdentityQuery:
 		return &query[*ent.AuthIdentityQuery, predicate.AuthIdentity, authidentity.OrderOption]{typ: ent.TypeAuthIdentity, tq: q}, nil
 	case *ent.AuthIdentityChannelQuery:

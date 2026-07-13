@@ -20,6 +20,8 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/announcement"
 	"github.com/Wei-Shaw/sub2api/ent/announcementread"
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
+	"github.com/Wei-Shaw/sub2api/ent/ashevent"
+	"github.com/Wei-Shaw/sub2api/ent/ashusage"
 	"github.com/Wei-Shaw/sub2api/ent/authidentity"
 	"github.com/Wei-Shaw/sub2api/ent/authidentitychannel"
 	"github.com/Wei-Shaw/sub2api/ent/channelmonitor"
@@ -68,6 +70,10 @@ type Client struct {
 	Announcement *AnnouncementClient
 	// AnnouncementRead is the client for interacting with the AnnouncementRead builders.
 	AnnouncementRead *AnnouncementReadClient
+	// AshEvent is the client for interacting with the AshEvent builders.
+	AshEvent *AshEventClient
+	// AshUsage is the client for interacting with the AshUsage builders.
+	AshUsage *AshUsageClient
 	// AuthIdentity is the client for interacting with the AuthIdentity builders.
 	AuthIdentity *AuthIdentityClient
 	// AuthIdentityChannel is the client for interacting with the AuthIdentityChannel builders.
@@ -142,6 +148,8 @@ func (c *Client) init() {
 	c.AccountGroup = NewAccountGroupClient(c.config)
 	c.Announcement = NewAnnouncementClient(c.config)
 	c.AnnouncementRead = NewAnnouncementReadClient(c.config)
+	c.AshEvent = NewAshEventClient(c.config)
+	c.AshUsage = NewAshUsageClient(c.config)
 	c.AuthIdentity = NewAuthIdentityClient(c.config)
 	c.AuthIdentityChannel = NewAuthIdentityChannelClient(c.config)
 	c.ChannelMonitor = NewChannelMonitorClient(c.config)
@@ -268,6 +276,8 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		AccountGroup:                  NewAccountGroupClient(cfg),
 		Announcement:                  NewAnnouncementClient(cfg),
 		AnnouncementRead:              NewAnnouncementReadClient(cfg),
+		AshEvent:                      NewAshEventClient(cfg),
+		AshUsage:                      NewAshUsageClient(cfg),
 		AuthIdentity:                  NewAuthIdentityClient(cfg),
 		AuthIdentityChannel:           NewAuthIdentityChannelClient(cfg),
 		ChannelMonitor:                NewChannelMonitorClient(cfg),
@@ -321,6 +331,8 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		AccountGroup:                  NewAccountGroupClient(cfg),
 		Announcement:                  NewAnnouncementClient(cfg),
 		AnnouncementRead:              NewAnnouncementReadClient(cfg),
+		AshEvent:                      NewAshEventClient(cfg),
+		AshUsage:                      NewAshUsageClient(cfg),
 		AuthIdentity:                  NewAuthIdentityClient(cfg),
 		AuthIdentityChannel:           NewAuthIdentityChannelClient(cfg),
 		ChannelMonitor:                NewChannelMonitorClient(cfg),
@@ -380,8 +392,8 @@ func (c *Client) Close() error {
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
 		c.APIKey, c.Account, c.AccountGroup, c.Announcement, c.AnnouncementRead,
-		c.AuthIdentity, c.AuthIdentityChannel, c.ChannelMonitor,
-		c.ChannelMonitorDailyRollup, c.ChannelMonitorHistory,
+		c.AshEvent, c.AshUsage, c.AuthIdentity, c.AuthIdentityChannel,
+		c.ChannelMonitor, c.ChannelMonitorDailyRollup, c.ChannelMonitorHistory,
 		c.ChannelMonitorRequestTemplate, c.ErrorPassthroughRule, c.Group,
 		c.IdempotencyRecord, c.IdentityAdoptionDecision, c.PaymentAuditLog,
 		c.PaymentOrder, c.PaymentProviderInstance, c.PendingAuthSession, c.PromoCode,
@@ -399,8 +411,8 @@ func (c *Client) Use(hooks ...Hook) {
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
 		c.APIKey, c.Account, c.AccountGroup, c.Announcement, c.AnnouncementRead,
-		c.AuthIdentity, c.AuthIdentityChannel, c.ChannelMonitor,
-		c.ChannelMonitorDailyRollup, c.ChannelMonitorHistory,
+		c.AshEvent, c.AshUsage, c.AuthIdentity, c.AuthIdentityChannel,
+		c.ChannelMonitor, c.ChannelMonitorDailyRollup, c.ChannelMonitorHistory,
 		c.ChannelMonitorRequestTemplate, c.ErrorPassthroughRule, c.Group,
 		c.IdempotencyRecord, c.IdentityAdoptionDecision, c.PaymentAuditLog,
 		c.PaymentOrder, c.PaymentProviderInstance, c.PendingAuthSession, c.PromoCode,
@@ -426,6 +438,10 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.Announcement.mutate(ctx, m)
 	case *AnnouncementReadMutation:
 		return c.AnnouncementRead.mutate(ctx, m)
+	case *AshEventMutation:
+		return c.AshEvent.mutate(ctx, m)
+	case *AshUsageMutation:
+		return c.AshUsage.mutate(ctx, m)
 	case *AuthIdentityMutation:
 		return c.AuthIdentity.mutate(ctx, m)
 	case *AuthIdentityChannelMutation:
@@ -1298,6 +1314,272 @@ func (c *AnnouncementReadClient) mutate(ctx context.Context, m *AnnouncementRead
 		return (&AnnouncementReadDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown AnnouncementRead mutation op: %q", m.Op())
+	}
+}
+
+// AshEventClient is a client for the AshEvent schema.
+type AshEventClient struct {
+	config
+}
+
+// NewAshEventClient returns a client for the AshEvent from the given config.
+func NewAshEventClient(c config) *AshEventClient {
+	return &AshEventClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `ashevent.Hooks(f(g(h())))`.
+func (c *AshEventClient) Use(hooks ...Hook) {
+	c.hooks.AshEvent = append(c.hooks.AshEvent, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `ashevent.Intercept(f(g(h())))`.
+func (c *AshEventClient) Intercept(interceptors ...Interceptor) {
+	c.inters.AshEvent = append(c.inters.AshEvent, interceptors...)
+}
+
+// Create returns a builder for creating a AshEvent entity.
+func (c *AshEventClient) Create() *AshEventCreate {
+	mutation := newAshEventMutation(c.config, OpCreate)
+	return &AshEventCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of AshEvent entities.
+func (c *AshEventClient) CreateBulk(builders ...*AshEventCreate) *AshEventCreateBulk {
+	return &AshEventCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *AshEventClient) MapCreateBulk(slice any, setFunc func(*AshEventCreate, int)) *AshEventCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &AshEventCreateBulk{err: fmt.Errorf("calling to AshEventClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*AshEventCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &AshEventCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for AshEvent.
+func (c *AshEventClient) Update() *AshEventUpdate {
+	mutation := newAshEventMutation(c.config, OpUpdate)
+	return &AshEventUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *AshEventClient) UpdateOne(_m *AshEvent) *AshEventUpdateOne {
+	mutation := newAshEventMutation(c.config, OpUpdateOne, withAshEvent(_m))
+	return &AshEventUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *AshEventClient) UpdateOneID(id int64) *AshEventUpdateOne {
+	mutation := newAshEventMutation(c.config, OpUpdateOne, withAshEventID(id))
+	return &AshEventUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for AshEvent.
+func (c *AshEventClient) Delete() *AshEventDelete {
+	mutation := newAshEventMutation(c.config, OpDelete)
+	return &AshEventDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *AshEventClient) DeleteOne(_m *AshEvent) *AshEventDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *AshEventClient) DeleteOneID(id int64) *AshEventDeleteOne {
+	builder := c.Delete().Where(ashevent.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &AshEventDeleteOne{builder}
+}
+
+// Query returns a query builder for AshEvent.
+func (c *AshEventClient) Query() *AshEventQuery {
+	return &AshEventQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeAshEvent},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a AshEvent entity by its id.
+func (c *AshEventClient) Get(ctx context.Context, id int64) (*AshEvent, error) {
+	return c.Query().Where(ashevent.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *AshEventClient) GetX(ctx context.Context, id int64) *AshEvent {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *AshEventClient) Hooks() []Hook {
+	return c.hooks.AshEvent
+}
+
+// Interceptors returns the client interceptors.
+func (c *AshEventClient) Interceptors() []Interceptor {
+	return c.inters.AshEvent
+}
+
+func (c *AshEventClient) mutate(ctx context.Context, m *AshEventMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&AshEventCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&AshEventUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&AshEventUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&AshEventDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown AshEvent mutation op: %q", m.Op())
+	}
+}
+
+// AshUsageClient is a client for the AshUsage schema.
+type AshUsageClient struct {
+	config
+}
+
+// NewAshUsageClient returns a client for the AshUsage from the given config.
+func NewAshUsageClient(c config) *AshUsageClient {
+	return &AshUsageClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `ashusage.Hooks(f(g(h())))`.
+func (c *AshUsageClient) Use(hooks ...Hook) {
+	c.hooks.AshUsage = append(c.hooks.AshUsage, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `ashusage.Intercept(f(g(h())))`.
+func (c *AshUsageClient) Intercept(interceptors ...Interceptor) {
+	c.inters.AshUsage = append(c.inters.AshUsage, interceptors...)
+}
+
+// Create returns a builder for creating a AshUsage entity.
+func (c *AshUsageClient) Create() *AshUsageCreate {
+	mutation := newAshUsageMutation(c.config, OpCreate)
+	return &AshUsageCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of AshUsage entities.
+func (c *AshUsageClient) CreateBulk(builders ...*AshUsageCreate) *AshUsageCreateBulk {
+	return &AshUsageCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *AshUsageClient) MapCreateBulk(slice any, setFunc func(*AshUsageCreate, int)) *AshUsageCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &AshUsageCreateBulk{err: fmt.Errorf("calling to AshUsageClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*AshUsageCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &AshUsageCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for AshUsage.
+func (c *AshUsageClient) Update() *AshUsageUpdate {
+	mutation := newAshUsageMutation(c.config, OpUpdate)
+	return &AshUsageUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *AshUsageClient) UpdateOne(_m *AshUsage) *AshUsageUpdateOne {
+	mutation := newAshUsageMutation(c.config, OpUpdateOne, withAshUsage(_m))
+	return &AshUsageUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *AshUsageClient) UpdateOneID(id int64) *AshUsageUpdateOne {
+	mutation := newAshUsageMutation(c.config, OpUpdateOne, withAshUsageID(id))
+	return &AshUsageUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for AshUsage.
+func (c *AshUsageClient) Delete() *AshUsageDelete {
+	mutation := newAshUsageMutation(c.config, OpDelete)
+	return &AshUsageDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *AshUsageClient) DeleteOne(_m *AshUsage) *AshUsageDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *AshUsageClient) DeleteOneID(id int64) *AshUsageDeleteOne {
+	builder := c.Delete().Where(ashusage.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &AshUsageDeleteOne{builder}
+}
+
+// Query returns a query builder for AshUsage.
+func (c *AshUsageClient) Query() *AshUsageQuery {
+	return &AshUsageQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeAshUsage},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a AshUsage entity by its id.
+func (c *AshUsageClient) Get(ctx context.Context, id int64) (*AshUsage, error) {
+	return c.Query().Where(ashusage.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *AshUsageClient) GetX(ctx context.Context, id int64) *AshUsage {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *AshUsageClient) Hooks() []Hook {
+	return c.hooks.AshUsage
+}
+
+// Interceptors returns the client interceptors.
+func (c *AshUsageClient) Interceptors() []Interceptor {
+	return c.inters.AshUsage
+}
+
+func (c *AshUsageClient) mutate(ctx context.Context, m *AshUsageMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&AshUsageCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&AshUsageUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&AshUsageUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&AshUsageDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown AshUsage mutation op: %q", m.Op())
 	}
 }
 
@@ -6018,24 +6300,26 @@ func (c *UserSubscriptionClient) mutate(ctx context.Context, m *UserSubscription
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		APIKey, Account, AccountGroup, Announcement, AnnouncementRead, AuthIdentity,
-		AuthIdentityChannel, ChannelMonitor, ChannelMonitorDailyRollup,
-		ChannelMonitorHistory, ChannelMonitorRequestTemplate, ErrorPassthroughRule,
-		Group, IdempotencyRecord, IdentityAdoptionDecision, PaymentAuditLog,
-		PaymentOrder, PaymentProviderInstance, PendingAuthSession, PromoCode,
-		PromoCodeUsage, Proxy, RedeemCode, SecuritySecret, Setting, SubscriptionPlan,
-		TLSFingerprintProfile, UsageCleanupTask, UsageLog, User, UserAllowedGroup,
-		UserAttributeDefinition, UserAttributeValue, UserSubscription []ent.Hook
+		APIKey, Account, AccountGroup, Announcement, AnnouncementRead, AshEvent,
+		AshUsage, AuthIdentity, AuthIdentityChannel, ChannelMonitor,
+		ChannelMonitorDailyRollup, ChannelMonitorHistory,
+		ChannelMonitorRequestTemplate, ErrorPassthroughRule, Group, IdempotencyRecord,
+		IdentityAdoptionDecision, PaymentAuditLog, PaymentOrder,
+		PaymentProviderInstance, PendingAuthSession, PromoCode, PromoCodeUsage, Proxy,
+		RedeemCode, SecuritySecret, Setting, SubscriptionPlan, TLSFingerprintProfile,
+		UsageCleanupTask, UsageLog, User, UserAllowedGroup, UserAttributeDefinition,
+		UserAttributeValue, UserSubscription []ent.Hook
 	}
 	inters struct {
-		APIKey, Account, AccountGroup, Announcement, AnnouncementRead, AuthIdentity,
-		AuthIdentityChannel, ChannelMonitor, ChannelMonitorDailyRollup,
-		ChannelMonitorHistory, ChannelMonitorRequestTemplate, ErrorPassthroughRule,
-		Group, IdempotencyRecord, IdentityAdoptionDecision, PaymentAuditLog,
-		PaymentOrder, PaymentProviderInstance, PendingAuthSession, PromoCode,
-		PromoCodeUsage, Proxy, RedeemCode, SecuritySecret, Setting, SubscriptionPlan,
-		TLSFingerprintProfile, UsageCleanupTask, UsageLog, User, UserAllowedGroup,
-		UserAttributeDefinition, UserAttributeValue, UserSubscription []ent.Interceptor
+		APIKey, Account, AccountGroup, Announcement, AnnouncementRead, AshEvent,
+		AshUsage, AuthIdentity, AuthIdentityChannel, ChannelMonitor,
+		ChannelMonitorDailyRollup, ChannelMonitorHistory,
+		ChannelMonitorRequestTemplate, ErrorPassthroughRule, Group, IdempotencyRecord,
+		IdentityAdoptionDecision, PaymentAuditLog, PaymentOrder,
+		PaymentProviderInstance, PendingAuthSession, PromoCode, PromoCodeUsage, Proxy,
+		RedeemCode, SecuritySecret, Setting, SubscriptionPlan, TLSFingerprintProfile,
+		UsageCleanupTask, UsageLog, User, UserAllowedGroup, UserAttributeDefinition,
+		UserAttributeValue, UserSubscription []ent.Interceptor
 	}
 )
 

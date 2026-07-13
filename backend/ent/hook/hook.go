@@ -69,6 +69,30 @@ func (f AnnouncementReadFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.V
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.AnnouncementReadMutation", m)
 }
 
+// The AshEventFunc type is an adapter to allow the use of ordinary
+// function as AshEvent mutator.
+type AshEventFunc func(context.Context, *ent.AshEventMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f AshEventFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.AshEventMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.AshEventMutation", m)
+}
+
+// The AshUsageFunc type is an adapter to allow the use of ordinary
+// function as AshUsage mutator.
+type AshUsageFunc func(context.Context, *ent.AshUsageMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f AshUsageFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.AshUsageMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.AshUsageMutation", m)
+}
+
 // The AuthIdentityFunc type is an adapter to allow the use of ordinary
 // function as AuthIdentity mutator.
 type AuthIdentityFunc func(context.Context, *ent.AuthIdentityMutation) (ent.Value, error)

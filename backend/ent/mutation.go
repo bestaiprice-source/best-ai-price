@@ -17,6 +17,8 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/announcement"
 	"github.com/Wei-Shaw/sub2api/ent/announcementread"
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
+	"github.com/Wei-Shaw/sub2api/ent/ashevent"
+	"github.com/Wei-Shaw/sub2api/ent/ashusage"
 	"github.com/Wei-Shaw/sub2api/ent/authidentity"
 	"github.com/Wei-Shaw/sub2api/ent/authidentitychannel"
 	"github.com/Wei-Shaw/sub2api/ent/channelmonitor"
@@ -64,6 +66,8 @@ const (
 	TypeAccountGroup                  = "AccountGroup"
 	TypeAnnouncement                  = "Announcement"
 	TypeAnnouncementRead              = "AnnouncementRead"
+	TypeAshEvent                      = "AshEvent"
+	TypeAshUsage                      = "AshUsage"
 	TypeAuthIdentity                  = "AuthIdentity"
 	TypeAuthIdentityChannel           = "AuthIdentityChannel"
 	TypeChannelMonitor                = "ChannelMonitor"
@@ -6991,6 +6995,1436 @@ func (m *AnnouncementReadMutation) ResetEdge(name string) error {
 		return nil
 	}
 	return fmt.Errorf("unknown AnnouncementRead edge %s", name)
+}
+
+// AshEventMutation represents an operation that mutates the AshEvent nodes in the graph.
+type AshEventMutation struct {
+	config
+	op            Op
+	typ           string
+	id            *int64
+	owner_id      *string
+	session_id    *string
+	node_id       *string
+	event_type    *string
+	payload       *map[string]interface{}
+	created_at    *time.Time
+	clearedFields map[string]struct{}
+	done          bool
+	oldValue      func(context.Context) (*AshEvent, error)
+	predicates    []predicate.AshEvent
+}
+
+var _ ent.Mutation = (*AshEventMutation)(nil)
+
+// asheventOption allows management of the mutation configuration using functional options.
+type asheventOption func(*AshEventMutation)
+
+// newAshEventMutation creates new mutation for the AshEvent entity.
+func newAshEventMutation(c config, op Op, opts ...asheventOption) *AshEventMutation {
+	m := &AshEventMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeAshEvent,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withAshEventID sets the ID field of the mutation.
+func withAshEventID(id int64) asheventOption {
+	return func(m *AshEventMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *AshEvent
+		)
+		m.oldValue = func(ctx context.Context) (*AshEvent, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().AshEvent.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withAshEvent sets the old AshEvent of the mutation.
+func withAshEvent(node *AshEvent) asheventOption {
+	return func(m *AshEventMutation) {
+		m.oldValue = func(context.Context) (*AshEvent, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m AshEventMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m AshEventMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *AshEventMutation) ID() (id int64, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *AshEventMutation) IDs(ctx context.Context) ([]int64, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int64{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().AshEvent.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetOwnerID sets the "owner_id" field.
+func (m *AshEventMutation) SetOwnerID(s string) {
+	m.owner_id = &s
+}
+
+// OwnerID returns the value of the "owner_id" field in the mutation.
+func (m *AshEventMutation) OwnerID() (r string, exists bool) {
+	v := m.owner_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldOwnerID returns the old "owner_id" field's value of the AshEvent entity.
+// If the AshEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AshEventMutation) OldOwnerID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldOwnerID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldOwnerID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldOwnerID: %w", err)
+	}
+	return oldValue.OwnerID, nil
+}
+
+// ResetOwnerID resets all changes to the "owner_id" field.
+func (m *AshEventMutation) ResetOwnerID() {
+	m.owner_id = nil
+}
+
+// SetSessionID sets the "session_id" field.
+func (m *AshEventMutation) SetSessionID(s string) {
+	m.session_id = &s
+}
+
+// SessionID returns the value of the "session_id" field in the mutation.
+func (m *AshEventMutation) SessionID() (r string, exists bool) {
+	v := m.session_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSessionID returns the old "session_id" field's value of the AshEvent entity.
+// If the AshEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AshEventMutation) OldSessionID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSessionID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSessionID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSessionID: %w", err)
+	}
+	return oldValue.SessionID, nil
+}
+
+// ClearSessionID clears the value of the "session_id" field.
+func (m *AshEventMutation) ClearSessionID() {
+	m.session_id = nil
+	m.clearedFields[ashevent.FieldSessionID] = struct{}{}
+}
+
+// SessionIDCleared returns if the "session_id" field was cleared in this mutation.
+func (m *AshEventMutation) SessionIDCleared() bool {
+	_, ok := m.clearedFields[ashevent.FieldSessionID]
+	return ok
+}
+
+// ResetSessionID resets all changes to the "session_id" field.
+func (m *AshEventMutation) ResetSessionID() {
+	m.session_id = nil
+	delete(m.clearedFields, ashevent.FieldSessionID)
+}
+
+// SetNodeID sets the "node_id" field.
+func (m *AshEventMutation) SetNodeID(s string) {
+	m.node_id = &s
+}
+
+// NodeID returns the value of the "node_id" field in the mutation.
+func (m *AshEventMutation) NodeID() (r string, exists bool) {
+	v := m.node_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldNodeID returns the old "node_id" field's value of the AshEvent entity.
+// If the AshEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AshEventMutation) OldNodeID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldNodeID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldNodeID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldNodeID: %w", err)
+	}
+	return oldValue.NodeID, nil
+}
+
+// ClearNodeID clears the value of the "node_id" field.
+func (m *AshEventMutation) ClearNodeID() {
+	m.node_id = nil
+	m.clearedFields[ashevent.FieldNodeID] = struct{}{}
+}
+
+// NodeIDCleared returns if the "node_id" field was cleared in this mutation.
+func (m *AshEventMutation) NodeIDCleared() bool {
+	_, ok := m.clearedFields[ashevent.FieldNodeID]
+	return ok
+}
+
+// ResetNodeID resets all changes to the "node_id" field.
+func (m *AshEventMutation) ResetNodeID() {
+	m.node_id = nil
+	delete(m.clearedFields, ashevent.FieldNodeID)
+}
+
+// SetEventType sets the "event_type" field.
+func (m *AshEventMutation) SetEventType(s string) {
+	m.event_type = &s
+}
+
+// EventType returns the value of the "event_type" field in the mutation.
+func (m *AshEventMutation) EventType() (r string, exists bool) {
+	v := m.event_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEventType returns the old "event_type" field's value of the AshEvent entity.
+// If the AshEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AshEventMutation) OldEventType(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEventType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEventType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEventType: %w", err)
+	}
+	return oldValue.EventType, nil
+}
+
+// ResetEventType resets all changes to the "event_type" field.
+func (m *AshEventMutation) ResetEventType() {
+	m.event_type = nil
+}
+
+// SetPayload sets the "payload" field.
+func (m *AshEventMutation) SetPayload(value map[string]interface{}) {
+	m.payload = &value
+}
+
+// Payload returns the value of the "payload" field in the mutation.
+func (m *AshEventMutation) Payload() (r map[string]interface{}, exists bool) {
+	v := m.payload
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPayload returns the old "payload" field's value of the AshEvent entity.
+// If the AshEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AshEventMutation) OldPayload(ctx context.Context) (v map[string]interface{}, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPayload is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPayload requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPayload: %w", err)
+	}
+	return oldValue.Payload, nil
+}
+
+// ResetPayload resets all changes to the "payload" field.
+func (m *AshEventMutation) ResetPayload() {
+	m.payload = nil
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *AshEventMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *AshEventMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the AshEvent entity.
+// If the AshEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AshEventMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *AshEventMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// Where appends a list predicates to the AshEventMutation builder.
+func (m *AshEventMutation) Where(ps ...predicate.AshEvent) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the AshEventMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *AshEventMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.AshEvent, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *AshEventMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *AshEventMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (AshEvent).
+func (m *AshEventMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *AshEventMutation) Fields() []string {
+	fields := make([]string, 0, 6)
+	if m.owner_id != nil {
+		fields = append(fields, ashevent.FieldOwnerID)
+	}
+	if m.session_id != nil {
+		fields = append(fields, ashevent.FieldSessionID)
+	}
+	if m.node_id != nil {
+		fields = append(fields, ashevent.FieldNodeID)
+	}
+	if m.event_type != nil {
+		fields = append(fields, ashevent.FieldEventType)
+	}
+	if m.payload != nil {
+		fields = append(fields, ashevent.FieldPayload)
+	}
+	if m.created_at != nil {
+		fields = append(fields, ashevent.FieldCreatedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *AshEventMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case ashevent.FieldOwnerID:
+		return m.OwnerID()
+	case ashevent.FieldSessionID:
+		return m.SessionID()
+	case ashevent.FieldNodeID:
+		return m.NodeID()
+	case ashevent.FieldEventType:
+		return m.EventType()
+	case ashevent.FieldPayload:
+		return m.Payload()
+	case ashevent.FieldCreatedAt:
+		return m.CreatedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *AshEventMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case ashevent.FieldOwnerID:
+		return m.OldOwnerID(ctx)
+	case ashevent.FieldSessionID:
+		return m.OldSessionID(ctx)
+	case ashevent.FieldNodeID:
+		return m.OldNodeID(ctx)
+	case ashevent.FieldEventType:
+		return m.OldEventType(ctx)
+	case ashevent.FieldPayload:
+		return m.OldPayload(ctx)
+	case ashevent.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown AshEvent field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *AshEventMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case ashevent.FieldOwnerID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetOwnerID(v)
+		return nil
+	case ashevent.FieldSessionID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSessionID(v)
+		return nil
+	case ashevent.FieldNodeID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetNodeID(v)
+		return nil
+	case ashevent.FieldEventType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEventType(v)
+		return nil
+	case ashevent.FieldPayload:
+		v, ok := value.(map[string]interface{})
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPayload(v)
+		return nil
+	case ashevent.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown AshEvent field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *AshEventMutation) AddedFields() []string {
+	return nil
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *AshEventMutation) AddedField(name string) (ent.Value, bool) {
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *AshEventMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown AshEvent numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *AshEventMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(ashevent.FieldSessionID) {
+		fields = append(fields, ashevent.FieldSessionID)
+	}
+	if m.FieldCleared(ashevent.FieldNodeID) {
+		fields = append(fields, ashevent.FieldNodeID)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *AshEventMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *AshEventMutation) ClearField(name string) error {
+	switch name {
+	case ashevent.FieldSessionID:
+		m.ClearSessionID()
+		return nil
+	case ashevent.FieldNodeID:
+		m.ClearNodeID()
+		return nil
+	}
+	return fmt.Errorf("unknown AshEvent nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *AshEventMutation) ResetField(name string) error {
+	switch name {
+	case ashevent.FieldOwnerID:
+		m.ResetOwnerID()
+		return nil
+	case ashevent.FieldSessionID:
+		m.ResetSessionID()
+		return nil
+	case ashevent.FieldNodeID:
+		m.ResetNodeID()
+		return nil
+	case ashevent.FieldEventType:
+		m.ResetEventType()
+		return nil
+	case ashevent.FieldPayload:
+		m.ResetPayload()
+		return nil
+	case ashevent.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown AshEvent field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *AshEventMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *AshEventMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *AshEventMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *AshEventMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *AshEventMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *AshEventMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *AshEventMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown AshEvent unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *AshEventMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown AshEvent edge %s", name)
+}
+
+// AshUsageMutation represents an operation that mutates the AshUsage nodes in the graph.
+type AshUsageMutation struct {
+	config
+	op               Op
+	typ              string
+	id               *int64
+	owner_id         *string
+	session_id       *string
+	node_id          *string
+	input_tokens     *int64
+	addinput_tokens  *int64
+	output_tokens    *int64
+	addoutput_tokens *int64
+	cost_units       *int64
+	addcost_units    *int64
+	created_at       *time.Time
+	clearedFields    map[string]struct{}
+	done             bool
+	oldValue         func(context.Context) (*AshUsage, error)
+	predicates       []predicate.AshUsage
+}
+
+var _ ent.Mutation = (*AshUsageMutation)(nil)
+
+// ashusageOption allows management of the mutation configuration using functional options.
+type ashusageOption func(*AshUsageMutation)
+
+// newAshUsageMutation creates new mutation for the AshUsage entity.
+func newAshUsageMutation(c config, op Op, opts ...ashusageOption) *AshUsageMutation {
+	m := &AshUsageMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeAshUsage,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withAshUsageID sets the ID field of the mutation.
+func withAshUsageID(id int64) ashusageOption {
+	return func(m *AshUsageMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *AshUsage
+		)
+		m.oldValue = func(ctx context.Context) (*AshUsage, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().AshUsage.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withAshUsage sets the old AshUsage of the mutation.
+func withAshUsage(node *AshUsage) ashusageOption {
+	return func(m *AshUsageMutation) {
+		m.oldValue = func(context.Context) (*AshUsage, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m AshUsageMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m AshUsageMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *AshUsageMutation) ID() (id int64, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *AshUsageMutation) IDs(ctx context.Context) ([]int64, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int64{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().AshUsage.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetOwnerID sets the "owner_id" field.
+func (m *AshUsageMutation) SetOwnerID(s string) {
+	m.owner_id = &s
+}
+
+// OwnerID returns the value of the "owner_id" field in the mutation.
+func (m *AshUsageMutation) OwnerID() (r string, exists bool) {
+	v := m.owner_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldOwnerID returns the old "owner_id" field's value of the AshUsage entity.
+// If the AshUsage object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AshUsageMutation) OldOwnerID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldOwnerID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldOwnerID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldOwnerID: %w", err)
+	}
+	return oldValue.OwnerID, nil
+}
+
+// ResetOwnerID resets all changes to the "owner_id" field.
+func (m *AshUsageMutation) ResetOwnerID() {
+	m.owner_id = nil
+}
+
+// SetSessionID sets the "session_id" field.
+func (m *AshUsageMutation) SetSessionID(s string) {
+	m.session_id = &s
+}
+
+// SessionID returns the value of the "session_id" field in the mutation.
+func (m *AshUsageMutation) SessionID() (r string, exists bool) {
+	v := m.session_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSessionID returns the old "session_id" field's value of the AshUsage entity.
+// If the AshUsage object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AshUsageMutation) OldSessionID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSessionID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSessionID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSessionID: %w", err)
+	}
+	return oldValue.SessionID, nil
+}
+
+// ClearSessionID clears the value of the "session_id" field.
+func (m *AshUsageMutation) ClearSessionID() {
+	m.session_id = nil
+	m.clearedFields[ashusage.FieldSessionID] = struct{}{}
+}
+
+// SessionIDCleared returns if the "session_id" field was cleared in this mutation.
+func (m *AshUsageMutation) SessionIDCleared() bool {
+	_, ok := m.clearedFields[ashusage.FieldSessionID]
+	return ok
+}
+
+// ResetSessionID resets all changes to the "session_id" field.
+func (m *AshUsageMutation) ResetSessionID() {
+	m.session_id = nil
+	delete(m.clearedFields, ashusage.FieldSessionID)
+}
+
+// SetNodeID sets the "node_id" field.
+func (m *AshUsageMutation) SetNodeID(s string) {
+	m.node_id = &s
+}
+
+// NodeID returns the value of the "node_id" field in the mutation.
+func (m *AshUsageMutation) NodeID() (r string, exists bool) {
+	v := m.node_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldNodeID returns the old "node_id" field's value of the AshUsage entity.
+// If the AshUsage object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AshUsageMutation) OldNodeID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldNodeID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldNodeID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldNodeID: %w", err)
+	}
+	return oldValue.NodeID, nil
+}
+
+// ClearNodeID clears the value of the "node_id" field.
+func (m *AshUsageMutation) ClearNodeID() {
+	m.node_id = nil
+	m.clearedFields[ashusage.FieldNodeID] = struct{}{}
+}
+
+// NodeIDCleared returns if the "node_id" field was cleared in this mutation.
+func (m *AshUsageMutation) NodeIDCleared() bool {
+	_, ok := m.clearedFields[ashusage.FieldNodeID]
+	return ok
+}
+
+// ResetNodeID resets all changes to the "node_id" field.
+func (m *AshUsageMutation) ResetNodeID() {
+	m.node_id = nil
+	delete(m.clearedFields, ashusage.FieldNodeID)
+}
+
+// SetInputTokens sets the "input_tokens" field.
+func (m *AshUsageMutation) SetInputTokens(i int64) {
+	m.input_tokens = &i
+	m.addinput_tokens = nil
+}
+
+// InputTokens returns the value of the "input_tokens" field in the mutation.
+func (m *AshUsageMutation) InputTokens() (r int64, exists bool) {
+	v := m.input_tokens
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldInputTokens returns the old "input_tokens" field's value of the AshUsage entity.
+// If the AshUsage object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AshUsageMutation) OldInputTokens(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldInputTokens is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldInputTokens requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldInputTokens: %w", err)
+	}
+	return oldValue.InputTokens, nil
+}
+
+// AddInputTokens adds i to the "input_tokens" field.
+func (m *AshUsageMutation) AddInputTokens(i int64) {
+	if m.addinput_tokens != nil {
+		*m.addinput_tokens += i
+	} else {
+		m.addinput_tokens = &i
+	}
+}
+
+// AddedInputTokens returns the value that was added to the "input_tokens" field in this mutation.
+func (m *AshUsageMutation) AddedInputTokens() (r int64, exists bool) {
+	v := m.addinput_tokens
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetInputTokens resets all changes to the "input_tokens" field.
+func (m *AshUsageMutation) ResetInputTokens() {
+	m.input_tokens = nil
+	m.addinput_tokens = nil
+}
+
+// SetOutputTokens sets the "output_tokens" field.
+func (m *AshUsageMutation) SetOutputTokens(i int64) {
+	m.output_tokens = &i
+	m.addoutput_tokens = nil
+}
+
+// OutputTokens returns the value of the "output_tokens" field in the mutation.
+func (m *AshUsageMutation) OutputTokens() (r int64, exists bool) {
+	v := m.output_tokens
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldOutputTokens returns the old "output_tokens" field's value of the AshUsage entity.
+// If the AshUsage object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AshUsageMutation) OldOutputTokens(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldOutputTokens is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldOutputTokens requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldOutputTokens: %w", err)
+	}
+	return oldValue.OutputTokens, nil
+}
+
+// AddOutputTokens adds i to the "output_tokens" field.
+func (m *AshUsageMutation) AddOutputTokens(i int64) {
+	if m.addoutput_tokens != nil {
+		*m.addoutput_tokens += i
+	} else {
+		m.addoutput_tokens = &i
+	}
+}
+
+// AddedOutputTokens returns the value that was added to the "output_tokens" field in this mutation.
+func (m *AshUsageMutation) AddedOutputTokens() (r int64, exists bool) {
+	v := m.addoutput_tokens
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetOutputTokens resets all changes to the "output_tokens" field.
+func (m *AshUsageMutation) ResetOutputTokens() {
+	m.output_tokens = nil
+	m.addoutput_tokens = nil
+}
+
+// SetCostUnits sets the "cost_units" field.
+func (m *AshUsageMutation) SetCostUnits(i int64) {
+	m.cost_units = &i
+	m.addcost_units = nil
+}
+
+// CostUnits returns the value of the "cost_units" field in the mutation.
+func (m *AshUsageMutation) CostUnits() (r int64, exists bool) {
+	v := m.cost_units
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCostUnits returns the old "cost_units" field's value of the AshUsage entity.
+// If the AshUsage object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AshUsageMutation) OldCostUnits(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCostUnits is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCostUnits requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCostUnits: %w", err)
+	}
+	return oldValue.CostUnits, nil
+}
+
+// AddCostUnits adds i to the "cost_units" field.
+func (m *AshUsageMutation) AddCostUnits(i int64) {
+	if m.addcost_units != nil {
+		*m.addcost_units += i
+	} else {
+		m.addcost_units = &i
+	}
+}
+
+// AddedCostUnits returns the value that was added to the "cost_units" field in this mutation.
+func (m *AshUsageMutation) AddedCostUnits() (r int64, exists bool) {
+	v := m.addcost_units
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetCostUnits resets all changes to the "cost_units" field.
+func (m *AshUsageMutation) ResetCostUnits() {
+	m.cost_units = nil
+	m.addcost_units = nil
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *AshUsageMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *AshUsageMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the AshUsage entity.
+// If the AshUsage object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AshUsageMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *AshUsageMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// Where appends a list predicates to the AshUsageMutation builder.
+func (m *AshUsageMutation) Where(ps ...predicate.AshUsage) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the AshUsageMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *AshUsageMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.AshUsage, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *AshUsageMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *AshUsageMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (AshUsage).
+func (m *AshUsageMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *AshUsageMutation) Fields() []string {
+	fields := make([]string, 0, 7)
+	if m.owner_id != nil {
+		fields = append(fields, ashusage.FieldOwnerID)
+	}
+	if m.session_id != nil {
+		fields = append(fields, ashusage.FieldSessionID)
+	}
+	if m.node_id != nil {
+		fields = append(fields, ashusage.FieldNodeID)
+	}
+	if m.input_tokens != nil {
+		fields = append(fields, ashusage.FieldInputTokens)
+	}
+	if m.output_tokens != nil {
+		fields = append(fields, ashusage.FieldOutputTokens)
+	}
+	if m.cost_units != nil {
+		fields = append(fields, ashusage.FieldCostUnits)
+	}
+	if m.created_at != nil {
+		fields = append(fields, ashusage.FieldCreatedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *AshUsageMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case ashusage.FieldOwnerID:
+		return m.OwnerID()
+	case ashusage.FieldSessionID:
+		return m.SessionID()
+	case ashusage.FieldNodeID:
+		return m.NodeID()
+	case ashusage.FieldInputTokens:
+		return m.InputTokens()
+	case ashusage.FieldOutputTokens:
+		return m.OutputTokens()
+	case ashusage.FieldCostUnits:
+		return m.CostUnits()
+	case ashusage.FieldCreatedAt:
+		return m.CreatedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *AshUsageMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case ashusage.FieldOwnerID:
+		return m.OldOwnerID(ctx)
+	case ashusage.FieldSessionID:
+		return m.OldSessionID(ctx)
+	case ashusage.FieldNodeID:
+		return m.OldNodeID(ctx)
+	case ashusage.FieldInputTokens:
+		return m.OldInputTokens(ctx)
+	case ashusage.FieldOutputTokens:
+		return m.OldOutputTokens(ctx)
+	case ashusage.FieldCostUnits:
+		return m.OldCostUnits(ctx)
+	case ashusage.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown AshUsage field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *AshUsageMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case ashusage.FieldOwnerID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetOwnerID(v)
+		return nil
+	case ashusage.FieldSessionID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSessionID(v)
+		return nil
+	case ashusage.FieldNodeID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetNodeID(v)
+		return nil
+	case ashusage.FieldInputTokens:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetInputTokens(v)
+		return nil
+	case ashusage.FieldOutputTokens:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetOutputTokens(v)
+		return nil
+	case ashusage.FieldCostUnits:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCostUnits(v)
+		return nil
+	case ashusage.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown AshUsage field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *AshUsageMutation) AddedFields() []string {
+	var fields []string
+	if m.addinput_tokens != nil {
+		fields = append(fields, ashusage.FieldInputTokens)
+	}
+	if m.addoutput_tokens != nil {
+		fields = append(fields, ashusage.FieldOutputTokens)
+	}
+	if m.addcost_units != nil {
+		fields = append(fields, ashusage.FieldCostUnits)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *AshUsageMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case ashusage.FieldInputTokens:
+		return m.AddedInputTokens()
+	case ashusage.FieldOutputTokens:
+		return m.AddedOutputTokens()
+	case ashusage.FieldCostUnits:
+		return m.AddedCostUnits()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *AshUsageMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case ashusage.FieldInputTokens:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddInputTokens(v)
+		return nil
+	case ashusage.FieldOutputTokens:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddOutputTokens(v)
+		return nil
+	case ashusage.FieldCostUnits:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddCostUnits(v)
+		return nil
+	}
+	return fmt.Errorf("unknown AshUsage numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *AshUsageMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(ashusage.FieldSessionID) {
+		fields = append(fields, ashusage.FieldSessionID)
+	}
+	if m.FieldCleared(ashusage.FieldNodeID) {
+		fields = append(fields, ashusage.FieldNodeID)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *AshUsageMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *AshUsageMutation) ClearField(name string) error {
+	switch name {
+	case ashusage.FieldSessionID:
+		m.ClearSessionID()
+		return nil
+	case ashusage.FieldNodeID:
+		m.ClearNodeID()
+		return nil
+	}
+	return fmt.Errorf("unknown AshUsage nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *AshUsageMutation) ResetField(name string) error {
+	switch name {
+	case ashusage.FieldOwnerID:
+		m.ResetOwnerID()
+		return nil
+	case ashusage.FieldSessionID:
+		m.ResetSessionID()
+		return nil
+	case ashusage.FieldNodeID:
+		m.ResetNodeID()
+		return nil
+	case ashusage.FieldInputTokens:
+		m.ResetInputTokens()
+		return nil
+	case ashusage.FieldOutputTokens:
+		m.ResetOutputTokens()
+		return nil
+	case ashusage.FieldCostUnits:
+		m.ResetCostUnits()
+		return nil
+	case ashusage.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown AshUsage field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *AshUsageMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *AshUsageMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *AshUsageMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *AshUsageMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *AshUsageMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *AshUsageMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *AshUsageMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown AshUsage unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *AshUsageMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown AshUsage edge %s", name)
 }
 
 // AuthIdentityMutation represents an operation that mutates the AuthIdentity nodes in the graph.

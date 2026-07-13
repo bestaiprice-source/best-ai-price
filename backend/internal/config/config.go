@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	hypervisordec "github.com/Wei-Shaw/sub2api/pkg/hypervisor/config"
 	"github.com/spf13/viper"
 )
 
@@ -95,6 +96,7 @@ type Config struct {
 	Idempotency             IdempotencyConfig             `mapstructure:"idempotency"`
 	AccountImport           AccountImportConfig           `mapstructure:"account_import"`
 	Rust                    RustConfig                    `mapstructure:"rust"`
+	Hypervisor              hypervisordec.HypervisorConfig `mapstructure:"hypervisor"`
 }
 
 type LogConfig struct {
@@ -1313,8 +1315,18 @@ func setDefaults() {
 	viper.SetDefault("rust.ffi.enabled", false)
 	viper.SetDefault("rust.ffi.library_path", "")
 	viper.SetDefault("rust.ffi.hash_enabled", false)
-	viper.SetDefault("rust.ffi.streaming_enabled", false)
 	viper.SetDefault("rust.ffi.compression_enabled", false)
+
+	// Hypervisor
+	viper.SetDefault("hypervisor.enabled", true)
+	viper.SetDefault("hypervisor.enable_rebinding", true)
+	viper.SetDefault("hypervisor.enable_affinity", true)
+	viper.SetDefault("hypervisor.enable_summary", true)
+	viper.SetDefault("hypervisor.enable_health_controller", true)
+	viper.SetDefault("hypervisor.enable_quota_manager", true)
+	viper.SetDefault("hypervisor.enable_mock_runtime", true)
+	viper.SetDefault("hypervisor.max_retry", 1)
+	viper.SetDefault("hypervisor.node_cooldown_seconds", 900)
 
 	// Log
 	viper.SetDefault("log.level", "info")

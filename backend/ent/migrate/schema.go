@@ -339,6 +339,39 @@ var (
 			},
 		},
 	}
+	// AshEventsColumns holds the columns for the "ash_events" table.
+	AshEventsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "owner_id", Type: field.TypeString, Size: 64},
+		{Name: "session_id", Type: field.TypeString, Nullable: true, Size: 64},
+		{Name: "node_id", Type: field.TypeString, Nullable: true, Size: 64},
+		{Name: "event_type", Type: field.TypeString, Size: 64},
+		{Name: "payload", Type: field.TypeJSON},
+		{Name: "created_at", Type: field.TypeTime},
+	}
+	// AshEventsTable holds the schema information for the "ash_events" table.
+	AshEventsTable = &schema.Table{
+		Name:       "ash_events",
+		Columns:    AshEventsColumns,
+		PrimaryKey: []*schema.Column{AshEventsColumns[0]},
+	}
+	// AshUsagesColumns holds the columns for the "ash_usages" table.
+	AshUsagesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "owner_id", Type: field.TypeString, Size: 64},
+		{Name: "session_id", Type: field.TypeString, Nullable: true, Size: 64},
+		{Name: "node_id", Type: field.TypeString, Nullable: true, Size: 64},
+		{Name: "input_tokens", Type: field.TypeInt64, Default: 0},
+		{Name: "output_tokens", Type: field.TypeInt64, Default: 0},
+		{Name: "cost_units", Type: field.TypeInt64, Default: 0},
+		{Name: "created_at", Type: field.TypeTime},
+	}
+	// AshUsagesTable holds the schema information for the "ash_usages" table.
+	AshUsagesTable = &schema.Table{
+		Name:       "ash_usages",
+		Columns:    AshUsagesColumns,
+		PrimaryKey: []*schema.Column{AshUsagesColumns[0]},
+	}
 	// AuthIdentitiesColumns holds the columns for the "auth_identities" table.
 	AuthIdentitiesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
@@ -1683,6 +1716,8 @@ var (
 		AccountGroupsTable,
 		AnnouncementsTable,
 		AnnouncementReadsTable,
+		AshEventsTable,
+		AshUsagesTable,
 		AuthIdentitiesTable,
 		AuthIdentityChannelsTable,
 		ChannelMonitorsTable,
@@ -1737,6 +1772,12 @@ func init() {
 	AnnouncementReadsTable.ForeignKeys[1].RefTable = UsersTable
 	AnnouncementReadsTable.Annotation = &entsql.Annotation{
 		Table: "announcement_reads",
+	}
+	AshEventsTable.Annotation = &entsql.Annotation{
+		Table: "ash_events",
+	}
+	AshUsagesTable.Annotation = &entsql.Annotation{
+		Table: "ash_usages",
 	}
 	AuthIdentitiesTable.ForeignKeys[0].RefTable = UsersTable
 	AuthIdentitiesTable.Annotation = &entsql.Annotation{

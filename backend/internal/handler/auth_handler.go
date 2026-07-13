@@ -139,6 +139,10 @@ func (h *AuthHandler) Register(c *gin.Context) {
 }
 
 func (h *AuthHandler) RegisterGateway(c gatewayctx.GatewayContext) {
+	if h.authService == nil {
+		response.ErrorContext(authJSONResponder{ctx: c}, http.StatusBadRequest, "auth service not initialized")
+		return
+	}
 	var req RegisterRequest
 	if err := c.BindJSON(&req); err != nil {
 		response.ErrorContext(authJSONResponder{ctx: c}, http.StatusBadRequest, "Invalid request: "+err.Error())
@@ -167,6 +171,10 @@ func (h *AuthHandler) SendVerifyCode(c *gin.Context) {
 }
 
 func (h *AuthHandler) SendVerifyCodeGateway(c gatewayctx.GatewayContext) {
+	if h.authService == nil {
+		response.ErrorContext(authJSONResponder{ctx: c}, http.StatusBadRequest, "auth service not initialized")
+		return
+	}
 	var req SendVerifyCodeRequest
 	if err := c.BindJSON(&req); err != nil {
 		response.ErrorContext(authJSONResponder{ctx: c}, http.StatusBadRequest, "Invalid request: "+err.Error())
@@ -198,6 +206,10 @@ func (h *AuthHandler) Login(c *gin.Context) {
 }
 
 func (h *AuthHandler) LoginGateway(c gatewayctx.GatewayContext) {
+	if h.authService == nil {
+		response.ErrorContext(authJSONResponder{ctx: c}, http.StatusBadRequest, "auth service not initialized")
+		return
+	}
 	var req LoginRequest
 	if err := c.BindJSON(&req); err != nil {
 		response.ErrorContext(authJSONResponder{ctx: c}, http.StatusBadRequest, "Invalid request: "+err.Error())
@@ -563,6 +575,10 @@ func (h *AuthHandler) ResetPassword(c *gin.Context) {
 }
 
 func (h *AuthHandler) ResetPasswordGateway(c gatewayctx.GatewayContext) {
+	if h.authService == nil {
+		response.ErrorContext(authJSONResponder{ctx: c}, http.StatusBadRequest, "auth service not initialized")
+		return
+	}
 	var req ResetPasswordRequest
 	if err := c.BindJSON(&req); err != nil {
 		response.ErrorContext(authJSONResponder{ctx: c}, http.StatusBadRequest, "Invalid request: "+err.Error())

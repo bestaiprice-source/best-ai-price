@@ -10,6 +10,8 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/announcement"
 	"github.com/Wei-Shaw/sub2api/ent/announcementread"
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
+	"github.com/Wei-Shaw/sub2api/ent/ashevent"
+	"github.com/Wei-Shaw/sub2api/ent/ashusage"
 	"github.com/Wei-Shaw/sub2api/ent/authidentity"
 	"github.com/Wei-Shaw/sub2api/ent/authidentitychannel"
 	"github.com/Wei-Shaw/sub2api/ent/channelmonitor"
@@ -316,6 +318,100 @@ func init() {
 	announcementreadDescCreatedAt := announcementreadFields[3].Descriptor()
 	// announcementread.DefaultCreatedAt holds the default value on creation for the created_at field.
 	announcementread.DefaultCreatedAt = announcementreadDescCreatedAt.Default.(func() time.Time)
+	asheventFields := schema.AshEvent{}.Fields()
+	_ = asheventFields
+	// asheventDescOwnerID is the schema descriptor for owner_id field.
+	asheventDescOwnerID := asheventFields[0].Descriptor()
+	// ashevent.OwnerIDValidator is a validator for the "owner_id" field. It is called by the builders before save.
+	ashevent.OwnerIDValidator = func() func(string) error {
+		validators := asheventDescOwnerID.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(owner_id string) error {
+			for _, fn := range fns {
+				if err := fn(owner_id); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// asheventDescSessionID is the schema descriptor for session_id field.
+	asheventDescSessionID := asheventFields[1].Descriptor()
+	// ashevent.SessionIDValidator is a validator for the "session_id" field. It is called by the builders before save.
+	ashevent.SessionIDValidator = asheventDescSessionID.Validators[0].(func(string) error)
+	// asheventDescNodeID is the schema descriptor for node_id field.
+	asheventDescNodeID := asheventFields[2].Descriptor()
+	// ashevent.NodeIDValidator is a validator for the "node_id" field. It is called by the builders before save.
+	ashevent.NodeIDValidator = asheventDescNodeID.Validators[0].(func(string) error)
+	// asheventDescEventType is the schema descriptor for event_type field.
+	asheventDescEventType := asheventFields[3].Descriptor()
+	// ashevent.EventTypeValidator is a validator for the "event_type" field. It is called by the builders before save.
+	ashevent.EventTypeValidator = func() func(string) error {
+		validators := asheventDescEventType.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(event_type string) error {
+			for _, fn := range fns {
+				if err := fn(event_type); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// asheventDescCreatedAt is the schema descriptor for created_at field.
+	asheventDescCreatedAt := asheventFields[5].Descriptor()
+	// ashevent.DefaultCreatedAt holds the default value on creation for the created_at field.
+	ashevent.DefaultCreatedAt = asheventDescCreatedAt.Default.(func() time.Time)
+	ashusageFields := schema.AshUsage{}.Fields()
+	_ = ashusageFields
+	// ashusageDescOwnerID is the schema descriptor for owner_id field.
+	ashusageDescOwnerID := ashusageFields[0].Descriptor()
+	// ashusage.OwnerIDValidator is a validator for the "owner_id" field. It is called by the builders before save.
+	ashusage.OwnerIDValidator = func() func(string) error {
+		validators := ashusageDescOwnerID.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(owner_id string) error {
+			for _, fn := range fns {
+				if err := fn(owner_id); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// ashusageDescSessionID is the schema descriptor for session_id field.
+	ashusageDescSessionID := ashusageFields[1].Descriptor()
+	// ashusage.SessionIDValidator is a validator for the "session_id" field. It is called by the builders before save.
+	ashusage.SessionIDValidator = ashusageDescSessionID.Validators[0].(func(string) error)
+	// ashusageDescNodeID is the schema descriptor for node_id field.
+	ashusageDescNodeID := ashusageFields[2].Descriptor()
+	// ashusage.NodeIDValidator is a validator for the "node_id" field. It is called by the builders before save.
+	ashusage.NodeIDValidator = ashusageDescNodeID.Validators[0].(func(string) error)
+	// ashusageDescInputTokens is the schema descriptor for input_tokens field.
+	ashusageDescInputTokens := ashusageFields[3].Descriptor()
+	// ashusage.DefaultInputTokens holds the default value on creation for the input_tokens field.
+	ashusage.DefaultInputTokens = ashusageDescInputTokens.Default.(int64)
+	// ashusageDescOutputTokens is the schema descriptor for output_tokens field.
+	ashusageDescOutputTokens := ashusageFields[4].Descriptor()
+	// ashusage.DefaultOutputTokens holds the default value on creation for the output_tokens field.
+	ashusage.DefaultOutputTokens = ashusageDescOutputTokens.Default.(int64)
+	// ashusageDescCostUnits is the schema descriptor for cost_units field.
+	ashusageDescCostUnits := ashusageFields[5].Descriptor()
+	// ashusage.DefaultCostUnits holds the default value on creation for the cost_units field.
+	ashusage.DefaultCostUnits = ashusageDescCostUnits.Default.(int64)
+	// ashusageDescCreatedAt is the schema descriptor for created_at field.
+	ashusageDescCreatedAt := ashusageFields[6].Descriptor()
+	// ashusage.DefaultCreatedAt holds the default value on creation for the created_at field.
+	ashusage.DefaultCreatedAt = ashusageDescCreatedAt.Default.(func() time.Time)
 	authidentityMixin := schema.AuthIdentity{}.Mixin()
 	authidentityMixinFields0 := authidentityMixin[0].Fields()
 	_ = authidentityMixinFields0
