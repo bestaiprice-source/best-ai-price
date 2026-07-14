@@ -24,7 +24,10 @@ services:
   # Sub2API Application
   # ===========================================================================
   sub2api:
-    image: ghcr.io/dr-lin-eng/sub2api:latest
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: sub2api:latest
     container_name: sub2api
     restart: unless-stopped
     ulimits:
