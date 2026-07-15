@@ -386,6 +386,24 @@
       @close="closeModals"
     >
       <form id="key-form" @submit.prevent="handleSubmit" class="space-y-5">
+        <div v-if="isAdmin && !showEditModal">
+          <label class="input-label">User / Owner (Владелец ключа)</label>
+          <select
+            v-model="formData.user_id"
+            class="input select w-full"
+            required
+          >
+            <option :value="null" disabled>Select user...</option>
+            <option
+              v-for="user in allUsers"
+              :key="user.id"
+              :value="user.id"
+            >
+              {{ user.email }} ({{ user.username || 'no username' }})
+            </option>
+          </select>
+        </div>
+
         <div>
           <label class="input-label">{{ t('keys.nameLabel') }}</label>
           <input
@@ -1080,7 +1098,7 @@
 </template>
 
 <script setup lang="ts">
-	import { ref, computed, onMounted, onUnmounted, type ComponentPublicInstance } from 'vue'
+	import { ref, computed, watch, onMounted, onUnmounted, type ComponentPublicInstance } from 'vue'
 	import { useI18n } from 'vue-i18n'
 	import { useAppStore } from '@/stores/app'
 	import { useOnboardingStore } from '@/stores/onboarding'
@@ -1089,6 +1107,8 @@ import { getPersistedPageSize } from '@/composables/usePersistedPageSize'
 
 const { t } = useI18n()
 import { keysAPI, authAPI, usageAPI, userGroupsAPI } from '@/api'
+import { adminAPI } from '@/api/admin'
+import { useAuthStore } from '@/stores/auth'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import TablePageLayout from '@/components/layout/TablePageLayout.vue'
 	import DataTable from '@/components/common/DataTable.vue'
@@ -1136,6 +1156,27 @@ const apiKeys = ref<ApiKey[]>([])
 const groups = ref<Group[]>([])
 const loading = ref(false)
 const submitting = ref(false)
+
+const authStore = useAuthStore()
+const isAdmin = computed(() => authStore.isAdmin)
+const allUsers = ref<any[]>([])
+
+const loadAllUsers = async () => {
+  if (!isAdmin.value) return
+  try {
+    const res = await adminAPI.users.list(1, 1000)
+    allUsers.value = res.items || []
+  } catch (err) {
+    console.error('Failed to load users for dropdown:', err)
+  }
+}
+
+watch(showCreateModal, (val) => {
+  if (val && isAdmin.value) {
+    loadAllUsers()
+    formData.value.user_id = authStore.user?.id || null
+  }
+})
 const now = ref(new Date())
 let resetTimer: ReturnType<typeof setInterval> | null = null
 const usageStats = ref<Record<string, BatchApiKeyUsageStats>>({})
@@ -1195,6 +1236,7 @@ const toggleFormGroup = (groupId: number, checked: boolean) => {
 }
 
 const formData = ref({
+  user_id: null as number | null,
   name: '',
   group_ids: [] as number[],
   enable_model_restriction: false,
@@ -1420,6 +1462,7 @@ const editKey = (key: ApiKey) => {
   const hasIPRestriction = (key.ip_whitelist?.length > 0) || (key.ip_blacklist?.length > 0)
   const hasExpiration = !!key.expires_at
   formData.value = {
+    user_id: key.user_id || null,
     name: key.name,
     group_ids: key.group_ids && key.group_ids.length > 0
       ? [...key.group_ids]
@@ -1572,7 +1615,8 @@ const handleSubmit = async () => {
         ipBlacklist,
         quota,
         expiresInDays,
-        rateLimitData
+        rateLimitData,
+        formData.value.user_id ?? undefined
       )
       appStore.showSuccess(t('keys.keyCreatedSuccess'))
       // Only advance tour if active, on submit step, and creation succeeded
@@ -1616,6 +1660,7 @@ const closeModals = () => {
   showEditModal.value = false
   selectedKey.value = null
   formData.value = {
+    user_id: null,
     name: '',
     group_ids: [],
     enable_model_restriction: false,
@@ -1818,6 +1863,9 @@ onMounted(() => {
   loadGroups()
   loadUserGroupRates()
   loadPublicSettings()
+  if (isAdmin.value) {
+    loadAllUsers()
+  }
   document.addEventListener('click', closeGroupSelector)
   resetTimer = setInterval(() => { now.value = new Date() }, 60000)
 })

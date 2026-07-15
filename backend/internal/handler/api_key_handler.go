@@ -50,6 +50,7 @@ func NewAPIKeyHandler(apiKeyService *service.APIKeyService) *APIKeyHandler {
 
 // CreateAPIKeyRequest represents the create API key request payload
 type CreateAPIKeyRequest struct {
+	UserID        *int64   `json:"user_id"` // admin-only field to specify owner
 	Name          string   `json:"name" binding:"required"`
 	GroupID       *int64   `json:"group_id"`        // nullable
 	GroupIDs      []int64  `json:"group_ids"`       // optional multi-group binding
@@ -207,8 +208,14 @@ func (h *APIKeyHandler) CreateGateway(c gatewayctx.GatewayContext) {
 		svcReq.RateLimit7d = *req.RateLimit7d
 	}
 
+	targetUserID := subject.UserID
+	role, _ := middleware2.GetUserRoleFromGatewayContext(c)
+	if req.UserID != nil && role == "admin" {
+		targetUserID = *req.UserID
+	}
+
 	executeUserIdempotentGatewayJSON(c, "user.api_keys.create", req, service.DefaultWriteIdempotencyTTL(), func(ctx context.Context) (any, error) {
-		key, err := h.apiKeyService.Create(ctx, subject.UserID, svcReq)
+		key, err := h.apiKeyService.Create(ctx, targetUserID, svcReq)
 		if err != nil {
 			return nil, err
 		}

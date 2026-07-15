@@ -492,6 +492,7 @@ export interface ApiKey {
 }
 
 export interface CreateApiKeyRequest {
+  user_id?: number
   name: string
   group_id?: number | null
   group_ids?: number[]
