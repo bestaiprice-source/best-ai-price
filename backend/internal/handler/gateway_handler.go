@@ -27,6 +27,12 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/server/gatewayctx"
 	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/Wei-Shaw/sub2api/ent"
+	"github.com/Wei-Shaw/sub2api/pkg/hypervisor"
+	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/runtime"
+	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/storage"
+	"github.com/redis/go-redis/v9"
+	"os"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -53,6 +59,7 @@ type GatewayHandler struct {
 	maxAccountSwitchesGemini  int
 	cfg                       *config.Config
 	settingService            *service.SettingService
+	hypervisorEngine          *hypervisor.Hypervisor
 }
 
 // NewGatewayHandler creates a new GatewayHandler
@@ -70,6 +77,8 @@ func NewGatewayHandler(
 	userMsgQueueService *service.UserMessageQueueService,
 	cfg *config.Config,
 	settingService *service.SettingService,
+	entClient *ent.Client,
+	redisClient *redis.Client,
 ) *GatewayHandler {
 	pingInterval := time.Duration(0)
 	maxAccountSwitches := 10
@@ -90,6 +99,13 @@ func NewGatewayHandler(
 		umqHelper = NewUserMsgQueueHelper(userMsgQueueService, SSEPingFormatClaude, pingInterval)
 	}
 
+	hyperStore := storage.NewStorage(entClient, redisClient)
+	var rt runtime.Runtime = runtime.NewAnthropicRuntime(hyperStore)
+	if os.Getenv("ASH_ENABLE_MOCK_RUNTIME") == "true" {
+		rt = runtime.NewMockRuntime()
+	}
+	engine := hypervisor.NewHypervisor(hyperStore, rt)
+
 	return &GatewayHandler{
 		gatewayService:            gatewayService,
 		geminiCompatService:       geminiCompatService,
@@ -106,13 +122,50 @@ func NewGatewayHandler(
 		maxAccountSwitchesGemini:  maxAccountSwitchesGemini,
 		cfg:                       cfg,
 		settingService:            settingService,
+		hypervisorEngine:          engine,
 	}
 }
 
 // Messages handles Claude API compatible messages endpoint
 // POST /v1/messages
 func (h *GatewayHandler) Messages(c *gin.Context) {
+	if os.Getenv("ASH_ENABLED") == "true" {
+		h.handleHypervisorMessages(c)
+		return
+	}
 	h.MessagesGateway(gatewayctx.FromGin(c))
+}
+
+func (h *GatewayHandler) handleHypervisorMessages(c *gin.Context) {
+	transportCtx := gatewayctx.FromGin(c)
+	subject, ok := middleware2.GetAuthSubjectFromGatewayContext(transportCtx)
+	if !ok {
+		h.errorResponseGateway(transportCtx, http.StatusInternalServerError, "api_error", "User context not found")
+		return
+	}
+
+	ownerID := fmt.Sprintf("%d", subject.UserID)
+
+	body, err := pkghttputil.ReadRequestBodyWithPrealloc(c.Request)
+	if err != nil {
+		h.errorResponseGateway(transportCtx, http.StatusBadRequest, "invalid_request_error", "Failed to read request body")
+		return
+	}
+
+	conversationID := c.Query("conversation_id")
+	if conversationID == "" {
+		conversationID = c.GetHeader("X-Conversation-ID")
+	}
+
+	c.Header("Content-Type", "text/event-stream")
+	c.Header("Cache-Control", "no-cache")
+	c.Header("Connection", "keep-alive")
+
+	_, err = h.hypervisorEngine.HandleRequest(c.Request.Context(), ownerID, conversationID, body, c.Writer)
+	if err != nil {
+		h.errorResponseGateway(transportCtx, http.StatusBadGateway, "api_error", err.Error())
+		return
+	}
 }
 
 func (h *GatewayHandler) MessagesGateway(transportCtx gatewayctx.GatewayContext) {
