@@ -1157,26 +1157,7 @@ const groups = ref<Group[]>([])
 const loading = ref(false)
 const submitting = ref(false)
 
-const authStore = useAuthStore()
-const isAdmin = computed(() => authStore.isAdmin)
-const allUsers = ref<any[]>([])
 
-const loadAllUsers = async () => {
-  if (!isAdmin.value) return
-  try {
-    const res = await adminAPI.users.list(1, 1000)
-    allUsers.value = res.items || []
-  } catch (err) {
-    console.error('Failed to load users for dropdown:', err)
-  }
-}
-
-watch(showCreateModal, (val) => {
-  if (val && isAdmin.value) {
-    loadAllUsers()
-    formData.value.user_id = authStore.user?.id || null
-  }
-})
 const now = ref(new Date())
 let resetTimer: ReturnType<typeof setInterval> | null = null
 const usageStats = ref<Record<string, BatchApiKeyUsageStats>>({})
@@ -1258,6 +1239,27 @@ const formData = ref({
   enable_expiration: false,
   expiration_preset: '30' as '7' | '30' | '90' | 'custom',
   expiration_date: ''
+})
+
+const authStore = useAuthStore()
+const isAdmin = computed(() => authStore.isAdmin)
+const allUsers = ref<any[]>([])
+
+const loadAllUsers = async () => {
+  if (!isAdmin.value) return
+  try {
+    const res = await adminAPI.users.list(1, 1000)
+    allUsers.value = res.items || []
+  } catch (err) {
+    console.error('Failed to load users for dropdown:', err)
+  }
+}
+
+watch(showCreateModal, (val) => {
+  if (val && isAdmin.value) {
+    loadAllUsers()
+    formData.value.user_id = authStore.user?.id || null
+  }
 })
 
 // 自定义Key验证
