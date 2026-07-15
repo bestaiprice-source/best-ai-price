@@ -17,6 +17,8 @@ import (
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/events"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/health"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/lease"
+	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/quota"
+	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/scheduler"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/session"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/storage"
 
@@ -215,4 +217,141 @@ func TestHypervisorDay2(t *testing.T) {
 	require.Equal(t, eventNodeID, *event.NodeID)
 	require.Equal(t, "NodeHealthDegraded", event.EventType)
 	require.Equal(t, "health check failure", event.Payload["reason"])
+}
+
+func TestHypervisorDay3(t *testing.T) {
+	store := newTestStorage(t)
+	ctx := context.Background()
+
+	// 1. Test QuotaManager
+	qm := quota.NewQuotaManager(store)
+	ownerID := "user-owner-123"
+
+	// Register some active users and nodes to test dynamic limits
+	err := qm.RegisterActiveUser(ctx, "user-owner-123")
+	require.NoError(t, err)
+	err = qm.RegisterActiveUser(ctx, "user-owner-456")
+	require.NoError(t, err)
+	err = qm.RegisterActiveUser(ctx, "user-owner-789")
+	require.NoError(t, err)
+	err = qm.RegisterActiveUser(ctx, "user-owner-abc")
+	require.NoError(t, err) // 4 active users
+
+	err = qm.RegisterNode(ctx, "node-1")
+	require.NoError(t, err) // 1 node registered
+
+	// 1 node capacity (1,000,000) / 4 active users = 250,000 limit
+	dynLimit, err := qm.GetDynamicLimit(ctx, ownerID)
+	require.NoError(t, err)
+	require.Equal(t, int64(quota.NodeCapacity/4), dynLimit)
+
+	// Save UserAccess state
+	ua := &quota.UserAccess{
+		OwnerID:      ownerID,
+		PlanID:       "plan-pro",
+		MonthlyLimit: 0, // 0 triggers dynamic limit calculation
+		DailyBurst:   0,
+		UsedUnits:    0,
+		Priority:     1,
+		IsActive:     true,
+	}
+
+	err = qm.SaveUserAccess(ctx, ua)
+	require.NoError(t, err)
+
+	// Check quota (should pass)
+	allowed, err := qm.CheckQuota(ctx, ownerID)
+	require.NoError(t, err)
+	require.True(t, allowed)
+
+	// Consume quota up to limit
+	err = qm.ConsumeQuota(ctx, ownerID, 250000)
+	require.NoError(t, err)
+
+	// Check quota again (should be blocked due to limit exceed)
+	allowed, err = qm.CheckQuota(ctx, ownerID)
+	require.ErrorIs(t, err, quota.ErrQuotaExceeded)
+	require.False(t, allowed)
+
+	// Let's add a second node to the pool: 2 nodes / 4 users = 500,000 limit per user
+	err = qm.RegisterNode(ctx, "node-2")
+	require.NoError(t, err)
+
+	// Now check quota again (should pass since limit increased to 500,000 and used is 250,000)
+	allowed, err = qm.CheckQuota(ctx, ownerID)
+	require.NoError(t, err)
+	require.True(t, allowed)
+
+	// 2. Test Scheduler
+	sch := scheduler.NewScheduler()
+
+	nodes := []health.ExecutionNode{
+		{
+			NodeID:   "node-unavail",
+			State:    "unavailable",
+			Priority: 1,
+		},
+		{
+			NodeID:   "node-cooldown",
+			State:    "cooldown",
+			Priority: 1,
+		},
+		{
+			NodeID:   "node-limited",
+			State:    "limited",
+			Priority: 1,
+		},
+		{
+			NodeID:   "node-healthy-1",
+			State:    "healthy",
+			Priority: 1,
+		},
+		{
+			NodeID:   "node-healthy-2",
+			State:    "healthy",
+			Priority: 1,
+		},
+	}
+
+	states := map[string]health.NodeRuntimeState{
+		"node-healthy-1": {
+			NodeID:         "node-healthy-1",
+			SuccessRate:    0.9,
+			AvgLatencyMs:   500,
+			QueueDepth:     1,
+			Recent429:      0,
+			RecentTimeouts: 0,
+		},
+		"node-healthy-2": {
+			NodeID:         "node-healthy-2",
+			SuccessRate:    0.95, // higher success rate
+			AvgLatencyMs:   200,  // lower latency
+			QueueDepth:     0,    // no queue
+			Recent429:      0,
+			RecentTimeouts: 0,
+		},
+	}
+
+	// Select best node (should pick node-healthy-2 because it has better success rate and no latency/queue penalty)
+	selectedNode, err := sch.SelectNode(ctx, nodes, states, 1, "")
+	require.NoError(t, err)
+	require.Equal(t, "node-healthy-2", selectedNode.NodeID)
+
+	// Now test affinity bonus (if we have currentLeaseNodeID pointing to node-healthy-1)
+	// node-healthy-1 will get a bonus of 15.0 which will make its score higher than node-healthy-2
+	selectedNode, err = sch.SelectNode(ctx, nodes, states, 1, "node-healthy-1")
+	require.NoError(t, err)
+	require.Equal(t, "node-healthy-1", selectedNode.NodeID)
+
+	// Test limited state node selected only when healthy/busy nodes are absent
+	onlyLimitedNodes := []health.ExecutionNode{
+		{
+			NodeID:   "node-limited",
+			State:    "limited",
+			Priority: 1,
+		},
+	}
+	selectedNode, err = sch.SelectNode(ctx, onlyLimitedNodes, nil, 1, "")
+	require.NoError(t, err)
+	require.Equal(t, "node-limited", selectedNode.NodeID)
 }
