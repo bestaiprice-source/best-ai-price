@@ -124,7 +124,7 @@ func (r *AnthropicRuntime) Execute(ctx context.Context, nodeID string, reqPayloa
 
 	// 2. Extract API credentials
 	var apiKey string
-	if acc.Type == "api_key" {
+	if acc.Type == "api_key" || acc.Type == "apikey" {
 		if credKey, ok := acc.Credentials["api_key"]; ok {
 			apiKey = fmt.Sprintf("%v", credKey)
 		}
