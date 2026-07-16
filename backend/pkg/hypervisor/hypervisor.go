@@ -7,10 +7,12 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/ent/account"
+	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/compiler"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/events"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/health"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/lease"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/quota"
+	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/rebinding"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/runtime"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/scheduler"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/session"
@@ -26,6 +28,8 @@ type Hypervisor struct {
 	qm    *quota.QuotaManager
 	sch   *scheduler.Scheduler
 	rt    runtime.Runtime
+	rm    *rebinding.RebindingManager
+	comp  *compiler.Compiler
 }
 
 func NewHypervisor(store *storage.Storage, rt runtime.Runtime) *Hypervisor {
@@ -38,6 +42,8 @@ func NewHypervisor(store *storage.Storage, rt runtime.Runtime) *Hypervisor {
 		qm:    quota.NewQuotaManager(store),
 		sch:   scheduler.NewScheduler(),
 		rt:    rt,
+		rm:    rebinding.NewRebindingManager(store),
+		comp:  compiler.NewCompiler(),
 	}
 }
 
@@ -134,44 +140,26 @@ func (h *Hypervisor) HandleRequest(ctx context.Context, ownerID string, conversa
 		// Trigger Rebinding
 		_ = h.logEvent(ctx, ownerID, &sess.ID, &selectedNode.NodeID, "RebindingStarted", map[string]any{"reason": "upstream request failed"})
 
-		// Put current node on temporary cooldown in NodeRuntimeState
-		cooldownUntil := time.Now().Add(10 * time.Minute)
-		currentState, exists := states[selectedNode.NodeID]
-		if !exists {
-			currentState = health.NodeRuntimeState{NodeID: selectedNode.NodeID}
-		}
-		currentState.CooldownUntil = &cooldownUntil
-		currentState.RecentTimeouts++
-		_ = h.nm.SaveNodeRuntimeState(ctx, &currentState)
-
-		// Get all nodes again to recalculate score
-		states[selectedNode.NodeID] = currentState
-
-		// Try selecting another node (excluding the cooldown one)
-		newSelectedNode, err := h.sch.SelectNode(ctx, nodes, states, userPriority, "")
+		// Delegate to RebindingManager to safely handle distributed session lock, selection and retry
+		newRes, newSelectedNode, err := h.rm.ExecuteRebinding(
+			ctx,
+			sess,
+			selectedNode.NodeID,
+			reqPayload,
+			stream,
+			h.rt,
+			nodes,
+			states,
+			userPriority,
+			h.sch.SelectNode,
+		)
 		if err != nil {
-			_ = h.logEvent(ctx, ownerID, &sess.ID, nil, "RebindingFailed", map[string]any{"reason": "no backup nodes available"})
-			return nil, execErr
-		}
-
-		// Grant new lease
-		newLease.LeaseID = fmt.Sprintf("lease-%d-retry", time.Now().UnixNano())
-		newLease.NodeID = newSelectedNode.NodeID
-		newLease.GrantedAt = time.Now()
-		_ = h.lm.SaveLease(ctx, newLease)
-
-		sess.Lease = newLease
-		sess.UpdatedAt = time.Now()
-		_ = h.sm.SaveSession(ctx, sess)
-
-		// Retry execution once
-		res, execErr = h.rt.Execute(ctx, newSelectedNode.NodeID, reqPayload, stream)
-		if execErr != nil {
-			_ = h.logEvent(ctx, ownerID, &sess.ID, &newSelectedNode.NodeID, "RebindingFailed", map[string]any{"error": execErr.Error()})
+			_ = h.logEvent(ctx, ownerID, &sess.ID, nil, "RebindingFailed", map[string]any{"reason": err.Error()})
 			return nil, execErr
 		}
 
 		_ = h.logEvent(ctx, ownerID, &sess.ID, &newSelectedNode.NodeID, "RebindingSucceeded", nil)
+		res = newRes
 		selectedNode = newSelectedNode
 	}
 
