@@ -333,13 +333,13 @@ func TestHypervisorDay3(t *testing.T) {
 	}
 
 	// Select best node (should pick node-healthy-2 because it has better success rate and no latency/queue penalty)
-	selectedNode, err := sch.SelectNode(ctx, nodes, states, 1, "")
+	selectedNode, err := sch.SelectNode(ctx, nodes, states, 1, "", "NORMAL")
 	require.NoError(t, err)
 	require.Equal(t, "node-healthy-2", selectedNode.NodeID)
 
 	// Now test affinity bonus (if we have currentLeaseNodeID pointing to node-healthy-1)
 	// node-healthy-1 will get a bonus of 15.0 which will make its score higher than node-healthy-2
-	selectedNode, err = sch.SelectNode(ctx, nodes, states, 1, "node-healthy-1")
+	selectedNode, err = sch.SelectNode(ctx, nodes, states, 1, "node-healthy-1", "NORMAL")
 	require.NoError(t, err)
 	require.Equal(t, "node-healthy-1", selectedNode.NodeID)
 
@@ -351,7 +351,46 @@ func TestHypervisorDay3(t *testing.T) {
 			Priority: 1,
 		},
 	}
-	selectedNode, err = sch.SelectNode(ctx, onlyLimitedNodes, nil, 1, "")
+	selectedNode, err = sch.SelectNode(ctx, onlyLimitedNodes, nil, 1, "", "NORMAL")
 	require.NoError(t, err)
 	require.Equal(t, "node-limited", selectedNode.NodeID)
 }
+
+func TestHealthControllerAndDegradation(t *testing.T) {
+	ctx := context.Background()
+	store := newTestStorage(t)
+	hc := health.NewHealthController(store)
+
+	// Register some mock nodes
+	_ = store.Redis().SAdd(ctx, "ash:nodes", "node-1", "node-2").Err()
+
+	// Initial reconcile should compute NORMAL state
+	err := hc.Reconcile(ctx)
+	require.NoError(t, err)
+	require.Equal(t, "NORMAL", hc.GetSystemState(ctx))
+
+	// Now check warning penalties in scheduler
+	sch := scheduler.NewScheduler()
+	nodes := []health.ExecutionNode{
+		{NodeID: "node-1", State: "healthy"},
+	}
+	states := map[string]health.NodeRuntimeState{
+		"node-1": {
+			NodeID:       "node-1",
+			SuccessRate:  1.0,
+			AvgLatencyMs: 100,
+			Recent429:    1,
+		},
+	}
+
+	// Under NORMAL state
+	node, err := sch.SelectNode(ctx, nodes, states, 1, "", "NORMAL")
+	require.NoError(t, err)
+	require.NotNil(t, node)
+
+	// Under WARNING state, penalties are double, so check it runs without panic
+	nodeWarn, err := sch.SelectNode(ctx, nodes, states, 1, "", "WARNING")
+	require.NoError(t, err)
+	require.NotNil(t, nodeWarn)
+}
+

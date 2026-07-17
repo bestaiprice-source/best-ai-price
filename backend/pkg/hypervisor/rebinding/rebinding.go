@@ -39,7 +39,8 @@ func (rm *RebindingManager) ExecuteRebinding(
 	nodes []health.ExecutionNode,
 	states map[string]health.NodeRuntimeState,
 	userPriority int,
-	selectNodeFn func(ctx context.Context, nodes []health.ExecutionNode, states map[string]health.NodeRuntimeState, userPriority int, activeLease string) (*health.ExecutionNode, error),
+	selectNodeFn func(ctx context.Context, nodes []health.ExecutionNode, states map[string]health.NodeRuntimeState, userPriority int, activeLease string, systemState string) (*health.ExecutionNode, error),
+	systemState string,
 ) (*runtime.ResponseMetadata, *health.ExecutionNode, error) {
 	// 1. Acquire Redis distributed lock
 	locked, err := rm.store.AcquireLock(ctx, sess.ID, 30*time.Second)
@@ -62,7 +63,7 @@ func (rm *RebindingManager) ExecuteRebinding(
 	states[failedNodeID] = currentState
 
 	// 3. Select backup node
-	newNode, err := selectNodeFn(ctx, nodes, states, userPriority, "")
+	newNode, err := selectNodeFn(ctx, nodes, states, userPriority, "", systemState)
 	if err != nil {
 		return nil, nil, fmt.Errorf("no backup nodes available: %w", err)
 	}

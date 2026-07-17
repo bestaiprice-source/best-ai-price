@@ -24,7 +24,7 @@ func NewScheduler() *Scheduler {
 }
 
 // SelectNode selects the best execution node for a session based on the score formula
-func (s *Scheduler) SelectNode(ctx context.Context, nodes []health.ExecutionNode, states map[string]health.NodeRuntimeState, userPriority int, currentLeaseNodeID string) (*health.ExecutionNode, error) {
+func (s *Scheduler) SelectNode(ctx context.Context, nodes []health.ExecutionNode, states map[string]health.NodeRuntimeState, userPriority int, currentLeaseNodeID string, systemState string) (*health.ExecutionNode, error) {
 	now := time.Now()
 	var candidates []health.ExecutionNode
 
@@ -110,14 +110,36 @@ func (s *Scheduler) SelectNode(ctx context.Context, nodes []health.ExecutionNode
 		// - queue_depth * 5
 		score -= float64(queueDepth) * 5.0
 
-		// - avg_latency_ms / 100
-		score -= float64(avgLatencyMs) / 100.0
+		// Penalize more heavily based on degradation state
+		multiplier429 := 30.0
+		multiplierTimeout := 20.0
+		latencyDivider := 100.0
 
-		// - recent_429 * 30
-		score -= float64(recent429) * 30.0
+		if systemState == "WARNING" {
+			// Double the penalties in warning state to steer clear of shaky accounts
+			multiplier429 = 60.0
+			multiplierTimeout = 40.0
+			latencyDivider = 50.0
+		}
 
-		// - recent_timeout * 20
-		score -= float64(recentTimeout) * 20.0
+		// - avg_latency_ms / latencyDivider
+		score -= float64(avgLatencyMs) / latencyDivider
+
+		// - recent_429 * multiplier429
+		score -= float64(recent429) * multiplier429
+
+		// - recent_timeout * multiplierTimeout
+		score -= float64(recentTimeout) * multiplierTimeout
+
+		// Warmup penalty for cold nodes in RECOVERY system state (gradual traffic redirection)
+		if systemState == "RECOVERY" && exists && state.LastErrorAt != nil {
+			timeSinceError := time.Since(*state.LastErrorAt)
+			if timeSinceError < 5*time.Minute {
+				// Deduct score dynamically based on how recently the error occurred
+				warmupPenalty := (5*time.Minute - timeSinceError).Seconds() * 0.5
+				score -= warmupPenalty
+			}
+		}
 
 		if bestNode == nil || score > bestScore {
 			bestNode = &finalCandidates[i]

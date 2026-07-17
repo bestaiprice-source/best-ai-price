@@ -8,6 +8,7 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/ent/account"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/compiler"
+	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/config"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/events"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/health"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/lease"
@@ -30,10 +31,11 @@ type Hypervisor struct {
 	rt    runtime.Runtime
 	rm    *rebinding.RebindingManager
 	comp  *compiler.Compiler
+	hc    *health.HealthController
 }
 
 func NewHypervisor(store *storage.Storage, rt runtime.Runtime) *Hypervisor {
-	return &Hypervisor{
+	h := &Hypervisor{
 		store: store,
 		sm:    session.NewSessionManager(store),
 		lm:    lease.NewLeaseManager(store),
@@ -44,7 +46,15 @@ func NewHypervisor(store *storage.Storage, rt runtime.Runtime) *Hypervisor {
 		rt:    rt,
 		rm:    rebinding.NewRebindingManager(store),
 		comp:  compiler.NewCompiler(),
+		hc:    health.NewHealthController(store),
 	}
+
+	cfg := config.LoadFromEnv()
+	if cfg.EnableHealthController {
+		h.hc.Start(context.Background(), 10*time.Second)
+	}
+
+	return h
 }
 
 func (h *Hypervisor) HandleRequest(ctx context.Context, ownerID string, conversationID string, reqPayload []byte, stream io.Writer) (*runtime.ResponseMetadata, error) {
@@ -100,8 +110,20 @@ func (h *Hypervisor) HandleRequest(ctx context.Context, ownerID string, conversa
 		userPriority = ua.Priority
 	}
 
+	// Fetch system state from Redis
+	systemState := h.hc.GetSystemState(ctx)
+
+	// Enforce degradation policies
+	if systemState == "SURVIVAL" {
+		// Enforce survival rules: only high priority users allowed
+		if userPriority < 2 {
+			_ = h.logEvent(ctx, ownerID, &sess.ID, nil, "QuotaExceeded", map[string]any{"reason": "system in survival mode: low priority requests rejected"})
+			return nil, fmt.Errorf("system in survival mode: only high priority requests allowed")
+		}
+	}
+
 	// 5. Select Best Node via Scheduler
-	selectedNode, err := h.sch.SelectNode(ctx, nodes, states, userPriority, activeLeaseNodeID)
+	selectedNode, err := h.sch.SelectNode(ctx, nodes, states, userPriority, activeLeaseNodeID, systemState)
 	if err != nil {
 		return nil, err
 	}
@@ -152,6 +174,7 @@ func (h *Hypervisor) HandleRequest(ctx context.Context, ownerID string, conversa
 			states,
 			userPriority,
 			h.sch.SelectNode,
+			systemState,
 		)
 		if err != nil {
 			_ = h.logEvent(ctx, ownerID, &sess.ID, nil, "RebindingFailed", map[string]any{"reason": err.Error()})
