@@ -46,97 +46,131 @@ func (hc *HealthController) Stop() {
 }
 
 func (hc *HealthController) Reconcile(ctx context.Context) error {
-	var nodeIDs []string
+	platforms := []string{"anthropic", "openai"}
 
-	// Query PostgreSQL active accounts first
-	dbAccounts, dbErr := hc.store.DB().Account.Query().
-		Where(
-			account.Platform("anthropic"),
-			account.Status("active"),
-		).
-		All(ctx)
+	for _, plat := range platforms {
+		var nodeIDs []string
 
-	if dbErr == nil && len(dbAccounts) > 0 {
-		for _, acc := range dbAccounts {
-			nodeIDs = append(nodeIDs, fmt.Sprintf("%d", acc.ID))
-		}
-	} else {
-		// Fallback to Redis set for tests
-		nodeIDs, _ = hc.store.Redis().SMembers(ctx, "ash:nodes").Result()
-	}
+		// Query PostgreSQL active accounts first
+		dbAccounts, dbErr := hc.store.DB().Account.Query().
+			Where(
+				account.Platform(plat),
+				account.Status("active"),
+			).
+			All(ctx)
 
-	var healthyCount int
-	var totalCount = len(nodeIDs)
-
-	for _, nodeID := range nodeIDs {
-		node, err := hc.nm.GetNode(ctx, nodeID)
-		if err != nil || node == nil {
-			node = &ExecutionNode{
-				NodeID:       nodeID,
-				State:        "healthy",
-				Capabilities: []string{"claude-3-5-sonnet"},
-				UpdatedAt:    time.Now(),
+		if dbErr == nil && len(dbAccounts) > 0 {
+			for _, acc := range dbAccounts {
+				nodeIDs = append(nodeIDs, fmt.Sprintf("%d", acc.ID))
+			}
+		} else {
+			// Fallback to Redis set (filtered by platform if possible, or all nodes for tests)
+			allNodes, _ := hc.store.Redis().SMembers(ctx, "ash:nodes").Result()
+			for _, nodeID := range allNodes {
+				node, err := hc.nm.GetNode(ctx, nodeID)
+				if err == nil && node != nil && (node.Provider == plat || node.Provider == "") {
+					nodeIDs = append(nodeIDs, nodeID)
+				}
 			}
 		}
 
-		state, err := hc.nm.GetNodeRuntimeState(ctx, nodeID)
-		if err != nil || state == nil {
-			state = &NodeRuntimeState{NodeID: nodeID}
-		}
+		var healthyCount int
+		var totalCount = len(nodeIDs)
 
-		now := time.Now()
+		for _, nodeID := range nodeIDs {
+			node, err := hc.nm.GetNode(ctx, nodeID)
+			if err != nil || node == nil {
+				node = &ExecutionNode{
+					NodeID:       nodeID,
+					State:        "healthy",
+					Capabilities: []string{plat},
+					Provider:     plat,
+					UpdatedAt:    time.Now(),
+				}
+			}
 
-		// Cooldown check
-		if state.CooldownUntil != nil && now.After(*state.CooldownUntil) {
-			// Cooldown expired, transition back to healthy
-			state.CooldownUntil = nil
-			node.State = "healthy"
-			state.Recent429 = 0
-			state.RecentTimeouts = 0
+			state, err := hc.nm.GetNodeRuntimeState(ctx, nodeID)
+			if err != nil || state == nil {
+				state = &NodeRuntimeState{NodeID: nodeID}
+			}
+
+			now := time.Now()
+
+			// Cooldown check
+			if state.CooldownUntil != nil && now.After(*state.CooldownUntil) {
+				// Cooldown expired, transition back to healthy
+				state.CooldownUntil = nil
+				node.State = "healthy"
+				state.Recent429 = 0
+				state.RecentTimeouts = 0
+				_ = hc.nm.SaveNode(ctx, node)
+				_ = hc.nm.SaveNodeRuntimeState(ctx, state)
+			}
+
+			// Determine current state
+			if state.CooldownUntil != nil && now.Before(*state.CooldownUntil) {
+				node.State = "cooldown"
+			} else if state.Recent429 > 3 || state.RecentTimeouts > 5 {
+				node.State = "limited"
+			} else if node.State == "" {
+				node.State = "healthy"
+			}
+
 			_ = hc.nm.SaveNode(ctx, node)
-			_ = hc.nm.SaveNodeRuntimeState(ctx, state)
+
+			if node.State == "healthy" {
+				healthyCount++
+			}
 		}
 
-		// Determine current state
-		if state.CooldownUntil != nil && now.Before(*state.CooldownUntil) {
-			node.State = "cooldown"
-		} else if state.Recent429 > 3 || state.RecentTimeouts > 5 {
-			node.State = "limited"
-		} else if node.State == "" {
-			node.State = "healthy"
+		// 2. Compute System Degradation State
+		systemState := "NORMAL"
+		if totalCount > 0 {
+			healthyRatio := float64(healthyCount) / float64(totalCount)
+			if healthyRatio >= 0.75 {
+				systemState = "NORMAL"
+			} else if healthyRatio >= 0.50 {
+				systemState = "WARNING"
+			} else if healthyRatio >= 0.25 {
+				systemState = "DEGRADED"
+			} else {
+				systemState = "SURVIVAL"
+			}
 		}
 
-		_ = hc.nm.SaveNode(ctx, node)
-
-		if node.State == "healthy" {
-			healthyCount++
-		}
+		// Save platform specific system state in Redis
+		_ = hc.store.Redis().Set(ctx, "ash:system:state:"+plat, systemState, 0).Err()
 	}
 
-	// 2. Compute System Degradation State
-	systemState := "NORMAL"
-	if totalCount > 0 {
-		healthyRatio := float64(healthyCount) / float64(totalCount)
-		if healthyRatio >= 0.75 {
-			systemState = "NORMAL"
-		} else if healthyRatio >= 0.50 {
-			systemState = "WARNING"
-		} else if healthyRatio >= 0.25 {
-			systemState = "DEGRADED"
-		} else {
-			systemState = "SURVIVAL"
-		}
-	}
+	// Also update global state (worst of the two)
+	gState := "NORMAL"
+	anthropicState, _ := hc.store.Redis().Get(ctx, "ash:system:state:anthropic").Result()
+	openaiState, _ := hc.store.Redis().Get(ctx, "ash:system:state:openai").Result()
 
-	// Save system state in Redis
-	err := hc.store.Redis().Set(ctx, "ash:system:state", systemState, 0).Err()
-	return err
+	statesPriority := map[string]int{"SURVIVAL": 4, "DEGRADED": 3, "WARNING": 2, "NORMAL": 1}
+	if statesPriority[anthropicState] > statesPriority[gState] {
+		gState = anthropicState
+	}
+	if statesPriority[openaiState] > statesPriority[gState] {
+		gState = openaiState
+	}
+	_ = hc.store.Redis().Set(ctx, "ash:system:state", gState, 0).Err()
+
+	return nil
 }
 
-func (hc *HealthController) GetSystemState(ctx context.Context) string {
-	state, err := hc.store.Redis().Get(ctx, "ash:system:state").Result()
+func (hc *HealthController) GetSystemState(ctx context.Context, platform string) string {
+	if platform == "" {
+		platform = "anthropic"
+	}
+	state, err := hc.store.Redis().Get(ctx, "ash:system:state:"+platform).Result()
 	if err != nil || state == "" {
-		return "NORMAL"
+		// Fallback to global state
+		gState, err := hc.store.Redis().Get(ctx, "ash:system:state").Result()
+		if err != nil || gState == "" {
+			return "NORMAL"
+		}
+		return gState
 	}
 	return state
 }

@@ -23,6 +23,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/tidwall/gjson"
 	"go.uber.org/zap"
+	"github.com/Wei-Shaw/sub2api/pkg/hypervisor"
 )
 
 // OpenAIGatewayHandler handles OpenAI API gateway requests
@@ -35,6 +36,7 @@ type OpenAIGatewayHandler struct {
 	concurrencyHelper       *ConcurrencyHelper
 	maxAccountSwitches      int
 	cfg                     *config.Config
+	hypervisorEngine        *hypervisor.Hypervisor
 }
 
 const (
@@ -342,6 +344,42 @@ func NewOpenAIGatewayHandler(
 		concurrencyHelper:       NewConcurrencyHelper(concurrencyService, SSEPingFormatComment, pingInterval),
 		maxAccountSwitches:      maxAccountSwitches,
 		cfg:                     cfg,
+	}
+}
+
+func (h *OpenAIGatewayHandler) SetHypervisorEngine(engine *hypervisor.Hypervisor) {
+	h.hypervisorEngine = engine
+}
+
+func (h *OpenAIGatewayHandler) handleHypervisorChatCompletions(c *gin.Context) {
+	transportCtx := gatewayctx.FromGin(c)
+	subject, ok := middleware2.GetAuthSubjectFromGatewayContext(transportCtx)
+	if !ok {
+		h.errorResponseGateway(transportCtx, http.StatusInternalServerError, "api_error", "User context not found")
+		return
+	}
+
+	ownerID := fmt.Sprintf("%d", subject.UserID)
+
+	body, err := pkghttputil.ReadRequestBodyWithPrealloc(c.Request)
+	if err != nil {
+		h.errorResponseGateway(transportCtx, http.StatusBadRequest, "invalid_request_error", "Failed to read request body")
+		return
+	}
+
+	conversationID := c.Query("conversation_id")
+	if conversationID == "" {
+		conversationID = c.GetHeader("X-Conversation-ID")
+	}
+
+	c.Header("Content-Type", "text/event-stream")
+	c.Header("Cache-Control", "no-cache")
+	c.Header("Connection", "keep-alive")
+
+	_, err = h.hypervisorEngine.HandleRequest(c.Request.Context(), ownerID, conversationID, body, c.Writer, "openai")
+	if err != nil {
+		h.errorResponseGateway(transportCtx, http.StatusBadGateway, "api_error", err.Error())
+		return
 	}
 }
 

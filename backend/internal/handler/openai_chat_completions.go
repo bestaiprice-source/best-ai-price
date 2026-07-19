@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"os"
 	"time"
 
 	pkghttputil "github.com/Wei-Shaw/sub2api/internal/pkg/httputil"
@@ -19,6 +20,10 @@ import (
 // ChatCompletions handles OpenAI Chat Completions API requests.
 // POST /v1/chat/completions
 func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
+	if os.Getenv("ASH_ENABLED") == "true" {
+		h.handleHypervisorChatCompletions(c)
+		return
+	}
 	h.ChatCompletionsGateway(gatewayctx.FromGin(c))
 }
 

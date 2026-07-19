@@ -29,6 +29,7 @@ type Runtime interface {
 
 // MockRuntime implements Runtime for simulating upstream responses and testing failures
 type MockRuntime struct {
+	store           *storage.Storage
 	SuccessDelay    time.Duration
 	SlowStreamDelay time.Duration
 	Force429        bool
@@ -36,8 +37,8 @@ type MockRuntime struct {
 	ForceDisconnect bool
 }
 
-func NewMockRuntime() *MockRuntime {
-	return &MockRuntime{}
+func NewMockRuntime(store *storage.Storage) *MockRuntime {
+	return &MockRuntime{store: store}
 }
 
 func (m *MockRuntime) Execute(ctx context.Context, nodeID string, reqPayload []byte, stream io.Writer) (*ResponseMetadata, error) {
@@ -60,6 +61,50 @@ func (m *MockRuntime) Execute(ctx context.Context, nodeID string, reqPayload []b
 
 	if m.SuccessDelay > 0 {
 		time.Sleep(m.SuccessDelay)
+	}
+
+	platform := "anthropic"
+	if m.store != nil {
+		var acc *ent.Account
+		var err error
+		dbClient := m.store.DB()
+		if id, parseErr := strconv.ParseInt(nodeID, 10, 64); parseErr == nil {
+			acc, err = dbClient.Account.Get(ctx, id)
+		}
+		if err != nil || acc == nil {
+			acc, err = dbClient.Account.Query().Where(dbaccount.Name(nodeID)).Only(ctx)
+		}
+		if err == nil && acc != nil {
+			platform = acc.Platform
+		}
+	}
+
+	if platform == "openai" {
+		events := []string{
+			"data: {\"id\":\"chatcmpl-mock\",\"object\":\"chat.completion.chunk\",\"created\":1677858342,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"\"},\"finish_reason\":null}]}\n\n",
+			"data: {\"id\":\"chatcmpl-mock\",\"object\":\"chat.completion.chunk\",\"created\":1677858342,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"Hello \"},\"finish_reason\":null}]}\n\n",
+			"data: {\"id\":\"chatcmpl-mock\",\"object\":\"chat.completion.chunk\",\"created\":1677858342,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"from \"},\"finish_reason\":null}]}\n\n",
+			"data: {\"id\":\"chatcmpl-mock\",\"object\":\"chat.completion.chunk\",\"created\":1677858342,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"OpenAI Mock!\"},\"finish_reason\":null}]}\n\n",
+			"data: {\"id\":\"chatcmpl-mock\",\"object\":\"chat.completion.chunk\",\"created\":1677858342,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n",
+			"data: [DONE]\n\n",
+		}
+		for _, ev := range events {
+			if m.SlowStreamDelay > 0 {
+				time.Sleep(m.SlowStreamDelay)
+			}
+			_, err := stream.Write([]byte(ev))
+			if err != nil {
+				return nil, err
+			}
+			if flusher, ok := stream.(http.Flusher); ok {
+				flusher.Flush()
+			}
+		}
+		return &ResponseMetadata{
+			InputTokens:  15,
+			OutputTokens: 10,
+			StatusCode:   200,
+		}, nil
 	}
 
 	// Simulating standard Anthropic SSE stream
@@ -157,20 +202,28 @@ func (r *AnthropicRuntime) Execute(ctx context.Context, nodeID string, reqPayloa
 
 	// 4. Create HTTP Request
 	apiURL := "https://api.anthropic.com/v1/messages"
+	if acc.Platform == "openai" {
+		apiURL = "https://api.openai.com/v1/chat/completions"
+	}
 	req, err := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewReader(reqPayload))
 	if err != nil {
 		return nil, err
 	}
 
-	if acc.Type == "oauth" {
+	if acc.Platform == "openai" {
 		req.Header.Set("Authorization", "Bearer "+apiKey)
-		req.Header.Set("anthropic-beta", "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,fine-grained-tool-streaming-2025-05-14")
+		req.Header.Set("Content-Type", "application/json")
 	} else {
-		req.Header.Set("x-api-key", apiKey)
+		if acc.Type == "oauth" {
+			req.Header.Set("Authorization", "Bearer "+apiKey)
+			req.Header.Set("anthropic-beta", "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,fine-grained-tool-streaming-2025-05-14")
+		} else {
+			req.Header.Set("x-api-key", apiKey)
+		}
+		req.Header.Set("anthropic-version", "2023-06-01")
+		req.Header.Set("content-type", "application/json")
+		req.Header.Set("accept", "text/event-stream")
 	}
-	req.Header.Set("anthropic-version", "2023-06-01")
-	req.Header.Set("content-type", "application/json")
-	req.Header.Set("accept", "text/event-stream")
 
 	// 5. Send request
 	transport := &http.Transport{

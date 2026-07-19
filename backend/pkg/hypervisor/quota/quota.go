@@ -141,7 +141,7 @@ func (qm *QuotaManager) GetDynamicLimit(ctx context.Context, ownerID string) (in
 		Count(ctx)
 	nodes, _ := qm.store.DB().Account.Query().
 		Where(
-			account.Platform("anthropic"),
+			account.PlatformIn("anthropic", "openai"),
 			account.Status("active"),
 		).
 		Count(ctx)

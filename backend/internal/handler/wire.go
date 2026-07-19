@@ -110,6 +110,9 @@ func ProvideHandlers(
 	_ *service.IdempotencyCleanupService,
 	_ *adminTaskStateCacheSetup,
 ) *Handlers {
+	if openaiGatewayHandler != nil && gatewayHandler != nil {
+		openaiGatewayHandler.SetHypervisorEngine(gatewayHandler.GetHypervisorEngine())
+	}
 	return &Handlers{
 		Auth:             authHandler,
 		User:             userHandler,

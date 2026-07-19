@@ -102,7 +102,7 @@ func NewGatewayHandler(
 	hyperStore := storage.NewStorage(entClient, redisClient)
 	var rt runtime.Runtime = runtime.NewAnthropicRuntime(hyperStore)
 	if os.Getenv("ASH_ENABLE_MOCK_RUNTIME") == "true" {
-		rt = runtime.NewMockRuntime()
+		rt = runtime.NewMockRuntime(hyperStore)
 	}
 	engine := hypervisor.NewHypervisor(hyperStore, rt)
 
@@ -161,11 +161,15 @@ func (h *GatewayHandler) handleHypervisorMessages(c *gin.Context) {
 	c.Header("Cache-Control", "no-cache")
 	c.Header("Connection", "keep-alive")
 
-	_, err = h.hypervisorEngine.HandleRequest(c.Request.Context(), ownerID, conversationID, body, c.Writer)
+	_, err = h.hypervisorEngine.HandleRequest(c.Request.Context(), ownerID, conversationID, body, c.Writer, "anthropic")
 	if err != nil {
 		h.errorResponseGateway(transportCtx, http.StatusBadGateway, "api_error", err.Error())
 		return
 	}
+}
+
+func (h *GatewayHandler) GetHypervisorEngine() *hypervisor.Hypervisor {
+	return h.hypervisorEngine
 }
 
 func (h *GatewayHandler) MessagesGateway(transportCtx gatewayctx.GatewayContext) {

@@ -57,7 +57,7 @@ func NewHypervisor(store *storage.Storage, rt runtime.Runtime) *Hypervisor {
 	return h
 }
 
-func (h *Hypervisor) HandleRequest(ctx context.Context, ownerID string, conversationID string, reqPayload []byte, stream io.Writer) (*runtime.ResponseMetadata, error) {
+func (h *Hypervisor) HandleRequest(ctx context.Context, ownerID string, conversationID string, reqPayload []byte, stream io.Writer, platform string) (*runtime.ResponseMetadata, error) {
 	// 1. Check Quota
 	allowed, err := h.qm.CheckQuota(ctx, ownerID)
 	if err != nil {
@@ -95,7 +95,7 @@ func (h *Hypervisor) HandleRequest(ctx context.Context, ownerID string, conversa
 	}
 
 	// 4. Load pool nodes and states
-	nodes, err := h.getAllNodes(ctx)
+	nodes, err := h.getAllNodes(ctx, platform)
 	if err != nil {
 		return nil, err
 	}
@@ -111,7 +111,7 @@ func (h *Hypervisor) HandleRequest(ctx context.Context, ownerID string, conversa
 	}
 
 	// Fetch system state from Redis
-	systemState := h.hc.GetSystemState(ctx)
+	systemState := h.hc.GetSystemState(ctx, platform)
 
 	// Enforce degradation policies
 	if systemState == "SURVIVAL" {
@@ -202,11 +202,22 @@ func (h *Hypervisor) HandleRequest(ctx context.Context, ownerID string, conversa
 	return res, nil
 }
 
-func (h *Hypervisor) getAllNodes(ctx context.Context) ([]health.ExecutionNode, error) {
+func (h *Hypervisor) Storage() *storage.Storage {
+	return h.store
+}
+
+func (h *Hypervisor) HealthController() *health.HealthController {
+	return h.hc
+}
+
+func (h *Hypervisor) getAllNodes(ctx context.Context, platform string) ([]health.ExecutionNode, error) {
+	if platform == "" {
+		platform = "anthropic"
+	}
 	// Try loading from DB first
 	dbAccounts, _ := h.store.DB().Account.Query().
 		Where(
-			account.Platform("anthropic"),
+			account.Platform(platform),
 			account.Status("active"),
 		).
 		All(ctx)
@@ -221,7 +232,7 @@ func (h *Hypervisor) getAllNodes(ctx context.Context) ([]health.ExecutionNode, e
 				AccountName:  acc.Name,
 				Provider:     acc.Platform,
 				State:        "healthy",
-				Capabilities: []string{"claude-3-5-sonnet"},
+				Capabilities: []string{platform},
 				Priority:     acc.Priority,
 				UpdatedAt:    time.Now(),
 			}
@@ -235,7 +246,7 @@ func (h *Hypervisor) getAllNodes(ctx context.Context) ([]health.ExecutionNode, e
 		nodeIDs, _ := h.store.Redis().SMembers(ctx, "ash:nodes").Result()
 		for _, id := range nodeIDs {
 			node, err := h.nm.GetNode(ctx, id)
-			if err == nil && node != nil {
+			if err == nil && node != nil && (node.Provider == platform || node.Provider == "") {
 				list = append(list, *node)
 			}
 		}

@@ -1,6 +1,7 @@
 package hypervisor_test
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"fmt"
@@ -18,6 +19,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/health"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/lease"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/quota"
+	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/runtime"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/scheduler"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/session"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/storage"
@@ -367,7 +369,7 @@ func TestHealthControllerAndDegradation(t *testing.T) {
 	// Initial reconcile should compute NORMAL state
 	err := hc.Reconcile(ctx)
 	require.NoError(t, err)
-	require.Equal(t, "NORMAL", hc.GetSystemState(ctx))
+	require.Equal(t, "NORMAL", hc.GetSystemState(ctx, "anthropic"))
 
 	// Now check warning penalties in scheduler
 	sch := scheduler.NewScheduler()
@@ -392,5 +394,32 @@ func TestHealthControllerAndDegradation(t *testing.T) {
 	nodeWarn, err := sch.SelectNode(ctx, nodes, states, 1, "", "WARNING")
 	require.NoError(t, err)
 	require.NotNil(t, nodeWarn)
+}
+
+func TestOpenAIMockAndStatsEndpoints(t *testing.T) {
+	ctx := context.Background()
+	store := newTestStorage(t)
+
+	// Create an account with platform = "openai"
+	acc, err := store.DB().Account.Create().
+		SetName("openai-mock-node").
+		SetPlatform("openai").
+		SetType("api_key").
+		SetStatus("active").
+		SetCredentials(map[string]any{"api_key": "sk-mock-key"}).
+		Save(ctx)
+	require.NoError(t, err)
+
+	rt := runtime.NewMockRuntime(store)
+	var buf bytes.Buffer
+	res, err := rt.Execute(ctx, fmt.Sprintf("%d", acc.ID), []byte(`{"model":"gpt-4o"}`), &buf)
+	require.NoError(t, err)
+	require.NotNil(t, res)
+	require.Equal(t, 200, res.StatusCode)
+
+	// Verify the stream contains OpenAI chunk data
+	streamStr := buf.String()
+	require.Contains(t, streamStr, "chat.completion.chunk")
+	require.Contains(t, streamStr, "[DONE]")
 }
 

@@ -103,6 +103,9 @@ func registerRoutes(
 	// 通用路由（健康检查、状态等）
 	routes.RegisterCommonRoutes(r)
 
+	// Hypervisor ASH monitoring and admin control routes
+	routes.RegisterAshRoutes(r, h, jwtAuth, adminAuth)
+
 	// API v1
 	v1 := r.Group("/api/v1")
 
