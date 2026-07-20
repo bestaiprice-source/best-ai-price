@@ -59,8 +59,11 @@ func (rm *RebindingManager) ExecuteRebinding(
 		errMsg = execErr.Error()
 	}
 	isUpstreamError := strings.Contains(errMsg, "upstream error status 429") ||
+		strings.Contains(errMsg, "upstream error status 401") ||
+		strings.Contains(errMsg, "upstream error status 403") ||
 		strings.Contains(errMsg, "upstream error status 5") ||
 		strings.Contains(errMsg, "rate_limit_error") ||
+		strings.Contains(errMsg, "permission_error") ||
 		strings.Contains(errMsg, "overloaded_error")
 
 	if isUpstreamError {
