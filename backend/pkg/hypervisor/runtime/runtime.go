@@ -3,6 +3,7 @@ package runtime
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -208,6 +209,14 @@ func (r *AnthropicRuntime) Execute(ctx context.Context, nodeID string, reqPayloa
 		return nil, err
 	}
 
+	var payloadMap struct {
+		Stream bool `json:"stream"`
+	}
+	isStream := false
+	if json.Unmarshal(reqPayload, &payloadMap) == nil {
+		isStream = payloadMap.Stream
+	}
+
 	if acc.Platform == "openai" {
 		req.Header.Set("Authorization", "Bearer "+apiKey)
 		req.Header.Set("Content-Type", "application/json")
@@ -220,7 +229,11 @@ func (r *AnthropicRuntime) Execute(ctx context.Context, nodeID string, reqPayloa
 		}
 		req.Header.Set("anthropic-version", "2023-06-01")
 		req.Header.Set("content-type", "application/json")
-		req.Header.Set("accept", "text/event-stream")
+		if isStream {
+			req.Header.Set("accept", "text/event-stream")
+		} else {
+			req.Header.Set("accept", "application/json")
+		}
 	}
 
 	// 5. Send request
