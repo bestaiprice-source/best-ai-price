@@ -225,7 +225,7 @@ func (r *AnthropicRuntime) Execute(ctx context.Context, nodeID string, reqPayloa
 		if isOAuthOrSetupToken {
 			req.Header.Set("Authorization", "Bearer "+apiKey)
 			req.Header.Set("User-Agent", "Claude-Code/0.2.29")
-			req.Header.Set("anthropic-beta", "claude-code-20250219,oauth-2025-04-20")
+			req.Header.Set("anthropic-beta", "claude-code-20250219,oauth-2025-04-20,prompt-caching-2024-07-31")
 		} else {
 			req.Header.Set("x-api-key", apiKey)
 			req.Header.Set("User-Agent", "Claude-Code/0.2.29")
