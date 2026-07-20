@@ -225,6 +225,14 @@ func (h *Hypervisor) getAllNodes(ctx context.Context, platform string) ([]health
 		).
 		All(ctx)
 
+	if len(dbAccounts) == 0 {
+		dbAccounts, _ = h.store.DB().Account.Query().
+			Where(
+				account.StatusIn("active", "error"),
+			).
+			All(ctx)
+	}
+
 	var list []health.ExecutionNode
 	for _, acc := range dbAccounts {
 		nodeID := fmt.Sprintf("%d", acc.ID)

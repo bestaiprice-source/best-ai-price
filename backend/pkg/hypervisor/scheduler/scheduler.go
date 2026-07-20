@@ -42,11 +42,19 @@ func (s *Scheduler) SelectNode(ctx context.Context, nodes []health.ExecutionNode
 			}
 		}
 
-		if isCooldown {
+		if isCooldown && len(nodes) > 1 {
 			continue
 		}
 
 		candidates = append(candidates, node)
+	}
+
+	if len(candidates) == 0 {
+		for _, node := range nodes {
+			if node.State != "unavailable" {
+				candidates = append(candidates, node)
+			}
+		}
 	}
 
 	if len(candidates) == 0 {
