@@ -224,9 +224,11 @@ func (r *AnthropicRuntime) Execute(ctx context.Context, nodeID string, reqPayloa
 		isOAuthOrSetupToken := acc.Type == "oauth" || acc.Type == "setup-token" || strings.HasPrefix(apiKey, "sk-ant-oat") || strings.HasPrefix(apiKey, "sk-oat")
 		if isOAuthOrSetupToken {
 			req.Header.Set("Authorization", "Bearer "+apiKey)
+			req.Header.Set("User-Agent", "Claude-Code/0.2.29")
 			req.Header.Set("anthropic-beta", "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,fine-grained-tool-streaming-2025-05-14")
 		} else {
 			req.Header.Set("x-api-key", apiKey)
+			req.Header.Set("User-Agent", "Claude-Code/0.2.29")
 		}
 		req.Header.Set("anthropic-version", "2023-06-01")
 		req.Header.Set("content-type", "application/json")
