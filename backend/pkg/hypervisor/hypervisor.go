@@ -175,6 +175,7 @@ func (h *Hypervisor) HandleRequest(ctx context.Context, ownerID string, conversa
 			userPriority,
 			h.sch.SelectNode,
 			systemState,
+			execErr,
 		)
 		if err != nil {
 			_ = h.logEvent(ctx, ownerID, &sess.ID, nil, "RebindingFailed", map[string]any{"reason": err.Error()})

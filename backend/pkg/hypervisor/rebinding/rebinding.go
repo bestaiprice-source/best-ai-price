@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/health"
@@ -41,6 +42,7 @@ func (rm *RebindingManager) ExecuteRebinding(
 	userPriority int,
 	selectNodeFn func(ctx context.Context, nodes []health.ExecutionNode, states map[string]health.NodeRuntimeState, userPriority int, activeLease string, systemState string) (*health.ExecutionNode, error),
 	systemState string,
+	execErr error,
 ) (*runtime.ResponseMetadata, *health.ExecutionNode, error) {
 	// 1. Acquire Redis distributed lock
 	locked, err := rm.store.AcquireLock(ctx, sess.ID, 30*time.Second)
@@ -51,16 +53,27 @@ func (rm *RebindingManager) ExecuteRebinding(
 		_ = rm.store.ReleaseLock(ctx, sess.ID)
 	}()
 
-	// 2. Put failed node on cooldown (10 minutes)
-	cooldownUntil := time.Now().Add(10 * time.Minute)
-	currentState, exists := states[failedNodeID]
-	if !exists {
-		currentState = health.NodeRuntimeState{NodeID: failedNodeID}
+	// 2. Put failed node on cooldown (10 minutes) ONLY if caused by a real upstream Claude/OpenAI error (429/5xx)
+	errMsg := ""
+	if execErr != nil {
+		errMsg = execErr.Error()
 	}
-	currentState.CooldownUntil = &cooldownUntil
-	currentState.RecentTimeouts++
-	_ = rm.nm.SaveNodeRuntimeState(ctx, &currentState)
-	states[failedNodeID] = currentState
+	isUpstreamError := strings.Contains(errMsg, "upstream error status 429") ||
+		strings.Contains(errMsg, "upstream error status 5") ||
+		strings.Contains(errMsg, "rate_limit_error") ||
+		strings.Contains(errMsg, "overloaded_error")
+
+	if isUpstreamError {
+		cooldownUntil := time.Now().Add(10 * time.Minute)
+		currentState, exists := states[failedNodeID]
+		if !exists {
+			currentState = health.NodeRuntimeState{NodeID: failedNodeID}
+		}
+		currentState.CooldownUntil = &cooldownUntil
+		currentState.Recent429++
+		_ = rm.nm.SaveNodeRuntimeState(ctx, &currentState)
+		states[failedNodeID] = currentState
+	}
 
 	// 3. Select backup node
 	newNode, err := selectNodeFn(ctx, nodes, states, userPriority, "", systemState)
