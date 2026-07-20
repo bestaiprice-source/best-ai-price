@@ -3,6 +3,7 @@ package health
 import (
 	"context"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/ent/account"
@@ -134,8 +135,8 @@ func (hc *HealthController) Reconcile(ctx context.Context) error {
 			} else if healthyRatio >= 0.25 {
 				systemState = "DEGRADED"
 			} else {
-				// Only trigger SURVIVAL mode lock on large pools (>= 5 nodes)
-				if totalCount >= 5 {
+				// Only trigger SURVIVAL mode lock on large pools (>= 5 nodes) when not explicitly disabled
+				if totalCount >= 5 && os.Getenv("ASH_DISABLE_SURVIVAL_MODE") != "true" {
 					systemState = "SURVIVAL"
 				} else {
 					systemState = "DEGRADED"

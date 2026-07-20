@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/ent/account"
@@ -114,7 +115,8 @@ func (h *Hypervisor) HandleRequest(ctx context.Context, ownerID string, conversa
 	systemState := h.hc.GetSystemState(ctx, platform)
 
 	// Enforce degradation policies
-	if systemState == "SURVIVAL" {
+	disableSurvival := os.Getenv("ASH_DISABLE_SURVIVAL_MODE") == "true"
+	if systemState == "SURVIVAL" && !disableSurvival {
 		// Enforce survival rules: only high priority users allowed
 		if userPriority < 2 {
 			_ = h.logEvent(ctx, ownerID, &sess.ID, nil, "QuotaExceeded", map[string]any{"reason": "system in survival mode: low priority requests rejected"})
