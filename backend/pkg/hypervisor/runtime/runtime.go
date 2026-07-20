@@ -221,7 +221,8 @@ func (r *AnthropicRuntime) Execute(ctx context.Context, nodeID string, reqPayloa
 		req.Header.Set("Authorization", "Bearer "+apiKey)
 		req.Header.Set("Content-Type", "application/json")
 	} else {
-		if acc.Type == "oauth" {
+		isOAuthOrSetupToken := acc.Type == "oauth" || acc.Type == "setup-token" || strings.HasPrefix(apiKey, "sk-ant-oat") || strings.HasPrefix(apiKey, "sk-oat")
+		if isOAuthOrSetupToken {
 			req.Header.Set("Authorization", "Bearer "+apiKey)
 			req.Header.Set("anthropic-beta", "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,fine-grained-tool-streaming-2025-05-14")
 		} else {
@@ -252,15 +253,7 @@ func (r *AnthropicRuntime) Execute(ctx context.Context, nodeID string, reqPayloa
 
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(resp.Body)
-		if resp.StatusCode == 429 || resp.StatusCode >= 500 {
-			return nil, fmt.Errorf("upstream error status %d: %s", resp.StatusCode, string(bodyBytes))
-		}
-		// Pass through client 4xx errors (e.g. invalid model or request syntax) without putting node into cooldown
-		_, _ = stream.Write(bodyBytes)
-		if flusher, ok := stream.(http.Flusher); ok {
-			flusher.Flush()
-		}
-		return &ResponseMetadata{StatusCode: resp.StatusCode}, nil
+		return nil, fmt.Errorf("upstream error status %d: %s", resp.StatusCode, string(bodyBytes))
 	}
 
 	// 6. Stream response and track end of stream for token usage
