@@ -8579,6 +8579,18 @@ func (s *GatewayService) ForwardCountTokensContext(ctx context.Context, c gatewa
 		body, reqModel = s.applyClaudeCodeOAuthMimicryToParsedRequestBody(ctx, c, account, parsed, body, reqModel)
 	}
 
+	// Anthropic's count_tokens endpoint rejects metadata ("metadata: Extra inputs are not permitted").
+	// Strip metadata key from the JSON payload.
+	var countTokensMap map[string]any
+	if json.Unmarshal(body, &countTokensMap) == nil {
+		if _, hasMetadata := countTokensMap["metadata"]; hasMetadata {
+			delete(countTokensMap, "metadata")
+			if cleanedBody, err := json.Marshal(countTokensMap); err == nil {
+				body = cleanedBody
+			}
+		}
+	}
+
 	// Antigravity 账户不支持 count_tokens，返回 404 让客户端 fallback 到本地估算。
 	// 返回 nil 避免 handler 层记录为错误，也不设置 ops 上游错误上下文。
 	if account.Platform == PlatformAntigravity {
