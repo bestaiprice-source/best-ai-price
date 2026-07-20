@@ -372,9 +372,22 @@ func (h *OpenAIGatewayHandler) handleHypervisorChatCompletions(c *gin.Context) {
 		conversationID = c.GetHeader("X-Conversation-ID")
 	}
 
-	c.Header("Content-Type", "text/event-stream")
-	c.Header("Cache-Control", "no-cache")
-	c.Header("Connection", "keep-alive")
+	var reqPayloadMap struct {
+		Stream bool `json:"stream"`
+	}
+	isStream := false
+	if json.Unmarshal(body, &reqPayloadMap) == nil {
+		isStream = reqPayloadMap.Stream
+	}
+
+	if isStream {
+		c.Header("Content-Type", "text/event-stream")
+		c.Header("Cache-Control", "no-cache, no-transform")
+		c.Header("Connection", "keep-alive")
+		c.Header("X-Accel-Buffering", "no")
+	} else {
+		c.Header("Content-Type", "application/json")
+	}
 
 	_, err = h.hypervisorEngine.HandleRequest(c.Request.Context(), ownerID, conversationID, body, c.Writer, "openai")
 	if err != nil {
