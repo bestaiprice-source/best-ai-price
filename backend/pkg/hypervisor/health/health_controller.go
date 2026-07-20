@@ -134,7 +134,12 @@ func (hc *HealthController) Reconcile(ctx context.Context) error {
 			} else if healthyRatio >= 0.25 {
 				systemState = "DEGRADED"
 			} else {
-				systemState = "SURVIVAL"
+				// Only trigger SURVIVAL mode lock on large pools (>= 5 nodes)
+				if totalCount >= 5 {
+					systemState = "SURVIVAL"
+				} else {
+					systemState = "DEGRADED"
+				}
 			}
 		}
 
