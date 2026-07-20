@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/ent/account"
@@ -218,15 +217,11 @@ func (h *Hypervisor) getAllNodes(ctx context.Context, platform string) ([]health
 	if platform == "" {
 		platform = "anthropic"
 	}
-	platLower := strings.ToLower(platform)
-	platTitle := strings.Title(platLower)
-	platUpper := strings.ToUpper(platLower)
-
 	// Try loading from DB first
 	dbAccounts, _ := h.store.DB().Account.Query().
 		Where(
-			account.PlatformIn(platLower, platTitle, platUpper),
-			account.StatusIn("active", "enabled"),
+			account.Platform(platform),
+			account.StatusIn("active", "error"),
 		).
 		All(ctx)
 

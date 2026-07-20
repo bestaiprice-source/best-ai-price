@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/ent/account"
@@ -53,15 +52,11 @@ func (hc *HealthController) Reconcile(ctx context.Context) error {
 	for _, plat := range platforms {
 		var nodeIDs []string
 
-		platLower := strings.ToLower(plat)
-		platTitle := strings.Title(platLower)
-		platUpper := strings.ToUpper(platLower)
-
 		// Query PostgreSQL active accounts first
 		dbAccounts, dbErr := hc.store.DB().Account.Query().
 			Where(
-				account.PlatformIn(platLower, platTitle, platUpper),
-				account.StatusIn("active", "enabled"),
+				account.Platform(plat),
+				account.StatusIn("active", "error"),
 			).
 			All(ctx)
 
