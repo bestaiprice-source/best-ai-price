@@ -241,7 +241,15 @@ func (r *AnthropicRuntime) Execute(ctx context.Context, nodeID string, reqPayloa
 
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("upstream error status %d: %s", resp.StatusCode, string(bodyBytes))
+		if resp.StatusCode == 429 || resp.StatusCode >= 500 {
+			return nil, fmt.Errorf("upstream error status %d: %s", resp.StatusCode, string(bodyBytes))
+		}
+		// Pass through client 4xx errors (e.g. invalid model or request syntax) without putting node into cooldown
+		_, _ = stream.Write(bodyBytes)
+		if flusher, ok := stream.(http.Flusher); ok {
+			flusher.Flush()
+		}
+		return &ResponseMetadata{StatusCode: resp.StatusCode}, nil
 	}
 
 	// 6. Stream response and track end of stream for token usage
