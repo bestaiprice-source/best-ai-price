@@ -167,15 +167,13 @@ func (r *AnthropicRuntime) Execute(ctx context.Context, nodeID string, reqPayloa
 		}
 	}
 
-	// 2. Extract API credentials
+	// Extract API Key / Token from Credentials
 	var apiKey string
-	if acc.Type == "oauth" {
-		if token, ok := acc.Credentials["access_token"]; ok {
-			apiKey = fmt.Sprintf("%v", token)
-		}
-	} else if acc.Type == "api_key" || acc.Type == "apikey" {
-		if credKey, ok := acc.Credentials["api_key"]; ok {
-			apiKey = fmt.Sprintf("%v", credKey)
+	keysToTry := []string{"access_token", "api_key", "token", "setup_token", "key", "session_key"}
+	for _, k := range keysToTry {
+		if val, ok := acc.Credentials[k].(string); ok && strings.TrimSpace(val) != "" {
+			apiKey = strings.TrimSpace(val)
+			break
 		}
 	}
 	if apiKey == "" {
