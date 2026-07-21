@@ -204,6 +204,9 @@
           </div>
         </div>
 
+        <!-- Hypervisor Monitoring & Node Control Section -->
+        <HypervisorDashboardSection />
+
         <!-- Charts Section -->
         <div class="space-y-6">
           <!-- Date Range Filter -->
@@ -299,6 +302,7 @@ import DateRangePicker from '@/components/common/DateRangePicker.vue'
 import Select from '@/components/common/Select.vue'
 import ModelDistributionChart from '@/components/charts/ModelDistributionChart.vue'
 import TokenUsageTrend from '@/components/charts/TokenUsageTrend.vue'
+import HypervisorDashboardSection from './components/HypervisorDashboardSection.vue'
 
 import {
   Chart as ChartJS,

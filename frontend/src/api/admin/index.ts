@@ -29,11 +29,13 @@ import channelMonitorAPI from './channelMonitor'
 import channelMonitorTemplateAPI from './channelMonitorTemplate'
 import channelsAPI from './channels'
 import paymentAPI from './payment'
+import * as ashAPI from './ash'
 
 /**
  * Unified admin API object for convenient access
  */
 export const adminAPI = {
+  ash: ashAPI,
   dashboard: dashboardAPI,
   users: usersAPI,
   groups: groupsAPI,
