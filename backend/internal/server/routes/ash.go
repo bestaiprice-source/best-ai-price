@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/ent"
+	"github.com/Wei-Shaw/sub2api/ent/account"
 	"github.com/Wei-Shaw/sub2api/ent/ashevent"
 	"github.com/Wei-Shaw/sub2api/ent/ashusage"
 	"github.com/Wei-Shaw/sub2api/internal/handler"
@@ -44,24 +45,25 @@ func RegisterAshRoutes(
 
 		state := engine.HealthController().GetSystemState(c.Request.Context(), plat)
 
-		// Get node status counts
-		nodes, _ := engine.Storage().Redis().SMembers(c.Request.Context(), "ash:nodes").Result()
+		dbAccounts, _ := engine.Storage().DB().Account.Query().
+			Where(account.StatusIn("active", "error")).
+			All(c.Request.Context())
+
 		healthyCount := 0
 		cooldownCount := 0
-		totalCount := 0
+		totalCount := len(dbAccounts)
 
-		for _, nodeID := range nodes {
+		for _, acc := range dbAccounts {
+			nodeID := fmt.Sprintf("%d", acc.ID)
 			node, err := engine.Storage().Redis().HGetAll(c.Request.Context(), "ash:node:"+nodeID).Result()
-			if err == nil && len(node) > 0 {
-				p := node["Provider"]
-				if p == plat || p == "" {
-					totalCount++
-					if node["State"] == "healthy" {
-						healthyCount++
-					} else if node["State"] == "cooldown" {
-						cooldownCount++
-					}
-				}
+			st := "healthy"
+			if err == nil && len(node) > 0 && node["State"] != "" {
+				st = node["State"]
+			}
+			if st == "cooldown" {
+				cooldownCount++
+			} else if st == "healthy" || st == "busy" {
+				healthyCount++
 			}
 		}
 
@@ -212,16 +214,27 @@ func RegisterAshRoutes(
 				return
 			}
 
-			redisKeys, _ := engine.Storage().Redis().Keys(c.Request.Context(), "ash:node:*").Result()
+			dbAccounts, _ := engine.Storage().DB().Account.Query().
+				Where(account.StatusIn("active", "error")).
+				All(c.Request.Context())
+
 			var list []gin.H
 
-			for _, key := range redisKeys {
-				var nodeID string
-				fmt.Sscanf(key, "ash:node:%s", &nodeID)
+			for _, acc := range dbAccounts {
+				nodeID := fmt.Sprintf("%d", acc.ID)
+				node, _ := engine.Storage().Redis().HGetAll(c.Request.Context(), "ash:node:"+nodeID).Result()
 
-				node, err := engine.Storage().Redis().HGetAll(c.Request.Context(), key).Result()
-				if err != nil || len(node) == 0 {
-					continue
+				accName := acc.Name
+				if accName == "" {
+					accName = fmt.Sprintf("Node #%d", acc.ID)
+				}
+				provider := acc.Platform
+				if provider == "" {
+					provider = "anthropic"
+				}
+				nodeState := "healthy"
+				if node != nil && node["State"] != "" {
+					nodeState = node["State"]
 				}
 
 				stateKey := "ash:runtime_state:" + nodeID
@@ -249,16 +262,16 @@ func RegisterAshRoutes(
 				}
 
 				list = append(list, gin.H{
-					"node_id":        nodeID,
-					"account_name":   node["AccountName"],
-					"provider":       node["Provider"],
-					"state":          node["State"],
-					"capabilities":   node["Capabilities"],
-					"success_rate":   successRate,
-					"avg_latency_ms": avgLatency,
-					"recent_429":     recent429,
+					"node_id":         nodeID,
+					"account_name":    accName,
+					"provider":        provider,
+					"state":           nodeState,
+					"capabilities":    []string{"messages", "stream"},
+					"success_rate":    successRate,
+					"avg_latency_ms":  avgLatency,
+					"recent_429":      recent429,
 					"recent_timeouts": recentTimeouts,
-					"cooldown_until": cooldownUntil,
+					"cooldown_until":  cooldownUntil,
 				})
 			}
 
