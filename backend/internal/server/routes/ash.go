@@ -28,7 +28,7 @@ func RegisterAshRoutes(
 	jwtAuth middleware.JWTAuthMiddleware,
 	adminAuth middleware.AdminAuthMiddleware,
 ) {
-	ash := r.Group("/ash")
+	setupRoutes := func(ash *gin.RouterGroup) {
 
 	// 1. Public Health Check
 	ash.GET("/health", func(c *gin.Context) {
@@ -538,4 +538,8 @@ func RegisterAshRoutes(
 			c.JSON(http.StatusOK, gin.H{"status": "ok", "deposit_state": "released"})
 		})
 	}
+	}
+
+	setupRoutes(r.Group("/ash"))
+	setupRoutes(r.Group("/api/v1/ash"))
 }
