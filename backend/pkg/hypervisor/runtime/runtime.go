@@ -253,6 +253,69 @@ func (r *AnthropicRuntime) Execute(ctx context.Context, nodeID string, reqPayloa
 	}
 	defer resp.Body.Close()
 
+	// Extract Anthropic ratelimit headers and update account.Extra & SessionWindowEnd in DB
+	if acc != nil && resp.Header != nil {
+		extraUpdates := make(map[string]any, 4)
+
+		util5hStr := resp.Header.Get("anthropic-ratelimit-unified-5h-utilization")
+		if util5hStr == "" {
+			util5hStr = resp.Header.Get("anthropic-ratelimit-5h-utilization")
+		}
+		if util5hStr == "" {
+			util5hStr = resp.Header.Get("anthropic-ratelimit-requests-utilization")
+		}
+		if util5hStr == "" {
+			util5hStr = resp.Header.Get("anthropic-ratelimit-tokens-utilization")
+		}
+		if util5hStr != "" {
+			if util, parseErr := strconv.ParseFloat(util5hStr, 64); parseErr == nil {
+				extraUpdates["session_window_utilization"] = util
+				extraUpdates["passive_usage_5h_utilization"] = util
+			}
+		}
+
+		util7dStr := resp.Header.Get("anthropic-ratelimit-unified-7d-utilization")
+		if util7dStr == "" {
+			util7dStr = resp.Header.Get("anthropic-ratelimit-7d-utilization")
+		}
+		if util7dStr != "" {
+			if util, parseErr := strconv.ParseFloat(util7dStr, 64); parseErr == nil {
+				extraUpdates["passive_usage_7d_utilization"] = util
+			}
+		}
+
+		reset5hStr := resp.Header.Get("anthropic-ratelimit-unified-5h-reset")
+		if reset5hStr == "" {
+			reset5hStr = resp.Header.Get("anthropic-ratelimit-5h-reset")
+		}
+		if reset5hStr != "" {
+			if ts, parseErr := strconv.ParseInt(reset5hStr, 10, 64); parseErr == nil {
+				if ts > 1e11 {
+					ts = ts / 1000
+				}
+				sessionWindowEnd := time.Unix(ts, 0)
+				_ = dbClient.Account.UpdateOne(acc).
+					SetSessionWindowEnd(sessionWindowEnd).
+					SetSessionWindowStatus("allowed").
+					Exec(ctx)
+			}
+		}
+
+		if len(extraUpdates) > 0 {
+			extraUpdates["passive_usage_sampled_at"] = time.Now().UTC().Format(time.RFC3339)
+			existingExtra := acc.Extra
+			if existingExtra == nil {
+				existingExtra = make(map[string]any)
+			}
+			for k, v := range extraUpdates {
+				existingExtra[k] = v
+			}
+			_ = dbClient.Account.UpdateOne(acc).
+				SetExtra(existingExtra).
+				Exec(ctx)
+		}
+	}
+
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("upstream error status %d: %s", resp.StatusCode, string(bodyBytes))
