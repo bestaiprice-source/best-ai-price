@@ -5,8 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
+	"github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/account"
+	"github.com/Wei-Shaw/sub2api/ent/ashusage"
 	"github.com/Wei-Shaw/sub2api/ent/user"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/storage"
 )
@@ -55,32 +58,47 @@ func (qm *QuotaManager) GetUserAccess(ctx context.Context, ownerID string) (*Use
 
 	// Fallback to database query if not found in Redis
 	var id int64
+	isActive := true
 	if _, parseErr := fmt.Sscanf(ownerID, "%d", &id); parseErr == nil {
 		u, dbErr := qm.store.DB().User.Get(ctx, id)
 		if dbErr == nil && u != nil {
-			ua := &UserAccess{
-				OwnerID:      ownerID,
-				PlanID:       "pool-basic",
-				MonthlyLimit: 0, // dynamic pool capacity
-				UsedUnits:    0,
-				Priority:     1,
-				IsActive:     u.Status == "active",
-			}
-			// Cache in Redis for subsequent checks
-			_ = qm.SaveUserAccess(ctx, ua)
-			return ua, nil
+			isActive = (u.Status == "active")
 		}
 	}
 
-	// Fallback for tests/mocks when DB is empty
-	return &UserAccess{
+	// Sum user usage tokens for the current calendar month from ash_usage
+	var sum []struct {
+		Cost int64 `json:"cost" xml:"cost"`
+	}
+	now := time.Now()
+	startOfMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+
+	_ = qm.store.DB().AshUsage.Query().
+		Where(
+			ashusage.OwnerID(ownerID),
+			ashusage.CreatedAtGTE(startOfMonth),
+		).
+		Aggregate(
+			ent.Sum(ashusage.FieldCostUnits),
+		).
+		Scan(ctx, &sum)
+
+	var usedUnits int64
+	if len(sum) > 0 {
+		usedUnits = sum[0].Cost
+	}
+
+	ua := &UserAccess{
 		OwnerID:      ownerID,
 		PlanID:       "pool-basic",
-		MonthlyLimit: 0,
-		UsedUnits:    0,
+		MonthlyLimit: 0, // dynamic pool capacity
+		UsedUnits:    usedUnits,
 		Priority:     1,
-		IsActive:     true,
-	}, nil
+		IsActive:     isActive,
+	}
+	// Cache in Redis for subsequent checks
+	_ = qm.SaveUserAccess(ctx, ua)
+	return ua, nil
 }
 
 func (qm *QuotaManager) SaveUserAccess(ctx context.Context, ua *UserAccess) error {
@@ -89,7 +107,7 @@ func (qm *QuotaManager) SaveUserAccess(ctx context.Context, ua *UserAccess) erro
 	if err != nil {
 		return err
 	}
-	return qm.store.Redis().Set(ctx, key, data, 0).Err()
+	return qm.store.Redis().Set(ctx, key, data, 1*time.Hour).Err()
 }
 
 func (qm *QuotaManager) CheckQuota(ctx context.Context, ownerID string) (bool, error) {
