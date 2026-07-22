@@ -11,6 +11,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/account"
 	"github.com/Wei-Shaw/sub2api/ent/ashevent"
 	"github.com/Wei-Shaw/sub2api/ent/ashusage"
+	"github.com/Wei-Shaw/sub2api/ent/usagelog"
 	"github.com/Wei-Shaw/sub2api/internal/handler"
 	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/health"
@@ -193,6 +194,25 @@ func RegisterAshRoutes(
 				input = sum[0].Input
 				output = sum[0].Output
 				cost = sum[0].Cost
+			}
+
+			// Fall back to standard UsageLog table if AshUsage has no entries yet
+			if input == 0 && output == 0 {
+				var legacySum []struct {
+					Input  int64 `json:"input"`
+					Output int64 `json:"output"`
+				}
+				_ = engine.Storage().DB().UsageLog.Query().
+					Aggregate(
+						ent.Sum(usagelog.FieldInputTokens),
+						ent.Sum(usagelog.FieldOutputTokens),
+					).
+					Scan(c.Request.Context(), &legacySum)
+				if len(legacySum) > 0 {
+					input = legacySum[0].Input
+					output = legacySum[0].Output
+					cost = input + output
+				}
 			}
 
 			// Count active sessions

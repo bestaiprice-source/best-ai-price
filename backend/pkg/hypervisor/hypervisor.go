@@ -189,14 +189,17 @@ func (h *Hypervisor) HandleRequest(ctx context.Context, ownerID string, conversa
 		selectedNode = newSelectedNode
 	}
 
-	// 9. Consume Quota on Success
+	// 9. Consume Quota on Success & Record Usage in Database
 	if res != nil {
 		totalTokens := res.InputTokens + res.OutputTokens
+		costUnits := totalTokens
 		if totalTokens > 0 {
 			_ = h.qm.ConsumeQuota(ctx, ownerID, totalTokens)
+			_, _ = h.store.RecordUsage(ctx, ownerID, &sess.ID, &selectedNode.NodeID, res.InputTokens, res.OutputTokens, costUnits)
 			_ = h.logEvent(ctx, ownerID, &sess.ID, &selectedNode.NodeID, "UsageRecorded", map[string]any{
 				"input_tokens":  res.InputTokens,
 				"output_tokens": res.OutputTokens,
+				"cost_units":    costUnits,
 			})
 		}
 		_ = h.logEvent(ctx, ownerID, &sess.ID, &selectedNode.NodeID, "RequestSucceeded", nil)
