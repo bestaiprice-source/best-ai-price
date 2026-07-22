@@ -1208,6 +1208,13 @@ func buildCodexUsageProgressFromExtra(extra map[string]any, window string, now t
 	return progress
 }
 
+func normalizeUtilization(u float64) float64 {
+	if u > 0 && u <= 1.0 {
+		return u * 100.0
+	}
+	return u
+}
+
 func (s *AccountUsageService) GetAccountUsageStats(ctx context.Context, accountID int64, startTime, endTime time.Time) (*usagestats.AccountUsageStatsResponse, error) {
 	stats, err := s.usageLogRepo.GetAccountUsageStats(ctx, accountID, startTime, endTime)
 	if err != nil {
@@ -1298,7 +1305,7 @@ func (s *AccountUsageService) buildUsageInfo(resp *ClaudeUsageResponse, updatedA
 
 	// 5小时窗口 - 始终创建对象（即使 ResetsAt 为空）
 	info.FiveHour = &UsageProgress{
-		Utilization: resp.FiveHour.Utilization,
+		Utilization: normalizeUtilization(resp.FiveHour.Utilization),
 	}
 	if resp.FiveHour.ResetsAt != "" {
 		if fiveHourReset, err := parseTime(resp.FiveHour.ResetsAt); err == nil {
@@ -1313,14 +1320,14 @@ func (s *AccountUsageService) buildUsageInfo(resp *ClaudeUsageResponse, updatedA
 	if resp.SevenDay.ResetsAt != "" {
 		if sevenDayReset, err := parseTime(resp.SevenDay.ResetsAt); err == nil {
 			info.SevenDay = &UsageProgress{
-				Utilization:      resp.SevenDay.Utilization,
+				Utilization:      normalizeUtilization(resp.SevenDay.Utilization),
 				ResetsAt:         &sevenDayReset,
 				RemainingSeconds: int(time.Until(sevenDayReset).Seconds()),
 			}
 		} else {
 			log.Printf("Failed to parse SevenDay.ResetsAt: %s, error: %v", resp.SevenDay.ResetsAt, err)
 			info.SevenDay = &UsageProgress{
-				Utilization: resp.SevenDay.Utilization,
+				Utilization: normalizeUtilization(resp.SevenDay.Utilization),
 			}
 		}
 	}
@@ -1329,14 +1336,14 @@ func (s *AccountUsageService) buildUsageInfo(resp *ClaudeUsageResponse, updatedA
 	if resp.SevenDaySonnet.ResetsAt != "" {
 		if sonnetReset, err := parseTime(resp.SevenDaySonnet.ResetsAt); err == nil {
 			info.SevenDaySonnet = &UsageProgress{
-				Utilization:      resp.SevenDaySonnet.Utilization,
+				Utilization:      normalizeUtilization(resp.SevenDaySonnet.Utilization),
 				ResetsAt:         &sonnetReset,
 				RemainingSeconds: int(time.Until(sonnetReset).Seconds()),
 			}
 		} else {
 			log.Printf("Failed to parse SevenDaySonnet.ResetsAt: %s, error: %v", resp.SevenDaySonnet.ResetsAt, err)
 			info.SevenDaySonnet = &UsageProgress{
-				Utilization: resp.SevenDaySonnet.Utilization,
+				Utilization: normalizeUtilization(resp.SevenDaySonnet.Utilization),
 			}
 		}
 	}
@@ -1348,6 +1355,22 @@ func (s *AccountUsageService) buildUsageInfo(resp *ClaudeUsageResponse, updatedA
 func (s *AccountUsageService) estimateSetupTokenUsage(account *Account) *UsageInfo {
 	info := &UsageInfo{}
 
+	// 优先检查 Account.Extra 中的 passive_usage_5h_utilization 或 codex_5h_used_percent
+	var extraUtil float64
+	var hasExtraUtil bool
+	if account.Extra != nil {
+		if stored, ok := account.Extra["passive_usage_5h_utilization"]; ok {
+			extraUtil = normalizeUtilization(parseExtraFloat64(stored))
+			hasExtraUtil = extraUtil > 0
+		}
+		if !hasExtraUtil {
+			if stored, ok := account.Extra["codex_5h_used_percent"]; ok {
+				extraUtil = normalizeUtilization(parseExtraFloat64(stored))
+				hasExtraUtil = extraUtil > 0
+			}
+		}
+	}
+
 	// 如果有session_window信息
 	if account.SessionWindowEnd != nil {
 		remaining := int(time.Until(*account.SessionWindowEnd).Seconds())
@@ -1355,20 +1378,25 @@ func (s *AccountUsageService) estimateSetupTokenUsage(account *Account) *UsageIn
 			remaining = 0
 		}
 
-		// 优先使用响应头中存储的真实 utilization 值（0-1 小数，转为 0-100 百分比）
+		// 优先使用响应头中存储的真实 utilization 值
 		var utilization float64
 		var found bool
 		if stored, ok := account.Extra["session_window_utilization"]; ok {
 			switch v := stored.(type) {
 			case float64:
-				utilization = v * 100
+				utilization = normalizeUtilization(v)
 				found = true
 			case json.Number:
 				if f, err := v.Float64(); err == nil {
-					utilization = f * 100
+					utilization = normalizeUtilization(f)
 					found = true
 				}
 			}
+		}
+
+		if !found && hasExtraUtil {
+			utilization = extraUtil
+			found = true
 		}
 
 		// 如果没有存储的 utilization，回退到状态估算
@@ -1387,14 +1415,17 @@ func (s *AccountUsageService) estimateSetupTokenUsage(account *Account) *UsageIn
 			RemainingSeconds: remaining,
 		}
 	} else {
-		// 没有窗口信息，返回空数据
+		// 没有 SessionWindowEnd，但如果有 extraUtil 仍渲染 FiveHour
+		utilization := float64(0)
+		if hasExtraUtil {
+			utilization = extraUtil
+		}
 		info.FiveHour = &UsageProgress{
-			Utilization:      0,
+			Utilization:      utilization,
 			RemainingSeconds: 0,
 		}
 	}
 
-	// Setup Token无法获取7d数据
 	return info
 }
 
