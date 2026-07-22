@@ -68,7 +68,7 @@ func (sm *SessionManager) SaveSession(ctx context.Context, sess *VirtualSession)
 	if err != nil {
 		return err
 	}
-	return sm.store.Redis().Set(ctx, key, data, 0).Err()
+	return sm.store.Redis().Set(ctx, key, data, 24*time.Hour).Err()
 }
 
 func (sm *SessionManager) DeleteSession(ctx context.Context, sessionID string) error {

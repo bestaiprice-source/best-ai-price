@@ -70,10 +70,10 @@ func (h *Hypervisor) HandleRequest(ctx context.Context, ownerID string, conversa
 	}
 
 	// 2. Resolve or create Session
-	sessID := "session-" + conversationID
 	if conversationID == "" {
-		sessID = "session-temp-" + time.Now().Format("20060102150405.000")
+		conversationID = "default"
 	}
+	sessID := fmt.Sprintf("session-%s-%s", ownerID, conversationID)
 
 	sess, err := h.sm.GetSession(ctx, sessID)
 	if err != nil || sess == nil {
