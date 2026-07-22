@@ -79,7 +79,7 @@ func (qm *QuotaManager) GetUserAccess(ctx context.Context, ownerID string) (*Use
 			ashusage.CreatedAtGTE(startOfMonth),
 		).
 		Aggregate(
-			ent.Sum(ashusage.FieldCostUnits),
+			ent.As(ent.Sum(ashusage.FieldCostUnits), "cost"),
 		).
 		Scan(ctx, &sum)
 

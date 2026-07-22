@@ -106,8 +106,8 @@ func RegisterAshRoutes(
 			_ = engine.Storage().DB().AshUsage.Query().
 				Where(ashusage.OwnerID(ownerID)).
 				Aggregate(
-					ent.Sum(ashusage.FieldInputTokens),
-					ent.Sum(ashusage.FieldOutputTokens),
+					ent.As(ent.Sum(ashusage.FieldInputTokens), "input"),
+					ent.As(ent.Sum(ashusage.FieldOutputTokens), "output"),
 				).
 				Scan(c.Request.Context(), &sum)
 
@@ -183,9 +183,9 @@ func RegisterAshRoutes(
 			}
 			_ = engine.Storage().DB().AshUsage.Query().
 				Aggregate(
-					ent.Sum(ashusage.FieldInputTokens),
-					ent.Sum(ashusage.FieldOutputTokens),
-					ent.Sum(ashusage.FieldCostUnits),
+					ent.As(ent.Sum(ashusage.FieldInputTokens), "input"),
+					ent.As(ent.Sum(ashusage.FieldOutputTokens), "output"),
+					ent.As(ent.Sum(ashusage.FieldCostUnits), "cost"),
 				).
 				Scan(c.Request.Context(), &sum)
 
@@ -204,8 +204,8 @@ func RegisterAshRoutes(
 				}
 				_ = engine.Storage().DB().UsageLog.Query().
 					Aggregate(
-						ent.Sum(usagelog.FieldInputTokens),
-						ent.Sum(usagelog.FieldOutputTokens),
+						ent.As(ent.Sum(usagelog.FieldInputTokens), "input"),
+						ent.As(ent.Sum(usagelog.FieldOutputTokens), "output"),
 					).
 					Scan(c.Request.Context(), &legacySum)
 				if len(legacySum) > 0 {
