@@ -14,6 +14,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/storage"
 	"github.com/alicebob/miniredis/v2"
 	"github.com/redis/go-redis/v9"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"entgo.io/ent/dialect"
@@ -72,11 +73,11 @@ func TestNodeManagerAndHealthController(t *testing.T) {
 
 	now := time.Now()
 	state := &health.NodeRuntimeState{
-		NodeID:        "node-1",
-		SuccessRate:   0.95,
-		AvgLatencyMs:  150,
-		Recent429:     1,
-		LastErrorAt:   &now,
+		NodeID:       "node-1",
+		SuccessRate:  0.95,
+		AvgLatencyMs: 150,
+		Recent429:    1,
+		LastErrorAt:  &now,
 	}
 
 	err = nm.SaveNodeRuntimeState(ctx, state)
@@ -88,4 +89,20 @@ func TestNodeManagerAndHealthController(t *testing.T) {
 
 	systemState := hc.GetSystemState(ctx, "anthropic")
 	require.Equal(t, "NORMAL", systemState)
+
+	// Reconcile cycle
+	err = hc.Reconcile(ctx)
+	require.NoError(t, err)
+
+	// Start / Stop background worker
+	hc.Start(ctx, 10*time.Millisecond)
+	time.Sleep(20 * time.Millisecond)
+	hc.Stop()
+
+	// Delete node
+	err = nm.DeleteNode(ctx, "node-1")
+	require.NoError(t, err)
+
+	_, err = nm.GetNode(ctx, "node-1")
+	assert.Error(t, err)
 }

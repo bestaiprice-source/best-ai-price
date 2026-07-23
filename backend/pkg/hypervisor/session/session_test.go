@@ -68,9 +68,14 @@ func TestSessionManager(t *testing.T) {
 	err := sm.SaveSession(ctx, sess)
 	require.NoError(t, err)
 
-	retrieved, err := sm.GetSession(ctx, sessID)
+	savedSess, err := sm.GetSession(ctx, sessID)
 	require.NoError(t, err)
-	require.NotNil(t, retrieved)
-	require.Equal(t, sessID, retrieved.ID)
-	require.Equal(t, "owner-1", retrieved.OwnerID)
+	require.Equal(t, "owner-1", savedSess.OwnerID)
+	require.Equal(t, "conv-1", savedSess.ConversationID)
+
+	err = sm.DeleteSession(ctx, sessID)
+	require.NoError(t, err)
+
+	_, err = sm.GetSession(ctx, sessID)
+	require.Error(t, err)
 }
