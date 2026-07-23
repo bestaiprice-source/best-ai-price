@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/ent"
@@ -113,34 +114,49 @@ func (qm *QuotaManager) SaveUserAccess(ctx context.Context, ua *UserAccess) erro
 func (qm *QuotaManager) CheckQuota(ctx context.Context, ownerID string) (bool, error) {
 	ua, err := qm.GetUserAccess(ctx, ownerID)
 	if err != nil {
+		slog.Error("[QuotaManager] Failed to get user access", "owner_id", ownerID, "error", err)
 		return false, err
 	}
 	if !ua.IsActive {
+		slog.Warn("[QuotaManager] User is inactive", "owner_id", ownerID)
 		return false, ErrUserInactive
 	}
 
 	limit := ua.MonthlyLimit
 	if limit <= 0 {
-		// If no monthly limit is set explicitly, use the dynamic limit from the pool
 		dynLimit, err := qm.GetDynamicLimit(ctx, ownerID)
 		if err != nil {
+			slog.Error("[QuotaManager] Failed to compute dynamic pool limit", "owner_id", ownerID, "error", err)
 			return false, err
 		}
 		limit = dynLimit
 	}
 
 	if ua.UsedUnits >= limit {
+		slog.Warn("[QuotaManager] User quota exceeded",
+			"owner_id", ownerID,
+			"used_units", ua.UsedUnits,
+			"limit", limit,
+		)
 		return false, ErrQuotaExceeded
 	}
+
+	slog.Debug("[QuotaManager] Quota check passed",
+		"owner_id", ownerID,
+		"used_units", ua.UsedUnits,
+		"limit", limit,
+	)
 	return true, nil
 }
 
 func (qm *QuotaManager) ConsumeQuota(ctx context.Context, ownerID string, units int64) error {
 	ua, err := qm.GetUserAccess(ctx, ownerID)
 	if err != nil {
+		slog.Error("[QuotaManager] Failed to fetch user access for consuming quota", "owner_id", ownerID, "error", err)
 		return err
 	}
 	ua.UsedUnits += units
+	slog.Debug("[QuotaManager] Consumed user quota", "owner_id", ownerID, "consumed_units", units, "total_used_units", ua.UsedUnits)
 	return qm.SaveUserAccess(ctx, ua)
 }
 

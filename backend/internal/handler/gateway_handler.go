@@ -185,6 +185,10 @@ func (h *GatewayHandler) GetHypervisorEngine() *hypervisor.Hypervisor {
 	return h.hypervisorEngine
 }
 
+func (h *GatewayHandler) SetHypervisorEngine(engine *hypervisor.Hypervisor) {
+	h.hypervisorEngine = engine
+}
+
 func (h *GatewayHandler) MessagesGateway(transportCtx gatewayctx.GatewayContext) {
 	// 从context获取apiKey和user（ApiKeyAuth中间件已设置）
 	apiKey, ok := middleware2.GetAPIKeyFromGatewayContext(transportCtx)

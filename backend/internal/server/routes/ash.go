@@ -3,6 +3,7 @@ package routes
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"time"
@@ -371,6 +372,7 @@ func RegisterAshRoutes(
 				"duration": "10m",
 				"actor":    "admin",
 			})
+			slog.Info("[AshAdmin] Admin triggered node cooldown", "node_id", nodeID, "cooldown_until", cooldownUntil)
 
 			c.JSON(http.StatusOK, gin.H{"status": "ok", "cooldown_until": cooldownUntil})
 		})
@@ -397,6 +399,7 @@ func RegisterAshRoutes(
 			_, _ = engine.Storage().LogEvent(c.Request.Context(), "admin", nil, &nodeID, "NodeUnavailable", map[string]any{
 				"actor": "admin",
 			})
+			slog.Info("[AshAdmin] Admin disabled node", "node_id", nodeID)
 
 			c.JSON(http.StatusOK, gin.H{"status": "ok", "node_state": "unavailable"})
 		})
@@ -421,17 +424,17 @@ func RegisterAshRoutes(
 			_ = nm.SaveNode(c.Request.Context(), node)
 
 			state, err := nm.GetNodeRuntimeState(c.Request.Context(), nodeID)
-			if err != nil || state == nil {
-				state = &health.NodeRuntimeState{NodeID: nodeID}
+			if err == nil && state != nil {
+				state.CooldownUntil = nil
+				state.Recent429 = 0
+				state.RecentTimeouts = 0
+				_ = nm.SaveNodeRuntimeState(c.Request.Context(), state)
 			}
-			state.CooldownUntil = nil
-			state.Recent429 = 0
-			state.RecentTimeouts = 0
-			_ = nm.SaveNodeRuntimeState(c.Request.Context(), state)
 
 			_, _ = engine.Storage().LogEvent(c.Request.Context(), "admin", nil, &nodeID, "NodeRecovered", map[string]any{
 				"actor": "admin",
 			})
+			slog.Info("[AshAdmin] Admin enabled node", "node_id", nodeID)
 
 			c.JSON(http.StatusOK, gin.H{"status": "ok", "node_state": "healthy"})
 		})

@@ -2,6 +2,7 @@ package compiler
 
 import (
 	"fmt"
+	"log/slog"
 )
 
 type Message struct {
@@ -45,5 +46,14 @@ func (c *Compiler) Compile(ctx ExecutionContext) (string, error) {
 	if ctx.ToolState != "" {
 		prompt += fmt.Sprintf("Tool State:\n%s\n\n", ctx.ToolState)
 	}
+
+	slog.Debug("[Compiler] Compiled execution context",
+		"compiled_length", len(prompt),
+		"has_system_prompt", ctx.SystemPrompt != "",
+		"has_summary", ctx.Summary != "",
+		"pinned_facts_count", len(ctx.PinnedFacts),
+		"recent_messages_count", len(ctx.RecentMessages),
+	)
+
 	return prompt, nil
 }

@@ -3,6 +3,7 @@ package health
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"time"
 
@@ -25,6 +26,7 @@ func NewHealthController(store *storage.Storage) *HealthController {
 }
 
 func (hc *HealthController) Start(ctx context.Context, interval time.Duration) {
+	slog.Info("[HealthController] Starting background health reconciliation loop", "interval", interval)
 	ticker := time.NewTicker(interval)
 	go func() {
 		for {
@@ -33,9 +35,11 @@ func (hc *HealthController) Start(ctx context.Context, interval time.Duration) {
 				_ = hc.Reconcile(ctx)
 			case <-hc.stop:
 				ticker.Stop()
+				slog.Info("[HealthController] Stopped health reconciliation loop")
 				return
 			case <-ctx.Done():
 				ticker.Stop()
+				slog.Info("[HealthController] Stopped health reconciliation loop via context done")
 				return
 			}
 		}
@@ -65,7 +69,7 @@ func (hc *HealthController) Reconcile(ctx context.Context) error {
 				nodeIDs = append(nodeIDs, fmt.Sprintf("%d", acc.ID))
 			}
 		} else {
-			// Fallback to Redis set (filtered by platform if possible, or all nodes for tests)
+			// Fallback to Redis set
 			allNodes, _ := hc.store.Redis().SMembers(ctx, "ash:nodes").Result()
 			for _, nodeID := range allNodes {
 				node, err := hc.nm.GetNode(ctx, nodeID)
@@ -99,7 +103,7 @@ func (hc *HealthController) Reconcile(ctx context.Context) error {
 
 			// Cooldown check
 			if state.CooldownUntil != nil && now.After(*state.CooldownUntil) {
-				// Cooldown expired, transition back to healthy
+				slog.Info("[HealthController] Node cooldown expired, resetting to healthy", "node_id", nodeID)
 				state.CooldownUntil = nil
 				node.State = "healthy"
 				state.Recent429 = 0
@@ -112,6 +116,13 @@ func (hc *HealthController) Reconcile(ctx context.Context) error {
 			if state.CooldownUntil != nil && now.Before(*state.CooldownUntil) {
 				node.State = "cooldown"
 			} else if state.Recent429 > 3 || state.RecentTimeouts > 5 {
+				if node.State != "limited" {
+					slog.Warn("[HealthController] Node marked as limited due to recent errors",
+						"node_id", nodeID,
+						"recent_429", state.Recent429,
+						"recent_timeouts", state.RecentTimeouts,
+					)
+				}
 				node.State = "limited"
 			} else if node.State == "" {
 				node.State = "healthy"
@@ -135,7 +146,6 @@ func (hc *HealthController) Reconcile(ctx context.Context) error {
 			} else if healthyRatio >= 0.25 {
 				systemState = "DEGRADED"
 			} else {
-				// Only trigger SURVIVAL mode lock on large pools (>= 5 nodes) when not explicitly disabled
 				if totalCount >= 5 && os.Getenv("ASH_DISABLE_SURVIVAL_MODE") != "true" {
 					systemState = "SURVIVAL"
 				} else {
@@ -144,7 +154,13 @@ func (hc *HealthController) Reconcile(ctx context.Context) error {
 			}
 		}
 
-		// Save platform specific system state in Redis
+		slog.Info("[HealthController] Reconciled platform pool health",
+			"platform", plat,
+			"total_nodes", totalCount,
+			"healthy_nodes", healthyCount,
+			"system_state", systemState,
+		)
+
 		_ = hc.store.Redis().Set(ctx, "ash:system:state:"+plat, systemState, 0).Err()
 	}
 

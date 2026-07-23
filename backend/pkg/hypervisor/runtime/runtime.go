@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -247,8 +248,16 @@ func (r *AnthropicRuntime) Execute(ctx context.Context, nodeID string, reqPayloa
 		Transport: transport,
 	}
 
+	slog.Info("[Runtime] Sending upstream HTTP request",
+		"node_id", nodeID,
+		"platform", acc.Platform,
+		"url", apiURL,
+		"is_stream", isStream,
+	)
+
 	resp, err := client.Do(req)
 	if err != nil {
+		slog.Error("[Runtime] Upstream HTTP request failed", "node_id", nodeID, "error", err)
 		return nil, err
 	}
 	defer resp.Body.Close()
@@ -271,6 +280,7 @@ func (r *AnthropicRuntime) Execute(ctx context.Context, nodeID string, reqPayloa
 			if util, parseErr := strconv.ParseFloat(util5hStr, 64); parseErr == nil {
 				extraUpdates["session_window_utilization"] = util
 				extraUpdates["passive_usage_5h_utilization"] = util
+				slog.Debug("[Runtime] Parsed 5h ratelimit utilization", "node_id", nodeID, "utilization", util)
 			}
 		}
 
@@ -281,6 +291,7 @@ func (r *AnthropicRuntime) Execute(ctx context.Context, nodeID string, reqPayloa
 		if util7dStr != "" {
 			if util, parseErr := strconv.ParseFloat(util7dStr, 64); parseErr == nil {
 				extraUpdates["passive_usage_7d_utilization"] = util
+				slog.Debug("[Runtime] Parsed 7d ratelimit utilization", "node_id", nodeID, "utilization", util)
 			}
 		}
 
@@ -313,6 +324,7 @@ func (r *AnthropicRuntime) Execute(ctx context.Context, nodeID string, reqPayloa
 			_ = dbClient.Account.UpdateOne(acc).
 				SetExtra(existingExtra).
 				Exec(ctx)
+			slog.Info("[Runtime] Saved ratelimit metadata to account.Extra", "node_id", nodeID)
 		}
 	}
 

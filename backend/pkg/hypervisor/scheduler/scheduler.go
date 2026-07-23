@@ -3,6 +3,7 @@ package scheduler
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/health"
@@ -31,6 +32,7 @@ func (s *Scheduler) SelectNode(ctx context.Context, nodes []health.ExecutionNode
 	// 1. Filter out unavailable and nodes in active cooldown
 	for _, node := range nodes {
 		if node.State == "unavailable" {
+			slog.Debug("[Scheduler] Excluding unavailable node", "node_id", node.NodeID)
 			continue
 		}
 
@@ -43,6 +45,7 @@ func (s *Scheduler) SelectNode(ctx context.Context, nodes []health.ExecutionNode
 		}
 
 		if isCooldown && len(nodes) > 1 {
+			slog.Debug("[Scheduler] Excluding cooldown node", "node_id", node.NodeID)
 			continue
 		}
 
@@ -50,6 +53,7 @@ func (s *Scheduler) SelectNode(ctx context.Context, nodes []health.ExecutionNode
 	}
 
 	if len(candidates) == 0 {
+		slog.Warn("[Scheduler] All nodes in cooldown or filtered out, relaxing cooldown restriction for single pool node")
 		for _, node := range nodes {
 			if node.State != "unavailable" {
 				candidates = append(candidates, node)
@@ -58,6 +62,7 @@ func (s *Scheduler) SelectNode(ctx context.Context, nodes []health.ExecutionNode
 	}
 
 	if len(candidates) == 0 {
+		slog.Error("[Scheduler] No candidate execution nodes available in pool", "total_nodes", len(nodes))
 		return nil, ErrNoNodesAvailable
 	}
 
@@ -78,9 +83,9 @@ func (s *Scheduler) SelectNode(ctx context.Context, nodes []health.ExecutionNode
 	if len(healthyCandidates) > 0 {
 		finalCandidates = healthyCandidates
 	} else if len(limitedCandidates) > 0 {
+		slog.Warn("[Scheduler] Only limited nodes available, selecting from limited pool", "count", len(limitedCandidates))
 		finalCandidates = limitedCandidates
 	} else {
-		// If all candidates are in some other state (like config states), just evaluate all
 		finalCandidates = candidates
 	}
 
@@ -108,8 +113,10 @@ func (s *Scheduler) SelectNode(ctx context.Context, nodes []health.ExecutionNode
 		score := successRate * 100.0
 
 		// + affinity_bonus
+		hasAffinity := false
 		if currentLeaseNodeID != "" && node.NodeID == currentLeaseNodeID {
 			score += AffinityBonus
+			hasAffinity = true
 		}
 
 		// + priority_bonus
@@ -124,7 +131,6 @@ func (s *Scheduler) SelectNode(ctx context.Context, nodes []health.ExecutionNode
 		latencyDivider := 100.0
 
 		if systemState == "WARNING" {
-			// Double the penalties in warning state to steer clear of shaky accounts
 			multiplier429 = 60.0
 			multiplierTimeout = 40.0
 			latencyDivider = 50.0
@@ -143,17 +149,33 @@ func (s *Scheduler) SelectNode(ctx context.Context, nodes []health.ExecutionNode
 		if systemState == "RECOVERY" && exists && state.LastErrorAt != nil {
 			timeSinceError := time.Since(*state.LastErrorAt)
 			if timeSinceError < 5*time.Minute {
-				// Deduct score dynamically based on how recently the error occurred
 				warmupPenalty := (5*time.Minute - timeSinceError).Seconds() * 0.5
 				score -= warmupPenalty
 			}
 		}
+
+		slog.Debug("[Scheduler] Evaluated node score",
+			"node_id", node.NodeID,
+			"score", score,
+			"success_rate", successRate,
+			"affinity", hasAffinity,
+			"user_priority", userPriority,
+			"queue_depth", queueDepth,
+			"recent_429", recent429,
+			"recent_timeout", recentTimeout,
+		)
 
 		if bestNode == nil || score > bestScore {
 			bestNode = &finalCandidates[i]
 			bestScore = score
 		}
 	}
+
+	slog.Info("[Scheduler] Node selection completed",
+		"winning_node_id", bestNode.NodeID,
+		"winning_score", bestScore,
+		"total_candidates_evaluated", len(finalCandidates),
+	)
 
 	return bestNode, nil
 }
