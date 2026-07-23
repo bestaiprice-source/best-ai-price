@@ -13,6 +13,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/announcement"
 	"github.com/Wei-Shaw/sub2api/ent/announcementread"
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
+	"github.com/Wei-Shaw/sub2api/ent/ashdeposit"
 	"github.com/Wei-Shaw/sub2api/ent/ashevent"
 	"github.com/Wei-Shaw/sub2api/ent/ashusage"
 	"github.com/Wei-Shaw/sub2api/ent/authidentity"
@@ -236,6 +237,33 @@ func (f TraverseAnnouncementRead) Traverse(ctx context.Context, q ent.Query) err
 		return f(ctx, q)
 	}
 	return fmt.Errorf("unexpected query type %T. expect *ent.AnnouncementReadQuery", q)
+}
+
+// The AshDepositFunc type is an adapter to allow the use of ordinary function as a Querier.
+type AshDepositFunc func(context.Context, *ent.AshDepositQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f AshDepositFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.AshDepositQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.AshDepositQuery", q)
+}
+
+// The TraverseAshDeposit type is an adapter to allow the use of ordinary function as Traverser.
+type TraverseAshDeposit func(context.Context, *ent.AshDepositQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraverseAshDeposit) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraverseAshDeposit) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.AshDepositQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.AshDepositQuery", q)
 }
 
 // The AshEventFunc type is an adapter to allow the use of ordinary function as a Querier.
@@ -1088,6 +1116,8 @@ func NewQuery(q ent.Query) (Query, error) {
 		return &query[*ent.AnnouncementQuery, predicate.Announcement, announcement.OrderOption]{typ: ent.TypeAnnouncement, tq: q}, nil
 	case *ent.AnnouncementReadQuery:
 		return &query[*ent.AnnouncementReadQuery, predicate.AnnouncementRead, announcementread.OrderOption]{typ: ent.TypeAnnouncementRead, tq: q}, nil
+	case *ent.AshDepositQuery:
+		return &query[*ent.AshDepositQuery, predicate.AshDeposit, ashdeposit.OrderOption]{typ: ent.TypeAshDeposit, tq: q}, nil
 	case *ent.AshEventQuery:
 		return &query[*ent.AshEventQuery, predicate.AshEvent, ashevent.OrderOption]{typ: ent.TypeAshEvent, tq: q}, nil
 	case *ent.AshUsageQuery:

@@ -17,6 +17,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/announcement"
 	"github.com/Wei-Shaw/sub2api/ent/announcementread"
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
+	"github.com/Wei-Shaw/sub2api/ent/ashdeposit"
 	"github.com/Wei-Shaw/sub2api/ent/ashevent"
 	"github.com/Wei-Shaw/sub2api/ent/ashusage"
 	"github.com/Wei-Shaw/sub2api/ent/authidentity"
@@ -66,6 +67,7 @@ const (
 	TypeAccountGroup                  = "AccountGroup"
 	TypeAnnouncement                  = "Announcement"
 	TypeAnnouncementRead              = "AnnouncementRead"
+	TypeAshDeposit                    = "AshDeposit"
 	TypeAshEvent                      = "AshEvent"
 	TypeAshUsage                      = "AshUsage"
 	TypeAuthIdentity                  = "AuthIdentity"
@@ -6995,6 +6997,747 @@ func (m *AnnouncementReadMutation) ResetEdge(name string) error {
 		return nil
 	}
 	return fmt.Errorf("unknown AnnouncementRead edge %s", name)
+}
+
+// AshDepositMutation represents an operation that mutates the AshDeposit nodes in the graph.
+type AshDepositMutation struct {
+	config
+	op              Op
+	typ             string
+	id              *int64
+	owner_id        *string
+	amount_cents    *int64
+	addamount_cents *int64
+	currency        *string
+	state           *string
+	notice_days     *int
+	addnotice_days  *int
+	created_at      *time.Time
+	released_at     *time.Time
+	clearedFields   map[string]struct{}
+	done            bool
+	oldValue        func(context.Context) (*AshDeposit, error)
+	predicates      []predicate.AshDeposit
+}
+
+var _ ent.Mutation = (*AshDepositMutation)(nil)
+
+// ashdepositOption allows management of the mutation configuration using functional options.
+type ashdepositOption func(*AshDepositMutation)
+
+// newAshDepositMutation creates new mutation for the AshDeposit entity.
+func newAshDepositMutation(c config, op Op, opts ...ashdepositOption) *AshDepositMutation {
+	m := &AshDepositMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeAshDeposit,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withAshDepositID sets the ID field of the mutation.
+func withAshDepositID(id int64) ashdepositOption {
+	return func(m *AshDepositMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *AshDeposit
+		)
+		m.oldValue = func(ctx context.Context) (*AshDeposit, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().AshDeposit.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withAshDeposit sets the old AshDeposit of the mutation.
+func withAshDeposit(node *AshDeposit) ashdepositOption {
+	return func(m *AshDepositMutation) {
+		m.oldValue = func(context.Context) (*AshDeposit, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m AshDepositMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m AshDepositMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *AshDepositMutation) ID() (id int64, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *AshDepositMutation) IDs(ctx context.Context) ([]int64, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int64{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().AshDeposit.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetOwnerID sets the "owner_id" field.
+func (m *AshDepositMutation) SetOwnerID(s string) {
+	m.owner_id = &s
+}
+
+// OwnerID returns the value of the "owner_id" field in the mutation.
+func (m *AshDepositMutation) OwnerID() (r string, exists bool) {
+	v := m.owner_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldOwnerID returns the old "owner_id" field's value of the AshDeposit entity.
+// If the AshDeposit object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AshDepositMutation) OldOwnerID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldOwnerID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldOwnerID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldOwnerID: %w", err)
+	}
+	return oldValue.OwnerID, nil
+}
+
+// ResetOwnerID resets all changes to the "owner_id" field.
+func (m *AshDepositMutation) ResetOwnerID() {
+	m.owner_id = nil
+}
+
+// SetAmountCents sets the "amount_cents" field.
+func (m *AshDepositMutation) SetAmountCents(i int64) {
+	m.amount_cents = &i
+	m.addamount_cents = nil
+}
+
+// AmountCents returns the value of the "amount_cents" field in the mutation.
+func (m *AshDepositMutation) AmountCents() (r int64, exists bool) {
+	v := m.amount_cents
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAmountCents returns the old "amount_cents" field's value of the AshDeposit entity.
+// If the AshDeposit object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AshDepositMutation) OldAmountCents(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAmountCents is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAmountCents requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAmountCents: %w", err)
+	}
+	return oldValue.AmountCents, nil
+}
+
+// AddAmountCents adds i to the "amount_cents" field.
+func (m *AshDepositMutation) AddAmountCents(i int64) {
+	if m.addamount_cents != nil {
+		*m.addamount_cents += i
+	} else {
+		m.addamount_cents = &i
+	}
+}
+
+// AddedAmountCents returns the value that was added to the "amount_cents" field in this mutation.
+func (m *AshDepositMutation) AddedAmountCents() (r int64, exists bool) {
+	v := m.addamount_cents
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetAmountCents resets all changes to the "amount_cents" field.
+func (m *AshDepositMutation) ResetAmountCents() {
+	m.amount_cents = nil
+	m.addamount_cents = nil
+}
+
+// SetCurrency sets the "currency" field.
+func (m *AshDepositMutation) SetCurrency(s string) {
+	m.currency = &s
+}
+
+// Currency returns the value of the "currency" field in the mutation.
+func (m *AshDepositMutation) Currency() (r string, exists bool) {
+	v := m.currency
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCurrency returns the old "currency" field's value of the AshDeposit entity.
+// If the AshDeposit object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AshDepositMutation) OldCurrency(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCurrency is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCurrency requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCurrency: %w", err)
+	}
+	return oldValue.Currency, nil
+}
+
+// ResetCurrency resets all changes to the "currency" field.
+func (m *AshDepositMutation) ResetCurrency() {
+	m.currency = nil
+}
+
+// SetState sets the "state" field.
+func (m *AshDepositMutation) SetState(s string) {
+	m.state = &s
+}
+
+// State returns the value of the "state" field in the mutation.
+func (m *AshDepositMutation) State() (r string, exists bool) {
+	v := m.state
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldState returns the old "state" field's value of the AshDeposit entity.
+// If the AshDeposit object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AshDepositMutation) OldState(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldState is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldState requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldState: %w", err)
+	}
+	return oldValue.State, nil
+}
+
+// ResetState resets all changes to the "state" field.
+func (m *AshDepositMutation) ResetState() {
+	m.state = nil
+}
+
+// SetNoticeDays sets the "notice_days" field.
+func (m *AshDepositMutation) SetNoticeDays(i int) {
+	m.notice_days = &i
+	m.addnotice_days = nil
+}
+
+// NoticeDays returns the value of the "notice_days" field in the mutation.
+func (m *AshDepositMutation) NoticeDays() (r int, exists bool) {
+	v := m.notice_days
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldNoticeDays returns the old "notice_days" field's value of the AshDeposit entity.
+// If the AshDeposit object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AshDepositMutation) OldNoticeDays(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldNoticeDays is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldNoticeDays requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldNoticeDays: %w", err)
+	}
+	return oldValue.NoticeDays, nil
+}
+
+// AddNoticeDays adds i to the "notice_days" field.
+func (m *AshDepositMutation) AddNoticeDays(i int) {
+	if m.addnotice_days != nil {
+		*m.addnotice_days += i
+	} else {
+		m.addnotice_days = &i
+	}
+}
+
+// AddedNoticeDays returns the value that was added to the "notice_days" field in this mutation.
+func (m *AshDepositMutation) AddedNoticeDays() (r int, exists bool) {
+	v := m.addnotice_days
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetNoticeDays resets all changes to the "notice_days" field.
+func (m *AshDepositMutation) ResetNoticeDays() {
+	m.notice_days = nil
+	m.addnotice_days = nil
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *AshDepositMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *AshDepositMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the AshDeposit entity.
+// If the AshDeposit object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AshDepositMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *AshDepositMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetReleasedAt sets the "released_at" field.
+func (m *AshDepositMutation) SetReleasedAt(t time.Time) {
+	m.released_at = &t
+}
+
+// ReleasedAt returns the value of the "released_at" field in the mutation.
+func (m *AshDepositMutation) ReleasedAt() (r time.Time, exists bool) {
+	v := m.released_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldReleasedAt returns the old "released_at" field's value of the AshDeposit entity.
+// If the AshDeposit object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AshDepositMutation) OldReleasedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldReleasedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldReleasedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldReleasedAt: %w", err)
+	}
+	return oldValue.ReleasedAt, nil
+}
+
+// ClearReleasedAt clears the value of the "released_at" field.
+func (m *AshDepositMutation) ClearReleasedAt() {
+	m.released_at = nil
+	m.clearedFields[ashdeposit.FieldReleasedAt] = struct{}{}
+}
+
+// ReleasedAtCleared returns if the "released_at" field was cleared in this mutation.
+func (m *AshDepositMutation) ReleasedAtCleared() bool {
+	_, ok := m.clearedFields[ashdeposit.FieldReleasedAt]
+	return ok
+}
+
+// ResetReleasedAt resets all changes to the "released_at" field.
+func (m *AshDepositMutation) ResetReleasedAt() {
+	m.released_at = nil
+	delete(m.clearedFields, ashdeposit.FieldReleasedAt)
+}
+
+// Where appends a list predicates to the AshDepositMutation builder.
+func (m *AshDepositMutation) Where(ps ...predicate.AshDeposit) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the AshDepositMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *AshDepositMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.AshDeposit, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *AshDepositMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *AshDepositMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (AshDeposit).
+func (m *AshDepositMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *AshDepositMutation) Fields() []string {
+	fields := make([]string, 0, 7)
+	if m.owner_id != nil {
+		fields = append(fields, ashdeposit.FieldOwnerID)
+	}
+	if m.amount_cents != nil {
+		fields = append(fields, ashdeposit.FieldAmountCents)
+	}
+	if m.currency != nil {
+		fields = append(fields, ashdeposit.FieldCurrency)
+	}
+	if m.state != nil {
+		fields = append(fields, ashdeposit.FieldState)
+	}
+	if m.notice_days != nil {
+		fields = append(fields, ashdeposit.FieldNoticeDays)
+	}
+	if m.created_at != nil {
+		fields = append(fields, ashdeposit.FieldCreatedAt)
+	}
+	if m.released_at != nil {
+		fields = append(fields, ashdeposit.FieldReleasedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *AshDepositMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case ashdeposit.FieldOwnerID:
+		return m.OwnerID()
+	case ashdeposit.FieldAmountCents:
+		return m.AmountCents()
+	case ashdeposit.FieldCurrency:
+		return m.Currency()
+	case ashdeposit.FieldState:
+		return m.State()
+	case ashdeposit.FieldNoticeDays:
+		return m.NoticeDays()
+	case ashdeposit.FieldCreatedAt:
+		return m.CreatedAt()
+	case ashdeposit.FieldReleasedAt:
+		return m.ReleasedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *AshDepositMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case ashdeposit.FieldOwnerID:
+		return m.OldOwnerID(ctx)
+	case ashdeposit.FieldAmountCents:
+		return m.OldAmountCents(ctx)
+	case ashdeposit.FieldCurrency:
+		return m.OldCurrency(ctx)
+	case ashdeposit.FieldState:
+		return m.OldState(ctx)
+	case ashdeposit.FieldNoticeDays:
+		return m.OldNoticeDays(ctx)
+	case ashdeposit.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case ashdeposit.FieldReleasedAt:
+		return m.OldReleasedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown AshDeposit field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *AshDepositMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case ashdeposit.FieldOwnerID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetOwnerID(v)
+		return nil
+	case ashdeposit.FieldAmountCents:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAmountCents(v)
+		return nil
+	case ashdeposit.FieldCurrency:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCurrency(v)
+		return nil
+	case ashdeposit.FieldState:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetState(v)
+		return nil
+	case ashdeposit.FieldNoticeDays:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetNoticeDays(v)
+		return nil
+	case ashdeposit.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case ashdeposit.FieldReleasedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetReleasedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown AshDeposit field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *AshDepositMutation) AddedFields() []string {
+	var fields []string
+	if m.addamount_cents != nil {
+		fields = append(fields, ashdeposit.FieldAmountCents)
+	}
+	if m.addnotice_days != nil {
+		fields = append(fields, ashdeposit.FieldNoticeDays)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *AshDepositMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case ashdeposit.FieldAmountCents:
+		return m.AddedAmountCents()
+	case ashdeposit.FieldNoticeDays:
+		return m.AddedNoticeDays()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *AshDepositMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case ashdeposit.FieldAmountCents:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddAmountCents(v)
+		return nil
+	case ashdeposit.FieldNoticeDays:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddNoticeDays(v)
+		return nil
+	}
+	return fmt.Errorf("unknown AshDeposit numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *AshDepositMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(ashdeposit.FieldReleasedAt) {
+		fields = append(fields, ashdeposit.FieldReleasedAt)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *AshDepositMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *AshDepositMutation) ClearField(name string) error {
+	switch name {
+	case ashdeposit.FieldReleasedAt:
+		m.ClearReleasedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown AshDeposit nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *AshDepositMutation) ResetField(name string) error {
+	switch name {
+	case ashdeposit.FieldOwnerID:
+		m.ResetOwnerID()
+		return nil
+	case ashdeposit.FieldAmountCents:
+		m.ResetAmountCents()
+		return nil
+	case ashdeposit.FieldCurrency:
+		m.ResetCurrency()
+		return nil
+	case ashdeposit.FieldState:
+		m.ResetState()
+		return nil
+	case ashdeposit.FieldNoticeDays:
+		m.ResetNoticeDays()
+		return nil
+	case ashdeposit.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case ashdeposit.FieldReleasedAt:
+		m.ResetReleasedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown AshDeposit field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *AshDepositMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *AshDepositMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *AshDepositMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *AshDepositMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *AshDepositMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *AshDepositMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *AshDepositMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown AshDeposit unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *AshDepositMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown AshDeposit edge %s", name)
 }
 
 // AshEventMutation represents an operation that mutates the AshEvent nodes in the graph.

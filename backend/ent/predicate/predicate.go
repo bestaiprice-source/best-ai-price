@@ -21,6 +21,9 @@ type Announcement func(*sql.Selector)
 // AnnouncementRead is the predicate function for announcementread builders.
 type AnnouncementRead func(*sql.Selector)
 
+// AshDeposit is the predicate function for ashdeposit builders.
+type AshDeposit func(*sql.Selector)
+
 // AshEvent is the predicate function for ashevent builders.
 type AshEvent func(*sql.Selector)
 

@@ -20,6 +20,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/announcement"
 	"github.com/Wei-Shaw/sub2api/ent/announcementread"
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
+	"github.com/Wei-Shaw/sub2api/ent/ashdeposit"
 	"github.com/Wei-Shaw/sub2api/ent/ashevent"
 	"github.com/Wei-Shaw/sub2api/ent/ashusage"
 	"github.com/Wei-Shaw/sub2api/ent/authidentity"
@@ -70,6 +71,8 @@ type Client struct {
 	Announcement *AnnouncementClient
 	// AnnouncementRead is the client for interacting with the AnnouncementRead builders.
 	AnnouncementRead *AnnouncementReadClient
+	// AshDeposit is the client for interacting with the AshDeposit builders.
+	AshDeposit *AshDepositClient
 	// AshEvent is the client for interacting with the AshEvent builders.
 	AshEvent *AshEventClient
 	// AshUsage is the client for interacting with the AshUsage builders.
@@ -148,6 +151,7 @@ func (c *Client) init() {
 	c.AccountGroup = NewAccountGroupClient(c.config)
 	c.Announcement = NewAnnouncementClient(c.config)
 	c.AnnouncementRead = NewAnnouncementReadClient(c.config)
+	c.AshDeposit = NewAshDepositClient(c.config)
 	c.AshEvent = NewAshEventClient(c.config)
 	c.AshUsage = NewAshUsageClient(c.config)
 	c.AuthIdentity = NewAuthIdentityClient(c.config)
@@ -276,6 +280,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		AccountGroup:                  NewAccountGroupClient(cfg),
 		Announcement:                  NewAnnouncementClient(cfg),
 		AnnouncementRead:              NewAnnouncementReadClient(cfg),
+		AshDeposit:                    NewAshDepositClient(cfg),
 		AshEvent:                      NewAshEventClient(cfg),
 		AshUsage:                      NewAshUsageClient(cfg),
 		AuthIdentity:                  NewAuthIdentityClient(cfg),
@@ -331,6 +336,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		AccountGroup:                  NewAccountGroupClient(cfg),
 		Announcement:                  NewAnnouncementClient(cfg),
 		AnnouncementRead:              NewAnnouncementReadClient(cfg),
+		AshDeposit:                    NewAshDepositClient(cfg),
 		AshEvent:                      NewAshEventClient(cfg),
 		AshUsage:                      NewAshUsageClient(cfg),
 		AuthIdentity:                  NewAuthIdentityClient(cfg),
@@ -392,7 +398,7 @@ func (c *Client) Close() error {
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
 		c.APIKey, c.Account, c.AccountGroup, c.Announcement, c.AnnouncementRead,
-		c.AshEvent, c.AshUsage, c.AuthIdentity, c.AuthIdentityChannel,
+		c.AshDeposit, c.AshEvent, c.AshUsage, c.AuthIdentity, c.AuthIdentityChannel,
 		c.ChannelMonitor, c.ChannelMonitorDailyRollup, c.ChannelMonitorHistory,
 		c.ChannelMonitorRequestTemplate, c.ErrorPassthroughRule, c.Group,
 		c.IdempotencyRecord, c.IdentityAdoptionDecision, c.PaymentAuditLog,
@@ -411,7 +417,7 @@ func (c *Client) Use(hooks ...Hook) {
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
 		c.APIKey, c.Account, c.AccountGroup, c.Announcement, c.AnnouncementRead,
-		c.AshEvent, c.AshUsage, c.AuthIdentity, c.AuthIdentityChannel,
+		c.AshDeposit, c.AshEvent, c.AshUsage, c.AuthIdentity, c.AuthIdentityChannel,
 		c.ChannelMonitor, c.ChannelMonitorDailyRollup, c.ChannelMonitorHistory,
 		c.ChannelMonitorRequestTemplate, c.ErrorPassthroughRule, c.Group,
 		c.IdempotencyRecord, c.IdentityAdoptionDecision, c.PaymentAuditLog,
@@ -438,6 +444,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.Announcement.mutate(ctx, m)
 	case *AnnouncementReadMutation:
 		return c.AnnouncementRead.mutate(ctx, m)
+	case *AshDepositMutation:
+		return c.AshDeposit.mutate(ctx, m)
 	case *AshEventMutation:
 		return c.AshEvent.mutate(ctx, m)
 	case *AshUsageMutation:
@@ -1314,6 +1322,139 @@ func (c *AnnouncementReadClient) mutate(ctx context.Context, m *AnnouncementRead
 		return (&AnnouncementReadDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown AnnouncementRead mutation op: %q", m.Op())
+	}
+}
+
+// AshDepositClient is a client for the AshDeposit schema.
+type AshDepositClient struct {
+	config
+}
+
+// NewAshDepositClient returns a client for the AshDeposit from the given config.
+func NewAshDepositClient(c config) *AshDepositClient {
+	return &AshDepositClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `ashdeposit.Hooks(f(g(h())))`.
+func (c *AshDepositClient) Use(hooks ...Hook) {
+	c.hooks.AshDeposit = append(c.hooks.AshDeposit, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `ashdeposit.Intercept(f(g(h())))`.
+func (c *AshDepositClient) Intercept(interceptors ...Interceptor) {
+	c.inters.AshDeposit = append(c.inters.AshDeposit, interceptors...)
+}
+
+// Create returns a builder for creating a AshDeposit entity.
+func (c *AshDepositClient) Create() *AshDepositCreate {
+	mutation := newAshDepositMutation(c.config, OpCreate)
+	return &AshDepositCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of AshDeposit entities.
+func (c *AshDepositClient) CreateBulk(builders ...*AshDepositCreate) *AshDepositCreateBulk {
+	return &AshDepositCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *AshDepositClient) MapCreateBulk(slice any, setFunc func(*AshDepositCreate, int)) *AshDepositCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &AshDepositCreateBulk{err: fmt.Errorf("calling to AshDepositClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*AshDepositCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &AshDepositCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for AshDeposit.
+func (c *AshDepositClient) Update() *AshDepositUpdate {
+	mutation := newAshDepositMutation(c.config, OpUpdate)
+	return &AshDepositUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *AshDepositClient) UpdateOne(_m *AshDeposit) *AshDepositUpdateOne {
+	mutation := newAshDepositMutation(c.config, OpUpdateOne, withAshDeposit(_m))
+	return &AshDepositUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *AshDepositClient) UpdateOneID(id int64) *AshDepositUpdateOne {
+	mutation := newAshDepositMutation(c.config, OpUpdateOne, withAshDepositID(id))
+	return &AshDepositUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for AshDeposit.
+func (c *AshDepositClient) Delete() *AshDepositDelete {
+	mutation := newAshDepositMutation(c.config, OpDelete)
+	return &AshDepositDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *AshDepositClient) DeleteOne(_m *AshDeposit) *AshDepositDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *AshDepositClient) DeleteOneID(id int64) *AshDepositDeleteOne {
+	builder := c.Delete().Where(ashdeposit.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &AshDepositDeleteOne{builder}
+}
+
+// Query returns a query builder for AshDeposit.
+func (c *AshDepositClient) Query() *AshDepositQuery {
+	return &AshDepositQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeAshDeposit},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a AshDeposit entity by its id.
+func (c *AshDepositClient) Get(ctx context.Context, id int64) (*AshDeposit, error) {
+	return c.Query().Where(ashdeposit.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *AshDepositClient) GetX(ctx context.Context, id int64) *AshDeposit {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *AshDepositClient) Hooks() []Hook {
+	return c.hooks.AshDeposit
+}
+
+// Interceptors returns the client interceptors.
+func (c *AshDepositClient) Interceptors() []Interceptor {
+	return c.inters.AshDeposit
+}
+
+func (c *AshDepositClient) mutate(ctx context.Context, m *AshDepositMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&AshDepositCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&AshDepositUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&AshDepositUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&AshDepositDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown AshDeposit mutation op: %q", m.Op())
 	}
 }
 
@@ -6300,8 +6441,8 @@ func (c *UserSubscriptionClient) mutate(ctx context.Context, m *UserSubscription
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		APIKey, Account, AccountGroup, Announcement, AnnouncementRead, AshEvent,
-		AshUsage, AuthIdentity, AuthIdentityChannel, ChannelMonitor,
+		APIKey, Account, AccountGroup, Announcement, AnnouncementRead, AshDeposit,
+		AshEvent, AshUsage, AuthIdentity, AuthIdentityChannel, ChannelMonitor,
 		ChannelMonitorDailyRollup, ChannelMonitorHistory,
 		ChannelMonitorRequestTemplate, ErrorPassthroughRule, Group, IdempotencyRecord,
 		IdentityAdoptionDecision, PaymentAuditLog, PaymentOrder,
@@ -6311,8 +6452,8 @@ type (
 		UserAttributeValue, UserSubscription []ent.Hook
 	}
 	inters struct {
-		APIKey, Account, AccountGroup, Announcement, AnnouncementRead, AshEvent,
-		AshUsage, AuthIdentity, AuthIdentityChannel, ChannelMonitor,
+		APIKey, Account, AccountGroup, Announcement, AnnouncementRead, AshDeposit,
+		AshEvent, AshUsage, AuthIdentity, AuthIdentityChannel, ChannelMonitor,
 		ChannelMonitorDailyRollup, ChannelMonitorHistory,
 		ChannelMonitorRequestTemplate, ErrorPassthroughRule, Group, IdempotencyRecord,
 		IdentityAdoptionDecision, PaymentAuditLog, PaymentOrder,

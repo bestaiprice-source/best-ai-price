@@ -94,4 +94,23 @@ func TestAshHealthAndStatsEndpoints(t *testing.T) {
 	reqNodes, _ := http.NewRequest("GET", "/ash/stats/nodes", nil)
 	r.ServeHTTP(wNodes, reqNodes)
 	assert.Equal(t, http.StatusOK, wNodes.Code)
+
+	// Test GET /ash/stats/analytics
+	wAnalytics := httptest.NewRecorder()
+	reqAnalytics, _ := http.NewRequest("GET", "/ash/stats/analytics", nil)
+	r.ServeHTTP(wAnalytics, reqAnalytics)
+	assert.Equal(t, http.StatusOK, wAnalytics.Code)
+
+	// Test POST /ash/admin/deposits
+	wDepPost := httptest.NewRecorder()
+	reqDepPost, _ := http.NewRequest("POST", "/ash/admin/deposits", strings.NewReader(`{"owner_id":"user-dep-1","amount_cents":2500,"currency":"USD","notice_days":10}`))
+	reqDepPost.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(wDepPost, reqDepPost)
+	assert.Equal(t, http.StatusOK, wDepPost.Code)
+
+	// Test GET /ash/admin/deposits
+	wDepGet := httptest.NewRecorder()
+	reqDepGet, _ := http.NewRequest("GET", "/ash/admin/deposits?owner_id=user-dep-1", nil)
+	r.ServeHTTP(wDepGet, reqDepGet)
+	assert.Equal(t, http.StatusOK, wDepGet.Code)
 }

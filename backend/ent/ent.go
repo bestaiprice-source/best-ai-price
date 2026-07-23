@@ -17,6 +17,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/announcement"
 	"github.com/Wei-Shaw/sub2api/ent/announcementread"
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
+	"github.com/Wei-Shaw/sub2api/ent/ashdeposit"
 	"github.com/Wei-Shaw/sub2api/ent/ashevent"
 	"github.com/Wei-Shaw/sub2api/ent/ashusage"
 	"github.com/Wei-Shaw/sub2api/ent/authidentity"
@@ -113,6 +114,7 @@ func checkColumn(t, c string) error {
 			accountgroup.Table:                  accountgroup.ValidColumn,
 			announcement.Table:                  announcement.ValidColumn,
 			announcementread.Table:              announcementread.ValidColumn,
+			ashdeposit.Table:                    ashdeposit.ValidColumn,
 			ashevent.Table:                      ashevent.ValidColumn,
 			ashusage.Table:                      ashusage.ValidColumn,
 			authidentity.Table:                  authidentity.ValidColumn,

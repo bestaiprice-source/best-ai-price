@@ -10,6 +10,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/announcement"
 	"github.com/Wei-Shaw/sub2api/ent/announcementread"
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
+	"github.com/Wei-Shaw/sub2api/ent/ashdeposit"
 	"github.com/Wei-Shaw/sub2api/ent/ashevent"
 	"github.com/Wei-Shaw/sub2api/ent/ashusage"
 	"github.com/Wei-Shaw/sub2api/ent/authidentity"
@@ -318,6 +319,50 @@ func init() {
 	announcementreadDescCreatedAt := announcementreadFields[3].Descriptor()
 	// announcementread.DefaultCreatedAt holds the default value on creation for the created_at field.
 	announcementread.DefaultCreatedAt = announcementreadDescCreatedAt.Default.(func() time.Time)
+	ashdepositFields := schema.AshDeposit{}.Fields()
+	_ = ashdepositFields
+	// ashdepositDescOwnerID is the schema descriptor for owner_id field.
+	ashdepositDescOwnerID := ashdepositFields[0].Descriptor()
+	// ashdeposit.OwnerIDValidator is a validator for the "owner_id" field. It is called by the builders before save.
+	ashdeposit.OwnerIDValidator = func() func(string) error {
+		validators := ashdepositDescOwnerID.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(owner_id string) error {
+			for _, fn := range fns {
+				if err := fn(owner_id); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// ashdepositDescAmountCents is the schema descriptor for amount_cents field.
+	ashdepositDescAmountCents := ashdepositFields[1].Descriptor()
+	// ashdeposit.AmountCentsValidator is a validator for the "amount_cents" field. It is called by the builders before save.
+	ashdeposit.AmountCentsValidator = ashdepositDescAmountCents.Validators[0].(func(int64) error)
+	// ashdepositDescCurrency is the schema descriptor for currency field.
+	ashdepositDescCurrency := ashdepositFields[2].Descriptor()
+	// ashdeposit.DefaultCurrency holds the default value on creation for the currency field.
+	ashdeposit.DefaultCurrency = ashdepositDescCurrency.Default.(string)
+	// ashdeposit.CurrencyValidator is a validator for the "currency" field. It is called by the builders before save.
+	ashdeposit.CurrencyValidator = ashdepositDescCurrency.Validators[0].(func(string) error)
+	// ashdepositDescState is the schema descriptor for state field.
+	ashdepositDescState := ashdepositFields[3].Descriptor()
+	// ashdeposit.DefaultState holds the default value on creation for the state field.
+	ashdeposit.DefaultState = ashdepositDescState.Default.(string)
+	// ashdeposit.StateValidator is a validator for the "state" field. It is called by the builders before save.
+	ashdeposit.StateValidator = ashdepositDescState.Validators[0].(func(string) error)
+	// ashdepositDescNoticeDays is the schema descriptor for notice_days field.
+	ashdepositDescNoticeDays := ashdepositFields[4].Descriptor()
+	// ashdeposit.DefaultNoticeDays holds the default value on creation for the notice_days field.
+	ashdeposit.DefaultNoticeDays = ashdepositDescNoticeDays.Default.(int)
+	// ashdepositDescCreatedAt is the schema descriptor for created_at field.
+	ashdepositDescCreatedAt := ashdepositFields[5].Descriptor()
+	// ashdeposit.DefaultCreatedAt holds the default value on creation for the created_at field.
+	ashdeposit.DefaultCreatedAt = ashdepositDescCreatedAt.Default.(func() time.Time)
 	asheventFields := schema.AshEvent{}.Fields()
 	_ = asheventFields
 	// asheventDescOwnerID is the schema descriptor for owner_id field.

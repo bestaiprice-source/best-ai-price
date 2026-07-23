@@ -69,6 +69,18 @@ func (f AnnouncementReadFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.V
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.AnnouncementReadMutation", m)
 }
 
+// The AshDepositFunc type is an adapter to allow the use of ordinary
+// function as AshDeposit mutator.
+type AshDepositFunc func(context.Context, *ent.AshDepositMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f AshDepositFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.AshDepositMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.AshDepositMutation", m)
+}
+
 // The AshEventFunc type is an adapter to allow the use of ordinary
 // function as AshEvent mutator.
 type AshEventFunc func(context.Context, *ent.AshEventMutation) (ent.Value, error)

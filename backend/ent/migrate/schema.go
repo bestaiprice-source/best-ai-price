@@ -339,6 +339,35 @@ var (
 			},
 		},
 	}
+	// AshDepositsColumns holds the columns for the "ash_deposits" table.
+	AshDepositsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "owner_id", Type: field.TypeString, Size: 64},
+		{Name: "amount_cents", Type: field.TypeInt64},
+		{Name: "currency", Type: field.TypeString, Size: 8, Default: "USD"},
+		{Name: "state", Type: field.TypeString, Size: 32, Default: "held"},
+		{Name: "notice_days", Type: field.TypeInt, Default: 10},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "released_at", Type: field.TypeTime, Nullable: true},
+	}
+	// AshDepositsTable holds the schema information for the "ash_deposits" table.
+	AshDepositsTable = &schema.Table{
+		Name:       "ash_deposits",
+		Columns:    AshDepositsColumns,
+		PrimaryKey: []*schema.Column{AshDepositsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "ashdeposit_owner_id",
+				Unique:  false,
+				Columns: []*schema.Column{AshDepositsColumns[1]},
+			},
+			{
+				Name:    "ashdeposit_state",
+				Unique:  false,
+				Columns: []*schema.Column{AshDepositsColumns[4]},
+			},
+		},
+	}
 	// AshEventsColumns holds the columns for the "ash_events" table.
 	AshEventsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
@@ -1716,6 +1745,7 @@ var (
 		AccountGroupsTable,
 		AnnouncementsTable,
 		AnnouncementReadsTable,
+		AshDepositsTable,
 		AshEventsTable,
 		AshUsagesTable,
 		AuthIdentitiesTable,
@@ -1772,6 +1802,9 @@ func init() {
 	AnnouncementReadsTable.ForeignKeys[1].RefTable = UsersTable
 	AnnouncementReadsTable.Annotation = &entsql.Annotation{
 		Table: "announcement_reads",
+	}
+	AshDepositsTable.Annotation = &entsql.Annotation{
+		Table: "ash_deposits",
 	}
 	AshEventsTable.Annotation = &entsql.Annotation{
 		Table: "ash_events",

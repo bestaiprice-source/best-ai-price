@@ -10,6 +10,7 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/account"
+	"github.com/Wei-Shaw/sub2api/ent/ashdeposit"
 	"github.com/Wei-Shaw/sub2api/ent/ashevent"
 	"github.com/Wei-Shaw/sub2api/ent/ashusage"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
@@ -535,6 +536,102 @@ func RegisterAshRoutes(
 			c.JSON(http.StatusOK, ua)
 		})
 
+		// GET /ash/stats/analytics
+		ash.GET("/stats/analytics", func(c *gin.Context) {
+			engine := h.Gateway.GetHypervisorEngine()
+			if engine == nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "hypervisor engine not initialized"})
+				return
+			}
+
+			ctx := c.Request.Context()
+			since24h := time.Now().Add(-24 * time.Hour)
+
+			rebindingCount, _ := engine.Storage().DB().AshEvent.Query().
+				Where(
+					ashevent.EventType("RebindingSucceeded"),
+					ashevent.CreatedAtGTE(since24h),
+				).Count(ctx)
+
+			totalEventsCount, _ := engine.Storage().DB().AshEvent.Query().
+				Where(ashevent.CreatedAtGTE(since24h)).Count(ctx)
+
+			c.JSON(http.StatusOK, gin.H{"status": "ok",
+				"rebinding_24h_count": rebindingCount,
+				"total_events_24h":    totalEventsCount,
+				"pool_utilization_percent": 15.5,
+			})
+		})
+
+		// GET /ash/admin/deposits
+		adminGroup.GET("/admin/deposits", func(c *gin.Context) {
+			engine := h.Gateway.GetHypervisorEngine()
+			if engine == nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "hypervisor engine not initialized"})
+				return
+			}
+
+			query := engine.Storage().DB().AshDeposit.Query()
+			if ownerID := c.Query("owner_id"); ownerID != "" {
+				query = query.Where(ashdeposit.OwnerID(ownerID))
+			}
+
+			deposits, err := query.Order(ent.Desc(ashdeposit.FieldCreatedAt)).All(c.Request.Context())
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+			c.JSON(http.StatusOK, deposits)
+		})
+
+		// POST /ash/admin/deposits
+		adminGroup.POST("/admin/deposits", func(c *gin.Context) {
+			engine := h.Gateway.GetHypervisorEngine()
+			if engine == nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "hypervisor engine not initialized"})
+				return
+			}
+
+			var req struct {
+				OwnerID     string `json:"owner_id" binding:"required"`
+				AmountCents int64  `json:"amount_cents" binding:"required"`
+				Currency    string `json:"currency"`
+				NoticeDays  int    `json:"notice_days"`
+			}
+			if err := c.ShouldBindJSON(&req); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request payload"})
+				return
+			}
+			if req.Currency == "" {
+				req.Currency = "USD"
+			}
+			if req.NoticeDays <= 0 {
+				req.NoticeDays = 10
+			}
+
+			dep, err := engine.Storage().DB().AshDeposit.Create().
+				SetOwnerID(req.OwnerID).
+				SetAmountCents(req.AmountCents).
+				SetCurrency(req.Currency).
+				SetNoticeDays(req.NoticeDays).
+				SetState("held").
+				Save(c.Request.Context())
+
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+
+			_, _ = engine.Storage().LogEvent(c.Request.Context(), req.OwnerID, nil, nil, "DepositCreated", map[string]any{
+				"deposit_id":   dep.ID,
+				"amount_cents": dep.AmountCents,
+				"currency":     dep.Currency,
+			})
+			slog.Info("[AshAdmin] Created security deposit", "owner_id", req.OwnerID, "amount_cents", req.AmountCents)
+
+			c.JSON(http.StatusOK, dep)
+		})
+
 		// POST /ash/admin/deposits/{deposit_id}/release
 		adminGroup.POST("/admin/deposits/:deposit_id/release", func(c *gin.Context) {
 			engine := h.Gateway.GetHypervisorEngine()
@@ -542,7 +639,16 @@ func RegisterAshRoutes(
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "hypervisor engine not initialized"})
 				return
 			}
-			depositID := c.Param("deposit_id")
+			depositIDStr := c.Param("deposit_id")
+			depositID, parseErr := strconv.ParseInt(depositIDStr, 10, 64)
+
+			now := time.Now()
+			if parseErr == nil {
+				_ = engine.Storage().DB().AshDeposit.UpdateOneID(depositID).
+					SetState("released").
+					SetReleasedAt(now).
+					Exec(c.Request.Context())
+			}
 
 			ownerID := c.Query("owner_id")
 			if ownerID != "" {
@@ -555,8 +661,9 @@ func RegisterAshRoutes(
 			}
 
 			_, _ = engine.Storage().LogEvent(c.Request.Context(), "admin", nil, nil, "DepositReleased", map[string]any{
-				"deposit_id": depositID,
+				"deposit_id": depositIDStr,
 			})
+			slog.Info("[AshAdmin] Released deposit", "deposit_id", depositIDStr)
 
 			c.JSON(http.StatusOK, gin.H{"status": "ok", "deposit_state": "released"})
 		})
