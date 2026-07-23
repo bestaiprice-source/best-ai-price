@@ -63,3 +63,42 @@ export async function disableAshNode(nodeID: string): Promise<{ status: string; 
   const { data } = await apiClient.post<{ status: string; node_state: string }>(`/ash/admin/nodes/${nodeID}/disable`)
   return data
 }
+
+export interface AshAnalytics {
+  rebinding_24h_count: number
+  total_events_24h: number
+  pool_utilization_percent: number
+}
+
+export interface AshDepositItem {
+  id: number
+  owner_id: string
+  amount_cents: number
+  currency: string
+  state: string
+  notice_days: number
+  created_at: string
+  released_at?: string
+}
+
+export async function getAshAnalytics(): Promise<AshAnalytics> {
+  const { data } = await apiClient.get<AshAnalytics>('/ash/stats/analytics')
+  return data
+}
+
+export async function getAshDeposits(ownerID?: string): Promise<AshDepositItem[]> {
+  const url = ownerID ? `/ash/admin/deposits?owner_id=${ownerID}` : '/ash/admin/deposits'
+  const { data } = await apiClient.get<AshDepositItem[]>(url)
+  return data
+}
+
+export async function createAshDeposit(payload: { owner_id: string; amount_cents: number; currency?: string; notice_days?: number }): Promise<AshDepositItem> {
+  const { data } = await apiClient.post<AshDepositItem>('/ash/admin/deposits', payload)
+  return data
+}
+
+export async function releaseAshDeposit(depositID: number, ownerID?: string): Promise<{ status: string; deposit_state: string }> {
+  const url = ownerID ? `/ash/admin/deposits/${depositID}/release?owner_id=${ownerID}` : `/ash/admin/deposits/${depositID}/release`
+  const { data } = await apiClient.post<{ status: string; deposit_state: string }>(url)
+  return data
+}

@@ -41,7 +41,7 @@
     </div>
 
     <!-- Core Metrics Cards -->
-    <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
+    <div class="grid grid-cols-2 gap-4 lg:grid-cols-5">
       <!-- Total Nodes -->
       <div class="rounded-xl border border-gray-200 bg-gray-50/50 p-4 dark:border-gray-700 dark:bg-gray-800/40">
         <div class="flex items-center justify-between">
@@ -97,6 +97,20 @@
         </p>
         <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
           Pooled Capacity Units
+        </p>
+      </div>
+
+      <!-- 24h Rebinding Analytics -->
+      <div class="rounded-xl border border-gray-200 bg-gray-50/50 p-4 dark:border-gray-700 dark:bg-gray-800/40">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-medium text-gray-500 dark:text-gray-400">24h Rebindings</span>
+          <Icon name="sync" size="sm" class="text-purple-500" />
+        </div>
+        <p class="mt-2 text-2xl font-black text-purple-600 dark:text-purple-400">
+          {{ analyticsData?.rebinding_24h_count || 0 }}
+        </p>
+        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+          Total Events: {{ analyticsData?.total_events_24h || 0 }}
         </p>
       </div>
     </div>
@@ -233,13 +247,14 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { adminAPI } from '@/api/admin'
-import type { AshHealthResponse, AshGlobalStats, AshNodeMetric } from '@/api/admin/ash'
+import type { AshHealthResponse, AshGlobalStats, AshNodeMetric, AshAnalytics } from '@/api/admin/ash'
 import Icon from '@/components/icons/Icon.vue'
 
 const loading = ref(false)
 const healthData = ref<AshHealthResponse | null>(null)
 const globalStats = ref<AshGlobalStats | null>(null)
 const nodeMetrics = ref<AshNodeMetric[]>([])
+const analyticsData = ref<AshAnalytics | null>(null)
 let refreshTimer: ReturnType<typeof setInterval> | null = null
 
 const stateBadgeClass = computed(() => {
@@ -295,14 +310,16 @@ const formatDate = (dateStr?: string) => {
 const loadAshData = async () => {
   loading.value = true
   try {
-    const [healthRes, statsRes, nodesRes] = await Promise.all([
+    const [healthRes, statsRes, nodesRes, analyticsRes] = await Promise.all([
       adminAPI.ash.getAshHealth().catch(() => null),
       adminAPI.ash.getAshGlobalStats().catch(() => null),
-      adminAPI.ash.getAshNodeMetrics().catch(() => [])
+      adminAPI.ash.getAshNodeMetrics().catch(() => []),
+      adminAPI.ash.getAshAnalytics().catch(() => null)
     ])
     healthData.value = healthRes
     globalStats.value = statsRes
     nodeMetrics.value = nodesRes || []
+    analyticsData.value = analyticsRes
   } catch (err) {
     console.error('Failed to load ASH hypervisor stats:', err)
   } finally {
