@@ -368,7 +368,7 @@ const errors = reactive({
 onMounted(async () => {
   try {
     const settings = await getPublicSettings()
-    registrationEnabled.value = settings.registration_enabled
+    registrationEnabled.value = false
     emailVerifyEnabled.value = settings.email_verify_enabled
     promoCodeEnabled.value = settings.promo_code_enabled
     invitationCodeEnabled.value = settings.invitation_code_enabled
