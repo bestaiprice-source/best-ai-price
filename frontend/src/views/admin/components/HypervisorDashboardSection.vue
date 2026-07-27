@@ -7,11 +7,24 @@
           <Icon name="cpu" size="md" class="text-indigo-600 dark:text-indigo-400" :stroke-width="2" />
         </div>
         <div>
-          <h3 class="text-lg font-bold text-gray-900 dark:text-white">
-            Hypervisor Engine (ASH)
-          </h3>
-          <p class="text-xs text-gray-500 dark:text-gray-400">
-            Real-time session hypervisor, load balancer & pool health controller
+          <div class="flex items-center gap-2">
+            <button
+              @click="activeEngine = 'standard'"
+              class="px-3 py-1 text-xs font-bold rounded-lg transition-colors"
+              :class="activeEngine === 'standard' ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'"
+            >
+              Standard ASH Engine
+            </button>
+            <button
+              @click="activeEngine = 'yunwu'"
+              class="px-3 py-1 text-xs font-bold rounded-lg transition-colors"
+              :class="activeEngine === 'yunwu' ? 'bg-purple-600 text-white' : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'"
+            >
+              Yunwu Hypervisor Engine
+            </button>
+          </div>
+          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            {{ activeEngine === 'standard' ? 'Real-time session hypervisor, load balancer & pool health controller' : 'Dedicated Yunwu API channels hypervisor & credit balance sync' }}
           </p>
         </div>
       </div>
@@ -250,6 +263,7 @@ import { adminAPI } from '@/api/admin'
 import type { AshHealthResponse, AshGlobalStats, AshNodeMetric, AshAnalytics } from '@/api/admin/ash'
 import Icon from '@/components/icons/Icon.vue'
 
+const activeEngine = ref<'standard' | 'yunwu'>('standard')
 const loading = ref(false)
 const healthData = ref<AshHealthResponse | null>(null)
 const globalStats = ref<AshGlobalStats | null>(null)
@@ -310,16 +324,35 @@ const formatDate = (dateStr?: string) => {
 const loadAshData = async () => {
   loading.value = true
   try {
-    const [healthRes, statsRes, nodesRes, analyticsRes] = await Promise.all([
-      adminAPI.ash.getAshHealth().catch(() => null),
-      adminAPI.ash.getAshGlobalStats().catch(() => null),
-      adminAPI.ash.getAshNodeMetrics().catch(() => []),
-      adminAPI.ash.getAshAnalytics().catch(() => null)
-    ])
-    healthData.value = healthRes
-    globalStats.value = statsRes
-    nodeMetrics.value = nodesRes || []
-    analyticsData.value = analyticsRes
+    if (activeEngine.value === 'yunwu') {
+      const [healthRes, yunwuNodes] = await Promise.all([
+        adminAPI.ash.getAshYunwuHealth().catch(() => null),
+        adminAPI.ash.getAshYunwuNodes().catch(() => [])
+      ])
+      healthData.value = healthRes
+      nodeMetrics.value = (yunwuNodes || []).map((n) => ({
+        node_id: n.node_id,
+        account_name: n.account_name,
+        provider: 'yunwu',
+        state: n.state,
+        capabilities: ['anthropic', 'openai'],
+        success_rate: 1.0,
+        avg_latency_ms: 120,
+        recent_429: 0,
+        recent_timeouts: 0
+      }))
+    } else {
+      const [healthRes, statsRes, nodesRes, analyticsRes] = await Promise.all([
+        adminAPI.ash.getAshHealth().catch(() => null),
+        adminAPI.ash.getAshGlobalStats().catch(() => null),
+        adminAPI.ash.getAshNodeMetrics().catch(() => []),
+        adminAPI.ash.getAshAnalytics().catch(() => null)
+      ])
+      healthData.value = healthRes
+      globalStats.value = statsRes
+      nodeMetrics.value = nodesRes || []
+      analyticsData.value = analyticsRes
+    }
   } catch (err) {
     console.error('Failed to load ASH hypervisor stats:', err)
   } finally {

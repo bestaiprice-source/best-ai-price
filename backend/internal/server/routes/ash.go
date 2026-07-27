@@ -20,6 +20,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/lease"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/quota"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/session"
+	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/yunwu"
 
 	"github.com/gin-gonic/gin"
 )
@@ -666,6 +667,100 @@ func RegisterAshRoutes(
 			slog.Info("[AshAdmin] Released deposit", "deposit_id", depositIDStr)
 
 			c.JSON(http.StatusOK, gin.H{"status": "ok", "deposit_state": "released"})
+		})
+
+		// =========================================================================
+		// DEDICATED YUNWU HYPERVISOR ENGINE ROUTES
+		// =========================================================================
+
+		// GET /ash/admin/yunwu/health
+		adminGroup.GET("/yunwu/health", func(c *gin.Context) {
+			engine := h.Gateway.GetHypervisorEngine()
+			if engine == nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "hypervisor engine not initialized"})
+				return
+			}
+
+			yh := yunwu.NewYunwuHypervisor(engine.Storage(), nil)
+			c.JSON(http.StatusOK, yh.GetHealthStatus(c.Request.Context()))
+		})
+
+		// GET /ash/admin/yunwu/nodes
+		adminGroup.GET("/yunwu/nodes", func(c *gin.Context) {
+			engine := h.Gateway.GetHypervisorEngine()
+			if engine == nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "hypervisor engine not initialized"})
+				return
+			}
+
+			dbAccounts, _ := engine.Storage().DB().Account.Query().
+				Where(account.PlatformEqualFold("yunwu")).
+				All(c.Request.Context())
+
+			if len(dbAccounts) == 0 {
+				dbAccounts, _ = engine.Storage().DB().Account.Query().
+					Where(account.NameContainsFold("yunwu")).
+					All(c.Request.Context())
+			}
+
+			var list []gin.H
+			for _, acc := range dbAccounts {
+				nodeID := fmt.Sprintf("%d", acc.ID)
+				creditValStr, _ := engine.Storage().Redis().Get(c.Request.Context(), "ash:yunwu:credit:"+nodeID).Result()
+				availableUSD, _ := strconv.ParseFloat(creditValStr, 64)
+
+				nodeState := "healthy"
+				if state, err := health.NewNodeManager(engine.Storage()).GetNodeRuntimeState(c.Request.Context(), nodeID); err == nil && state != nil {
+					if state.CooldownUntil != nil && time.Now().Before(*state.CooldownUntil) {
+						nodeState = "cooldown"
+					}
+				}
+
+				baseURL := "https://api.yunwu.ai/v1"
+				if acc.Credentials != nil {
+					if urlStr, ok := acc.Credentials["base_url"].(string); ok && urlStr != "" {
+						baseURL = urlStr
+					}
+				}
+
+				list = append(list, gin.H{
+					"node_id":              nodeID,
+					"account_name":         acc.Name,
+					"platform":             "yunwu",
+					"type":                 acc.Type,
+					"state":                nodeState,
+					"total_available_usd":  availableUSD,
+					"base_url":             baseURL,
+					"status":               acc.Status,
+				})
+			}
+
+			c.JSON(http.StatusOK, list)
+		})
+
+		// POST /ash/admin/yunwu/nodes/:id/sync - Manual balance sync with Yunwu API
+		adminGroup.POST("/yunwu/nodes/:id/sync", func(c *gin.Context) {
+			engine := h.Gateway.GetHypervisorEngine()
+			if engine == nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "hypervisor engine not initialized"})
+				return
+			}
+
+			nodeID := c.Param("id")
+			var reqBody struct {
+				APIKey  string `json:"api_key"`
+				BaseURL string `json:"base_url"`
+			}
+			_ = c.ShouldBindJSON(&reqBody)
+
+			yh := yunwu.NewYunwuHypervisor(engine.Storage(), nil)
+			grants, err := yh.SyncNodeBalance(c.Request.Context(), nodeID, reqBody.APIKey, reqBody.BaseURL)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
+
+			c.JSON(http.StatusOK, grants)
 		})
 	}
 	}

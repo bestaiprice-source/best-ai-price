@@ -102,3 +102,32 @@ export async function releaseAshDeposit(depositID: number, ownerID?: string): Pr
   const { data } = await apiClient.post<{ status: string; deposit_state: string }>(url)
   return data
 }
+
+export interface YunwuNodeItem {
+  node_id: string
+  account_name: string
+  platform: string
+  type: string
+  state: string
+  total_available_usd: number
+  base_url?: string
+  status: string
+}
+
+export async function getAshYunwuHealth(): Promise<AshHealthResponse> {
+  const { data } = await apiClient.get<AshHealthResponse>('/ash/admin/yunwu/health')
+  return data
+}
+
+export async function getAshYunwuNodes(): Promise<YunwuNodeItem[]> {
+  const { data } = await apiClient.get<YunwuNodeItem[]>('/ash/admin/yunwu/nodes')
+  return data
+}
+
+export async function syncAshYunwuNode(nodeID: string, apiKey?: string, baseURL?: string): Promise<{ total_available: number; total_used: number }> {
+  const { data } = await apiClient.post<{ total_available: number; total_used: number }>(`/ash/admin/yunwu/nodes/${nodeID}/sync`, {
+    api_key: apiKey,
+    base_url: baseURL
+  })
+  return data
+}

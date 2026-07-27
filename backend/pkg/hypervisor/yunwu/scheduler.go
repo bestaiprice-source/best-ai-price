@@ -1,0 +1,175 @@
+package yunwu
+
+import (
+	"context"
+	"errors"
+	"log/slog"
+	"time"
+
+	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/health"
+)
+
+var (
+	ErrNoYunwuNodesAvailable = errors.New("no Yunwu execution nodes available")
+)
+
+const (
+	AffinityBonus           = 15.0
+	PriorityBonusMultiplier = 5.0
+)
+
+type YunwuScheduler struct{}
+
+func NewYunwuScheduler() *YunwuScheduler {
+	return &YunwuScheduler{}
+}
+
+// SelectNode selects the best Yunwu execution node for a session based on Yunwu credit balance and health stats
+func (s *YunwuScheduler) SelectNode(
+	ctx context.Context,
+	nodes []health.ExecutionNode,
+	states map[string]*health.NodeRuntimeState,
+	credits map[string]float64,
+	userPriority int,
+	currentLeaseNodeID string,
+	systemState string,
+) (*health.ExecutionNode, error) {
+	now := time.Now()
+	var candidates []health.ExecutionNode
+
+	// 1. Filter out unavailable, zero-credit (<0.01), and nodes in active cooldown
+	for _, node := range nodes {
+		if node.State == "unavailable" {
+			slog.Debug("[YunwuScheduler] Excluding unavailable node", "node_id", node.NodeID)
+			continue
+		}
+
+		// Check credit balance (if tracked)
+		credit, tracked := credits[node.NodeID]
+		if tracked && credit <= 0.01 && len(nodes) > 1 {
+			slog.Warn("[YunwuScheduler] Excluding exhausted credit Yunwu node", "node_id", node.NodeID, "available_credit", credit)
+			continue
+		}
+
+		// Check if in cooldown
+		isCooldown := node.State == "cooldown"
+		if state, exists := states[node.NodeID]; exists && state.CooldownUntil != nil {
+			if now.Before(*state.CooldownUntil) {
+				isCooldown = true
+			}
+		}
+
+		if isCooldown && len(nodes) > 1 {
+			slog.Debug("[YunwuScheduler] Excluding cooldown node", "node_id", node.NodeID)
+			continue
+		}
+
+		candidates = append(candidates, node)
+	}
+
+	if len(candidates) == 0 {
+		slog.Warn("[YunwuScheduler] All Yunwu nodes filtered out, relaxing cooldown for pool")
+		for _, node := range nodes {
+			if node.State != "unavailable" {
+				candidates = append(candidates, node)
+			}
+		}
+	}
+
+	if len(candidates) == 0 {
+		slog.Error("[YunwuScheduler] No candidate Yunwu nodes available", "total_nodes", len(nodes))
+		return nil, ErrNoYunwuNodesAvailable
+	}
+
+	// 2. Separate healthy and limited candidates
+	var healthyCandidates []health.ExecutionNode
+	var limitedCandidates []health.ExecutionNode
+
+	for _, node := range candidates {
+		if node.State == "healthy" || node.State == "busy" || node.State == "" {
+			healthyCandidates = append(healthyCandidates, node)
+		} else if node.State == "limited" {
+			limitedCandidates = append(limitedCandidates, node)
+		}
+	}
+
+	var finalCandidates []health.ExecutionNode
+	if len(healthyCandidates) > 0 {
+		finalCandidates = healthyCandidates
+	} else if len(limitedCandidates) > 0 {
+		finalCandidates = limitedCandidates
+	} else {
+		finalCandidates = candidates
+	}
+
+	// 3. Score Yunwu nodes:
+	// score = success_rate * 100 + affinity + priority + credit_bonus - queue_depth * 5 - avg_latency / 100 - recent_429 * 30
+	var bestNode *health.ExecutionNode
+	var bestScore float64
+
+	for i, node := range finalCandidates {
+		state, exists := states[node.NodeID]
+		successRate := 1.0
+		var avgLatencyMs int64
+		var queueDepth int
+		var recent429 int
+		var recentTimeout int
+
+		if exists {
+			successRate = state.SuccessRate
+			avgLatencyMs = state.AvgLatencyMs
+			queueDepth = state.QueueDepth
+			recent429 = state.Recent429
+			recentTimeout = state.RecentTimeouts
+		}
+
+		score := successRate * 100.0
+
+		// + Affinity
+		if currentLeaseNodeID != "" && node.NodeID == currentLeaseNodeID {
+			score += AffinityBonus
+		}
+
+		// + User priority
+		score += float64(userPriority) * PriorityBonusMultiplier
+
+		// + Available credit bonus (capped at 50 points)
+		credit := credits[node.NodeID]
+		creditBonus := credit * 5.0
+		if creditBonus > 50.0 {
+			creditBonus = 50.0
+		}
+		score += creditBonus
+
+		// - Queue depth
+		score -= float64(queueDepth) * 5.0
+
+		// - Latency
+		latencyDivider := 100.0
+		if systemState == "WARNING" {
+			latencyDivider = 50.0
+		}
+		score -= float64(avgLatencyMs) / latencyDivider
+
+		// - 429 and timeouts
+		multiplier429 := 30.0
+		if systemState == "WARNING" {
+			multiplier429 = 60.0
+		}
+		score -= float64(recent429) * multiplier429
+		score -= float64(recentTimeout) * 20.0
+
+		if i == 0 || score > bestScore {
+			bestScore = score
+			bestNode = &finalCandidates[i]
+		}
+	}
+
+	slog.Info("[YunwuScheduler] Selected best Yunwu execution node",
+		"node_id", bestNode.NodeID,
+		"account_name", bestNode.AccountName,
+		"score", bestScore,
+	)
+
+	return bestNode, nil
+}
