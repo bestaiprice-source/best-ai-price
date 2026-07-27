@@ -640,9 +640,9 @@ func (s *AccountTestService) testClaudeAccountConnection(c gatewayctx.GatewayCon
 		if authToken == "" {
 			return s.sendErrorAndEnd(c, "No access token available")
 		}
-	} else if account.Type == "apikey" {
+	} else if account.Type == "apikey" || account.Type == "api" {
 		// API Key - use x-api-key header
-		useBearer = false
+		useBearer = (account.Platform == PlatformYunwu)
 		authToken = account.GetCredential("api_key")
 		if authToken == "" {
 			return s.sendErrorAndEnd(c, "No API key available")
@@ -650,7 +650,11 @@ func (s *AccountTestService) testClaudeAccountConnection(c gatewayctx.GatewayCon
 
 		baseURL := account.GetBaseURL()
 		if baseURL == "" {
-			baseURL = "https://api.anthropic.com"
+			if account.Platform == PlatformYunwu {
+				baseURL = "https://yunwu.ai/v1"
+			} else {
+				baseURL = "https://api.anthropic.com"
+			}
 		}
 		normalizedBaseURL, err := s.validateUpstreamBaseURL(baseURL)
 		if err != nil {
@@ -693,9 +697,10 @@ func (s *AccountTestService) testClaudeAccountConnection(c gatewayctx.GatewayCon
 	}
 
 	// Set authentication header
-	if useBearer {
+	if useBearer || account.Platform == PlatformYunwu {
 		req.Header.Set("anthropic-beta", claude.DefaultBetaHeader)
 		req.Header.Set("Authorization", "Bearer "+authToken)
+		req.Header.Set("x-api-key", authToken)
 	} else {
 		req.Header.Set("anthropic-beta", claude.APIKeyBetaHeader)
 		req.Header.Set("x-api-key", authToken)
@@ -878,16 +883,23 @@ func (s *AccountTestService) testOpenAIAccountConnection(c gatewayctx.GatewayCon
 		// OAuth uses ChatGPT internal API
 		apiURL = chatgptCodexAPIURL
 		chatgptAccountID = account.GetChatGPTAccountID()
-	} else if account.Type == "apikey" {
+	} else if account.Type == "apikey" || account.Type == "api" {
 		// API Key - use Platform API
 		authToken = account.GetOpenAIApiKey()
+		if authToken == "" {
+			authToken = account.GetCredential("api_key")
+		}
 		if authToken == "" {
 			return s.sendErrorAndEnd(c, "No API key available")
 		}
 
 		baseURL := account.GetOpenAIBaseURL()
 		if baseURL == "" {
-			baseURL = "https://api.openai.com"
+			if account.Platform == PlatformYunwu {
+				baseURL = "https://yunwu.ai/v1"
+			} else {
+				baseURL = "https://api.openai.com"
+			}
 		}
 		normalizedBaseURL, err := s.validateUpstreamBaseURL(baseURL)
 		if err != nil {
@@ -1005,7 +1017,7 @@ func (s *AccountTestService) testGeminiAccountConnection(c gatewayctx.GatewayCon
 	var err error
 
 	switch account.Type {
-	case AccountTypeAPIKey:
+	case AccountTypeAPIKey, "api":
 		req, err = s.buildGeminiAPIKeyRequest(ctx, account, testModelID, payload)
 	case AccountTypeOAuth:
 		req, err = s.buildGeminiOAuthRequest(ctx, account, testModelID, payload)

@@ -4177,7 +4177,7 @@ const handleSubmit = async () => {
       api_key: yunwuApiKey.value.trim()
     }
 
-    await createAccountAndFinish('yunwu', 'api' as AccountType, credentials)
+    await createAccountAndFinish('yunwu', 'apikey' as AccountType, credentials)
     return
   }
 

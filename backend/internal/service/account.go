@@ -805,11 +805,14 @@ func (a *Account) ResolveCompactMappedModel(requestedModel string) (mappedModel 
 }
 
 func (a *Account) GetBaseURL() string {
-	if a.Type != AccountTypeAPIKey {
+	if a.Type != AccountTypeAPIKey && a.Type != "api" {
 		return ""
 	}
 	baseURL := a.GetCredential("base_url")
 	if baseURL == "" {
+		if a.Platform == PlatformYunwu {
+			return "https://yunwu.ai/v1"
+		}
 		return "https://api.anthropic.com"
 	}
 	if a.Platform == PlatformAntigravity {
