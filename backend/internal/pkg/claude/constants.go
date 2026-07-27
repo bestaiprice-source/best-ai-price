@@ -149,6 +149,72 @@ var DefaultModels = []Model{
 		DisplayName: "Claude Haiku 4.5",
 		CreatedAt:   "2025-10-01T00:00:00Z",
 	},
+	{
+		ID:          "gpt-4o",
+		Type:        "model",
+		DisplayName: "GPT-4o",
+		CreatedAt:   "2024-05-13T00:00:00Z",
+	},
+	{
+		ID:          "gpt-4o-mini",
+		Type:        "model",
+		DisplayName: "GPT-4o Mini",
+		CreatedAt:   "2024-07-18T00:00:00Z",
+	},
+	{
+		ID:          "gpt-4-turbo",
+		Type:        "model",
+		DisplayName: "GPT-4 Turbo",
+		CreatedAt:   "2024-04-09T00:00:00Z",
+	},
+	{
+		ID:          "o1",
+		Type:        "model",
+		DisplayName: "OpenAI o1",
+		CreatedAt:   "2024-12-17T00:00:00Z",
+	},
+	{
+		ID:          "o3-mini",
+		Type:        "model",
+		DisplayName: "OpenAI o3-mini",
+		CreatedAt:   "2025-01-31T00:00:00Z",
+	},
+	{
+		ID:          "deepseek-r1",
+		Type:        "model",
+		DisplayName: "DeepSeek R1",
+		CreatedAt:   "2025-01-20T00:00:00Z",
+	},
+	{
+		ID:          "deepseek-chat",
+		Type:        "model",
+		DisplayName: "DeepSeek V3 / Chat",
+		CreatedAt:   "2024-12-26T00:00:00Z",
+	},
+	{
+		ID:          "gemini-2.5-pro",
+		Type:        "model",
+		DisplayName: "Gemini 2.5 Pro",
+		CreatedAt:   "2025-01-01T00:00:00Z",
+	},
+	{
+		ID:          "gemini-2.5-flash",
+		Type:        "model",
+		DisplayName: "Gemini 2.5 Flash",
+		CreatedAt:   "2025-01-01T00:00:00Z",
+	},
+	{
+		ID:          "gemini-3-flash",
+		Type:        "model",
+		DisplayName: "Gemini 3 Flash",
+		CreatedAt:   "2025-06-01T00:00:00Z",
+	},
+	{
+		ID:          "gemini-3-pro-high",
+		Type:        "model",
+		DisplayName: "Gemini 3 Pro High",
+		CreatedAt:   "2025-06-01T00:00:00Z",
+	},
 }
 
 // DefaultModelIDs 返回默认模型的 ID 列表
