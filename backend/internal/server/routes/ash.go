@@ -674,7 +674,7 @@ func RegisterAshRoutes(
 		// =========================================================================
 
 		// GET /ash/admin/yunwu/health
-		adminGroup.GET("/yunwu/health", func(c *gin.Context) {
+		adminGroup.GET("/admin/yunwu/health", func(c *gin.Context) {
 			slog.Info("[YunwuAdminAPI] Fetching Yunwu system health")
 			engine := h.Gateway.GetHypervisorEngine()
 			if engine == nil {
@@ -688,7 +688,7 @@ func RegisterAshRoutes(
 		})
 
 		// GET /ash/admin/yunwu/nodes
-		adminGroup.GET("/yunwu/nodes", func(c *gin.Context) {
+		adminGroup.GET("/admin/yunwu/nodes", func(c *gin.Context) {
 			slog.Info("[YunwuAdminAPI] Listing Yunwu execution nodes")
 			engine := h.Gateway.GetHypervisorEngine()
 			if engine == nil {
@@ -744,7 +744,7 @@ func RegisterAshRoutes(
 		})
 
 		// POST /ash/admin/yunwu/nodes/:id/sync - Manual balance sync with Yunwu API
-		adminGroup.POST("/yunwu/nodes/:id/sync", func(c *gin.Context) {
+		adminGroup.POST("/admin/yunwu/nodes/:id/sync", func(c *gin.Context) {
 			nodeID := c.Param("id")
 			slog.Info("[YunwuAdminAPI] Manual balance sync requested for node", "node_id", nodeID)
 
