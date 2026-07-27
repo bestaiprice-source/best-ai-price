@@ -129,6 +129,9 @@ func supportsFetchedModelsRefresh(account *Account) bool {
 	if account == nil {
 		return false
 	}
+	if account.Platform == PlatformYunwu || account.Platform == "yunwu" {
+		return true
+	}
 	if account.IsOpenAI() || account.IsGemini() {
 		return true
 	}

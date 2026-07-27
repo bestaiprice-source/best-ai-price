@@ -456,10 +456,66 @@ func (s *AccountTestService) fetchGeminiAvailableModels(ctx context.Context, acc
 	return NormalizeFetchedModelIDs(models), "gemini_v1beta_models", nil
 }
 
+func (s *AccountTestService) fetchYunwuAvailableModels(ctx context.Context, account *Account) ([]string, string, error) {
+	if account == nil {
+		return nil, "", errors.New("account is nil")
+	}
+	apiKey := strings.TrimSpace(account.GetCredential("api_key"))
+	if apiKey == "" {
+		return nil, "", errors.New("yunwu api_key is not configured")
+	}
+
+	baseURL := account.GetBaseURL()
+	if strings.TrimSpace(baseURL) == "" {
+		baseURL = "https://yunwu.ai/v1"
+	}
+	normalizedBaseURL, err := s.validateUpstreamBaseURL(baseURL)
+	if err != nil {
+		return nil, "", fmt.Errorf("invalid yunwu base_url: %w", err)
+	}
+
+	modelsURL := buildVersionedModelsURL(normalizedBaseURL, "/v1")
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, modelsURL, nil)
+	if err != nil {
+		return nil, "", err
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+	req.Header.Set("x-api-key", apiKey)
+
+	resp, err := s.executeAccountRequest(req, account)
+	if err != nil {
+		return nil, "", err
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+	if resp.StatusCode != http.StatusOK {
+		return nil, "", fmt.Errorf("yunwu models request returned %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+
+	var payload struct {
+		Data []struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return nil, "", fmt.Errorf("parse yunwu models response: %w", err)
+	}
+
+	models := make([]string, 0, len(payload.Data))
+	for _, item := range payload.Data {
+		models = append(models, item.ID)
+	}
+	return NormalizeFetchedModelIDs(models), "yunwu_v1_models", nil
+}
+
 func (s *AccountTestService) fetchAvailableModelsForAccount(ctx context.Context, account *Account) ([]string, string, error) {
 	switch {
 	case account == nil:
 		return nil, "", errors.New("account is nil")
+	case account.Platform == PlatformYunwu || account.Platform == "yunwu":
+		return s.fetchYunwuAvailableModels(ctx, account)
 	case account.IsOpenAI():
 		return s.fetchOpenAIAvailableModels(ctx, account)
 	case account.IsGemini():
