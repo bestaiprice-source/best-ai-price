@@ -251,6 +251,11 @@ func (s *APIKeyService) compileAPIKeyIPRules(apiKey *APIKey) {
 
 // GenerateKey 生成随机API Key
 func (s *APIKeyService) GenerateKey() (string, error) {
+	return s.GenerateKeyForPlatform("")
+}
+
+// GenerateKeyForPlatform 生成指定平台的 API Key
+func (s *APIKeyService) GenerateKeyForPlatform(platform string) (string, error) {
 	// 生成32字节随机数据
 	bytes := make([]byte, 32)
 	if _, err := rand.Read(bytes); err != nil {
@@ -261,6 +266,9 @@ func (s *APIKeyService) GenerateKey() (string, error) {
 	prefix := s.cfg.Default.APIKeyPrefix
 	if prefix == "" {
 		prefix = "sk-"
+	}
+	if strings.EqualFold(platform, "yunwu") {
+		prefix = "sk-yunwu-"
 	}
 
 	key := prefix + hex.EncodeToString(bytes)
@@ -425,7 +433,11 @@ func (s *APIKeyService) Create(ctx context.Context, userID int64, req CreateAPIK
 	} else {
 		// 生成随机API Key
 		var err error
-		key, err = s.GenerateKey()
+		primaryPlatform := ""
+		if len(groups) > 0 {
+			primaryPlatform = groups[0].Platform
+		}
+		key, err = s.GenerateKeyForPlatform(primaryPlatform)
 		if err != nil {
 			return nil, fmt.Errorf("generate key: %w", err)
 		}
