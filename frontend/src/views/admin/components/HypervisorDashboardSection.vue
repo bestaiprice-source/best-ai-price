@@ -258,7 +258,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { adminAPI } from '@/api/admin'
 import type { AshHealthResponse, AshGlobalStats, AshNodeMetric, AshAnalytics } from '@/api/admin/ash'
 import Icon from '@/components/icons/Icon.vue'
@@ -350,7 +350,7 @@ const loadAshData = async () => {
       ])
       healthData.value = healthRes
       globalStats.value = statsRes
-      nodeMetrics.value = nodesRes || []
+      nodeMetrics.value = (nodesRes || []).filter(n => n.provider !== 'yunwu')
       analyticsData.value = analyticsRes
     }
   } catch (err) {
@@ -359,6 +359,8 @@ const loadAshData = async () => {
     loading.value = false
   }
 }
+
+watch(activeEngine, loadAshData)
 
 const handleCooldown = async (nodeID: string) => {
   try {
