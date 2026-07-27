@@ -72,17 +72,20 @@ func (yh *YunwuHypervisor) HandleRequest(
 		"owner_id", ownerID,
 		"conversation_id", conversationID,
 		"platform", platform,
+		"payload_size_bytes", len(reqPayload),
 	)
 
 	// 1. Quota Check
 	allowed, err := yh.qm.CheckQuota(ctx, ownerID)
 	if err != nil {
+		slog.Error("[YunwuHypervisor] Quota check error", "owner_id", ownerID, "error", err)
 		return nil, err
 	}
 	if !allowed {
 		slog.Warn("[YunwuHypervisor] User quota exceeded", "owner_id", ownerID)
 		return nil, quota.ErrQuotaExceeded
 	}
+	slog.Debug("[YunwuHypervisor] Quota check passed", "owner_id", ownerID)
 
 	// 2. Resolve VirtualSession
 	if conversationID == "" {
@@ -100,6 +103,9 @@ func (yh *YunwuHypervisor) HandleRequest(
 			CreatedAt:      time.Now(),
 			UpdatedAt:      time.Now(),
 		}
+		slog.Debug("[YunwuHypervisor] Created new virtual session", "session_id", sessID)
+	} else {
+		slog.Debug("[YunwuHypervisor] Reusing existing virtual session", "session_id", sessID, "state", sess.State)
 	}
 
 	// 3. Resolve active lease
@@ -107,16 +113,23 @@ func (yh *YunwuHypervisor) HandleRequest(
 	currentLease, err := yh.lm.GetLease(ctx, sess.ID)
 	if err == nil && currentLease != nil {
 		activeLeaseNodeID = currentLease.NodeID
+		slog.Debug("[YunwuHypervisor] Found active session lease", "session_id", sess.ID, "lease_node_id", activeLeaseNodeID)
 	}
 
 	// 4. Load Yunwu nodes and runtime credits
 	nodes, err := yh.getAllYunwuNodes(ctx)
 	if err != nil {
+		slog.Error("[YunwuHypervisor] Failed to fetch Yunwu nodes", "error", err)
 		return nil, err
 	}
 	states := yh.getAllYunwuNodeStates(ctx, nodes)
 	credits := yh.getAllYunwuNodeCredits(ctx, nodes)
 	systemState := yh.hc.GetSystemState(ctx)
+
+	slog.Debug("[YunwuHypervisor] Evaluated Yunwu pool status",
+		"total_nodes", len(nodes),
+		"system_state", systemState,
+	)
 
 	userPriority := 1
 	if ua, err := yh.qm.GetUserAccess(ctx, ownerID); err == nil && ua != nil {
@@ -126,7 +139,7 @@ func (yh *YunwuHypervisor) HandleRequest(
 	// 5. Select Best Node via YunwuScheduler
 	selectedNode, err := yh.sch.SelectNode(ctx, nodes, states, credits, userPriority, activeLeaseNodeID, systemState)
 	if err != nil {
-		slog.Error("[YunwuHypervisor] YunwuScheduler selection failed", "error", err)
+		slog.Error("[YunwuHypervisor] YunwuScheduler selection failed", "error", err, "total_nodes", len(nodes))
 		return nil, err
 	}
 
@@ -140,6 +153,11 @@ func (yh *YunwuHypervisor) HandleRequest(
 		ExpiresAt: &expiresAt,
 	}
 	_ = yh.lm.SaveLease(ctx, newLease)
+	slog.Debug("[YunwuHypervisor] Granted lease for node",
+		"lease_id", newLease.LeaseID,
+		"selected_node_id", selectedNode.NodeID,
+		"account_name", selectedNode.AccountName,
+	)
 
 	// 7. Execute Runtime Request
 	execStart := time.Now()
@@ -149,18 +167,35 @@ func (yh *YunwuHypervisor) HandleRequest(
 	if err != nil {
 		slog.Warn("[YunwuHypervisor] Runtime request failed on selected Yunwu node, attempting Rebinding",
 			"failed_node_id", selectedNode.NodeID,
+			"account_name", selectedNode.AccountName,
 			"error", err,
 		)
 		reboundNode, rebindErr := yh.rm.HandleYunwuFailure(ctx, selectedNode.NodeID, err, nodes)
 		if rebindErr == nil && reboundNode != nil {
+			slog.Info("[YunwuHypervisor] Retrying execution on rebound node",
+				"rebound_node_id", reboundNode.NodeID,
+				"rebound_account_name", reboundNode.AccountName,
+			)
 			meta, err = yh.rt.Execute(ctx, reboundNode.NodeID, reqPayload, stream)
 			if err == nil {
 				selectedNode = reboundNode
+			} else {
+				slog.Error("[YunwuHypervisor] Execution failed on rebound node",
+					"rebound_node_id", reboundNode.NodeID,
+					"error", err,
+				)
 			}
+		} else {
+			slog.Error("[YunwuHypervisor] Rebinding failed or no alternative nodes", "rebind_error", rebindErr)
 		}
 	}
 
 	if err != nil {
+		slog.Error("[YunwuHypervisor] Final execution failed",
+			"node_id", selectedNode.NodeID,
+			"elapsed_ms", time.Since(execStart).Milliseconds(),
+			"error", err,
+		)
 		return nil, err
 	}
 
@@ -175,13 +210,24 @@ func (yh *YunwuHypervisor) HandleRequest(
 	_ = yh.nm.SaveNodeRuntimeState(ctx, state)
 
 	// 9. Record usage
+	var units int64 = 0
 	if meta != nil {
-		units := meta.InputTokens + meta.OutputTokens
+		units = meta.InputTokens + meta.OutputTokens
 		if units == 0 {
 			units = 100
 		}
 		_ = yh.qm.ConsumeQuota(ctx, ownerID, units)
 	}
+
+	slog.Info("[YunwuHypervisor] Request executed successfully",
+		"owner_id", ownerID,
+		"selected_node_id", selectedNode.NodeID,
+		"account_name", selectedNode.AccountName,
+		"latency_ms", latencyMs,
+		"tokens_in", func() int64 { if meta != nil { return meta.InputTokens }; return 0 }(),
+		"tokens_out", func() int64 { if meta != nil { return meta.OutputTokens }; return 0 }(),
+		"total_units_consumed", units,
+	)
 
 	return meta, nil
 }

@@ -159,6 +159,17 @@ func (s *YunwuScheduler) SelectNode(
 		score -= float64(recent429) * multiplier429
 		score -= float64(recentTimeout) * 20.0
 
+		slog.Debug("[YunwuScheduler] Evaluated node candidate",
+			"node_id", node.NodeID,
+			"account_name", node.AccountName,
+			"score", score,
+			"credit", credit,
+			"credit_bonus", creditBonus,
+			"success_rate", successRate,
+			"avg_latency_ms", avgLatencyMs,
+			"recent_429", recent429,
+		)
+
 		if i == 0 || score > bestScore {
 			bestScore = score
 			bestNode = &finalCandidates[i]
@@ -169,6 +180,7 @@ func (s *YunwuScheduler) SelectNode(
 		"node_id", bestNode.NodeID,
 		"account_name", bestNode.AccountName,
 		"score", bestScore,
+		"total_candidates_evaluated", len(finalCandidates),
 	)
 
 	return bestNode, nil

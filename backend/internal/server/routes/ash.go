@@ -675,8 +675,10 @@ func RegisterAshRoutes(
 
 		// GET /ash/admin/yunwu/health
 		adminGroup.GET("/yunwu/health", func(c *gin.Context) {
+			slog.Info("[YunwuAdminAPI] Fetching Yunwu system health")
 			engine := h.Gateway.GetHypervisorEngine()
 			if engine == nil {
+				slog.Error("[YunwuAdminAPI] Hypervisor engine not initialized")
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "hypervisor engine not initialized"})
 				return
 			}
@@ -687,8 +689,10 @@ func RegisterAshRoutes(
 
 		// GET /ash/admin/yunwu/nodes
 		adminGroup.GET("/yunwu/nodes", func(c *gin.Context) {
+			slog.Info("[YunwuAdminAPI] Listing Yunwu execution nodes")
 			engine := h.Gateway.GetHypervisorEngine()
 			if engine == nil {
+				slog.Error("[YunwuAdminAPI] Hypervisor engine not initialized")
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "hypervisor engine not initialized"})
 				return
 			}
@@ -735,18 +739,22 @@ func RegisterAshRoutes(
 				})
 			}
 
+			slog.Info("[YunwuAdminAPI] Returned Yunwu nodes list", "count", len(list))
 			c.JSON(http.StatusOK, list)
 		})
 
 		// POST /ash/admin/yunwu/nodes/:id/sync - Manual balance sync with Yunwu API
 		adminGroup.POST("/yunwu/nodes/:id/sync", func(c *gin.Context) {
+			nodeID := c.Param("id")
+			slog.Info("[YunwuAdminAPI] Manual balance sync requested for node", "node_id", nodeID)
+
 			engine := h.Gateway.GetHypervisorEngine()
 			if engine == nil {
+				slog.Error("[YunwuAdminAPI] Hypervisor engine not initialized")
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "hypervisor engine not initialized"})
 				return
 			}
 
-			nodeID := c.Param("id")
 			var reqBody struct {
 				APIKey  string `json:"api_key"`
 				BaseURL string `json:"base_url"`
@@ -756,10 +764,12 @@ func RegisterAshRoutes(
 			yh := yunwu.NewYunwuHypervisor(engine.Storage(), nil)
 			grants, err := yh.SyncNodeBalance(c.Request.Context(), nodeID, reqBody.APIKey, reqBody.BaseURL)
 			if err != nil {
+				slog.Error("[YunwuAdminAPI] Sync node balance failed", "node_id", nodeID, "error", err)
 				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 				return
 			}
 
+			slog.Info("[YunwuAdminAPI] Sync node balance succeeded", "node_id", nodeID, "total_available", grants.TotalAvailable)
 			c.JSON(http.StatusOK, grants)
 		})
 	}
