@@ -1794,7 +1794,9 @@ export default {
         openai: 'OpenAI',
         gemini: 'Gemini',
         antigravity: 'Antigravity',
-        sora: 'Sora'
+        sora: 'Sora',
+        kiro: 'Kiro',
+        yunwu: 'Yunwu'
       },
       saving: '保存中...',
       noGroups: '暂无分组',

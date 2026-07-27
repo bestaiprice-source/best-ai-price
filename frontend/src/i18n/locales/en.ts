@@ -1757,7 +1757,9 @@ export default {
         openai: 'OpenAI',
         gemini: 'Gemini',
         antigravity: 'Antigravity',
-        sora: 'Sora'
+        sora: 'Sora',
+        kiro: 'Kiro',
+        yunwu: 'Yunwu'
       },
       deleteConfirm:
         "Are you sure you want to delete '{name}'? All associated API keys will no longer belong to any group.",
