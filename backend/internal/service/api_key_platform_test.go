@@ -20,10 +20,9 @@ func TestGenerateKeyForPlatform(t *testing.T) {
 	stdKey, err := service.GenerateKeyForPlatform("claude")
 	assert.NoError(t, err)
 	assert.True(t, strings.HasPrefix(stdKey, "sk-"))
-	assert.False(t, strings.HasPrefix(stdKey, "sk-yunwu-"))
 
-	// Test Yunwu Key Generation
+	// Test Yunwu Key Generation maintains standard visual format
 	yunwuKey, err := service.GenerateKeyForPlatform("yunwu")
 	assert.NoError(t, err)
-	assert.True(t, strings.HasPrefix(yunwuKey, "sk-yunwu-"))
+	assert.True(t, strings.HasPrefix(yunwuKey, "sk-"))
 }

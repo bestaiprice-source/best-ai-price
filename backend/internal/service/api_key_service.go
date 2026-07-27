@@ -267,9 +267,6 @@ func (s *APIKeyService) GenerateKeyForPlatform(platform string) (string, error) 
 	if prefix == "" {
 		prefix = "sk-"
 	}
-	if strings.EqualFold(platform, "yunwu") {
-		prefix = "sk-yunwu-"
-	}
 
 	key := prefix + hex.EncodeToString(bytes)
 	return key, nil
