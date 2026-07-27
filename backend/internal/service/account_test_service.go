@@ -474,7 +474,8 @@ func (s *AccountTestService) fetchYunwuAvailableModels(ctx context.Context, acco
 		return nil, "", fmt.Errorf("invalid yunwu base_url: %w", err)
 	}
 
-	modelsURL := buildVersionedModelsURL(normalizedBaseURL, "/v1")
+	base := strings.TrimSuffix(strings.TrimRight(normalizedBaseURL, "/"), "/v1")
+	modelsURL := base + "/v1/models"
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, modelsURL, nil)
 	if err != nil {
 		return nil, "", err
