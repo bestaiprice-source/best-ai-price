@@ -72,6 +72,54 @@ type Model struct {
 // DefaultModels Claude Code 客户端支持的默认模型列表
 var DefaultModels = []Model{
 	{
+		ID:          "claude-3-7-sonnet-20250219",
+		Type:        "model",
+		DisplayName: "Claude 3.7 Sonnet",
+		CreatedAt:   "2025-02-19T00:00:00Z",
+	},
+	{
+		ID:          "claude-3-7-sonnet",
+		Type:        "model",
+		DisplayName: "Claude 3.7 Sonnet (latest)",
+		CreatedAt:   "2025-02-19T00:00:00Z",
+	},
+	{
+		ID:          "claude-3-5-sonnet-20241022",
+		Type:        "model",
+		DisplayName: "Claude 3.5 Sonnet (20241022)",
+		CreatedAt:   "2024-10-22T00:00:00Z",
+	},
+	{
+		ID:          "claude-3-5-sonnet-20240620",
+		Type:        "model",
+		DisplayName: "Claude 3.5 Sonnet (20240620)",
+		CreatedAt:   "2024-06-20T00:00:00Z",
+	},
+	{
+		ID:          "claude-3-5-haiku-20241022",
+		Type:        "model",
+		DisplayName: "Claude 3.5 Haiku",
+		CreatedAt:   "2024-10-22T00:00:00Z",
+	},
+	{
+		ID:          "claude-3-opus-20240229",
+		Type:        "model",
+		DisplayName: "Claude 3 Opus",
+		CreatedAt:   "2024-02-29T00:00:00Z",
+	},
+	{
+		ID:          "claude-3-sonnet-20240229",
+		Type:        "model",
+		DisplayName: "Claude 3 Sonnet",
+		CreatedAt:   "2024-02-29T00:00:00Z",
+	},
+	{
+		ID:          "claude-3-haiku-20240307",
+		Type:        "model",
+		DisplayName: "Claude 3 Haiku",
+		CreatedAt:   "2024-03-07T00:00:00Z",
+	},
+	{
 		ID:          "claude-opus-4-5-20251101",
 		Type:        "model",
 		DisplayName: "Claude Opus 4.5",
