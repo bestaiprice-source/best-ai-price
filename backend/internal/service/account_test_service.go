@@ -660,7 +660,9 @@ func (s *AccountTestService) testClaudeAccountConnection(c gatewayctx.GatewayCon
 		if err != nil {
 			return s.sendErrorAndEnd(c, fmt.Sprintf("Invalid base URL: %s", err.Error()))
 		}
-		apiURL = strings.TrimSuffix(normalizedBaseURL, "/") + "/v1/messages?beta=true"
+		base := strings.TrimSuffix(normalizedBaseURL, "/")
+		base = strings.TrimSuffix(base, "/v1")
+		apiURL = base + "/v1/messages?beta=true"
 	} else {
 		return s.sendErrorAndEnd(c, fmt.Sprintf("Unsupported account type: %s", account.Type))
 	}
