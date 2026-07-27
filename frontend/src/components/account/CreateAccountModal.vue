@@ -182,6 +182,19 @@
             <Icon name="cloud" size="sm" />
             Antigravity
           </button>
+          <button
+            type="button"
+            @click="form.platform = 'yunwu'"
+            :class="[
+              'flex flex-1 items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-medium transition-all',
+              form.platform === 'yunwu'
+                ? 'bg-white text-emerald-600 shadow-sm dark:bg-dark-600 dark:text-emerald-400'
+                : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200'
+            ]"
+          >
+            <span class="text-sm font-semibold">Y</span>
+            Yunwu
+          </button>
         </div>
       </div>
 
@@ -255,6 +268,35 @@
             <label class="input-label">Node Version</label>
             <input v-model="kiroNodeVersion" type="text" class="input font-mono text-sm" placeholder="22.21.1" />
           </div>
+        </div>
+      </div>
+
+      <!-- Yunwu Configuration -->
+      <div
+        v-if="form.platform === 'yunwu'"
+        class="space-y-4 rounded-lg border border-emerald-200 bg-emerald-50/60 p-4 dark:border-emerald-900/40 dark:bg-emerald-950/20"
+      >
+        <div>
+          <label class="input-label">Base URL</label>
+          <input
+            v-model="yunwuBaseUrl"
+            type="text"
+            required
+            class="input"
+            placeholder="https://yunwu.ai/v1"
+          />
+          <p class="input-hint">Yunwu API Base URL (defaults to https://yunwu.ai/v1)</p>
+        </div>
+        <div>
+          <label class="input-label">API Key</label>
+          <input
+            v-model="yunwuApiKey"
+            type="password"
+            required
+            class="input font-mono"
+            placeholder="sk-yunwu-..."
+          />
+          <p class="input-hint">Your Yunwu API Key / Bearer Token</p>
         </div>
       </div>
 
@@ -3195,6 +3237,8 @@ const kiroSystemVersion = ref('darwin#24.6.0')
 const kiroNodeVersion = ref('22.21.1')
 const upstreamBaseUrl = ref('') // For upstream type: base URL
 const upstreamApiKey = ref('') // For upstream type: API key
+const yunwuBaseUrl = ref('https://yunwu.ai/v1') // For Yunwu type: base URL
+const yunwuApiKey = ref('') // For Yunwu type: API key
 const antigravityModelRestrictionMode = ref<'whitelist' | 'mapping'>('whitelist')
 const antigravityWhitelistModels = ref<string[]>([])
 const antigravityModelMappings = ref<ModelMapping[]>([])
@@ -3376,7 +3420,7 @@ const form = reactive({
 
 // Helper to check if current type needs OAuth flow
 const isOAuthFlow = computed(() => {
-  if (form.platform === 'kiro') {
+  if (form.platform === 'kiro' || form.platform === 'yunwu') {
     return false
   }
   // Antigravity upstream 类型不需要 OAuth 流程
@@ -3959,6 +4003,8 @@ const resetForm = () => {
   antigravityAccountType.value = 'oauth'
   upstreamBaseUrl.value = ''
   upstreamApiKey.value = ''
+  yunwuBaseUrl.value = 'https://yunwu.ai/v1'
+  yunwuApiKey.value = ''
   tempUnschedEnabled.value = false
   tempUnschedRules.value = []
   geminiOAuthType.value = 'code_assist'
@@ -4116,6 +4162,25 @@ const normalizePoolModeRetryCount = (value: number) => {
 }
 
 const handleSubmit = async () => {
+  if (form.platform === 'yunwu') {
+    if (!form.name.trim()) {
+      appStore.showError(t('admin.accounts.pleaseEnterAccountName'))
+      return
+    }
+    if (!yunwuApiKey.value.trim()) {
+      appStore.showError('Yunwu API Key is required')
+      return
+    }
+
+    const credentials: Record<string, unknown> = {
+      base_url: yunwuBaseUrl.value.trim() || 'https://yunwu.ai/v1',
+      api_key: yunwuApiKey.value.trim()
+    }
+
+    await createAccountAndFinish('yunwu', 'api' as AccountType, credentials)
+    return
+  }
+
   if (form.platform === 'kiro') {
     if (!form.name.trim()) {
       appStore.showError(t('admin.accounts.pleaseEnterAccountName'))

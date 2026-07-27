@@ -1891,7 +1891,8 @@ const platformOptions = computed(() => [
   { value: 'gemini', label: 'Gemini' },
   { value: 'kiro', label: 'Kiro' },
   { value: 'antigravity', label: 'Antigravity' },
-  { value: 'sora', label: 'Sora' }
+  { value: 'sora', label: 'Sora' },
+  { value: 'yunwu', label: 'Yunwu' }
 ])
 
 const platformFilterOptions = computed(() => [
@@ -1901,7 +1902,8 @@ const platformFilterOptions = computed(() => [
   { value: 'gemini', label: 'Gemini' },
   { value: 'kiro', label: 'Kiro' },
   { value: 'antigravity', label: 'Antigravity' },
-  { value: 'sora', label: 'Sora' }
+  { value: 'sora', label: 'Sora' },
+  { value: 'yunwu', label: 'Yunwu' }
 ])
 
 const editStatusOptions = computed(() => [
