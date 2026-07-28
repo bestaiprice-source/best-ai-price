@@ -176,8 +176,16 @@ func (h *GatewayHandler) handleHypervisorMessages(c *gin.Context) {
 	}
 
 	platform := "anthropic"
-	if apiKey, ok := middleware2.GetAPIKeyFromGatewayContext(transportCtx); ok && apiKey != nil && apiKey.Group != nil && apiKey.Group.Platform != "" {
-		platform = apiKey.Group.Platform
+	if apiKey, ok := middleware2.GetAPIKeyFromGatewayContext(transportCtx); ok && apiKey != nil {
+		if apiKey.Group != nil && apiKey.Group.Platform != "" {
+			platform = apiKey.Group.Platform
+		}
+		for _, g := range apiKey.Groups {
+			if g != nil && (g.Platform == "yunwu" || strings.EqualFold(g.Name, "yunwu")) {
+				platform = "yunwu"
+				break
+			}
+		}
 	}
 	if forcePlat, hasForce := middleware2.GetForcePlatformFromGatewayContext(transportCtx); hasForce && forcePlat != "" {
 		platform = forcePlat
