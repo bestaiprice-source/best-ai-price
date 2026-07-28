@@ -212,7 +212,7 @@ func (r *AnthropicRuntime) Execute(ctx context.Context, nodeID string, reqPayloa
 		isStream = payloadMap.Stream
 	}
 
-	if acc.Platform == "anthropic" {
+	if acc.Platform == "anthropic" || acc.Platform == "yunwu" || strings.HasSuffix(apiURL, "/messages") {
 		var bodyMap map[string]any
 		if json.Unmarshal(reqPayload, &bodyMap) == nil {
 			modified := false
@@ -229,6 +229,28 @@ func (r *AnthropicRuntime) Execute(ctx context.Context, nodeID string, reqPayloa
 				}
 			} else if num, ok := val.(float64); ok && num <= 0 {
 				bodyMap["max_tokens"] = 4096
+				modified = true
+			}
+
+			msgs, hasMsgs := bodyMap["messages"]
+			if !hasMsgs || msgs == nil {
+				if input, ok := bodyMap["input"].(string); ok && strings.TrimSpace(input) != "" {
+					bodyMap["messages"] = []map[string]any{
+						{"role": "user", "content": input},
+					}
+					delete(bodyMap, "input")
+					modified = true
+				} else if prompt, ok := bodyMap["prompt"].(string); ok && strings.TrimSpace(prompt) != "" {
+					bodyMap["messages"] = []map[string]any{
+						{"role": "user", "content": prompt},
+					}
+					delete(bodyMap, "prompt")
+					modified = true
+				}
+			} else if msgArr, ok := msgs.([]any); ok && len(msgArr) == 0 {
+				bodyMap["messages"] = []map[string]any{
+					{"role": "user", "content": "Hello"},
+				}
 				modified = true
 			}
 
@@ -256,6 +278,7 @@ func (r *AnthropicRuntime) Execute(ctx context.Context, nodeID string, reqPayloa
 			req.Header.Set("anthropic-beta", "claude-code-20250219,oauth-2025-04-20,prompt-caching-2024-07-31")
 		} else {
 			req.Header.Set("x-api-key", apiKey)
+			req.Header.Set("Authorization", "Bearer "+apiKey)
 			req.Header.Set("User-Agent", "Claude-Code/0.2.29")
 		}
 		req.Header.Set("anthropic-version", "2023-06-01")
