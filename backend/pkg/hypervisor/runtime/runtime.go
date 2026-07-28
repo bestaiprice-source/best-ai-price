@@ -202,7 +202,27 @@ func (r *AnthropicRuntime) Execute(ctx context.Context, nodeID string, reqPayloa
 
 	// 4. Create HTTP Request
 	customURL, _ := acc.Credentials["base_url"].(string)
-	apiURL := resolveUpstreamAPIURL(customURL, acc.Platform, false)
+
+	isChatCompletions := false
+	if acc.Platform == "openai" {
+		isChatCompletions = true
+	} else if acc.Platform == "yunwu" {
+		var bodyMap map[string]any
+		if json.Unmarshal(reqPayload, &bodyMap) == nil {
+			modelStr, _ := bodyMap["model"].(string)
+			modelLower := strings.ToLower(modelStr)
+			if strings.HasPrefix(modelLower, "gpt-") ||
+				strings.HasPrefix(modelLower, "o1-") ||
+				strings.HasPrefix(modelLower, "o3-") ||
+				strings.HasPrefix(modelLower, "text-") ||
+				bodyMap["input"] != nil ||
+				bodyMap["instructions"] != nil {
+				isChatCompletions = true
+			}
+		}
+	}
+
+	apiURL := resolveUpstreamAPIURL(customURL, acc.Platform, isChatCompletions)
 
 	var payloadMap struct {
 		Stream bool `json:"stream"`
@@ -212,7 +232,7 @@ func (r *AnthropicRuntime) Execute(ctx context.Context, nodeID string, reqPayloa
 		isStream = payloadMap.Stream
 	}
 
-	if acc.Platform == "anthropic" || acc.Platform == "yunwu" || strings.HasSuffix(apiURL, "/messages") {
+	if !isChatCompletions && (acc.Platform == "anthropic" || acc.Platform == "yunwu" || strings.HasSuffix(apiURL, "/messages")) {
 		var bodyMap map[string]any
 		if json.Unmarshal(reqPayload, &bodyMap) == nil {
 			modified := false
@@ -267,7 +287,7 @@ func (r *AnthropicRuntime) Execute(ctx context.Context, nodeID string, reqPayloa
 		return nil, err
 	}
 
-	if acc.Platform == "openai" {
+	if isChatCompletions || acc.Platform == "openai" {
 		req.Header.Set("Authorization", "Bearer "+apiKey)
 		req.Header.Set("Content-Type", "application/json")
 	} else {

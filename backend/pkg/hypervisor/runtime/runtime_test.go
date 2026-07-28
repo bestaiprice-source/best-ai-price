@@ -201,4 +201,41 @@ func TestResolveUpstreamAPIURL(t *testing.T) {
 	assert.Equal(t, "https://yunwu.ai/v1/messages", resolveUpstreamAPIURL("https://yunwu.ai/v1/messages", "yunwu", false))
 }
 
+func TestYunwuRuntimeExecution(t *testing.T) {
+	store := newTestStorage(t)
+	ctx := context.Background()
+
+	yunwuServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "Bearer sk-yunwu-key", r.Header.Get("Authorization"))
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"ok"}}]}`))
+	}))
+	defer yunwuServer.Close()
+
+	accYunwu, err := store.DB().Account.Create().
+		SetName("yunwu-acc-1").
+		SetPlatform("yunwu").
+		SetType("api_key").
+		SetStatus("active").
+		SetCredentials(map[string]any{"api_key": "sk-yunwu-key", "base_url": yunwuServer.URL}).
+		Save(ctx)
+	require.NoError(t, err)
+
+	rt := NewAnthropicRuntime(store)
+
+	// Test GPT model request on Yunwu node
+	var buf bytes.Buffer
+	res, err := rt.Execute(ctx, fmt.Sprintf("%d", accYunwu.ID), []byte(`{"model":"gpt-4o","messages":[{"role":"user","content":"hi"}]}`), &buf)
+	require.NoError(t, err)
+	assert.NotNil(t, res)
+	assert.Equal(t, 200, res.StatusCode)
+
+	// Test input parameter fallback on Yunwu node
+	var buf2 bytes.Buffer
+	res2, err := rt.Execute(ctx, fmt.Sprintf("%d", accYunwu.ID), []byte(`{"model":"claude-3-5-sonnet","input":"test prompt"}`), &buf2)
+	require.NoError(t, err)
+	assert.NotNil(t, res2)
+}
+
+
 
