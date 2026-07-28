@@ -154,7 +154,7 @@ func (hc *HealthController) Reconcile(ctx context.Context) error {
 			}
 		}
 
-		slog.Info("[HealthController] Reconciled platform pool health",
+		slog.Debug("[HealthController] Reconciled platform pool health",
 			"platform", plat,
 			"total_nodes", totalCount,
 			"healthy_nodes", healthyCount,

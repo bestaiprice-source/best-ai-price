@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -174,7 +175,21 @@ func (h *GatewayHandler) handleHypervisorMessages(c *gin.Context) {
 		c.Header("Content-Type", "application/json")
 	}
 
-	_, err = h.hypervisorEngine.HandleRequest(c.Request.Context(), ownerID, conversationID, body, c.Writer, "anthropic")
+	platform := "anthropic"
+	if apiKey, ok := middleware2.GetAPIKeyFromGatewayContext(transportCtx); ok && apiKey != nil && apiKey.Group != nil && apiKey.Group.Platform != "" {
+		platform = apiKey.Group.Platform
+	}
+	if forcePlat, hasForce := middleware2.GetForcePlatformFromGatewayContext(transportCtx); hasForce && forcePlat != "" {
+		platform = forcePlat
+	}
+
+	slog.Info("[GatewayHandler] Routing request via Hypervisor",
+		"platform", platform,
+		"owner_id", ownerID,
+		"conversation_id", conversationID,
+	)
+
+	_, err = h.hypervisorEngine.HandleRequest(c.Request.Context(), ownerID, conversationID, body, c.Writer, platform)
 	if err != nil {
 		h.errorResponseGateway(transportCtx, http.StatusBadGateway, "api_error", err.Error())
 		return

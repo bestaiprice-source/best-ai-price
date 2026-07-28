@@ -20,6 +20,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/scheduler"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/session"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/storage"
+	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/yunwu"
 )
 
 type Hypervisor struct {
@@ -34,6 +35,7 @@ type Hypervisor struct {
 	rm    *rebinding.RebindingManager
 	comp  *compiler.Compiler
 	hc    *health.HealthController
+	yh    *yunwu.YunwuHypervisor
 }
 
 func NewHypervisor(store *storage.Storage, rt runtime.Runtime) *Hypervisor {
@@ -49,6 +51,7 @@ func NewHypervisor(store *storage.Storage, rt runtime.Runtime) *Hypervisor {
 		rm:    rebinding.NewRebindingManager(store),
 		comp:  compiler.NewCompiler(),
 		hc:    health.NewHealthController(store),
+		yh:    yunwu.NewYunwuHypervisor(store, rt),
 	}
 
 	cfg := config.LoadFromEnv()
@@ -60,9 +63,14 @@ func NewHypervisor(store *storage.Storage, rt runtime.Runtime) *Hypervisor {
 		"health_controller_enabled", cfg.EnableHealthController,
 		"rebinding_enabled", cfg.EnableRebinding,
 		"quota_manager_enabled", cfg.EnableQuotaManager,
+		"yunwu_engine_initialized", h.yh != nil,
 	)
 
 	return h
+}
+
+func (h *Hypervisor) YunwuEngine() *yunwu.YunwuHypervisor {
+	return h.yh
 }
 
 func (h *Hypervisor) HandleRequest(ctx context.Context, ownerID string, conversationID string, reqPayload []byte, stream io.Writer, platform string) (*runtime.ResponseMetadata, error) {
@@ -72,6 +80,15 @@ func (h *Hypervisor) HandleRequest(ctx context.Context, ownerID string, conversa
 		"platform", platform,
 		"payload_size", len(reqPayload),
 	)
+
+	if platform == "yunwu" && h.yh != nil {
+		slog.Info("[Hypervisor] Dispatching request to dedicated Yunwu Hypervisor Engine",
+			"owner_id", ownerID,
+			"conversation_id", conversationID,
+			"platform", platform,
+		)
+		return h.yh.HandleRequest(ctx, ownerID, conversationID, reqPayload, stream, platform)
+	}
 
 	// 1. Check Quota
 	allowed, err := h.qm.CheckQuota(ctx, ownerID)

@@ -15,6 +15,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
 
+	"github.com/Wei-Shaw/sub2api/pkg/hypervisor"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/events"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/health"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/lease"
@@ -422,4 +423,31 @@ func TestOpenAIMockAndStatsEndpoints(t *testing.T) {
 	require.Contains(t, streamStr, "chat.completion.chunk")
 	require.Contains(t, streamStr, "[DONE]")
 }
+
+func TestYunwuHypervisorDispatch(t *testing.T) {
+	ctx := context.Background()
+	store := newTestStorage(t)
+
+	// Create a Yunwu account in DB
+	acc, err := store.DB().Account.Create().
+		SetName("yunwu-node-1").
+		SetPlatform("yunwu").
+		SetType("api_key").
+		SetStatus("active").
+		SetCredentials(map[string]any{"api_key": "sk-yunwu-test-key", "base_url": "https://yunwu.ai/v1"}).
+		Save(ctx)
+	require.NoError(t, err)
+	_ = acc
+
+	rt := runtime.NewMockRuntime(store)
+	hyp := hypervisor.NewHypervisor(store, rt)
+
+	require.NotNil(t, hyp.YunwuEngine())
+
+	var buf bytes.Buffer
+	res, err := hyp.HandleRequest(ctx, "user-123", "conv-yunwu-1", []byte(`{"model":"gpt-4o","messages":[{"role":"user","content":"hello"}]}`), &buf, "yunwu")
+	require.NoError(t, err)
+	require.NotNil(t, res)
+}
+
 

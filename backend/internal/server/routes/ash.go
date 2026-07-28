@@ -683,7 +683,10 @@ func RegisterAshRoutes(
 				return
 			}
 
-			yh := yunwu.NewYunwuHypervisor(engine.Storage(), nil)
+			yh := engine.YunwuEngine()
+			if yh == nil {
+				yh = yunwu.NewYunwuHypervisor(engine.Storage(), nil)
+			}
 			c.JSON(http.StatusOK, yh.GetHealthStatus(c.Request.Context()))
 		})
 
@@ -761,7 +764,10 @@ func RegisterAshRoutes(
 			}
 			_ = c.ShouldBindJSON(&reqBody)
 
-			yh := yunwu.NewYunwuHypervisor(engine.Storage(), nil)
+			yh := engine.YunwuEngine()
+			if yh == nil {
+				yh = yunwu.NewYunwuHypervisor(engine.Storage(), nil)
+			}
 			grants, err := yh.SyncNodeBalance(c.Request.Context(), nodeID, reqBody.APIKey, reqBody.BaseURL)
 			if err != nil {
 				slog.Error("[YunwuAdminAPI] Sync node balance failed", "node_id", nodeID, "error", err)
