@@ -483,12 +483,28 @@ func (r *AnthropicRuntime) Execute(ctx context.Context, nodeID string, reqPayloa
 }
 
 type responsesSSETransformer struct {
-	writer io.Writer
-	buf    []byte
+	writer     io.Writer
+	buf        []byte
+	headerSent bool
+	accContent strings.Builder
 }
 
 func newResponsesSSETransformer(w io.Writer) *responsesSSETransformer {
 	return &responsesSSETransformer{writer: w}
+}
+
+func (t *responsesSSETransformer) ensureHeaderSent() {
+	if t.headerSent {
+		return
+	}
+	t.headerSent = true
+	preamble := `data: {"type":"response.created","response":{"id":"resp_yunwu_1","status":"in_progress"}}` + "\n\n" +
+		`data: {"type":"response.output_item.added","output_index":0,"item":{"id":"item_yunwu_1","type":"message","status":"in_progress","role":"assistant","content":[]}}` + "\n\n" +
+		`data: {"type":"response.content_part.added","output_index":0,"content_index":0,"part":{"type":"text","text":""}}` + "\n\n"
+	_, _ = t.writer.Write([]byte(preamble))
+	if flusher, ok := t.writer.(http.Flusher); ok {
+		flusher.Flush()
+	}
 }
 
 func (t *responsesSSETransformer) Write(p []byte) (n int, err error) {
@@ -508,7 +524,49 @@ func (t *responsesSSETransformer) Write(p []byte) (n int, err error) {
 		if bytes.HasPrefix(line, []byte("data: ")) {
 			dataPayload := bytes.TrimSpace(bytes.TrimPrefix(line, []byte("data: ")))
 			if bytes.Equal(dataPayload, []byte("[DONE]")) {
-				_, _ = t.writer.Write([]byte("data: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_completed\"}}\n\n"))
+				t.ensureHeaderSent()
+				fullText := t.accContent.String()
+
+				doneEvt := map[string]any{
+					"type":          "response.output_text.done",
+					"output_index":  0,
+					"content_index": 0,
+					"text":          fullText,
+				}
+				if b, err := json.Marshal(doneEvt); err == nil {
+					_, _ = t.writer.Write([]byte("data: " + string(b) + "\n\n"))
+				}
+
+				itemDoneEvt := map[string]any{
+					"type":         "response.output_item.done",
+					"output_index": 0,
+					"item": map[string]any{
+						"id":     "item_yunwu_1",
+						"type":   "message",
+						"status": "completed",
+						"role":   "assistant",
+						"content": []map[string]any{
+							{
+								"type": "text",
+								"text": fullText,
+							},
+						},
+					},
+				}
+				if b, err := json.Marshal(itemDoneEvt); err == nil {
+					_, _ = t.writer.Write([]byte("data: " + string(b) + "\n\n"))
+				}
+
+				completedEvt := map[string]any{
+					"type": "response.completed",
+					"response": map[string]any{
+						"id":     "resp_yunwu_1",
+						"status": "completed",
+					},
+				}
+				if b, err := json.Marshal(completedEvt); err == nil {
+					_, _ = t.writer.Write([]byte("data: " + string(b) + "\n\n"))
+				}
 			} else {
 				var eventMap map[string]any
 				if json.Unmarshal(dataPayload, &eventMap) == nil {
@@ -518,9 +576,13 @@ func (t *responsesSSETransformer) Write(p []byte) (n int, err error) {
 						if choiceMap, ok := choices[0].(map[string]any); ok {
 							if delta, ok := choiceMap["delta"].(map[string]any); ok {
 								if content, ok := delta["content"].(string); ok && content != "" {
+									t.ensureHeaderSent()
+									t.accContent.WriteString(content)
 									deltaEvt := map[string]any{
-										"type":  "response.output_text.delta",
-										"delta": content,
+										"type":          "response.output_text.delta",
+										"output_index":  0,
+										"content_index": 0,
+										"delta":         content,
 									}
 									if bytesEvt, err := json.Marshal(deltaEvt); err == nil {
 										_, _ = t.writer.Write([]byte("data: " + string(bytesEvt) + "\n\n"))
