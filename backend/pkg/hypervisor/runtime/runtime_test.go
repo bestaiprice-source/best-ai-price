@@ -172,8 +172,6 @@ func TestAnthropicRuntimeExecution(t *testing.T) {
 	assert.NotNil(t, resMock)
 	assert.Contains(t, mockBuf.String(), "chat.completion.chunk")
 
-
-
 	// Invalid nodeID -> error
 	_, err = rt.Execute(ctx, "non-existent-node", []byte(`{}`), &bytes.Buffer{})
 	assert.Error(t, err)
@@ -191,6 +189,16 @@ func TestAnthropicRuntimeExecution(t *testing.T) {
 	_, err = rt.Execute(ctx, fmt.Sprintf("%d", accNoKey.ID), []byte(`{}`), &bytes.Buffer{})
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "empty api_key")
+}
+
+func TestResolveUpstreamAPIURL(t *testing.T) {
+	assert.Equal(t, "https://api.anthropic.com/v1/messages", resolveUpstreamAPIURL("", "anthropic", false))
+	assert.Equal(t, "https://api.openai.com/v1/chat/completions", resolveUpstreamAPIURL("", "openai", true))
+
+	assert.Equal(t, "https://yunwu.ai/v1/messages", resolveUpstreamAPIURL("https://yunwu.ai/v1", "yunwu", false))
+	assert.Equal(t, "https://yunwu.ai/v1/messages", resolveUpstreamAPIURL("https://yunwu.ai", "yunwu", false))
+	assert.Equal(t, "https://yunwu.ai/v1/chat/completions", resolveUpstreamAPIURL("https://yunwu.ai/v1", "openai", true))
+	assert.Equal(t, "https://yunwu.ai/v1/messages", resolveUpstreamAPIURL("https://yunwu.ai/v1/messages", "yunwu", false))
 }
 
 

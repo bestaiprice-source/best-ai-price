@@ -201,13 +201,8 @@ func (r *AnthropicRuntime) Execute(ctx context.Context, nodeID string, reqPayloa
 	}
 
 	// 4. Create HTTP Request
-	apiURL := "https://api.anthropic.com/v1/messages"
-	if acc.Platform == "openai" {
-		apiURL = "https://api.openai.com/v1/chat/completions"
-	}
-	if customURL, ok := acc.Credentials["base_url"].(string); ok && strings.TrimSpace(customURL) != "" {
-		apiURL = strings.TrimSpace(customURL)
-	}
+	customURL, _ := acc.Credentials["base_url"].(string)
+	apiURL := resolveUpstreamAPIURL(customURL, acc.Platform, false)
 
 	var payloadMap struct {
 		Stream bool `json:"stream"`
@@ -430,3 +425,35 @@ func extractTokens(data []byte) (int64, int64) {
 	}
 	return input, output
 }
+
+func resolveUpstreamAPIURL(customURL string, platform string, isChatCompletions bool) string {
+	customURL = strings.TrimSpace(customURL)
+	if customURL == "" {
+		if platform == "openai" || isChatCompletions {
+			return "https://api.openai.com/v1/chat/completions"
+		}
+		return "https://api.anthropic.com/v1/messages"
+	}
+
+	customURL = strings.TrimSuffix(customURL, "/")
+
+	// If full endpoint URL is already provided
+	if strings.HasSuffix(customURL, "/v1/messages") || strings.HasSuffix(customURL, "/messages") ||
+		strings.HasSuffix(customURL, "/v1/chat/completions") || strings.HasSuffix(customURL, "/chat/completions") {
+		return customURL
+	}
+
+	if platform == "openai" || isChatCompletions {
+		if strings.HasSuffix(customURL, "/v1") {
+			return customURL + "/chat/completions"
+		}
+		return customURL + "/v1/chat/completions"
+	}
+
+	// Anthropic / Yunwu Messages endpoint
+	if strings.HasSuffix(customURL, "/v1") {
+		return customURL + "/messages"
+	}
+	return customURL + "/v1/messages"
+}
+
