@@ -232,11 +232,54 @@ func (r *AnthropicRuntime) Execute(ctx context.Context, nodeID string, reqPayloa
 		isStream = payloadMap.Stream
 	}
 
-	if !isChatCompletions && (acc.Platform == "anthropic" || acc.Platform == "yunwu" || strings.HasSuffix(apiURL, "/messages")) {
-		var bodyMap map[string]any
-		if json.Unmarshal(reqPayload, &bodyMap) == nil {
-			modified := false
+	var bodyMap map[string]any
+	if json.Unmarshal(reqPayload, &bodyMap) == nil {
+		modified := false
 
+		msgs, hasMsgs := bodyMap["messages"]
+		if !hasMsgs || msgs == nil {
+			var constructedMsgs []map[string]any
+
+			if inst, ok := bodyMap["instructions"].(string); ok && strings.TrimSpace(inst) != "" {
+				constructedMsgs = append(constructedMsgs, map[string]any{
+					"role":    "system",
+					"content": inst,
+				})
+			}
+
+			if inputStr, ok := bodyMap["input"].(string); ok && strings.TrimSpace(inputStr) != "" {
+				constructedMsgs = append(constructedMsgs, map[string]any{
+					"role":    "user",
+					"content": inputStr,
+				})
+			} else if inputArr, ok := bodyMap["input"].([]any); ok && len(inputArr) > 0 {
+				constructedMsgs = append(constructedMsgs, map[string]any{
+					"role":    "user",
+					"content": inputArr,
+				})
+			} else if promptStr, ok := bodyMap["prompt"].(string); ok && strings.TrimSpace(promptStr) != "" {
+				constructedMsgs = append(constructedMsgs, map[string]any{
+					"role":    "user",
+					"content": promptStr,
+				})
+			}
+
+			if len(constructedMsgs) == 0 {
+				constructedMsgs = []map[string]any{
+					{"role": "user", "content": "Hello"},
+				}
+			}
+
+			bodyMap["messages"] = constructedMsgs
+			modified = true
+		} else if msgArr, ok := msgs.([]any); ok && len(msgArr) == 0 {
+			bodyMap["messages"] = []map[string]any{
+				{"role": "user", "content": "Hello"},
+			}
+			modified = true
+		}
+
+		if !isChatCompletions || acc.Platform == "anthropic" || strings.HasSuffix(apiURL, "/messages") {
 			val, hasMax := bodyMap["max_tokens"]
 			if !hasMax || val == nil {
 				if mct, ok := bodyMap["max_completion_tokens"]; ok && mct != nil {
@@ -251,33 +294,11 @@ func (r *AnthropicRuntime) Execute(ctx context.Context, nodeID string, reqPayloa
 				bodyMap["max_tokens"] = 4096
 				modified = true
 			}
+		}
 
-			msgs, hasMsgs := bodyMap["messages"]
-			if !hasMsgs || msgs == nil {
-				if input, ok := bodyMap["input"].(string); ok && strings.TrimSpace(input) != "" {
-					bodyMap["messages"] = []map[string]any{
-						{"role": "user", "content": input},
-					}
-					delete(bodyMap, "input")
-					modified = true
-				} else if prompt, ok := bodyMap["prompt"].(string); ok && strings.TrimSpace(prompt) != "" {
-					bodyMap["messages"] = []map[string]any{
-						{"role": "user", "content": prompt},
-					}
-					delete(bodyMap, "prompt")
-					modified = true
-				}
-			} else if msgArr, ok := msgs.([]any); ok && len(msgArr) == 0 {
-				bodyMap["messages"] = []map[string]any{
-					{"role": "user", "content": "Hello"},
-				}
-				modified = true
-			}
-
-			if modified {
-				if newPayload, err := json.Marshal(bodyMap); err == nil {
-					reqPayload = newPayload
-				}
+		if modified {
+			if newPayload, err := json.Marshal(bodyMap); err == nil {
+				reqPayload = newPayload
 			}
 		}
 	}
