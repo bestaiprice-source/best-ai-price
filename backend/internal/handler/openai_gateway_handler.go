@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"os"
 	"runtime/debug"
 	"strings"
 	"time"
@@ -423,10 +422,6 @@ func (h *OpenAIGatewayHandler) handleHypervisorChatCompletions(c *gin.Context) {
 // Responses handles OpenAI Responses API endpoint
 // POST /openai/v1/responses
 func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
-	if os.Getenv("ASH_ENABLED") == "true" {
-		h.handleHypervisorChatCompletions(c)
-		return
-	}
 	h.ResponsesGateway(gatewayctx.FromGin(c))
 }
 
