@@ -75,4 +75,17 @@ func TestBackupManagerCreateAndRestore(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, sessID, restoredSess.ID)
 	assert.Equal(t, "active", restoredSess.State)
+
+	// Test missing snapshot
+	_, err = bm.RestoreSessionFromSnapshot(ctx, "non-existent-session")
+	assert.Error(t, err)
+
+	// Test snapshot with zero CreatedAt
+	zeroSnap := &ProjectSnapshot{WorkspaceID: "ws-zero"}
+	err = bm.CreateSnapshot(ctx, "sess-zero", zeroSnap)
+	require.NoError(t, err)
+	savedZero, err := bm.GetLatestSnapshot(ctx, "sess-zero")
+	require.NoError(t, err)
+	assert.False(t, savedZero.CreatedAt.IsZero())
 }
+

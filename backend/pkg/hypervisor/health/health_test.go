@@ -99,10 +99,89 @@ func TestNodeManagerAndHealthController(t *testing.T) {
 	time.Sleep(20 * time.Millisecond)
 	hc.Stop()
 
-	// Delete node
+	// Delete node and runtime state
+	err = nm.DeleteNodeRuntimeState(ctx, "node-1")
+	require.NoError(t, err)
+
 	err = nm.DeleteNode(ctx, "node-1")
 	require.NoError(t, err)
 
 	_, err = nm.GetNode(ctx, "node-1")
 	assert.Error(t, err)
 }
+
+func TestHealthControllerCooldownResetAndLimitedState(t *testing.T) {
+	store := newTestStorage(t)
+	ctx := context.Background()
+
+	nm := health.NewNodeManager(store)
+	hc := health.NewHealthController(store)
+
+	// Create an account in DB so Reconcile sees it
+	acc, err := store.DB().Account.Create().
+		SetName("acc-cooldown").
+		SetPlatform("anthropic").
+		SetType("api_key").
+		SetStatus("active").
+		Save(ctx)
+	require.NoError(t, err)
+
+	nodeID := fmt.Sprintf("%d", acc.ID)
+
+	// expired cooldown
+	pastTime := time.Now().Add(-10 * time.Second)
+	state := &health.NodeRuntimeState{
+		NodeID:        nodeID,
+		CooldownUntil: &pastTime,
+		Recent429:     4,
+	}
+	require.NoError(t, nm.SaveNodeRuntimeState(ctx, state))
+
+	require.NoError(t, hc.Reconcile(ctx))
+
+	// Reconcile should have reset cooldown to healthy
+	savedNode, err := nm.GetNode(ctx, nodeID)
+	require.NoError(t, err)
+	require.Equal(t, "healthy", savedNode.State)
+}
+
+func TestHealthControllerDegradationStates(t *testing.T) {
+	store := newTestStorage(t)
+	ctx := context.Background()
+
+	nm := health.NewNodeManager(store)
+	hc := health.NewHealthController(store)
+
+	// Create 4 accounts
+	for i := 1; i <= 4; i++ {
+		acc, err := store.DB().Account.Create().
+			SetName(fmt.Sprintf("acc-%d", i)).
+			SetPlatform("openai").
+			SetType("api_key").
+			SetStatus("active").
+			Save(ctx)
+		require.NoError(t, err)
+		nodeID := fmt.Sprintf("%d", acc.ID)
+
+		nodeState := "healthy"
+		if i > 1 {
+			// Mark nodes 2, 3, 4 with active cooldown so healthyRatio < 0.25
+			futureTime := time.Now().Add(10 * time.Minute)
+			_ = nm.SaveNodeRuntimeState(ctx, &health.NodeRuntimeState{
+				NodeID:        nodeID,
+				CooldownUntil: &futureTime,
+			})
+			nodeState = "cooldown"
+		}
+		_ = nm.SaveNode(ctx, &health.ExecutionNode{
+			NodeID:   nodeID,
+			Provider: "openai",
+			State:    nodeState,
+		})
+	}
+
+	require.NoError(t, hc.Reconcile(ctx))
+	sysState := hc.GetSystemState(ctx, "openai")
+	require.Equal(t, "DEGRADED", sysState)
+}
+

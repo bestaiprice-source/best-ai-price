@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -57,8 +59,14 @@ func TestYunwuHypervisorEndToEnd(t *testing.T) {
 	err = store.Redis().SAdd(context.Background(), "ash:yunwu:nodes", "yunwu-101").Err()
 	require.NoError(t, err)
 
-	// Set test credit balance
+	// Set test credit balance and node runtime state
 	err = store.Redis().Set(context.Background(), "ash:yunwu:credit:yunwu-101", 50.0, 24*time.Hour).Err()
+	require.NoError(t, err)
+
+	err = nm.SaveNodeRuntimeState(context.Background(), &health.NodeRuntimeState{
+		NodeID:      "yunwu-101",
+		SuccessRate: 1.0,
+	})
 	require.NoError(t, err)
 
 	// Save test user access profile
@@ -110,3 +118,213 @@ func TestYunwuRebindingOnFailure(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(t, failedState.CooldownUntil)
 }
+
+func TestYunwuSchedulerScoringAndSelection(t *testing.T) {
+	sch := NewYunwuScheduler()
+	ctx := context.Background()
+
+	nodes := []health.ExecutionNode{
+		{NodeID: "yw-1", AccountName: "Yunwu 1", State: "healthy"},
+		{NodeID: "yw-2", AccountName: "Yunwu 2", State: "healthy"},
+		{NodeID: "yw-3", AccountName: "Yunwu 3", State: "unavailable"},
+	}
+
+	states := map[string]*health.NodeRuntimeState{
+		"yw-1": {NodeID: "yw-1", SuccessRate: 0.9},
+		"yw-2": {NodeID: "yw-2", SuccessRate: 0.99},
+	}
+
+	credits := map[string]float64{
+		"yw-1": 10.0,
+		"yw-2": 100.0,
+	}
+
+	// yw-2 has higher credit and success rate -> should win
+	winning, err := sch.SelectNode(ctx, nodes, states, credits, 1, "", "NORMAL")
+	require.NoError(t, err)
+	require.NotNil(t, winning)
+	assert.Equal(t, "yw-2", winning.NodeID)
+
+	// Test no nodes available
+	_, err = sch.SelectNode(ctx, nil, nil, nil, 1, "", "NORMAL")
+	require.ErrorIs(t, err, ErrNoYunwuNodesAvailable)
+}
+
+func TestYunwuHealthControllerAndStatsWorker(t *testing.T) {
+	store := setupTestYunwuStore(t)
+	ctx, cancel := context.WithCancel(context.Background())
+
+	hc := NewYunwuHealthController(store)
+	assert.Equal(t, "NORMAL", hc.GetSystemState(ctx))
+
+	hc.Start(ctx, 10*time.Millisecond, func(ctx context.Context) []health.ExecutionNode {
+		return []health.ExecutionNode{
+			{NodeID: "yw-1", State: "healthy"},
+		}
+	})
+	time.Sleep(25 * time.Millisecond)
+	cancel()
+
+	sw := NewStatsWorker(store)
+	assert.NotNil(t, sw)
+}
+
+func TestStatsWorkerSyncNodeStats(t *testing.T) {
+	store := setupTestYunwuStore(t)
+	ctx := context.Background()
+
+	// Mock server for primary credit_grants API
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"object":"credit_grants","total_granted":100,"total_used":20,"total_available":80}`))
+	}))
+	defer server.Close()
+
+	sw := NewStatsWorker(store)
+	node := &health.ExecutionNode{NodeID: "yw-sync-1", AccountName: "Yunwu Sync Node"}
+
+	grants, err := sw.SyncNodeStats(ctx, node, "sk-test-key", server.URL)
+	require.NoError(t, err)
+	require.NotNil(t, grants)
+	assert.Equal(t, 80.0, grants.TotalAvailable)
+
+	// Verify saved to Redis
+	val, err := store.Redis().Get(ctx, "ash:yunwu:credit:yw-sync-1").Result()
+	require.NoError(t, err)
+	assert.Equal(t, "80", val)
+}
+
+func TestStatsWorkerFallbackAndSyncLoop(t *testing.T) {
+	store := setupTestYunwuStore(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Mock server returning 404 for credit_grants and 200 for /api/user/self
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/user/self" {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"success":true,"data":{"quota":200,"used_quota":50,"balance":150}}`))
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer server.Close()
+
+	yh := NewYunwuHypervisor(store, &mockYunwuRuntime{})
+	grants, err := yh.SyncNodeBalance(ctx, "yw-fallback-1", "sk-fallback-key", server.URL)
+	require.NoError(t, err)
+	require.NotNil(t, grants)
+	assert.Equal(t, 150.0, grants.TotalAvailable)
+
+	// Test StartSyncLoop
+	yh.sw.StartSyncLoop(ctx, 10*time.Millisecond, func(ctx context.Context) ([]health.ExecutionNode, map[string]string, map[string]string) {
+		return []health.ExecutionNode{{NodeID: "yw-fallback-1"}}, map[string]string{"yw-fallback-1": "key"}, map[string]string{"yw-fallback-1": server.URL}
+	})
+	time.Sleep(25 * time.Millisecond)
+
+	// Test GetRebinding24hCount
+	cnt, err := yh.rm.GetRebinding24hCount(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), cnt)
+}
+
+func TestYunwuRebindingExhausted(t *testing.T) {
+	store := setupTestYunwuStore(t)
+	ctx := context.Background()
+	rm := NewYunwuRebindingManager(store)
+
+	node1 := health.ExecutionNode{NodeID: "yw-e1", State: "healthy"}
+	node2 := health.ExecutionNode{NodeID: "yw-e2", State: "unavailable"}
+
+	_, err := rm.HandleYunwuFailure(ctx, "yw-e1", assert.AnError, []health.ExecutionNode{node1, node2})
+	require.ErrorIs(t, err, ErrYunwuRebindingExhausted)
+}
+
+type failingYunwuRuntime struct{}
+
+func (f *failingYunwuRuntime) Execute(ctx context.Context, nodeID string, reqPayload []byte, stream io.Writer) (*runtime.ResponseMetadata, error) {
+	if nodeID == "yw-fail-1" {
+		return nil, assert.AnError
+	}
+	return &runtime.ResponseMetadata{StatusCode: 200, InputTokens: 50, OutputTokens: 50}, nil
+}
+
+func TestYunwuReconcileHealthAndErrorRebinding(t *testing.T) {
+	store := setupTestYunwuStore(t)
+	ctx := context.Background()
+	nm := health.NewNodeManager(store)
+
+	hc := NewYunwuHealthController(store)
+
+	nodes := []health.ExecutionNode{
+		{NodeID: "yw-h1", State: "healthy"},
+		{NodeID: "yw-h2", State: "cooldown"},
+		{NodeID: "yw-h3", State: "limited"},
+		{NodeID: "yw-h4", State: "unavailable"},
+	}
+
+	for _, n := range nodes {
+		_ = nm.SaveNode(ctx, &n)
+	}
+
+	state := hc.ReconcileHealth(ctx, nodes)
+	assert.NotEmpty(t, state)
+
+	// Test HandleRequest error rebinding
+	yh := NewYunwuHypervisor(store, &failingYunwuRuntime{})
+	node1 := &health.ExecutionNode{NodeID: "yw-fail-1", AccountName: "Node 1", Provider: "yunwu", State: "healthy"}
+	node2 := &health.ExecutionNode{NodeID: "yw-ok-2", AccountName: "Node 2", Provider: "yunwu", State: "healthy"}
+
+	_ = nm.SaveNode(ctx, node1)
+	_ = nm.SaveNode(ctx, node2)
+	_ = store.Redis().SAdd(ctx, "ash:yunwu:nodes", "yw-fail-1", "yw-ok-2").Err()
+
+	// Quota
+	_ = yh.qm.SaveUserAccess(ctx, &quota.UserAccess{OwnerID: "u-rebind", IsActive: true, MonthlyLimit: 100000})
+
+	var buf bytes.Buffer
+	meta, err := yh.HandleRequest(ctx, "u-rebind", "conv-rebind", []byte(`{"model":"claude"}`), &buf, "yunwu")
+	require.NoError(t, err)
+	assert.NotNil(t, meta)
+}
+
+func TestYunwuQuotaExceeded(t *testing.T) {
+	store := setupTestYunwuStore(t)
+	ctx := context.Background()
+	yh := NewYunwuHypervisor(store, &mockYunwuRuntime{})
+
+	// User exceeding quota
+	_ = yh.qm.SaveUserAccess(ctx, &quota.UserAccess{OwnerID: "u-exceeded", IsActive: true, MonthlyLimit: 100, UsedUnits: 150})
+
+	var buf bytes.Buffer
+	_, err := yh.HandleRequest(ctx, "u-exceeded", "conv-1", []byte(`{"model":"claude"}`), &buf, "yunwu")
+	require.ErrorIs(t, err, quota.ErrQuotaExceeded)
+
+	// Inactive user
+	_ = yh.qm.SaveUserAccess(ctx, &quota.UserAccess{OwnerID: "u-inactive", IsActive: false})
+	_, err = yh.HandleRequest(ctx, "u-inactive", "conv-1", []byte(`{"model":"claude"}`), &buf, "yunwu")
+	require.ErrorIs(t, err, quota.ErrUserInactive)
+}
+
+func TestYunwuGetHealthStatusWithCooldown(t *testing.T) {
+	store := setupTestYunwuStore(t)
+	ctx := context.Background()
+	yh := NewYunwuHypervisor(store, &mockYunwuRuntime{})
+	nm := health.NewNodeManager(store)
+
+	_ = nm.SaveNode(ctx, &health.ExecutionNode{NodeID: "yw-cd-1", State: "cooldown"})
+	_ = store.Redis().SAdd(ctx, "ash:yunwu:nodes", "yw-cd-1").Err()
+
+	status := yh.GetHealthStatus(ctx)
+	assert.Equal(t, 1, status["cooldown_nodes"])
+}
+
+
+
+
+
+
+
+

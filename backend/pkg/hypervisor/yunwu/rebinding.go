@@ -99,3 +99,10 @@ func (rm *YunwuRebindingManager) HandleYunwuFailure(
 
 	return selected, nil
 }
+
+func (rm *YunwuRebindingManager) GetRebinding24hCount(ctx context.Context) (int64, error) {
+	now := time.Now().Unix()
+	_ = rm.store.Redis().ZRemRangeByScore(ctx, "ash:yunwu:rebinding:24h", "-inf", fmt.Sprintf("%d", now-86400)).Err()
+	return rm.store.Redis().ZCard(ctx, "ash:yunwu:rebinding:24h").Result()
+}
+

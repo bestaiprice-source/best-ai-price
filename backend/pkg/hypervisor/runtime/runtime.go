@@ -205,6 +205,9 @@ func (r *AnthropicRuntime) Execute(ctx context.Context, nodeID string, reqPayloa
 	if acc.Platform == "openai" {
 		apiURL = "https://api.openai.com/v1/chat/completions"
 	}
+	if customURL, ok := acc.Credentials["base_url"].(string); ok && strings.TrimSpace(customURL) != "" {
+		apiURL = strings.TrimSpace(customURL)
+	}
 	req, err := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewReader(reqPayload))
 	if err != nil {
 		return nil, err

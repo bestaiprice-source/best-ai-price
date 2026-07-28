@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
+	"io"
 	"strings"
 	"testing"
 	"time"
@@ -449,5 +451,169 @@ func TestYunwuHypervisorDispatch(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, res)
 }
+
+func TestHypervisorQuotaExceededAndLeaseResolution(t *testing.T) {
+	ctx := context.Background()
+	store := newTestStorage(t)
+
+	// Create account
+	acc, err := store.DB().Account.Create().
+		SetName("anthropic-node-1").
+		SetPlatform("anthropic").
+		SetType("api_key").
+		SetStatus("active").
+		SetCredentials(map[string]any{"api_key": "sk-test-key"}).
+		Save(ctx)
+	require.NoError(t, err)
+
+	rt := runtime.NewMockRuntime(store)
+	hyp := hypervisor.NewHypervisor(store, rt)
+	require.NotNil(t, hyp.HealthController())
+	require.NotNil(t, hyp.Storage())
+
+	// Exceed quota via QuotaManager SaveUserAccess
+	qm := quota.NewQuotaManager(store)
+	_ = qm.SaveUserAccess(ctx, &quota.UserAccess{
+		OwnerID:      "user-exceeded",
+		PlanID:       "pool-basic",
+		MonthlyLimit: 100,
+		UsedUnits:    200,
+		IsActive:     true,
+	})
+
+	var buf bytes.Buffer
+	_, err = hyp.HandleRequest(ctx, "user-exceeded", "", []byte(`{"model":"claude-3-5-sonnet-20241022"}`), &buf, "anthropic")
+	require.ErrorIs(t, err, quota.ErrQuotaExceeded)
+
+	// Normal user with active lease
+	_ = store.Redis().Set(ctx, "ash:lease:session-user-ok-default", fmt.Sprintf("%d", acc.ID), 0).Err()
+	res, err := hyp.HandleRequest(ctx, "user-ok", "", []byte(`{"model":"claude-3-5-sonnet-20241022"}`), &buf, "anthropic")
+	require.NoError(t, err)
+	require.NotNil(t, res)
+}
+
+type failingFirstNodeRuntime struct{}
+
+func (f *failingFirstNodeRuntime) Execute(ctx context.Context, nodeID string, reqPayload []byte, stream io.Writer) (*runtime.ResponseMetadata, error) {
+	if strings.Contains(nodeID, "node-fail") {
+		return nil, errors.New("test failure")
+	}
+	return &runtime.ResponseMetadata{StatusCode: 200, InputTokens: 20, OutputTokens: 30}, nil
+}
+
+func TestHypervisorRebindingOnExecutionFailure(t *testing.T) {
+	ctx := context.Background()
+	store := newTestStorage(t)
+
+	acc1, err := store.DB().Account.Create().
+		SetName("node-fail-1").
+		SetPlatform("anthropic").
+		SetType("api_key").
+		SetStatus("active").
+		SetCredentials(map[string]any{"api_key": "sk-key-1"}).
+		Save(ctx)
+	require.NoError(t, err)
+
+	acc2, err := store.DB().Account.Create().
+		SetName("node-ok-2").
+		SetPlatform("anthropic").
+		SetType("api_key").
+		SetStatus("active").
+		SetCredentials(map[string]any{"api_key": "sk-key-2"}).
+		Save(ctx)
+	require.NoError(t, err)
+	_ = acc1
+	_ = acc2
+
+	rt := &failingFirstNodeRuntime{}
+	hyp := hypervisor.NewHypervisor(store, rt)
+
+	var buf bytes.Buffer
+	res, err := hyp.HandleRequest(ctx, "user-rebound", "conv-rebound", []byte(`{"model":"claude"}`), &buf, "anthropic")
+	require.NoError(t, err)
+	require.NotNil(t, res)
+}
+
+func TestHypervisorNoNodesAvailableAndRedisFallback(t *testing.T) {
+	ctx := context.Background()
+	store := newTestStorage(t)
+	rt := runtime.NewMockRuntime(store)
+	hyp := hypervisor.NewHypervisor(store, rt)
+
+	// No nodes in DB or Redis -> returns ErrNoNodesAvailable
+	var buf bytes.Buffer
+	_, err := hyp.HandleRequest(ctx, "user-empty", "conv-empty", []byte(`{"model":"claude"}`), &buf, "anthropic")
+	require.ErrorIs(t, err, scheduler.ErrNoNodesAvailable)
+
+	// Redis nodes fallback
+	nm := health.NewNodeManager(store)
+	_ = nm.SaveNode(ctx, &health.ExecutionNode{NodeID: "redis-node-1", Provider: "anthropic", State: "healthy"})
+	_ = store.Redis().SAdd(ctx, "ash:nodes", "redis-node-1").Err()
+
+	res, err := hyp.HandleRequest(ctx, "user-redis", "conv-redis", []byte(`{"model":"claude"}`), &buf, "anthropic")
+	require.NoError(t, err)
+	require.NotNil(t, res)
+}
+
+func TestHypervisorHelperCoverage(t *testing.T) {
+	ctx := context.Background()
+	store := newTestStorage(t)
+
+	acc, err := store.DB().Account.Create().
+		SetName("helper-node-1").
+		SetPlatform("anthropic").
+		SetType("api_key").
+		SetStatus("active").
+		SetCredentials(map[string]any{"api_key": "sk-key"}).
+		Save(ctx)
+	require.NoError(t, err)
+
+	rt := runtime.NewMockRuntime(store)
+	hyp := hypervisor.NewHypervisor(store, rt)
+
+	// Save runtime state
+	nm := health.NewNodeManager(store)
+	_ = nm.SaveNodeRuntimeState(ctx, &health.NodeRuntimeState{
+		NodeID:      fmt.Sprintf("%d", acc.ID),
+		SuccessRate: 0.99,
+	})
+
+	var buf bytes.Buffer
+	res, err := hyp.HandleRequest(ctx, "user-h", "conv-h", []byte(`{"model":"claude"}`), &buf, "anthropic")
+	require.NoError(t, err)
+	require.NotNil(t, res)
+}
+
+type allFailingRuntime struct{}
+
+func (a *allFailingRuntime) Execute(ctx context.Context, nodeID string, reqPayload []byte, stream io.Writer) (*runtime.ResponseMetadata, error) {
+	return nil, errors.New("all nodes failed")
+}
+
+func TestHypervisorRebindingExhaustedFailure(t *testing.T) {
+	ctx := context.Background()
+	store := newTestStorage(t)
+
+	_, err := store.DB().Account.Create().
+		SetName("fail-all-node-1").
+		SetPlatform("anthropic").
+		SetType("api_key").
+		SetStatus("active").
+		SetCredentials(map[string]any{"api_key": "sk-key"}).
+		Save(ctx)
+	require.NoError(t, err)
+
+	rt := &allFailingRuntime{}
+	hyp := hypervisor.NewHypervisor(store, rt)
+
+	var buf bytes.Buffer
+	_, err = hyp.HandleRequest(ctx, "user-all-fail", "conv-all-fail", []byte(`{"model":"claude"}`), &buf, "anthropic")
+	require.Error(t, err)
+}
+
+
+
+
+
 
 
