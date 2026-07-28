@@ -454,6 +454,13 @@ func (r *AnthropicRuntime) Execute(ctx context.Context, nodeID string, reqPayloa
 		}
 	}
 
+	if isChatCompletions && isStream {
+		_, _ = stream.Write([]byte("data: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_completed\"}}\n\n"))
+		if flusher, ok := stream.(http.Flusher); ok {
+			flusher.Flush()
+		}
+	}
+
 	input, output := extractTokens(endBuf.Bytes())
 	return &ResponseMetadata{
 		StatusCode:   resp.StatusCode,

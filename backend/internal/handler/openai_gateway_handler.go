@@ -422,7 +422,29 @@ func (h *OpenAIGatewayHandler) handleHypervisorChatCompletions(c *gin.Context) {
 // Responses handles OpenAI Responses API endpoint
 // POST /openai/v1/responses
 func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
-	h.ResponsesGateway(gatewayctx.FromGin(c))
+	if os.Getenv("ASH_ENABLED") == "true" {
+		h.handleHypervisorChatCompletions(c)
+		return
+	}
+
+	transportCtx := gatewayctx.FromGin(c)
+	if apiKey, ok := middleware2.GetAPIKeyFromGatewayContext(transportCtx); ok && apiKey != nil {
+		isYunwu := apiKey.Group != nil && apiKey.Group.Platform == "yunwu"
+		if !isYunwu {
+			for _, g := range apiKey.Groups {
+				if g != nil && (g.Platform == "yunwu" || strings.EqualFold(g.Name, "yunwu")) {
+					isYunwu = true
+					break
+				}
+			}
+		}
+		if isYunwu {
+			h.handleHypervisorChatCompletions(c)
+			return
+		}
+	}
+
+	h.ResponsesGateway(transportCtx)
 }
 
 func (h *OpenAIGatewayHandler) ResponsesGateway(transportCtx gatewayctx.GatewayContext) {
