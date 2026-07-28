@@ -80,7 +80,7 @@ func (hc *YunwuHealthController) ReconcileHealth(ctx context.Context, nodes []he
 		}
 	}
 
-	slog.Info("[YunwuHealthController] Reconciled Yunwu pool health",
+	slog.Debug("[YunwuHealthController] Reconciled Yunwu pool health",
 		"total_nodes", totalCount,
 		"healthy_nodes", healthyCount,
 		"system_state", systemState,
