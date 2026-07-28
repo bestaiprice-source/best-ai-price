@@ -424,13 +424,26 @@ func (r *AnthropicRuntime) Execute(ctx context.Context, nodeID string, reqPayloa
 		return nil, fmt.Errorf("upstream error status %d: %s", resp.StatusCode, string(bodyBytes))
 	}
 
+	isResponsesAPI := false
+	var checkMap map[string]any
+	if json.Unmarshal(reqPayload, &checkMap) == nil {
+		if checkMap["input"] != nil || checkMap["instructions"] != nil {
+			isResponsesAPI = true
+		}
+	}
+
 	// 6. Stream response and track end of stream for token usage
+	var outStream io.Writer = stream
+	if isResponsesAPI && isStream {
+		outStream = newResponsesSSETransformer(stream)
+	}
+
 	var endBuf bytes.Buffer
 	buf := make([]byte, 4096)
 	for {
 		n, err := resp.Body.Read(buf)
 		if n > 0 {
-			_, writeErr := stream.Write(buf[:n])
+			_, writeErr := outStream.Write(buf[:n])
 			if writeErr != nil {
 				return nil, writeErr
 			}
@@ -467,6 +480,69 @@ func (r *AnthropicRuntime) Execute(ctx context.Context, nodeID string, reqPayloa
 		InputTokens:  input,
 		OutputTokens: output,
 	}, nil
+}
+
+type responsesSSETransformer struct {
+	writer io.Writer
+	buf    []byte
+}
+
+func newResponsesSSETransformer(w io.Writer) *responsesSSETransformer {
+	return &responsesSSETransformer{writer: w}
+}
+
+func (t *responsesSSETransformer) Write(p []byte) (n int, err error) {
+	t.buf = append(t.buf, p...)
+	for {
+		idx := bytes.IndexByte(t.buf, '\n')
+		if idx == -1 {
+			break
+		}
+		line := bytes.TrimSpace(t.buf[:idx])
+		t.buf = t.buf[idx+1:]
+
+		if len(line) == 0 {
+			continue
+		}
+
+		if bytes.HasPrefix(line, []byte("data: ")) {
+			dataPayload := bytes.TrimSpace(bytes.TrimPrefix(line, []byte("data: ")))
+			if bytes.Equal(dataPayload, []byte("[DONE]")) {
+				_, _ = t.writer.Write([]byte("data: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_completed\"}}\n\n"))
+			} else {
+				var eventMap map[string]any
+				if json.Unmarshal(dataPayload, &eventMap) == nil {
+					if _, hasType := eventMap["type"]; hasType {
+						_, _ = t.writer.Write(append(line, []byte("\n\n")...))
+					} else if choices, ok := eventMap["choices"].([]any); ok && len(choices) > 0 {
+						if choiceMap, ok := choices[0].(map[string]any); ok {
+							if delta, ok := choiceMap["delta"].(map[string]any); ok {
+								if content, ok := delta["content"].(string); ok && content != "" {
+									deltaEvt := map[string]any{
+										"type":  "response.output_text.delta",
+										"delta": content,
+									}
+									if bytesEvt, err := json.Marshal(deltaEvt); err == nil {
+										_, _ = t.writer.Write([]byte("data: " + string(bytesEvt) + "\n\n"))
+									}
+								}
+							}
+						}
+					} else {
+						_, _ = t.writer.Write(append(line, []byte("\n\n")...))
+					}
+				} else {
+					_, _ = t.writer.Write(append(line, []byte("\n\n")...))
+				}
+			}
+			if flusher, ok := t.writer.(http.Flusher); ok {
+				flusher.Flush()
+			}
+		} else {
+			_, _ = t.writer.Write(append(line, []byte("\n\n")...))
+		}
+	}
+	return len(p), nil
 }
 
 func extractTokens(data []byte) (int64, int64) {

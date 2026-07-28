@@ -230,11 +230,43 @@ func TestYunwuRuntimeExecution(t *testing.T) {
 	assert.NotNil(t, res)
 	assert.Equal(t, 200, res.StatusCode)
 
-	// Test input parameter fallback on Yunwu node
-	var buf2 bytes.Buffer
-	res2, err := rt.Execute(ctx, fmt.Sprintf("%d", accYunwu.ID), []byte(`{"model":"claude-3-5-sonnet","input":"test prompt"}`), &buf2)
+	// Test streaming responses API transformation
+	streamServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("data: {\"choices\":[{\"delta\":{\"content\":\"Hello\"}}]}\n\ndata: [DONE]\n\n"))
+	}))
+	defer streamServer.Close()
+
+	accStream, err := store.DB().Account.Create().
+		SetName("yunwu-stream-acc").
+		SetPlatform("yunwu").
+		SetType("api_key").
+		SetStatus("active").
+		SetCredentials(map[string]any{"api_key": "sk-yunwu-key", "base_url": streamServer.URL}).
+		Save(ctx)
 	require.NoError(t, err)
-	assert.NotNil(t, res2)
+
+	var streamBuf bytes.Buffer
+	resStream, err := rt.Execute(ctx, fmt.Sprintf("%d", accStream.ID), []byte(`{"model":"gpt-4o","input":"hi","stream":true}`), &streamBuf)
+	require.NoError(t, err)
+	assert.NotNil(t, resStream)
+	assert.Contains(t, streamBuf.String(), "response.output_text.delta")
+	assert.Contains(t, streamBuf.String(), "response.completed")
+}
+
+func TestResponsesSSETransformerDirect(t *testing.T) {
+	var buf bytes.Buffer
+	tr := newResponsesSSETransformer(&buf)
+
+	input := []byte("data: {\"choices\":[{\"delta\":{\"content\":\"Hello world\"}}]}\n\ndata: [DONE]\n\n")
+	_, err := tr.Write(input)
+	require.NoError(t, err)
+
+	out := buf.String()
+	assert.Contains(t, out, "response.output_text.delta")
+	assert.Contains(t, out, "Hello world")
+	assert.Contains(t, out, "response.completed")
 }
 
 
