@@ -238,44 +238,10 @@ func (r *AnthropicRuntime) Execute(ctx context.Context, nodeID string, reqPayloa
 
 		msgs, hasMsgs := bodyMap["messages"]
 		if !hasMsgs || msgs == nil {
-			var constructedMsgs []map[string]any
-
-			if inst, ok := bodyMap["instructions"].(string); ok && strings.TrimSpace(inst) != "" {
-				constructedMsgs = append(constructedMsgs, map[string]any{
-					"role":    "system",
-					"content": inst,
-				})
-			}
-
-			if inputStr, ok := bodyMap["input"].(string); ok && strings.TrimSpace(inputStr) != "" {
-				constructedMsgs = append(constructedMsgs, map[string]any{
-					"role":    "user",
-					"content": inputStr,
-				})
-			} else if inputArr, ok := bodyMap["input"].([]any); ok && len(inputArr) > 0 {
-				constructedMsgs = append(constructedMsgs, map[string]any{
-					"role":    "user",
-					"content": inputArr,
-				})
-			} else if promptStr, ok := bodyMap["prompt"].(string); ok && strings.TrimSpace(promptStr) != "" {
-				constructedMsgs = append(constructedMsgs, map[string]any{
-					"role":    "user",
-					"content": promptStr,
-				})
-			}
-
-			if len(constructedMsgs) == 0 {
-				constructedMsgs = []map[string]any{
-					{"role": "user", "content": "Hello"},
-				}
-			}
-
-			bodyMap["messages"] = constructedMsgs
+			bodyMap["messages"] = constructMessagesFromResponsesPayload(bodyMap)
 			modified = true
 		} else if msgArr, ok := msgs.([]any); ok && len(msgArr) == 0 {
-			bodyMap["messages"] = []map[string]any{
-				{"role": "user", "content": "Hello"},
-			}
+			bodyMap["messages"] = constructMessagesFromResponsesPayload(bodyMap)
 			modified = true
 		}
 
@@ -664,5 +630,91 @@ func resolveUpstreamAPIURL(customURL string, platform string, isChatCompletions 
 		return customURL + "/messages"
 	}
 	return customURL + "/v1/messages"
+}
+
+func constructMessagesFromResponsesPayload(bodyMap map[string]any) []map[string]any {
+	var msgs []map[string]any
+
+	if inst, ok := bodyMap["instructions"].(string); ok && strings.TrimSpace(inst) != "" {
+		msgs = append(msgs, map[string]any{
+			"role":    "system",
+			"content": inst,
+		})
+	}
+
+	inputVal := bodyMap["input"]
+	if inputVal != nil {
+		switch v := inputVal.(type) {
+		case string:
+			if strings.TrimSpace(v) != "" {
+				msgs = append(msgs, map[string]any{
+					"role":    "user",
+					"content": v,
+				})
+			}
+		case []any:
+			for _, item := range v {
+				switch itemObj := item.(type) {
+				case string:
+					if strings.TrimSpace(itemObj) != "" {
+						msgs = append(msgs, map[string]any{
+							"role":    "user",
+							"content": itemObj,
+						})
+					}
+				case map[string]any:
+					role, _ := itemObj["role"].(string)
+					if role == "" {
+						role = "user"
+					}
+					if contentStr, ok := itemObj["content"].(string); ok && strings.TrimSpace(contentStr) != "" {
+						msgs = append(msgs, map[string]any{
+							"role":    role,
+							"content": contentStr,
+						})
+					} else if contentArr, ok := itemObj["content"].([]any); ok {
+						var textParts []string
+						for _, part := range contentArr {
+							if partStr, ok := part.(string); ok && strings.TrimSpace(partStr) != "" {
+								textParts = append(textParts, partStr)
+							} else if partObj, ok := part.(map[string]any); ok {
+								if t, ok := partObj["text"].(string); ok && strings.TrimSpace(t) != "" {
+									textParts = append(textParts, t)
+								}
+							}
+						}
+						if len(textParts) > 0 {
+							msgs = append(msgs, map[string]any{
+								"role":    role,
+								"content": strings.Join(textParts, "\n"),
+							})
+						}
+					} else if textVal, ok := itemObj["text"].(string); ok && strings.TrimSpace(textVal) != "" {
+						msgs = append(msgs, map[string]any{
+							"role":    role,
+							"content": textVal,
+						})
+					}
+				}
+			}
+		}
+	}
+
+	if len(msgs) == 0 || (len(msgs) == 1 && msgs[0]["role"] == "system") {
+		if promptStr, ok := bodyMap["prompt"].(string); ok && strings.TrimSpace(promptStr) != "" {
+			msgs = append(msgs, map[string]any{
+				"role":    "user",
+				"content": promptStr,
+			})
+		}
+	}
+
+	if len(msgs) == 0 {
+		msgs = []map[string]any{
+			{"role": "user", "content": "Hello"},
+		}
+	}
+
+	return msgs
 }
 

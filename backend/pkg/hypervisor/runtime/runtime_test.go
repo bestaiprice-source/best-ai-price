@@ -269,5 +269,26 @@ func TestResponsesSSETransformerDirect(t *testing.T) {
 	assert.Contains(t, out, "response.completed")
 }
 
+func TestConstructMessagesFromResponsesPayload(t *testing.T) {
+	payload := map[string]any{
+		"instructions": "Be concise.",
+		"input": []any{
+			map[string]any{
+				"type": "message",
+				"role": "user",
+				"content": []any{
+					map[string]any{"type": "input_text", "text": "Что такое телеграм?"},
+				},
+			},
+		},
+	}
+	msgs := constructMessagesFromResponsesPayload(payload)
+	require.Len(t, msgs, 2)
+	assert.Equal(t, "system", msgs[0]["role"])
+	assert.Equal(t, "Be concise.", msgs[0]["content"])
+	assert.Equal(t, "user", msgs[1]["role"])
+	assert.Equal(t, "Что такое телеграм?", msgs[1]["content"])
+}
+
 
 
