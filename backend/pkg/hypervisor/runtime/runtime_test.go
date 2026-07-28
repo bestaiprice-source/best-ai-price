@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -98,6 +99,9 @@ func TestAnthropicRuntimeExecution(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "Bearer sk-ant-oat-test-token", r.Header.Get("Authorization"))
 		assert.Equal(t, "2023-06-01", r.Header.Get("anthropic-version"))
+
+		body, _ := io.ReadAll(r.Body)
+		assert.Contains(t, string(body), `"max_tokens":4096`)
 
 		w.Header().Set("anthropic-ratelimit-unified-5h-utilization", "0.45")
 		w.Header().Set("anthropic-ratelimit-unified-7d-utilization", "0.20")

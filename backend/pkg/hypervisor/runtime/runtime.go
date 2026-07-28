@@ -208,10 +208,6 @@ func (r *AnthropicRuntime) Execute(ctx context.Context, nodeID string, reqPayloa
 	if customURL, ok := acc.Credentials["base_url"].(string); ok && strings.TrimSpace(customURL) != "" {
 		apiURL = strings.TrimSpace(customURL)
 	}
-	req, err := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewReader(reqPayload))
-	if err != nil {
-		return nil, err
-	}
 
 	var payloadMap struct {
 		Stream bool `json:"stream"`
@@ -219,6 +215,39 @@ func (r *AnthropicRuntime) Execute(ctx context.Context, nodeID string, reqPayloa
 	isStream := false
 	if json.Unmarshal(reqPayload, &payloadMap) == nil {
 		isStream = payloadMap.Stream
+	}
+
+	if acc.Platform == "anthropic" {
+		var bodyMap map[string]any
+		if json.Unmarshal(reqPayload, &bodyMap) == nil {
+			modified := false
+
+			val, hasMax := bodyMap["max_tokens"]
+			if !hasMax || val == nil {
+				if mct, ok := bodyMap["max_completion_tokens"]; ok && mct != nil {
+					bodyMap["max_tokens"] = mct
+					delete(bodyMap, "max_completion_tokens")
+					modified = true
+				} else {
+					bodyMap["max_tokens"] = 4096
+					modified = true
+				}
+			} else if num, ok := val.(float64); ok && num <= 0 {
+				bodyMap["max_tokens"] = 4096
+				modified = true
+			}
+
+			if modified {
+				if newPayload, err := json.Marshal(bodyMap); err == nil {
+					reqPayload = newPayload
+				}
+			}
+		}
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewReader(reqPayload))
+	if err != nil {
+		return nil, err
 	}
 
 	if acc.Platform == "openai" {
