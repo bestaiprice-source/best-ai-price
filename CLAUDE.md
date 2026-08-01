@@ -13,7 +13,7 @@ Welcome to **sub2api** and the **AI Session Hypervisor (ASH / Yunwu Engine)** re
 - **Virtual Sessions**: Users are decoupled from physical accounts. The system maintains continuous conversation state while transparently switching underlying physical nodes on failure.
 - **Automatic Rebinding**: When an upstream node encounters `429 Too Many Requests`, timeouts, or disconnection, the Hypervisor locks the session, selects a healthy alternative node, recompiles context, and retries the request seamlessly.
 
-```
+```text
 +--------+     +---------------+     +----------------+     +-----------+     +-------------------+
 | Client | --> | Service Key / | --> | VirtualSession | --> | Scheduler | --> | Physical Node     |
 | (CLI)  |     | Gateway API   |     | (State & Context)|   | & Lease   |     | (Claude / Yunwu)  |
@@ -22,7 +22,112 @@ Welcome to **sub2api** and the **AI Session Hypervisor (ASH / Yunwu Engine)** re
 
 ---
 
-## 📁 2. Repository Structure
+## 🔍 2. Deep Dive: What We Built & How It Works Under the Hood
+
+### 2.1 The Core Transformation
+Sub2API was expanded from a simple single-account proxy into an **AI Session Hypervisor (ASH)** architecture. Instead of hardcoding a user to a physical account (`User -> Account`), we decoupled execution into virtual entities:
+
+```text
+User -> Service API Key -> VirtualSession -> Lease -> ExecutionNode (Claude / Yunwu Account)
+```
+
+- **`VirtualSession`** maintains the perpetual user conversation state, prompt history, summary, and metadata.
+- **`Lease`** provides a short-lived binding to a specific physical account (`ExecutionNode`).
+- **`Scheduler`** dynamically routes each request to the best available physical node.
+- **`Rebinding`** transparently migrates a session to a new physical account if the current node fails (`429`, timeout, disconnect).
+
+---
+
+### 2.2 Detailed Subsystem Breakdown
+
+#### 1. Virtual Session Management (`pkg/hypervisor/session`)
+- **State Machine**: Tracks session state: `new` → `active` → `rebinding` → `queued` → `closed`.
+- **Storage**: Caches hot session state in Redis (`ash:session:{session_id}`) with atomic versioning and persists metadata in PostgreSQL (`ash_sessions`).
+- **Concurrency**: Prevents race conditions during state transitions.
+
+#### 2. Lease Allocation & Binding (`pkg/hypervisor/lease`)
+- Manages temporary leases connecting a `VirtualSession` to an `ExecutionNode`.
+- Handles automatic lease granting, renewal, and release.
+- Ensures a session does not stay bound to a node that has entered a limited or cooldown state.
+
+#### 3. Behavioral Node Scheduler (`pkg/hypervisor/scheduler` & `pkg/hypervisor/yunwu`)
+- Evaluates node health dynamically without relying on opaque upstream quota counters.
+- **Scoring Equation**:
+
+$$\text{score} = \text{success\_rate} \times 100 + \text{affinity\_bonus} + \text{priority\_bonus} - (\text{queue\_depth} \times 5) - \frac{\text{avg\_latency\_ms}}{100} - (\text{recent\_429} \times 30) - (\text{recent\_timeout} \times 20)$$
+
+- **Node Filtering Rules**:
+  - `unavailable` nodes are strictly excluded.
+  - `cooldown` nodes are excluded until their cooldown timer expires.
+  - `limited` nodes are used only if no `healthy` nodes are available.
+  - Affinity provides a preference bonus but will never route to an unhealthy node.
+
+#### 4. Distributed Rebinding Workflow (`pkg/hypervisor/rebinding`)
+- **Distributed Redis Locking**: Uses `SETNX` on `ash:lock:session:{session_id}` (TTL: 120s) to guarantee only one rebinding operation occurs per session at a time.
+- **Failover Sequence**:
+  1. Lock session.
+  2. Degrade failing node state to `limited` or `cooldown`.
+  3. Emit `RebindingStarted` event.
+  4. Invoke `Scheduler` to select a new healthy execution node.
+  5. Run `ContextCompiler` to reconstruct prompt context.
+  6. Grant a new `Lease` bound to the selected node.
+  7. Execute a single upstream retry request.
+  8. Emit `RebindingSucceeded` (or `RebindingFailed`) and release lock.
+
+#### 5. Context Compiler (`pkg/hypervisor/compiler`)
+- Reconstructs portable conversation context in a deterministic block order when migrating between physical accounts:
+  1. `SystemPrompt`
+  2. `Summary`
+  3. `PinnedFacts`
+  4. `TerminalState`
+  5. `ToolState`
+  6. `ProjectState`
+  7. `RecentMessages`
+  8. `CurrentUserPrompt`
+- Guarantees full dialogue context continuity across physical node switches without prompt cache dependence.
+
+#### 6. Responses API Normalization (`pkg/hypervisor/runtime`)
+- Solves structured message array issues in Codex CLI Responses API (`/responses`).
+- Includes `constructMessagesFromResponsesPayload`, which recursively inspects incoming `input` objects:
+  ```json
+  "input": [
+    {
+      "type": "message",
+      "role": "user",
+      "content": [
+        {"type": "input_text", "text": "What is Telegram?"}
+      ]
+    }
+  ]
+  ```
+- Extracts `input_text` elements into clean `messages` arrays (`"role": "user", "content": "What is Telegram?"`), ensuring prompts are never lost or ignored by upstream providers.
+
+#### 7. Health Controller & System Degradation (`pkg/hypervisor/health`)
+- Runs a background reconciliation loop every 10 seconds.
+- Recalculates node metrics (success rates, latencies, recent 429s).
+- Manages node state lifecycle: `healthy` → `busy` → `limited` → `unavailable` → `cooldown` → `healthy`.
+- Automatically applies cooldowns (default 15 minutes) after 429 errors.
+- Manages global degradation modes:
+  - `NORMAL`: Full capacity, rebinding enabled.
+  - `WARNING`: High latency/429 rates, penalized node scores.
+  - `DEGRADED`: Node shortages, background tasks disabled, request queueing.
+  - `SURVIVAL`: Critical shortage, high-priority requests only, short timeouts.
+  - `RECOVERY`: Nodes returning from cooldown, gradual traffic ramp-up.
+
+#### 8. Fair Use Quotas & Audit Logging (`pkg/hypervisor/quota`, `events`, `storage`)
+- **Quota Manager**: Enforces `UserAccess` monthly limits, daily burst allowances, and priority queueing.
+- **Event Store**: Writes append-only audit logs to `ash_events` table for full system traceability.
+- **Usage Recorder**: Records detailed token consumption (`input_tokens`, `output_tokens`, `cost_units`) in `ash_usage` table.
+
+#### 9. Fault Injection Testing (`pkg/hypervisor/runtime/mock.go`)
+- Includes `MockRuntime` for simulating 429 rate limits, timeouts, slow SSE streams, malformed payloads, and disconnections without hitting live provider accounts.
+
+#### 10. Backup & Recovery (`pkg/hypervisor/backup`)
+- Handles session snapshots, git state, terminal snapshots, and project restoration.
+
+---
+
+## 📁 3. Repository Structure
 
 ```text
 sub2api/
@@ -61,71 +166,24 @@ sub2api/
 
 ---
 
-## 🛠 3. Hypervisor Package Architecture (`backend/pkg/hypervisor`)
+## 🛠 4. Hypervisor Package Architecture (`backend/pkg/hypervisor`)
 
-| Package | Purpose & Functionality |
-| :--- | :--- |
-| `config` | Manages environment variables (`ASH_ENABLED`, `ASH_ENABLE_REBINDING`, etc.) and default runtime settings. |
-| `session` | Manages `VirtualSession` state machine (`new` → `active` → `rebinding` → `queued` → `closed`), Redis state TTL, and versioning. |
-| `lease` | Grants, renews, and releases temporary bindings (`Lease`) between a session and an `ExecutionNode`. |
-| `scheduler` | Implements the node selection algorithm based on observed metrics (success rate, latency, queue depth, 429s, affinity). |
-| `runtime` | Handles upstream HTTP streaming (Anthropic `/v1/messages`, OpenAI `/v1/chat/completions`), SSE transformation, and `MockRuntime` for fault injection. |
-| `yunwu` | Dedicated execution engine, scheduler (`YunwuScheduler`), and rebinding manager (`YunwuRebindingManager`) tailored for Yunwu provider nodes. |
-| `compiler` | Compiles execution contexts into stable prompt blocks (`SystemPrompt` → `Summary` → `PinnedFacts` → `TerminalState` → `ToolState` → `ProjectState` → `RecentMessages` → `CurrentUserPrompt`). |
-| `storage` | Provides Redis hot-state caching and PostgreSQL persistent storage helpers. |
-| `events` | Append-only event writer logging system operations (`SessionCreated`, `RebindingStarted`, `UsageRecorded`, `NodeLimited`, etc.). |
-| `health` | Periodically reconciles node health states (`healthy` → `busy` → `limited` → `unavailable` → `cooldown`) and manages degradation modes. |
-| `rebinding` | Executes session failover workflow with Redis distributed locking (`SETNX`), single-retry policy, and event logging. |
-| `quota` | Enforces plan limits, monthly usage units, daily burst budgets, and fair use priorities. |
-| `stats` | Aggregates and serves analytics for user usage and administrator monitoring dashboards. |
-| `backup` | Manages project snapshots and session state recovery. |
-
----
-
-## 🧮 4. Core Algorithms & Logic
-
-### 4.1 Scheduler Node Selection Formula
-
-The scheduler does not rely on opaque upstream quota counters; it evaluates nodes dynamically based on observed health metrics:
-
-$$\text{score} = \text{success\_rate} \times 100 + \text{affinity\_bonus} + \text{priority\_bonus} - (\text{queue\_depth} \times 5) - \frac{\text{avg\_latency\_ms}}{100} - (\text{recent\_429} \times 30) - (\text{recent\_timeout} \times 20)$$
-
-**Rules:**
-- `unavailable` nodes are strictly excluded.
-- `cooldown` nodes are excluded until their cooldown timer expires.
-- `limited` nodes are used only if no `healthy` nodes are available.
-- Node affinity grants a bonus score but will not override an unhealthy node status.
-
-### 4.2 Distributed Rebinding Workflow
-
-When an upstream execution returns `429` or times out:
-1. **Acquire Redis Lock**: `ash:lock:session:{session_id}` (TTL: 120s).
-2. **Transition State**: Set `VirtualSession.State = "rebinding"`.
-3. **Degrade Node**: Mark the failing node as `limited` or `cooldown`.
-4. **Emit Event**: Record `RebindingStarted` in `ash_events`.
-5. **Select New Node**: Execute `Scheduler.SelectNode()` to find an alternative healthy node.
-6. **Compile Context**: Run `ContextCompiler` to prepare portable prompt state.
-7. **Grant Lease**: Assign new `Lease` bound to the newly selected node.
-8. **Retry Request**: Execute single retry upstream.
-9. **Release Lock & Finalize**: Record `RebindingSucceeded` (or `RebindingFailed`) and restore state to `active`.
-
-### 4.3 Responses API Input Normalization
-
-When handling OpenAI Responses API payloads (`/responses`), incoming user prompts can arrive as either raw strings or complex item arrays:
-
-```json
-"input": [
-  {
-    "type": "message",
-    "role": "user",
-    "content": [
-      {"type": "input_text", "text": "What is Telegram?"}
-    ]
-  }
-]
-```
-
-`runtime.go` provides `constructMessagesFromResponsesPayload`, which recursively inspects and extracts `input_text` parts into clean OpenAI/Yunwu compatible `messages` arrays, preventing empty or unparsed prompt submissions.
+| Package | Purpose & Functionality | Test Coverage |
+| :--- | :--- | :---: |
+| `config` | Environment variables (`ASH_ENABLED`, `ASH_ENABLE_REBINDING`, etc.) and default settings. | **87.5%** |
+| `session` | `VirtualSession` state machine (`new` → `active` → `rebinding` → `queued` → `closed`), Redis TTL, versioning. | **87.5%** |
+| `lease` | Grants, renews, and releases temporary bindings (`Lease`) between a session and an `ExecutionNode`. | **90.5%** |
+| `scheduler` | Dynamic node selection score algorithm (success rate, latency, queue depth, 429s, affinity). | **92.5%** |
+| `runtime` | Upstream HTTP streaming (`/v1/messages`, `/v1/chat/completions`), SSE transformers, `MockRuntime`. | **83.8%** |
+| `yunwu` | Dedicated execution engine, `YunwuScheduler`, and `YunwuRebindingManager` for Yunwu provider nodes. | **80.4%** |
+| `compiler` | Compiles execution contexts into stable prompt blocks. | **92.0%** |
+| `storage` | Provides Redis hot-state caching and PostgreSQL persistent storage helpers. | **92.3%** |
+| `events` | Append-only event writer logging system operations (`SessionCreated`, `RebindingStarted`, etc.). | **100.0%** |
+| `health` | Periodically reconciles node health states and manages degradation modes. | **82.5%** |
+| `rebinding` | Executes session failover workflow with Redis distributed locking (`SETNX`) and single retry. | **80.4%** |
+| `quota` | Enforces plan limits, monthly usage units, daily burst budgets, and fair use priorities. | **86.1%** |
+| `stats` | Aggregates and serves analytics for user usage and administrator monitoring dashboards. | **81.6%** |
+| `backup` | Manages project snapshots and session state recovery. | **86.1%** |
 
 ---
 
