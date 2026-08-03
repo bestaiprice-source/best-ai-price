@@ -232,9 +232,35 @@ func (yh *YunwuHypervisor) HandleRequest(
 	// 9. Record usage
 	var units int64 = 0
 	if meta != nil {
-		units = meta.InputTokens + meta.OutputTokens
-		if units == 0 {
-			units = 100
+		// Parse requested model
+		var parsedReq struct {
+			Model string `json:"model"`
+		}
+		_ = json.Unmarshal(reqPayload, &parsedReq)
+		modelName := parsedReq.Model
+
+		// Default pricing
+		var inputPrice, outputPrice float64 = 0.002, 0.002
+
+		if modelName != "" {
+			rows, err := yh.store.DB().QueryContext(ctx, "SELECT input_price, output_price FROM ash_vendor_models WHERE model_name = $1 LIMIT 1", modelName)
+			if err == nil {
+				if rows.Next() {
+					_ = rows.Scan(&inputPrice, &outputPrice)
+				}
+				rows.Close()
+			} else {
+				slog.Warn("[YunwuHypervisor] Failed to query model pricing", "model", modelName, "error", err)
+			}
+		}
+
+		inputCost := (float64(meta.InputTokens) / 1000.0) * inputPrice
+		outputCost := (float64(meta.OutputTokens) / 1000.0) * outputPrice
+		totalCost := inputCost + outputCost
+		units = int64(totalCost * 1000000.0)
+
+		if units <= 0 {
+			units = 1
 		}
 		_ = yh.qm.ConsumeQuota(ctx, ownerID, units)
 	}

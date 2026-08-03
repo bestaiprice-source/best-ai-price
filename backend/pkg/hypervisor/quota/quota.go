@@ -169,37 +169,49 @@ func (qm *QuotaManager) RegisterNode(ctx context.Context, nodeID string) error {
 }
 
 func (qm *QuotaManager) GetDynamicLimit(ctx context.Context, ownerID string) (int64, error) {
-	// Try loading counts from Postgres DB first
 	activeUsers, _ := qm.store.DB().User.Query().
 		Where(user.Status("active")).
 		Count(ctx)
-	nodes, _ := qm.store.DB().Account.Query().
+
+	// Fetch all active Yunwu nodes
+	var nodeIDs []string
+	_ = qm.store.DB().Account.Query().
 		Where(
 			account.PlatformIn("anthropic", "openai"),
 			account.Status("active"),
 		).
-		Count(ctx)
-
-	// If DB has no active users/accounts (e.g., in unit tests), fall back to Redis sets
-	if activeUsers == 0 || nodes == 0 {
-		redisUsers, _ := qm.store.Redis().SCard(ctx, "ash:active_users").Result()
-		redisNodes, _ := qm.store.Redis().SCard(ctx, "ash:nodes").Result()
-		
-		if activeUsers == 0 && redisUsers > 0 {
-			activeUsers = int(redisUsers)
-		}
-		if nodes == 0 && redisNodes > 0 {
-			nodes = int(redisNodes)
-		}
-	}
+		Select(account.FieldID).
+		Scan(ctx, &nodeIDs)
 
 	if activeUsers == 0 {
 		activeUsers = 1
 	}
-	if nodes == 0 {
-		nodes = 1
+
+	var totalBalanceDollars float64 = 0
+	for _, id := range nodeIDs {
+		// fetch credit from redis
+		valStr, err := qm.store.Redis().Get(ctx, fmt.Sprintf("ash:yunwu:credit:%s", id)).Result()
+		if err == nil && valStr != "" {
+			var val float64
+			if _, scanErr := fmt.Sscanf(valStr, "%f", &val); scanErr == nil {
+				totalBalanceDollars += val
+			}
+		} else {
+			// default or fallback? assume 0 if we can't read
+		}
 	}
 
-	limit := (int64(nodes) * NodeCapacity) / int64(activeUsers)
+	// 1 dollar = 1,000,000 units (micro-dollars)
+	totalCapacityUnits := int64(totalBalanceDollars * 1_000_000)
+
+	if totalCapacityUnits == 0 {
+		// fallback to standard capacity for 1 node if we have 0 balance but nodes exist
+		totalCapacityUnits = int64(len(nodeIDs)) * NodeCapacity
+	}
+	if totalCapacityUnits == 0 {
+		totalCapacityUnits = NodeCapacity
+	}
+
+	limit := totalCapacityUnits / int64(activeUsers)
 	return limit, nil
 }
