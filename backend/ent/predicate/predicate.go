@@ -27,6 +27,9 @@ type AshDeposit func(*sql.Selector)
 // AshEvent is the predicate function for ashevent builders.
 type AshEvent func(*sql.Selector)
 
+// AshSession is the predicate function for ashsession builders.
+type AshSession func(*sql.Selector)
+
 // AshUsage is the predicate function for ashusage builders.
 type AshUsage func(*sql.Selector)
 

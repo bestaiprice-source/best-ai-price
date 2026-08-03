@@ -15,6 +15,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
 	"github.com/Wei-Shaw/sub2api/ent/ashdeposit"
 	"github.com/Wei-Shaw/sub2api/ent/ashevent"
+	"github.com/Wei-Shaw/sub2api/ent/ashsession"
 	"github.com/Wei-Shaw/sub2api/ent/ashusage"
 	"github.com/Wei-Shaw/sub2api/ent/authidentity"
 	"github.com/Wei-Shaw/sub2api/ent/authidentitychannel"
@@ -291,6 +292,33 @@ func (f TraverseAshEvent) Traverse(ctx context.Context, q ent.Query) error {
 		return f(ctx, q)
 	}
 	return fmt.Errorf("unexpected query type %T. expect *ent.AshEventQuery", q)
+}
+
+// The AshSessionFunc type is an adapter to allow the use of ordinary function as a Querier.
+type AshSessionFunc func(context.Context, *ent.AshSessionQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f AshSessionFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.AshSessionQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.AshSessionQuery", q)
+}
+
+// The TraverseAshSession type is an adapter to allow the use of ordinary function as Traverser.
+type TraverseAshSession func(context.Context, *ent.AshSessionQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraverseAshSession) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraverseAshSession) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.AshSessionQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.AshSessionQuery", q)
 }
 
 // The AshUsageFunc type is an adapter to allow the use of ordinary function as a Querier.
@@ -1120,6 +1148,8 @@ func NewQuery(q ent.Query) (Query, error) {
 		return &query[*ent.AshDepositQuery, predicate.AshDeposit, ashdeposit.OrderOption]{typ: ent.TypeAshDeposit, tq: q}, nil
 	case *ent.AshEventQuery:
 		return &query[*ent.AshEventQuery, predicate.AshEvent, ashevent.OrderOption]{typ: ent.TypeAshEvent, tq: q}, nil
+	case *ent.AshSessionQuery:
+		return &query[*ent.AshSessionQuery, predicate.AshSession, ashsession.OrderOption]{typ: ent.TypeAshSession, tq: q}, nil
 	case *ent.AshUsageQuery:
 		return &query[*ent.AshUsageQuery, predicate.AshUsage, ashusage.OrderOption]{typ: ent.TypeAshUsage, tq: q}, nil
 	case *ent.AuthIdentityQuery:

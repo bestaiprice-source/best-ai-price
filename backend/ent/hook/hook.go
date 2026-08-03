@@ -93,6 +93,18 @@ func (f AshEventFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, er
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.AshEventMutation", m)
 }
 
+// The AshSessionFunc type is an adapter to allow the use of ordinary
+// function as AshSession mutator.
+type AshSessionFunc func(context.Context, *ent.AshSessionMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f AshSessionFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.AshSessionMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.AshSessionMutation", m)
+}
+
 // The AshUsageFunc type is an adapter to allow the use of ordinary
 // function as AshUsage mutator.
 type AshUsageFunc func(context.Context, *ent.AshUsageMutation) (ent.Value, error)

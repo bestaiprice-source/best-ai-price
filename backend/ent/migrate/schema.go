@@ -384,6 +384,23 @@ var (
 		Columns:    AshEventsColumns,
 		PrimaryKey: []*schema.Column{AshEventsColumns[0]},
 	}
+	// AshSessionsColumns holds the columns for the "ash_sessions" table.
+	AshSessionsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, Size: 64},
+		{Name: "owner_id", Type: field.TypeString, Size: 64},
+		{Name: "conversation_id", Type: field.TypeString, Nullable: true, Size: 64},
+		{Name: "state", Type: field.TypeString, Size: 32},
+		{Name: "summary", Type: field.TypeString, Nullable: true, Size: 2147483647},
+		{Name: "metadata", Type: field.TypeJSON},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+	}
+	// AshSessionsTable holds the schema information for the "ash_sessions" table.
+	AshSessionsTable = &schema.Table{
+		Name:       "ash_sessions",
+		Columns:    AshSessionsColumns,
+		PrimaryKey: []*schema.Column{AshSessionsColumns[0]},
+	}
 	// AshUsagesColumns holds the columns for the "ash_usages" table.
 	AshUsagesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
@@ -1747,6 +1764,7 @@ var (
 		AnnouncementReadsTable,
 		AshDepositsTable,
 		AshEventsTable,
+		AshSessionsTable,
 		AshUsagesTable,
 		AuthIdentitiesTable,
 		AuthIdentityChannelsTable,

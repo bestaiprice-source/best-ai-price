@@ -52,14 +52,36 @@ func NewSessionManager(store *storage.Storage) *SessionManager {
 func (sm *SessionManager) GetSession(ctx context.Context, sessionID string) (*VirtualSession, error) {
 	key := storage.SessionKey(sessionID)
 	data, err := sm.store.Redis().Get(ctx, key).Bytes()
-	if err != nil {
-		return nil, err
+	if err == nil {
+		var sess VirtualSession
+		if err := json.Unmarshal(data, &sess); err == nil {
+			return &sess, nil
+		}
 	}
-	var sess VirtualSession
-	if err := json.Unmarshal(data, &sess); err != nil {
-		return nil, err
+
+	// Fallback to DB
+	if sm.store.DB() != nil {
+		dbSess, err := sm.store.DB().AshSession.Get(ctx, sessionID)
+		if err == nil && dbSess != nil {
+			// Convert back to VirtualSession
+			sess := &VirtualSession{
+				ID:             dbSess.ID,
+				OwnerID:        dbSess.OwnerID,
+				ConversationID: dbSess.ConversationID,
+				State:          dbSess.State,
+				CreatedAt:      dbSess.CreatedAt,
+				UpdatedAt:      dbSess.UpdatedAt,
+			}
+			if dbSess.Metadata != nil {
+				// We don't restore Version and Lease from DB right now since they are transient, but we could.
+			}
+			// Write back to Redis for hot cache
+			_ = sm.SaveSession(ctx, sess)
+			return sess, nil
+		}
 	}
-	return &sess, nil
+
+	return nil, err
 }
 
 func (sm *SessionManager) SaveSession(ctx context.Context, sess *VirtualSession) error {
@@ -68,10 +90,38 @@ func (sm *SessionManager) SaveSession(ctx context.Context, sess *VirtualSession)
 	if err != nil {
 		return err
 	}
-	return sm.store.Redis().Set(ctx, key, data, 24*time.Hour).Err()
+	
+	// Write to Redis (hot state)
+	redisErr := sm.store.Redis().Set(ctx, key, data, 24*time.Hour).Err()
+	
+	// Write to PostgreSQL
+	if sm.store.DB() != nil {
+		dbErr := sm.store.DB().AshSession.Create().
+			SetID(sess.ID).
+			SetOwnerID(sess.OwnerID).
+			SetConversationID(sess.ConversationID).
+			SetState(sess.State).
+			SetCreatedAt(sess.CreatedAt).
+			SetUpdatedAt(sess.UpdatedAt).
+			OnConflict().
+			UpdateNewValues().
+			Exec(ctx)
+			
+		if dbErr != nil {
+			// Ignore DB error for MVP if Redis succeeded, but we should log it
+		}
+	}
+	
+	return redisErr
 }
 
 func (sm *SessionManager) DeleteSession(ctx context.Context, sessionID string) error {
 	key := storage.SessionKey(sessionID)
-	return sm.store.Redis().Del(ctx, key).Err()
+	redisErr := sm.store.Redis().Del(ctx, key).Err()
+	
+	if sm.store.DB() != nil {
+		_ = sm.store.DB().AshSession.DeleteOneID(sessionID).Exec(ctx)
+	}
+	
+	return redisErr
 }

@@ -12,6 +12,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
 	"github.com/Wei-Shaw/sub2api/ent/ashdeposit"
 	"github.com/Wei-Shaw/sub2api/ent/ashevent"
+	"github.com/Wei-Shaw/sub2api/ent/ashsession"
 	"github.com/Wei-Shaw/sub2api/ent/ashusage"
 	"github.com/Wei-Shaw/sub2api/ent/authidentity"
 	"github.com/Wei-Shaw/sub2api/ent/authidentitychannel"
@@ -413,6 +414,66 @@ func init() {
 	asheventDescCreatedAt := asheventFields[5].Descriptor()
 	// ashevent.DefaultCreatedAt holds the default value on creation for the created_at field.
 	ashevent.DefaultCreatedAt = asheventDescCreatedAt.Default.(func() time.Time)
+	ashsessionFields := schema.AshSession{}.Fields()
+	_ = ashsessionFields
+	// ashsessionDescOwnerID is the schema descriptor for owner_id field.
+	ashsessionDescOwnerID := ashsessionFields[1].Descriptor()
+	// ashsession.OwnerIDValidator is a validator for the "owner_id" field. It is called by the builders before save.
+	ashsession.OwnerIDValidator = func() func(string) error {
+		validators := ashsessionDescOwnerID.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(owner_id string) error {
+			for _, fn := range fns {
+				if err := fn(owner_id); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// ashsessionDescConversationID is the schema descriptor for conversation_id field.
+	ashsessionDescConversationID := ashsessionFields[2].Descriptor()
+	// ashsession.ConversationIDValidator is a validator for the "conversation_id" field. It is called by the builders before save.
+	ashsession.ConversationIDValidator = ashsessionDescConversationID.Validators[0].(func(string) error)
+	// ashsessionDescState is the schema descriptor for state field.
+	ashsessionDescState := ashsessionFields[3].Descriptor()
+	// ashsession.StateValidator is a validator for the "state" field. It is called by the builders before save.
+	ashsession.StateValidator = func() func(string) error {
+		validators := ashsessionDescState.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(state string) error {
+			for _, fn := range fns {
+				if err := fn(state); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// ashsessionDescMetadata is the schema descriptor for metadata field.
+	ashsessionDescMetadata := ashsessionFields[5].Descriptor()
+	// ashsession.DefaultMetadata holds the default value on creation for the metadata field.
+	ashsession.DefaultMetadata = ashsessionDescMetadata.Default.(map[string]interface{})
+	// ashsessionDescCreatedAt is the schema descriptor for created_at field.
+	ashsessionDescCreatedAt := ashsessionFields[6].Descriptor()
+	// ashsession.DefaultCreatedAt holds the default value on creation for the created_at field.
+	ashsession.DefaultCreatedAt = ashsessionDescCreatedAt.Default.(func() time.Time)
+	// ashsessionDescUpdatedAt is the schema descriptor for updated_at field.
+	ashsessionDescUpdatedAt := ashsessionFields[7].Descriptor()
+	// ashsession.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	ashsession.DefaultUpdatedAt = ashsessionDescUpdatedAt.Default.(func() time.Time)
+	// ashsession.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	ashsession.UpdateDefaultUpdatedAt = ashsessionDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// ashsessionDescID is the schema descriptor for id field.
+	ashsessionDescID := ashsessionFields[0].Descriptor()
+	// ashsession.IDValidator is a validator for the "id" field. It is called by the builders before save.
+	ashsession.IDValidator = ashsessionDescID.Validators[0].(func(string) error)
 	ashusageFields := schema.AshUsage{}.Fields()
 	_ = ashusageFields
 	// ashusageDescOwnerID is the schema descriptor for owner_id field.

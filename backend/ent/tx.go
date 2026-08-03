@@ -28,6 +28,8 @@ type Tx struct {
 	AshDeposit *AshDepositClient
 	// AshEvent is the client for interacting with the AshEvent builders.
 	AshEvent *AshEventClient
+	// AshSession is the client for interacting with the AshSession builders.
+	AshSession *AshSessionClient
 	// AshUsage is the client for interacting with the AshUsage builders.
 	AshUsage *AshUsageClient
 	// AuthIdentity is the client for interacting with the AuthIdentity builders.
@@ -226,6 +228,7 @@ func (tx *Tx) init() {
 	tx.AnnouncementRead = NewAnnouncementReadClient(tx.config)
 	tx.AshDeposit = NewAshDepositClient(tx.config)
 	tx.AshEvent = NewAshEventClient(tx.config)
+	tx.AshSession = NewAshSessionClient(tx.config)
 	tx.AshUsage = NewAshUsageClient(tx.config)
 	tx.AuthIdentity = NewAuthIdentityClient(tx.config)
 	tx.AuthIdentityChannel = NewAuthIdentityChannelClient(tx.config)
