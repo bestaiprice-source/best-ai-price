@@ -149,3 +149,94 @@ func (h *AdminVendorHandler) ScrapeVendor(c *gin.Context) {
 
 	response.Success(c, gin.H{"message": "Scrape successful", "models_count": len(res.Models)})
 }
+
+type ScrapeVendorByUrlRequest struct {
+	Name string `json:"name" binding:"required"`
+	URL  string `json:"url" binding:"required"`
+}
+
+// ScrapeVendorByUrl triggers a manual scrape for a vendor by URL, creating it if it doesn't exist
+func (h *AdminVendorHandler) ScrapeVendorByUrl(c *gin.Context) {
+	var req ScrapeVendorByUrlRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	ctx := c.Request.Context()
+
+	// Check if exists
+	var id string
+	err := h.db.QueryRowContext(ctx, `SELECT id FROM ash_vendors WHERE url = $1`, req.URL).Scan(&id)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			// Insert
+			err = h.db.QueryRowContext(ctx, `
+				INSERT INTO ash_vendors (name, url) 
+				VALUES ($1, $2) 
+				RETURNING id
+			`, req.Name, req.URL).Scan(&id)
+			if err != nil {
+				response.Error(c, http.StatusInternalServerError, "Failed to create vendor")
+				return
+			}
+		} else {
+			response.Error(c, http.StatusInternalServerError, "Database error")
+			return
+		}
+	}
+
+	s := scraper.NewOneAPIScraper()
+	res, err := s.Scrape(ctx, req.URL)
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, "Failed to scrape vendor: "+err.Error())
+		return
+	}
+
+	// Update vendor in a transaction
+	tx, err := h.db.BeginTxx(ctx, nil)
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, "Failed to start transaction")
+		return
+	}
+	defer tx.Rollback()
+
+	now := time.Now()
+	pmJSON, _ := json.Marshal(res.PaymentMethods)
+
+	finalName := req.Name
+	if res.Name != "" && res.Name != "Unknown" {
+		finalName = res.Name
+	}
+
+	_, err = tx.ExecContext(ctx, `
+		UPDATE ash_vendors 
+		SET name = $1, payment_methods = $2, currency_type = $3, exchange_rate = $4, last_scraped_at = $5, updated_at = $5
+		WHERE id = $6
+	`, finalName, pmJSON, res.CurrencyType, res.ExchangeRate, now, id)
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, "Failed to update vendor")
+		return
+	}
+
+	// Update models (upsert)
+	for _, m := range res.Models {
+		_, err = tx.ExecContext(ctx, `
+			INSERT INTO ash_vendor_models (vendor_id, model_name, input_price, output_price, is_available)
+			VALUES ($1, $2, $3, $4, $5)
+			ON CONFLICT (vendor_id, model_name) DO UPDATE 
+			SET input_price = EXCLUDED.input_price, output_price = EXCLUDED.output_price, is_available = EXCLUDED.is_available, updated_at = $6
+		`, id, m.ModelName, m.InputPrice, m.OutputPrice, m.IsAvailable, now)
+		if err != nil {
+			response.Error(c, http.StatusInternalServerError, "Failed to upsert models")
+			return
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		response.Error(c, http.StatusInternalServerError, "Failed to commit transaction")
+		return
+	}
+
+	response.Success(c, gin.H{"message": "Scrape successful", "models_count": len(res.Models)})
+}

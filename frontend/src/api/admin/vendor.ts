@@ -41,3 +41,8 @@ export async function scrapeVendor(id: string): Promise<{ message: string, model
   const { data } = await apiClient.post<{ message: string, models_count: number }>(`/admin/vendors/${id}/scrape`);
   return data;
 }
+
+export async function scrapeVendorByUrl(name: string, url: string): Promise<{ message: string, models_count: number }> {
+  const { data } = await apiClient.post<{ message: string, models_count: number }>(`/admin/vendors/scrape-by-url`, { name, url });
+  return data;
+}

@@ -510,6 +510,7 @@ func registerAdminAPIKeyRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 func registerVendorRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	admin.GET("/vendors", h.AdminVendor.GetVendors)
 	admin.POST("/vendors", h.AdminVendor.AddVendor)
+	admin.POST("/vendors/scrape-by-url", h.AdminVendor.ScrapeVendorByUrl)
 	admin.POST("/vendors/:id/scrape", h.AdminVendor.ScrapeVendor)
 }
 

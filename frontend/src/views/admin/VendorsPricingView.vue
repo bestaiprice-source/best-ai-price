@@ -1,125 +1,140 @@
 <template>
   <AppLayout>
     <div class="vendors-container">
-    <div class="header-section">
-      <div class="header-content">
-        <h2>AI Providers & Pricing</h2>
-        <p class="subtitle">Manage unified pricing and payment methods for all upstream API vendors.</p>
-      </div>
-      <div class="actions">
-        <div class="input-group">
-          <input v-model="newVendorUrl" placeholder="Enter One-API / New-API URL (e.g. https://yunwu.ai)" class="glass-input" @keyup.enter="handleAddVendor" />
-          <button class="primary-btn" @click="handleAddVendor" :disabled="isAdding">
-            <span class="icon">➕</span> Add Vendor
+      <div class="header-section">
+        <div class="header-content">
+          <h2>AI Providers & Pricing</h2>
+          <p class="subtitle">Manage unified pricing and payment methods for all upstream API vendors.</p>
+        </div>
+        <div class="actions">
+          <button class="primary-btn" @click="handleSyncAll" :disabled="isSyncingAll">
+            <span class="icon">🔄</span> {{ isSyncingAll ? 'Syncing...' : 'Sync All Prices' }}
           </button>
         </div>
       </div>
-    </div>
 
-    <div class="vendors-grid">
-      <div v-if="loading" class="loading-state">
-        <div class="spinner"></div>
-        <p>Fetching latest pricing...</p>
-      </div>
-      
-      <div v-else-if="vendors.length === 0" class="empty-state">
-        <div class="empty-icon">🌐</div>
-        <h3>No Vendors Configured</h3>
-        <p>Add your first vendor URL above to scrape pricing and payment data.</p>
-      </div>
-
-      <div v-else v-for="vendor in vendors" :key="vendor.id" class="vendor-card glass-panel">
-        <div class="card-header">
-          <div class="vendor-info">
-            <h3 class="vendor-name">{{ vendor.name }}</h3>
-            <a :href="vendor.url" target="_blank" class="vendor-url">{{ vendor.url }}</a>
-          </div>
-          <button class="sync-btn" @click="handleScrape(vendor.id)" :class="{ 'syncing': syncingId === vendor.id }">
-            <span class="icon">🔄</span> {{ syncingId === vendor.id ? 'Syncing...' : 'Sync Prices' }}
-          </button>
-        </div>
-
-        <div class="card-meta">
-          <div class="meta-item">
-            <span class="label">Currency:</span>
-            <span class="value">{{ vendor.currency_type }} (1 USD = {{ vendor.exchange_rate }})</span>
-          </div>
-          <div class="meta-item">
-            <span class="label">Last Updated:</span>
-            <span class="value">{{ formatDate(vendor.last_scraped_at) }}</span>
-          </div>
-        </div>
-
-        <div class="payment-methods">
-          <span class="label">Accepted Payments:</span>
-          <div class="tags-container">
-            <span v-for="method in vendor.payment_methods" :key="method.type" 
-                  class="payment-tag" :style="{ backgroundColor: method.color || '#333' }">
-              {{ method.name }}
-            </span>
-            <span v-if="!vendor.payment_methods || vendor.payment_methods.length === 0" class="text-muted">None found</span>
-          </div>
-        </div>
-
-        <div class="pricing-section">
-          <div class="pricing-header" @click="toggleModels(vendor.id)">
-            <h4>Supported Models ({{ vendor.models?.length || 0 }})</h4>
-            <span class="toggle-icon" :class="{ 'open': expandedVendorId === vendor.id }">▼</span>
-          </div>
-          
-          <div class="models-table-container" v-show="expandedVendorId === vendor.id">
-            <table class="models-table">
-              <thead>
-                <tr>
-                  <th>Model Name</th>
-                  <th>Input Price (Base Multiplier)</th>
-                  <th>Output Price (Base Multiplier)</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="model in vendor.models" :key="model.model_name">
-                  <td class="fw-bold">{{ model.model_name }}</td>
-                  <td class="price-val">${{ model.input_price.toFixed(6) }}</td>
-                  <td class="price-val">${{ model.output_price.toFixed(6) }}</td>
-                  <td>
-                    <span class="status-badge" :class="model.is_available ? 'active' : 'inactive'">
-                      {{ model.is_available ? 'Available' : 'Unavailable' }}
-                    </span>
-                  </td>
-                </tr>
-                <tr v-if="!vendor.models || vendor.models.length === 0">
-                  <td colspan="4" class="text-center text-muted">No models synced yet. Click Sync Prices.</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
+      <div class="table-container glass-panel">
+        <table class="vendors-table">
+          <thead>
+            <tr>
+              <th>Provider</th>
+              <th>URL</th>
+              <th>Payment Methods</th>
+              <th>Models Count</th>
+              <th>Last Updated</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="vendor in displayVendors" :key="vendor.url">
+              <td class="fw-bold">{{ vendor.name }}</td>
+              <td><a :href="vendor.url" target="_blank">{{ vendor.url }}</a></td>
+              <td>
+                <div class="tags-container">
+                  <span v-for="method in vendor.payment_methods" :key="method.type" 
+                        class="payment-tag" :style="{ backgroundColor: method.color || '#333' }">
+                    {{ method.name }}
+                  </span>
+                  <span v-if="!vendor.payment_methods || vendor.payment_methods.length === 0" class="text-muted">None</span>
+                </div>
+              </td>
+              <td>{{ vendor.models?.length || 0 }}</td>
+              <td>{{ formatDate(vendor.last_scraped_at) }}</td>
+              <td>
+                <div class="action-buttons">
+                  <button class="action-btn sync-btn" @click="handleScrape(vendor)" :disabled="syncingId === vendor.url">
+                    <span class="icon">🔄</span> {{ syncingId === vendor.url ? 'Syncing...' : 'Sync' }}
+                  </button>
+                  <button class="action-btn view-btn" @click="openModelsModal(vendor)" :disabled="!vendor.models || vendor.models.length === 0">
+                    <span class="icon">👁️</span> View Models
+                  </button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
+
+    <!-- Models Modal -->
+    <div v-if="selectedVendor" class="modal-overlay" @click.self="closeModelsModal">
+      <div class="modal-content glass-panel">
+        <div class="modal-header">
+          <h3>Models for {{ selectedVendor.name }}</h3>
+          <button class="close-btn" @click="closeModelsModal">✕</button>
+        </div>
+        <div class="modal-body">
+          <table class="models-table">
+            <thead>
+              <tr>
+                <th>Model Name</th>
+                <th>Input Price</th>
+                <th>Output Price</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="model in selectedVendor.models" :key="model.model_name">
+                <td class="fw-bold">{{ model.model_name }}</td>
+                <td class="price-val">${{ model.input_price.toFixed(6) }}</td>
+                <td class="price-val">${{ model.output_price.toFixed(6) }}</td>
+                <td>
+                  <span class="status-badge" :class="model.is_available ? 'active' : 'inactive'">
+                    {{ model.is_available ? 'Available' : 'Unavailable' }}
+                  </span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   </AppLayout>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 import AppLayout from '@/components/layout/AppLayout.vue';
-import { getVendors, addVendor, scrapeVendor, Vendor } from '@/api/admin/vendor';
+import { getVendors, scrapeVendorByUrl, Vendor } from '@/api/admin/vendor';
 import { useAppStore } from '@/stores'
 
 const appStore = useAppStore();
-const vendors = ref<Vendor[]>([]);
+const dbVendors = ref<Vendor[]>([]);
 const loading = ref(true);
-const isAdding = ref(false);
-const newVendorUrl = ref('');
 const syncingId = ref<string | null>(null);
-const expandedVendorId = ref<string | null>(null);
+const isSyncingAll = ref(false);
+const selectedVendor = ref<Vendor | null>(null);
+
+const HARDCODED_VENDORS = [
+  { name: 'Yunwu', url: 'https://yunwu.ai' }
+];
+
+const displayVendors = computed(() => {
+  return HARDCODED_VENDORS.map(hc => {
+    const dbMatch = dbVendors.value.find(dbv => dbv.url === hc.url);
+    if (dbMatch) {
+      return dbMatch;
+    }
+    // Return mock un-synced vendor
+    return {
+      id: '',
+      name: hc.name,
+      url: hc.url,
+      payment_methods: [],
+      currency_type: 'USD',
+      exchange_rate: 1.0,
+      status: 'pending',
+      last_scraped_at: '',
+      models: []
+    } as Vendor;
+  });
+});
 
 const loadVendors = async () => {
   try {
     loading.value = true;
     const res = await getVendors();
-    vendors.value = res || [];
+    dbVendors.value = res || [];
   } catch (error: any) {
     appStore.showError(error.message || 'Failed to load vendors');
   } finally {
@@ -127,28 +142,12 @@ const loadVendors = async () => {
   }
 };
 
-const handleAddVendor = async () => {
-  if (!newVendorUrl.value) return;
+const handleScrape = async (vendor: Vendor) => {
   try {
-    isAdding.value = true;
-    await addVendor(newVendorUrl.value);
-    appStore.showSuccess('Vendor added successfully');
-    newVendorUrl.value = '';
-    await loadVendors();
-  } catch (error: any) {
-    appStore.showError(error.message || 'Failed to add vendor');
-  } finally {
-    isAdding.value = false;
-  }
-};
-
-const handleScrape = async (id: string) => {
-  try {
-    syncingId.value = id;
-    const res = await scrapeVendor(id);
+    syncingId.value = vendor.url;
+    const res = await scrapeVendorByUrl(vendor.name, vendor.url);
     appStore.showSuccess(res.message + ` (${res.models_count} models synced)`);
     await loadVendors();
-    expandedVendorId.value = id; // Auto expand after sync
   } catch (error: any) {
     appStore.showError(error.message || 'Scrape failed');
   } finally {
@@ -156,12 +155,27 @@ const handleScrape = async (id: string) => {
   }
 };
 
-const toggleModels = (id: string) => {
-  if (expandedVendorId.value === id) {
-    expandedVendorId.value = null;
-  } else {
-    expandedVendorId.value = id;
+const handleSyncAll = async () => {
+  try {
+    isSyncingAll.value = true;
+    for (const vendor of displayVendors.value) {
+      await scrapeVendorByUrl(vendor.name, vendor.url);
+    }
+    appStore.showSuccess('All vendors synced successfully');
+    await loadVendors();
+  } catch (error: any) {
+    appStore.showError(error.message || 'Sync all failed');
+  } finally {
+    isSyncingAll.value = false;
   }
+};
+
+const openModelsModal = (vendor: Vendor) => {
+  selectedVendor.value = vendor;
+};
+
+const closeModelsModal = () => {
+  selectedVendor.value = null;
 };
 
 const formatDate = (dateStr: string) => {
@@ -177,7 +191,7 @@ onMounted(() => {
 <style scoped>
 .vendors-container {
   padding: 24px;
-  max-width: 1200px;
+  max-width: 1400px;
   margin: 0 auto;
   color: var(--text-primary, #e0e0e0);
   font-family: 'Inter', sans-serif;
@@ -188,12 +202,10 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 32px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .header-content h2 {
-  font-size: 24px;
+  font-size: 28px;
   font-weight: 700;
   margin: 0 0 8px 0;
   background: linear-gradient(90deg, #fff, #a5b4fc);
@@ -202,49 +214,29 @@ onMounted(() => {
 }
 
 .subtitle {
-  color: #94a3b8;
+  color: #9ca3af;
   margin: 0;
-  font-size: 14px;
-}
-
-.input-group {
-  display: flex;
-  gap: 12px;
-}
-
-.glass-input {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  padding: 10px 16px;
-  border-radius: 8px;
-  color: #fff;
-  width: 300px;
-  transition: all 0.3s ease;
-}
-
-.glass-input:focus {
-  outline: none;
-  border-color: #6366f1;
-  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+  font-size: 15px;
 }
 
 .primary-btn {
-  background: #6366f1;
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
   color: white;
   border: none;
   padding: 10px 20px;
   border-radius: 8px;
-  cursor: pointer;
   font-weight: 600;
-  transition: all 0.2s;
+  cursor: pointer;
   display: flex;
   align-items: center;
   gap: 8px;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
 }
 
 .primary-btn:hover:not(:disabled) {
-  background: #4f46e5;
-  transform: translateY(-1px);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(99, 102, 241, 0.4);
 }
 
 .primary-btn:disabled {
@@ -255,226 +247,195 @@ onMounted(() => {
 .glass-panel {
   background: rgba(30, 41, 59, 0.7);
   backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 16px;
-  padding: 24px;
-  margin-bottom: 24px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
 }
 
-.glass-panel:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.3);
-  border-color: rgba(255, 255, 255, 0.12);
+.table-container {
+  overflow-x: auto;
+  border-radius: 12px;
 }
 
-.card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 16px;
+.vendors-table, .models-table {
+  width: 100%;
+  border-collapse: collapse;
 }
 
-.vendor-name {
-  font-size: 20px;
+.vendors-table th, .models-table th {
+  background: rgba(15, 23, 42, 0.6);
+  padding: 16px;
+  text-align: left;
   font-weight: 600;
-  margin: 0 0 4px 0;
-  color: #fff;
-}
-
-.vendor-url {
-  color: #6366f1;
-  text-decoration: none;
+  color: #94a3b8;
   font-size: 13px;
-}
-
-.vendor-url:hover {
-  text-decoration: underline;
-}
-
-.sync-btn {
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  color: #fff;
-  padding: 8px 16px;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.sync-btn:hover {
-  background: rgba(255, 255, 255, 0.15);
-}
-
-.syncing .icon {
-  display: inline-block;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  100% { transform: rotate(360deg); }
-}
-
-.card-meta {
-  display: flex;
-  gap: 24px;
-  margin-bottom: 20px;
-  padding-bottom: 20px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 
-.meta-item {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.label {
-  font-size: 12px;
-  color: #94a3b8;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.value {
+.vendors-table td, .models-table td {
+  padding: 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
   font-size: 14px;
-  color: #e2e8f0;
-  font-weight: 500;
 }
 
-.payment-methods {
-  margin-bottom: 24px;
+.vendors-table tr:hover, .models-table tr:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.fw-bold {
+  font-weight: 600;
+  color: #f1f5f9;
+}
+
+.text-muted {
+  color: #64748b;
+}
+
+a {
+  color: #60a5fa;
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
 }
 
 .tags-container {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 8px;
+  gap: 6px;
 }
 
 .payment-tag {
-  padding: 4px 12px;
-  border-radius: 20px;
-  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 100px;
+  font-size: 11px;
   font-weight: 600;
-  color: #fff;
+  color: white;
   text-shadow: 0 1px 2px rgba(0,0,0,0.2);
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
-.pricing-header {
+.action-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.action-btn {
+  border: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s;
+}
+
+.sync-btn {
+  background: rgba(59, 130, 246, 0.15);
+  color: #60a5fa;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.sync-btn:hover:not(:disabled) {
+  background: rgba(59, 130, 246, 0.25);
+}
+
+.view-btn {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.view-btn:hover:not(:disabled) {
+  background: rgba(16, 185, 129, 0.25);
+}
+
+.action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Modal Styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  width: 90%;
+  max-width: 800px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+}
+
+.modal-header {
+  padding: 20px 24px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  cursor: pointer;
-  padding: 12px;
-  background: rgba(0, 0, 0, 0.2);
-  border-radius: 8px;
-  transition: background 0.2s;
 }
 
-.pricing-header:hover {
-  background: rgba(0, 0, 0, 0.3);
-}
-
-.pricing-header h4 {
+.modal-header h3 {
   margin: 0;
-  font-size: 15px;
-  color: #e2e8f0;
+  font-size: 20px;
+  color: #f1f5f9;
 }
 
-.toggle-icon {
-  transition: transform 0.3s;
-  font-size: 12px;
-}
-
-.toggle-icon.open {
-  transform: rotate(180deg);
-}
-
-.models-table-container {
-  margin-top: 12px;
-  animation: slideDown 0.3s ease-out;
-}
-
-@keyframes slideDown {
-  from { opacity: 0; transform: translateY(-10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-.models-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
-}
-
-.models-table th, .models-table td {
-  padding: 12px;
-  text-align: left;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-.models-table th {
+.close-btn {
+  background: none;
+  border: none;
   color: #94a3b8;
-  font-weight: 600;
-  background: rgba(0, 0, 0, 0.1);
+  font-size: 20px;
+  cursor: pointer;
 }
-
-.fw-bold {
-  font-weight: 600;
+.close-btn:hover {
   color: #fff;
 }
 
+.modal-body {
+  padding: 24px;
+  overflow-y: auto;
+}
+
 .price-val {
-  font-family: monospace;
-  color: #a7f3d0;
+  font-family: 'JetBrains Mono', monospace;
+  color: #fbbf24;
 }
 
 .status-badge {
-  padding: 4px 8px;
-  border-radius: 4px;
+  padding: 4px 10px;
+  border-radius: 100px;
   font-size: 11px;
   font-weight: 600;
+  text-transform: uppercase;
 }
 
 .status-badge.active {
-  background: rgba(16, 185, 129, 0.2);
+  background: rgba(16, 185, 129, 0.15);
   color: #34d399;
 }
 
 .status-badge.inactive {
-  background: rgba(239, 68, 68, 0.2);
+  background: rgba(239, 68, 68, 0.15);
   color: #f87171;
 }
 
-.text-center { text-align: center; }
-.text-muted { color: #64748b; font-size: 13px; }
-
-/* Loading State */
-.loading-state, .empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 60px 0;
-  color: #94a3b8;
-}
-
-.spinner {
-  width: 40px;
-  height: 40px;
-  border: 3px solid rgba(99, 102, 241, 0.2);
-  border-top-color: #6366f1;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-  margin-bottom: 16px;
-}
-
-.empty-icon {
-  font-size: 48px;
-  margin-bottom: 16px;
-  opacity: 0.5;
+.icon {
+  font-size: 14px;
 }
 </style>
