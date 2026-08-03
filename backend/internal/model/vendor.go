@@ -1,6 +1,7 @@
 package model
 
 import (
+	"encoding/json"
 	"time"
 )
 
@@ -16,7 +17,7 @@ type Vendor struct {
 	ID             string          `json:"id" db:"id"`
 	Name           string          `json:"name" db:"name"`
 	URL            string          `json:"url" db:"url"`
-	PaymentMethods []PaymentMethod `json:"payment_methods" db:"payment_methods"`
+	PaymentMethods PaymentMethodList `json:"payment_methods" db:"payment_methods"`
 	CurrencyType   string          `json:"currency_type" db:"currency_type"`
 	ExchangeRate   float64         `json:"exchange_rate" db:"exchange_rate"`
 	Status         string          `json:"status" db:"status"`
@@ -40,8 +41,24 @@ type VendorModel struct {
 // VendorScrapeResult is the result returned by a scraper
 type VendorScrapeResult struct {
 	Name           string          `json:"name"`
-	PaymentMethods []PaymentMethod `json:"payment_methods"`
+	PaymentMethods PaymentMethodList `json:"payment_methods"`
 	CurrencyType   string          `json:"currency_type"`
 	ExchangeRate   float64         `json:"exchange_rate"`
 	Models         []VendorModel   `json:"models"`
+}
+
+// PaymentMethodList handles JSONB serialization for []PaymentMethod
+type PaymentMethodList []PaymentMethod
+
+// Scan implements the sql.Scanner interface for JSONB
+func (p *PaymentMethodList) Scan(value interface{}) error {
+	if value == nil {
+		*p = []PaymentMethod{}
+		return nil
+	}
+	b, ok := value.([]byte)
+	if !ok {
+		return nil
+	}
+	return json.Unmarshal(b, p)
 }

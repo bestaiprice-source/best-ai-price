@@ -45,7 +45,7 @@ func (h *AdminVendorHandler) GetVendors(c *gin.Context) {
 		Models []model.VendorModel `json:"models"`
 	}
 
-	var result []VendorWithModels
+	result := make([]VendorWithModels, 0)
 	for _, v := range vendors {
 		vm := VendorWithModels{Vendor: v, Models: []model.VendorModel{}}
 		for _, m := range models {

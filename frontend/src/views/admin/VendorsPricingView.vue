@@ -119,7 +119,7 @@ const loadVendors = async () => {
   try {
     loading.value = true;
     const res = await getVendors();
-    vendors.value = res;
+    vendors.value = res || [];
   } catch (error: any) {
     appStore.showError(error.message || 'Failed to load vendors');
   } finally {
