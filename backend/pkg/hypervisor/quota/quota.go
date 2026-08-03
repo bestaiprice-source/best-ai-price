@@ -174,7 +174,7 @@ func (qm *QuotaManager) GetDynamicLimit(ctx context.Context, ownerID string) (in
 		Count(ctx)
 
 	// Fetch all active Yunwu nodes
-	var nodeIDs []string
+	var nodeIDs []int64
 	_ = qm.store.DB().Account.Query().
 		Where(
 			account.PlatformIn("anthropic", "openai"),
@@ -187,27 +187,23 @@ func (qm *QuotaManager) GetDynamicLimit(ctx context.Context, ownerID string) (in
 		activeUsers = 1
 	}
 
-	var totalBalanceDollars float64 = 0
+	var totalCapacityUnits int64 = 0
+
 	for _, id := range nodeIDs {
-		// fetch credit from redis
-		valStr, err := qm.store.Redis().Get(ctx, fmt.Sprintf("ash:yunwu:credit:%s", id)).Result()
+		// Try to fetch credit from redis (for Yunwu accounts)
+		valStr, err := qm.store.Redis().Get(ctx, fmt.Sprintf("ash:yunwu:credit:%d", id)).Result()
 		if err == nil && valStr != "" {
 			var val float64
 			if _, scanErr := fmt.Sscanf(valStr, "%f", &val); scanErr == nil {
-				totalBalanceDollars += val
+				totalCapacityUnits += int64(val * 1_000_000)
+				continue
 			}
-		} else {
-			// default or fallback? assume 0 if we can't read
 		}
+		// Fallback for standard OpenAI/Anthropic accounts (e.g. ChatGPT Plus)
+		// They contribute a fixed token capacity to the pool.
+		totalCapacityUnits += NodeCapacity
 	}
 
-	// 1 dollar = 1,000,000 units (micro-dollars)
-	totalCapacityUnits := int64(totalBalanceDollars * 1_000_000)
-
-	if totalCapacityUnits == 0 {
-		// fallback to standard capacity for 1 node if we have 0 balance but nodes exist
-		totalCapacityUnits = int64(len(nodeIDs)) * NodeCapacity
-	}
 	if totalCapacityUnits == 0 {
 		totalCapacityUnits = NodeCapacity
 	}
