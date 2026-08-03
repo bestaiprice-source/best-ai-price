@@ -91,7 +91,7 @@ func (h *Hypervisor) HandleRequest(ctx context.Context, ownerID string, conversa
 	}
 
 	// 1. Check Quota
-	allowed, err := h.qm.CheckQuota(ctx, ownerID)
+	allowed, err := h.qm.CheckQuota(ctx, ownerID, "standard")
 	if err != nil {
 		slog.Error("[Hypervisor] Quota check failed with error", "owner_id", ownerID, "error", err)
 		return nil, err
@@ -254,7 +254,7 @@ func (h *Hypervisor) HandleRequest(ctx context.Context, ownerID string, conversa
 		totalTokens := res.InputTokens + res.OutputTokens
 		costUnits := totalTokens
 		if totalTokens > 0 {
-			_ = h.qm.ConsumeQuota(ctx, ownerID, totalTokens)
+			_ = h.qm.ConsumeQuota(ctx, ownerID, "standard", totalTokens)
 			_, _ = h.store.RecordUsage(ctx, ownerID, &sess.ID, &selectedNode.NodeID, res.InputTokens, res.OutputTokens, costUnits)
 			slog.Info("[Hypervisor] Recorded request usage",
 				"owner_id", ownerID,

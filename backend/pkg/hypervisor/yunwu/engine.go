@@ -78,9 +78,9 @@ func (yh *YunwuHypervisor) HandleRequest(
 	)
 
 	// 1. Quota Check
-	allowed, err := yh.qm.CheckQuota(ctx, ownerID)
+	allowed, err := yh.qm.CheckQuota(ctx, ownerID, "yunwu")
 	if err != nil {
-		slog.Error("[YunwuHypervisor] Quota check error", "owner_id", ownerID, "error", err)
+		slog.Error("[YunwuHypervisor] Quota check failed", "owner_id", ownerID, "error", err)
 		return nil, err
 	}
 	if !allowed {
@@ -262,7 +262,7 @@ func (yh *YunwuHypervisor) HandleRequest(
 		if units <= 0 {
 			units = 1
 		}
-		_ = yh.qm.ConsumeQuota(ctx, ownerID, units)
+		_ = yh.qm.ConsumeQuota(ctx, ownerID, "yunwu", units)
 	}
 
 	slog.Info("[YunwuHypervisor] Request executed successfully",
