@@ -81,7 +81,7 @@ func TestYunwuHypervisorEndToEnd(t *testing.T) {
 		UsedUnits:    100,
 		Priority:     1,
 		IsActive:     true,
-	})
+	}, "yunwu")
 	require.NoError(t, err)
 
 	var buf bytes.Buffer
@@ -288,7 +288,11 @@ func TestYunwuReconcileHealthAndErrorRebinding(t *testing.T) {
 	_ = store.Redis().SAdd(ctx, "ash:yunwu:nodes", "yw-fail-1", "yw-ok-2").Err()
 
 	// Quota
-	_ = yh.qm.SaveUserAccess(ctx, &quota.UserAccess{OwnerID: "u-rebind", IsActive: true, MonthlyLimit: 100000})
+	_ = yh.qm.SaveUserAccess(ctx, &quota.UserAccess{
+		OwnerID:      "u-rebind",
+		IsActive:     true,
+		MonthlyLimit: 100000,
+	}, "yunwu")
 
 	var buf bytes.Buffer
 	meta, err := yh.HandleRequest(ctx, "u-rebind", "conv-rebind", []byte(`{"model":"claude"}`), &buf, "yunwu")
@@ -302,14 +306,14 @@ func TestYunwuQuotaExceeded(t *testing.T) {
 	yh := NewYunwuHypervisor(store, &mockYunwuRuntime{})
 
 	// User exceeding quota
-	_ = yh.qm.SaveUserAccess(ctx, &quota.UserAccess{OwnerID: "u-exceeded", IsActive: true, MonthlyLimit: 100, UsedUnits: 150})
+	_ = yh.qm.SaveUserAccess(ctx, &quota.UserAccess{OwnerID: "u-exceeded", IsActive: true, MonthlyLimit: 100, UsedUnits: 150}, "yunwu")
 
 	var buf bytes.Buffer
 	_, err := yh.HandleRequest(ctx, "u-exceeded", "conv-1", []byte(`{"model":"claude"}`), &buf, "yunwu")
 	require.ErrorIs(t, err, quota.ErrQuotaExceeded)
 
 	// Inactive user
-	_ = yh.qm.SaveUserAccess(ctx, &quota.UserAccess{OwnerID: "u-inactive", IsActive: false})
+	_ = yh.qm.SaveUserAccess(ctx, &quota.UserAccess{OwnerID: "u-inactive", IsActive: false}, "yunwu")
 	_, err = yh.HandleRequest(ctx, "u-inactive", "conv-1", []byte(`{"model":"claude"}`), &buf, "yunwu")
 	require.ErrorIs(t, err, quota.ErrUserInactive)
 }

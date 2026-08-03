@@ -138,7 +138,7 @@ func (yh *YunwuHypervisor) HandleRequest(
 	)
 
 	userPriority := 1
-	if ua, err := yh.qm.GetUserAccess(ctx, ownerID); err == nil && ua != nil {
+	if ua, err := yh.qm.GetUserAccess(ctx, ownerID, "yunwu"); err == nil && ua != nil {
 		userPriority = ua.Priority
 	}
 
@@ -242,7 +242,7 @@ func (yh *YunwuHypervisor) HandleRequest(
 		// Default pricing
 		var inputPrice, outputPrice float64 = 0.002, 0.002
 
-		if modelName != "" {
+		if modelName != "" && yh.store.DB() != nil {
 			rows, err := yh.store.DB().QueryContext(ctx, "SELECT input_price, output_price FROM ash_vendor_models WHERE model_name = $1 LIMIT 1", modelName)
 			if err == nil {
 				if rows.Next() {
@@ -285,13 +285,6 @@ func (yh *YunwuHypervisor) getAllYunwuNodes(ctx context.Context) ([]health.Execu
 		dbAccounts, _ = yh.store.DB().Account.Query().
 			Where(account.PlatformEqualFold("yunwu")).
 			All(ctx)
-
-		if len(dbAccounts) == 0 {
-			// Try fallback to accounts containing "yunwu" in name or type
-			dbAccounts, _ = yh.store.DB().Account.Query().
-				Where(account.NameContainsFold("yunwu")).
-				All(ctx)
-		}
 	}
 
 	var list []health.ExecutionNode

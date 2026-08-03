@@ -246,7 +246,7 @@ func TestHypervisorDay3(t *testing.T) {
 	require.NoError(t, err) // 1 node registered
 
 	// 1 node capacity (1,000,000) / 4 active users = 250,000 limit
-	dynLimit, err := qm.GetDynamicLimit(ctx, ownerID)
+	dynLimit, err := qm.GetDynamicLimit(ctx, ownerID, "standard")
 	require.NoError(t, err)
 	require.Equal(t, int64(quota.NodeCapacity/4), dynLimit)
 
@@ -261,20 +261,20 @@ func TestHypervisorDay3(t *testing.T) {
 		IsActive:     true,
 	}
 
-	err = qm.SaveUserAccess(ctx, ua)
+	err = qm.SaveUserAccess(ctx, ua, "standard")
 	require.NoError(t, err)
 
 	// Check quota (should pass)
-	allowed, err := qm.CheckQuota(ctx, ownerID)
+	allowed, err := qm.CheckQuota(ctx, ownerID, "standard")
 	require.NoError(t, err)
 	require.True(t, allowed)
 
 	// Consume quota up to limit
-	err = qm.ConsumeQuota(ctx, ownerID, 250000)
+	err = qm.ConsumeQuota(ctx, ownerID, "standard", 250000)
 	require.NoError(t, err)
 
 	// Check quota again (should be blocked due to limit exceed)
-	allowed, err = qm.CheckQuota(ctx, ownerID)
+	allowed, err = qm.CheckQuota(ctx, ownerID, "standard")
 	require.ErrorIs(t, err, quota.ErrQuotaExceeded)
 	require.False(t, allowed)
 
@@ -283,7 +283,7 @@ func TestHypervisorDay3(t *testing.T) {
 	require.NoError(t, err)
 
 	// Now check quota again (should pass since limit increased to 500,000 and used is 250,000)
-	allowed, err = qm.CheckQuota(ctx, ownerID)
+	allowed, err = qm.CheckQuota(ctx, ownerID, "standard")
 	require.NoError(t, err)
 	require.True(t, allowed)
 
@@ -479,7 +479,7 @@ func TestHypervisorQuotaExceededAndLeaseResolution(t *testing.T) {
 		MonthlyLimit: 100,
 		UsedUnits:    200,
 		IsActive:     true,
-	})
+	}, "standard")
 
 	var buf bytes.Buffer
 	_, err = hyp.HandleRequest(ctx, "user-exceeded", "", []byte(`{"model":"claude-3-5-sonnet-20241022"}`), &buf, "anthropic")

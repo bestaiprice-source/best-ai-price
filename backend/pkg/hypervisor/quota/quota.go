@@ -179,6 +179,11 @@ func (qm *QuotaManager) GetDynamicLimit(ctx context.Context, ownerID string, poo
 		Where(user.Status("active")).
 		Count(ctx)
 
+	if activeUsers == 0 {
+		count, _ := qm.store.Redis().SCard(ctx, "ash:active_users").Result()
+		activeUsers = int(count)
+	}
+
 	// Fetch all active nodes
 	var nodeIDs []int64
 	_ = qm.store.DB().Account.Query().
@@ -188,6 +193,19 @@ func (qm *QuotaManager) GetDynamicLimit(ctx context.Context, ownerID string, poo
 		).
 		Select(account.FieldID).
 		Scan(ctx, &nodeIDs)
+
+	if len(nodeIDs) == 0 {
+		strIDs, _ := qm.store.Redis().SMembers(ctx, "ash:nodes").Result()
+		for _, sid := range strIDs {
+			// Extract numeric part for testing if it's like "node-1"
+			var id int64
+			if _, err := fmt.Sscanf(sid, "node-%d", &id); err == nil {
+				nodeIDs = append(nodeIDs, id)
+			} else {
+				nodeIDs = append(nodeIDs, 1)
+			}
+		}
+	}
 
 	if activeUsers == 0 {
 		activeUsers = 1

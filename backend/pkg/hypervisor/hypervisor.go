@@ -146,7 +146,7 @@ func (h *Hypervisor) HandleRequest(ctx context.Context, ownerID string, conversa
 
 	// Resolve user priority
 	userPriority := 1
-	if ua, err := h.qm.GetUserAccess(ctx, ownerID); err == nil && ua != nil {
+	if ua, err := h.qm.GetUserAccess(ctx, ownerID, "standard"); err == nil && ua != nil {
 		userPriority = ua.Priority
 	}
 
@@ -300,6 +300,7 @@ func (h *Hypervisor) getAllNodes(ctx context.Context, platform string) ([]health
 		dbAccounts, _ = h.store.DB().Account.Query().
 			Where(
 				account.StatusIn("active", "error"),
+				account.PlatformNEQ("yunwu"),
 			).
 			All(ctx)
 	}
