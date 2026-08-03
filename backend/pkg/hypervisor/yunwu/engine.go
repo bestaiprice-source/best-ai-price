@@ -2,9 +2,11 @@ package yunwu
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
+	"os"
 	"strconv"
 	"time"
 
@@ -108,6 +110,10 @@ func (yh *YunwuHypervisor) HandleRequest(
 		slog.Debug("[YunwuHypervisor] Reusing existing virtual session", "session_id", sessID, "state", sess.State)
 	}
 
+	// 2.1 Extract and store session context from request payload
+	yh.extractAndStoreContext(sess, reqPayload)
+	_ = yh.sm.SaveSession(ctx, sess)
+
 	// 3. Resolve active lease
 	var activeLeaseNodeID string
 	currentLease, err := yh.lm.GetLease(ctx, sess.ID)
@@ -176,9 +182,23 @@ func (yh *YunwuHypervisor) HandleRequest(
 				"rebound_node_id", reboundNode.NodeID,
 				"rebound_account_name", reboundNode.AccountName,
 			)
-			meta, err = yh.rt.Execute(ctx, reboundNode.NodeID, reqPayload, stream)
+
+			// Compile session context and inject into retry payload
+			retryPayload := yh.compileAndInjectContext(sess, reqPayload)
+
+			meta, err = yh.rt.Execute(ctx, reboundNode.NodeID, retryPayload, stream)
 			if err == nil {
 				selectedNode = reboundNode
+				// Update session lease to rebound node
+				expiresAt := time.Now().Add(30 * time.Minute)
+				newLease := &lease.Lease{
+					LeaseID:   fmt.Sprintf("lease-yunwu-%d", time.Now().UnixNano()),
+					SessionID: sess.ID,
+					NodeID:    reboundNode.NodeID,
+					GrantedAt: time.Now(),
+					ExpiresAt: &expiresAt,
+				}
+				_ = yh.lm.SaveLease(ctx, newLease)
 			} else {
 				slog.Error("[YunwuHypervisor] Execution failed on rebound node",
 					"rebound_node_id", reboundNode.NodeID,
@@ -267,8 +287,10 @@ func (yh *YunwuHypervisor) getAllYunwuNodes(ctx context.Context) ([]health.Execu
 		list = append(list, *node)
 	}
 
-	// Fallback to Redis for unit testing
-	if len(list) == 0 {
+	// Fallback to Redis nodes (only for unit tests where DB is empty)
+	// This path is guarded by ASH_YUNWU_TEST_MODE to prevent silent production fallback.
+	if len(list) == 0 && os.Getenv("ASH_YUNWU_TEST_MODE") == "true" {
+		slog.Warn("[YunwuHypervisor] No nodes found in DB, falling back to Redis test nodes (ASH_YUNWU_TEST_MODE=true)")
 		nodeIDs, _ := yh.store.Redis().SMembers(ctx, "ash:yunwu:nodes").Result()
 		for _, id := range nodeIDs {
 			node, err := yh.nm.GetNode(ctx, id)
@@ -347,4 +369,169 @@ func (yh *YunwuHypervisor) SyncNodeBalance(ctx context.Context, nodeID string, a
 		}
 	}
 	return yh.sw.SyncNodeStats(ctx, node, apiKey, baseURL)
+}
+
+// rawRequestPayload is a minimal structure to extract messages and system prompt
+// from Anthropic/OpenAI-compatible JSON request payloads.
+type rawRequestPayload struct {
+	System   string `json:"system"`
+	Messages []struct {
+		Role    string `json:"role"`
+		Content any    `json:"content"` // string or array of content blocks
+	} `json:"messages"`
+}
+
+// extractAndStoreContext parses the request payload and stores extracted
+// system prompt and recent messages into the session's ExecutionContext.
+func (yh *YunwuHypervisor) extractAndStoreContext(sess *session.VirtualSession, reqPayload []byte) {
+	var raw rawRequestPayload
+	if err := json.Unmarshal(reqPayload, &raw); err != nil {
+		slog.Debug("[YunwuHypervisor] Could not parse request payload for context extraction", "error", err)
+		return
+	}
+
+	ctx := sess.Context
+	if ctx == nil {
+		ctx = &session.ExecutionContext{}
+	}
+
+	// Extract system prompt (keep latest)
+	if raw.System != "" {
+		ctx.SystemPrompt = raw.System
+	}
+
+	// Extract recent messages (keep last 20 to avoid unbounded growth)
+	if len(raw.Messages) > 0 {
+		recent := raw.Messages
+		if len(recent) > 20 {
+			recent = recent[len(recent)-20:]
+		}
+		msgs := make([]session.Message, 0, len(recent))
+		for _, m := range recent {
+			content := extractContentString(m.Content)
+			if content != "" {
+				msgs = append(msgs, session.Message{Role: m.Role, Content: content})
+			}
+		}
+		ctx.RecentMessages = msgs
+	}
+
+	sess.Context = ctx
+	slog.Debug("[YunwuHypervisor] Extracted session context",
+		"session_id", sess.ID,
+		"system_prompt_len", len(ctx.SystemPrompt),
+		"recent_messages_count", len(ctx.RecentMessages),
+	)
+}
+
+// compileAndInjectContext compiles the session's ExecutionContext into a preamble
+// and injects it as a system message into the request payload for the retry.
+// Returns the modified payload (or original if no context to inject).
+func (yh *YunwuHypervisor) compileAndInjectContext(sess *session.VirtualSession, reqPayload []byte) []byte {
+	if sess.Context == nil {
+		return reqPayload
+	}
+
+	// Build compiler context from session
+	compCtx := compiler.ExecutionContext{
+		SystemPrompt:   sess.Context.SystemPrompt,
+		Summary:        sess.Context.Summary,
+		PinnedFacts:    sess.Context.PinnedFacts,
+		TerminalState:  sess.Context.TerminalState,
+		ToolState:      toolCallsToString(sess.Context.ToolState),
+	}
+	for _, m := range sess.Context.RecentMessages {
+		compCtx.RecentMessages = append(compCtx.RecentMessages, compiler.Message{Role: m.Role, Content: m.Content})
+	}
+
+	compiled, err := yh.comp.Compile(compCtx)
+	if err != nil || compiled == "" {
+		slog.Debug("[YunwuHypervisor] Context compilation produced empty result, using original payload")
+		return reqPayload
+	}
+
+	// Inject compiled context as a system message into the messages array
+	slog.Debug("[YunwuHypervisor] Injecting compiled context into retry payload",
+		"session_id", sess.ID,
+		"compiled_length", len(compiled),
+	)
+
+	var raw rawRequestPayload
+	if err := json.Unmarshal(reqPayload, &raw); err != nil {
+		slog.Warn("[YunwuHypervisor] Could not parse request for context injection", "error", err)
+		return reqPayload
+	}
+
+	// Prepend a system message with the compiled context
+	contextMsg := struct {
+		Role    string `json:"role"`
+		Content any    `json:"content"`
+	}{Role: "system", Content: compiled}
+
+	// Insert at the beginning (before any existing system message or user messages)
+	newMessages := make([]struct {
+		Role    string `json:"role"`
+		Content any    `json:"content"`
+	}, 0, len(raw.Messages)+1)
+	newMessages = append(newMessages, contextMsg)
+	newMessages = append(newMessages, raw.Messages...)
+	raw.Messages = newMessages
+
+	modified, err := json.Marshal(raw)
+	if err != nil {
+		slog.Warn("[YunwuHypervisor] Could not marshal modified payload", "error", err)
+		return reqPayload
+	}
+
+	return modified
+}
+
+// extractContentString converts a message content field (string or content-block array) to a string.
+func extractContentString(content any) string {
+	switch v := content.(type) {
+	case string:
+		return v
+	case []any:
+		// Content blocks array: [{"type":"text","text":"..."}, ...]
+		var parts []string
+		for _, block := range v {
+			if blockMap, ok := block.(map[string]any); ok {
+				if blockMap["type"] == "text" || blockMap["type"] == "input_text" {
+					if text, ok := blockMap["text"].(string); ok {
+						parts = append(parts, text)
+					}
+				}
+			}
+		}
+		if len(parts) > 0 {
+			result := ""
+			for i, p := range parts {
+				if i > 0 {
+					result += "\n"
+				}
+				result += p
+			}
+			return result
+		}
+	}
+	return ""
+}
+
+// toolCallsToString serializes tool calls to a compact string representation.
+func toolCallsToString(toolCalls []session.ToolCall) string {
+	if len(toolCalls) == 0 {
+		return ""
+	}
+	var parts []string
+	for _, tc := range toolCalls {
+		parts = append(parts, fmt.Sprintf("[%s] %s: %s", tc.Type, tc.ID, tc.Function))
+	}
+	result := ""
+	for i, p := range parts {
+		if i > 0 {
+			result += ", "
+		}
+		result += p
+	}
+	return result
 }

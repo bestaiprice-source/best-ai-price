@@ -3,6 +3,7 @@ package yunwu
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -17,6 +18,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/health"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/quota"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/runtime"
+	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/session"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/storage"
 )
 
@@ -42,6 +44,8 @@ func setupTestYunwuStore(t *testing.T) *storage.Storage {
 }
 
 func TestYunwuHypervisorEndToEnd(t *testing.T) {
+	t.Setenv("ASH_YUNWU_TEST_MODE", "true")
+
 	store := setupTestYunwuStore(t)
 	rt := &mockYunwuRuntime{}
 	yh := NewYunwuHypervisor(store, rt)
@@ -252,6 +256,8 @@ func (f *failingYunwuRuntime) Execute(ctx context.Context, nodeID string, reqPay
 }
 
 func TestYunwuReconcileHealthAndErrorRebinding(t *testing.T) {
+	t.Setenv("ASH_YUNWU_TEST_MODE", "true")
+
 	store := setupTestYunwuStore(t)
 	ctx := context.Background()
 	nm := health.NewNodeManager(store)
@@ -309,6 +315,8 @@ func TestYunwuQuotaExceeded(t *testing.T) {
 }
 
 func TestYunwuGetHealthStatusWithCooldown(t *testing.T) {
+	t.Setenv("ASH_YUNWU_TEST_MODE", "true")
+
 	store := setupTestYunwuStore(t)
 	ctx := context.Background()
 	yh := NewYunwuHypervisor(store, &mockYunwuRuntime{})
@@ -319,6 +327,124 @@ func TestYunwuGetHealthStatusWithCooldown(t *testing.T) {
 
 	status := yh.GetHealthStatus(ctx)
 	assert.Equal(t, 1, status["cooldown_nodes"])
+}
+
+func TestYunwuContextExtractionAndCompilation(t *testing.T) {
+	store := setupTestYunwuStore(t)
+	yh := NewYunwuHypervisor(store, &mockYunwuRuntime{})
+
+	sess := &session.VirtualSession{
+		ID:             "session-yunwu-ctx-test",
+		OwnerID:        "owner-ctx",
+		ConversationID: "conv-ctx",
+		State:          "active",
+		Version:        1,
+		CreatedAt:      time.Now(),
+		UpdatedAt:      time.Now(),
+	}
+
+	// Test 1: extract context from Anthropic-style payload with system + messages
+	payload := []byte(`{
+		"model": "claude-sonnet-4-20250514",
+		"system": "You are a helpful assistant.",
+		"messages": [
+			{"role": "user", "content": "Hello, how are you?"},
+			{"role": "assistant", "content": "I am doing well, thanks!"},
+			{"role": "user", "content": "What is 2+2?"}
+		]
+	}`)
+	yh.extractAndStoreContext(sess, payload)
+
+	require.NotNil(t, sess.Context)
+	assert.Equal(t, "You are a helpful assistant.", sess.Context.SystemPrompt)
+	assert.Equal(t, 3, len(sess.Context.RecentMessages))
+	assert.Equal(t, "user", sess.Context.RecentMessages[0].Role)
+	assert.Equal(t, "Hello, how are you?", sess.Context.RecentMessages[0].Content)
+
+	// Test 2: compile and inject context into retry payload
+	retryPayload := yh.compileAndInjectContext(sess, payload)
+	require.NotNil(t, retryPayload)
+	var raw rawRequestPayload
+	require.NoError(t, json.Unmarshal(retryPayload, &raw))
+	assert.True(t, len(raw.Messages) >= 4, "expected at least 4 messages (1 context system + 3 original)")
+	assert.Equal(t, "system", raw.Messages[0].Role)
+	assert.Contains(t, raw.Messages[0].Content.(string), "System Prompt:")
+	assert.Contains(t, raw.Messages[0].Content.(string), "You are a helpful assistant.")
+
+	// Test 3: content block array extraction
+	sess2 := &session.VirtualSession{
+		ID:             "session-yunwu-ctx-blocks",
+		OwnerID:        "owner-blocks",
+		ConversationID: "conv-blocks",
+	}
+	payloadBlocks := []byte(`{
+		"model": "claude-sonnet-4-20250514",
+		"messages": [
+			{"role": "user", "content": [{"type": "text", "text": "Part one"}, {"type": "text", "text": "Part two"}]},
+			{"role": "assistant", "content": "Response"}
+		]
+	}`)
+	yh.extractAndStoreContext(sess2, payloadBlocks)
+	require.NotNil(t, sess2.Context)
+	assert.Equal(t, 2, len(sess2.Context.RecentMessages))
+	assert.Equal(t, "Part one\nPart two", sess2.Context.RecentMessages[0].Content)
+}
+
+func TestYunwuContextCompilationEmptyContext(t *testing.T) {
+	store := setupTestYunwuStore(t)
+	yh := NewYunwuHypervisor(store, &mockYunwuRuntime{})
+
+	sess := &session.VirtualSession{
+		ID:             "session-yunwu-empty-ctx",
+		OwnerID:        "owner-empty",
+		ConversationID: "conv-empty",
+	}
+
+	// Nil context should return original payload unchanged
+	payload := []byte(`{"model":"claude","messages":[{"role":"user","content":"hi"}]}`)
+	result := yh.compileAndInjectContext(sess, payload)
+	assert.Equal(t, string(payload), string(result))
+
+	// Empty context should also return original (compiler produces empty string)
+	sess.Context = &session.ExecutionContext{}
+	result = yh.compileAndInjectContext(sess, payload)
+	assert.Equal(t, string(payload), string(result))
+}
+
+func TestExtractContentString(t *testing.T) {
+	assert.Equal(t, "hello", extractContentString("hello"))
+
+	blocks := []any{
+		map[string]any{"type": "text", "text": "first"},
+		map[string]any{"type": "text", "text": "second"},
+	}
+	assert.Equal(t, "first\nsecond", extractContentString(blocks))
+
+	blocksInput := []any{
+		map[string]any{"type": "input_text", "text": "user query"},
+	}
+	assert.Equal(t, "user query", extractContentString(blocksInput))
+
+	assert.Equal(t, "", extractContentString([]any{map[string]any{"type": "image", "url": "http://..."}}))
+	assert.Equal(t, "", extractContentString(nil))
+}
+
+func TestToolCallsToString(t *testing.T) {
+	assert.Equal(t, "", toolCallsToString(nil))
+	assert.Equal(t, "", toolCallsToString([]session.ToolCall{}))
+
+	tc := []session.ToolCall{
+		{ID: "call_1", Type: "function", Function: "get_weather"},
+	}
+	assert.Equal(t, "[function] call_1: get_weather", toolCallsToString(tc))
+
+	tc2 := []session.ToolCall{
+		{ID: "call_1", Type: "function", Function: "get_weather"},
+		{ID: "call_2", Type: "function", Function: "search_web"},
+	}
+	result := toolCallsToString(tc2)
+	assert.Contains(t, result, "call_1")
+	assert.Contains(t, result, "call_2")
 }
 
 
