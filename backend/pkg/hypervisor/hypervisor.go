@@ -102,6 +102,13 @@ func (h *Hypervisor) HandleRequest(ctx context.Context, ownerID string, conversa
 		return nil, quota.ErrQuotaExceeded
 	}
 
+	// 1.5. Check Concurrent Slot
+	if err := h.qm.AcquireConcurrentSlot(ctx, ownerID, "standard"); err != nil {
+		_ = h.logEvent(ctx, ownerID, nil, nil, "QuotaExceeded", map[string]any{"reason": "concurrent request limit exceeded"})
+		return nil, err
+	}
+	defer h.qm.ReleaseConcurrentSlot(context.Background(), ownerID, "standard")
+
 	// 2. Resolve or create Session
 	if conversationID == "" {
 		conversationID = "default"
@@ -203,8 +210,6 @@ func (h *Hypervisor) HandleRequest(ctx context.Context, ownerID string, conversa
 		slog.Error("[Hypervisor] Failed to update session state", "session_id", sess.ID, "error", err)
 		return nil, err
 	}
-
-	_ = h.logEvent(ctx, ownerID, &sess.ID, &selectedNode.NodeID, "RequestStarted", nil)
 
 	_ = h.logEvent(ctx, ownerID, &sess.ID, &selectedNode.NodeID, "RequestStarted", nil)
 

@@ -94,6 +94,14 @@ func (yh *YunwuHypervisor) HandleRequest(
 		slog.Warn("[YunwuHypervisor] User quota exceeded", "owner_id", ownerID)
 		return nil, quota.ErrQuotaExceeded
 	}
+
+	// 1.5. Check Concurrent Slot
+	if err := yh.qm.AcquireConcurrentSlot(ctx, ownerID, "yunwu"); err != nil {
+		slog.Warn("[YunwuHypervisor] Concurrent limit exceeded", "owner_id", ownerID)
+		return nil, err
+	}
+	defer yh.qm.ReleaseConcurrentSlot(context.Background(), ownerID, "yunwu")
+
 	slog.Debug("[YunwuHypervisor] Quota check passed", "owner_id", ownerID)
 
 	// 2. Resolve VirtualSession

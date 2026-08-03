@@ -171,7 +171,55 @@ func (qm *QuotaManager) CheckQuota(ctx context.Context, ownerID string, poolType
 	return true, nil
 }
 
+// AcquireConcurrentSlot ensures a user does not exceed the maximum allowed concurrent requests.
+// This prevents bypassing the quota system via high-concurrency bursts (TOCTOU attacks).
+func (qm *QuotaManager) AcquireConcurrentSlot(ctx context.Context, ownerID string, poolType string) error {
+	key := fmt.Sprintf("ash:concurrent_reqs:%s:%s", poolType, ownerID)
+	
+	// Increment active requests
+	count, err := qm.store.Redis().Incr(ctx, key).Result()
+	if err != nil {
+		return err
+	}
+	
+	// Ensure cleanup if process crashes (5 mins is longer than max request time)
+	qm.store.Redis().Expire(ctx, key, 5*time.Minute)
+	
+	// Hard limit of 5 concurrent requests for Fair Use stop-loss
+	if count > 5 {
+		qm.store.Redis().Decr(ctx, key)
+		slog.Warn("[QuotaManager] Concurrent request limit exceeded", "owner_id", ownerID, "active", count)
+		return errors.New("concurrent request limit exceeded (max 5)")
+	}
+	
+	return nil
+}
+
+func (qm *QuotaManager) ReleaseConcurrentSlot(ctx context.Context, ownerID string, poolType string) {
+	key := fmt.Sprintf("ash:concurrent_reqs:%s:%s", poolType, ownerID)
+	qm.store.Redis().Decr(ctx, key)
+}
+
 func (qm *QuotaManager) ConsumeQuota(ctx context.Context, ownerID string, poolType string, units int64) error {
+	lockKey := fmt.Sprintf("ash:lock:quota:%s:%s", poolType, ownerID)
+
+	// Acquire lock with timeout
+	locked := false
+	for i := 0; i < 50; i++ {
+		ok, err := qm.store.Redis().SetNX(ctx, lockKey, "1", 5*time.Second).Result()
+		if err == nil && ok {
+			locked = true
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	if !locked {
+		slog.Error("[QuotaManager] Timeout acquiring quota lock", "owner_id", ownerID)
+		return errors.New("timeout acquiring quota lock")
+	}
+	defer qm.store.Redis().Del(context.Background(), lockKey)
+
 	ua, err := qm.GetUserAccess(ctx, ownerID, poolType)
 	if err != nil {
 		return err

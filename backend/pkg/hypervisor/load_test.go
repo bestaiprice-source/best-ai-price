@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor"
+	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/quota"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/runtime"
 	"github.com/stretchr/testify/require"
 )
@@ -42,6 +43,18 @@ func TestHighConcurrencyLoad(t *testing.T) {
 	mockRt := runtime.NewMockRuntime(store)
 	hyp := hypervisor.NewHypervisor(store, mockRt)
 
+	qm := quota.NewQuotaManager(store)
+	for i := 0; i < 100; i++ {
+		uid := fmt.Sprintf("user-%d", i)
+		_ = qm.RegisterActiveUser(ctx, uid, "standard", 1)
+		_ = qm.SaveUserAccess(ctx, &quota.UserAccess{
+			OwnerID:      uid,
+			IsActive:     true,
+			Priority:     1,
+			MonthlyLimit: 0,
+		}, "standard")
+	}
+
 	// 3. Launch 100 concurrent workers
 	concurrency := 100
 	var wg sync.WaitGroup
@@ -53,7 +66,7 @@ func TestHighConcurrencyLoad(t *testing.T) {
 		workerID := i
 		go func() {
 			defer wg.Done()
-			ownerID := fmt.Sprintf("user-%d", workerID%10)
+			ownerID := fmt.Sprintf("user-%d", workerID%100)
 			convID := fmt.Sprintf("conv-%d", workerID)
 			payload := []byte(`{"model":"claude-3-5-sonnet-20241022","messages":[{"role":"user","content":"hi"}]}`)
 

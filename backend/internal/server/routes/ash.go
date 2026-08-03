@@ -94,8 +94,12 @@ func RegisterAshRoutes(
 			}
 			ownerID := c.Param("owner_id")
 
+			poolType := c.Query("pool_type")
+			if poolType == "" {
+				poolType = "standard"
+			}
 			qm := quota.NewQuotaManager(engine.Storage())
-			ua, err := qm.GetUserAccess(c.Request.Context(), ownerID)
+			ua, err := qm.GetUserAccess(c.Request.Context(), ownerID, poolType)
 			if err != nil {
 				c.JSON(http.StatusNotFound, gin.H{"error": "user quota access not found"})
 				return
@@ -458,8 +462,12 @@ func RegisterAshRoutes(
 				return
 			}
 
+			poolType := c.Query("pool_type")
+			if poolType == "" {
+				poolType = "standard"
+			}
 			qm := quota.NewQuotaManager(engine.Storage())
-			ua, err := qm.GetUserAccess(c.Request.Context(), ownerID)
+			ua, err := qm.GetUserAccess(c.Request.Context(), ownerID, poolType)
 			if err != nil {
 				ua = &quota.UserAccess{
 					OwnerID:      ownerID,
@@ -475,7 +483,7 @@ func RegisterAshRoutes(
 			
 			// Save back to Redis
 			data, _ := json.Marshal(ua)
-			_ = engine.Storage().Redis().Set(c.Request.Context(), "ash:user_access:"+ownerID, data, 0).Err()
+			_ = engine.Storage().Redis().Set(c.Request.Context(), fmt.Sprintf("ash:user_access:%s:%s", poolType, ownerID), data, 0).Err()
 
 			_, _ = engine.Storage().LogEvent(c.Request.Context(), "admin", nil, nil, "PlanAssigned", map[string]any{
 				"owner_id": ownerID,
@@ -505,8 +513,12 @@ func RegisterAshRoutes(
 				return
 			}
 
+			poolType := c.Query("pool_type")
+			if poolType == "" {
+				poolType = "standard"
+			}
 			qm := quota.NewQuotaManager(engine.Storage())
-			ua, err := qm.GetUserAccess(c.Request.Context(), ownerID)
+			ua, err := qm.GetUserAccess(c.Request.Context(), ownerID, poolType)
 			if err != nil {
 				ua = &quota.UserAccess{
 					OwnerID:      ownerID,
@@ -532,7 +544,7 @@ func RegisterAshRoutes(
 			}
 
 			data, _ := json.Marshal(ua)
-			_ = engine.Storage().Redis().Set(c.Request.Context(), "ash:user_access:"+ownerID, data, 0).Err()
+			_ = engine.Storage().Redis().Set(c.Request.Context(), fmt.Sprintf("ash:user_access:%s:%s", poolType, ownerID), data, 0).Err()
 
 			c.JSON(http.StatusOK, ua)
 		})
@@ -653,11 +665,15 @@ func RegisterAshRoutes(
 
 			ownerID := c.Query("owner_id")
 			if ownerID != "" {
+				poolType := c.Query("pool_type")
+				if poolType == "" {
+					poolType = "standard"
+				}
 				qm := quota.NewQuotaManager(engine.Storage())
-				if ua, err := qm.GetUserAccess(c.Request.Context(), ownerID); err == nil && ua != nil {
+				if ua, err := qm.GetUserAccess(c.Request.Context(), ownerID, poolType); err == nil && ua != nil {
 					ua.DepositState = "released"
 					data, _ := json.Marshal(ua)
-					_ = engine.Storage().Redis().Set(c.Request.Context(), "ash:user_access:"+ownerID, data, 0).Err()
+					_ = engine.Storage().Redis().Set(c.Request.Context(), fmt.Sprintf("ash:user_access:%s:%s", poolType, ownerID), data, 0).Err()
 				}
 			}
 
