@@ -1,4 +1,3 @@
--- +goose Up
 CREATE TABLE IF NOT EXISTS ash_vendors (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name TEXT NOT NULL,
@@ -24,8 +23,5 @@ CREATE TABLE IF NOT EXISTS ash_vendor_models (
     UNIQUE (vendor_id, model_name)
 );
 
-CREATE INDEX idx_ash_vendor_models_vendor_id ON ash_vendor_models(vendor_id);
+CREATE INDEX IF NOT EXISTS idx_ash_vendor_models_vendor_id ON ash_vendor_models(vendor_id);
 
--- +goose Down
-DROP TABLE IF NOT EXISTS ash_vendor_models;
-DROP TABLE IF NOT EXISTS ash_vendors;
