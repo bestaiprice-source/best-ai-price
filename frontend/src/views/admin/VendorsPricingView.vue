@@ -1,5 +1,6 @@
 <template>
-  <div class="vendors-container">
+  <AppLayout>
+    <div class="vendors-container">
     <div class="header-section">
       <div class="header-content">
         <h2>AI Providers & Pricing</h2>
@@ -96,11 +97,13 @@
         </div>
       </div>
     </div>
-  </div>
+    </div>
+  </AppLayout>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
+import AppLayout from '@/components/layout/AppLayout.vue';
 import { getVendors, addVendor, scrapeVendor, Vendor } from '@/api/admin/vendor';
 import { useAppStore } from '@/stores'
 
