@@ -168,6 +168,7 @@ func TestQuotaManagerDynamicFairShareZeno(t *testing.T) {
 
 	// Real balance drops to $9.0
 	store.Redis().Set(ctx, fmt.Sprintf("ash:yunwu:credit:%d", acc.ID), "9.0", 0)
+	store.Redis().Del(ctx, "ash:quota_limit_cache:yunwu")
 
 	// 5. Check limit again (Pool is $9.0 -> 9,000,000 units. Limit = 9M / 4 = 2,250,000)
 	limit, err = qm.GetDynamicLimit(ctx, ownerID, "yunwu")
@@ -185,6 +186,7 @@ func TestQuotaManagerDynamicFairShareZeno(t *testing.T) {
 
 	// Real balance drops to $8.0
 	store.Redis().Set(ctx, fmt.Sprintf("ash:yunwu:credit:%d", acc.ID), "8.0", 0)
+	store.Redis().Del(ctx, "ash:quota_limit_cache:yunwu")
 
 	// 7. Check limit again (Pool is $8.0 -> 8,000,000 units. Limit = 8M / 4 = 2,000,000)
 	limit, err = qm.GetDynamicLimit(ctx, ownerID, "yunwu")
@@ -202,7 +204,6 @@ func TestQuotaManagerDynamicFairShareZeno(t *testing.T) {
 	val, _ := store.Redis().Get(ctx, fmt.Sprintf("ash:yunwu:credit:%d", acc.ID)).Result()
 	assert.Equal(t, "8.0", val)
 }
-
 
 func TestQuotaManagerInactive(t *testing.T) {
 	store := newTestStorage(t)

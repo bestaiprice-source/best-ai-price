@@ -22,14 +22,14 @@ func TestSchedulerSelectNode(t *testing.T) {
 
 	states := map[string]health.NodeRuntimeState{
 		"1": {
-			NodeID:      "1",
-			SuccessRate: 0.99,
+			NodeID:       "1",
+			SuccessRate:  0.99,
 			AvgLatencyMs: 200,
 		},
 		"2": {
-			NodeID:      "2",
-			SuccessRate: 0.80,
-			Recent429:   2,
+			NodeID:       "2",
+			SuccessRate:  0.80,
+			Recent429:    2,
 			AvgLatencyMs: 800,
 		},
 	}
@@ -117,4 +117,3 @@ func TestSchedulerAffinityAndRecovery(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "2", selectedRec.NodeID)
 }
-

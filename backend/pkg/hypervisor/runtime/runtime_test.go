@@ -289,6 +289,3 @@ func TestConstructMessagesFromResponsesPayload(t *testing.T) {
 	assert.Equal(t, "user", msgs[1]["role"])
 	assert.Equal(t, "Что такое телеграм?", msgs[1]["content"])
 }
-
-
-

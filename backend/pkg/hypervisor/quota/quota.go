@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/ent"
@@ -21,7 +22,8 @@ var (
 )
 
 const (
-	NodeCapacity = 1000000 // default capacity in units/tokens per node
+	NodeCapacity    int64 = 1000000 // default capacity in units/tokens per node
+	ZenoDenominator int64 = 4       // Shrink factor for used pool
 )
 
 type UserAccess struct {
@@ -175,6 +177,14 @@ func (qm *QuotaManager) RegisterNode(ctx context.Context, nodeID string) error {
 }
 
 func (qm *QuotaManager) GetDynamicLimit(ctx context.Context, ownerID string, poolType string) (int64, error) {
+	cacheKey := fmt.Sprintf("ash:quota_limit_cache:%s", poolType)
+	cachedVal, err := qm.store.Redis().Get(ctx, cacheKey).Result()
+	if err == nil && cachedVal != "" {
+		if limit, parseErr := strconv.ParseInt(cachedVal, 10, 64); parseErr == nil {
+			return limit, nil
+		}
+	}
+
 	activeUsers, _ := qm.store.DB().User.Query().
 		Where(user.Status("active")).
 		Count(ctx)
@@ -217,7 +227,7 @@ func (qm *QuotaManager) GetDynamicLimit(ctx context.Context, ownerID string, poo
 		// Try to fetch credit from redis (for Yunwu accounts)
 		valStr, err := qm.store.Redis().Get(ctx, fmt.Sprintf("ash:yunwu:credit:%d", id)).Result()
 		isYunwu := err == nil && valStr != ""
-		
+
 		if poolType == "yunwu" {
 			if isYunwu {
 				var val float64
@@ -237,5 +247,9 @@ func (qm *QuotaManager) GetDynamicLimit(ctx context.Context, ownerID string, poo
 	}
 
 	limit := totalCapacityUnits / int64(activeUsers)
+
+	// Cache the result
+	_ = qm.store.Redis().SetEx(ctx, cacheKey, limit, 60*time.Second).Err()
+
 	return limit, nil
 }

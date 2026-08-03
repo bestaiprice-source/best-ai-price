@@ -11,11 +11,11 @@ import (
 func TestCompilerCompile(t *testing.T) {
 	c := compiler.NewCompiler()
 	ctx := compiler.ExecutionContext{
-		SystemPrompt: "System instruction test",
-		Summary:      "Conversation summary test",
-		PinnedFacts:  []string{"Fact 1", "Fact 2"},
+		SystemPrompt:  "System instruction test",
+		Summary:       "Conversation summary test",
+		PinnedFacts:   []string{"Fact 1", "Fact 2"},
 		TerminalState: "Terminal ok",
-		ToolState:    "Tool active",
+		ToolState:     "Tool active",
 	}
 
 	result, err := c.Compile(ctx)

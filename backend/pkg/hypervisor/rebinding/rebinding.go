@@ -3,14 +3,12 @@ package rebinding
 import (
 	"context"
 	"fmt"
-	"io"
 	"log/slog"
 	"strings"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/health"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/lease"
-	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/runtime"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/session"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/storage"
 )
@@ -31,20 +29,17 @@ func NewRebindingManager(store *storage.Storage) *RebindingManager {
 	}
 }
 
-func (rm *RebindingManager) ExecuteRebinding(
+func (rm *RebindingManager) RebindSession(
 	ctx context.Context,
 	sess *session.VirtualSession,
 	failedNodeID string,
-	reqPayload []byte,
-	stream io.Writer,
-	rt runtime.Runtime,
 	nodes []health.ExecutionNode,
 	states map[string]health.NodeRuntimeState,
 	userPriority int,
 	selectNodeFn func(ctx context.Context, nodes []health.ExecutionNode, states map[string]health.NodeRuntimeState, userPriority int, activeLease string, systemState string) (*health.ExecutionNode, error),
 	systemState string,
 	execErr error,
-) (*runtime.ResponseMetadata, *health.ExecutionNode, error) {
+) (*health.ExecutionNode, error) {
 	slog.Info("[Rebinding] Initiating session rebinding workflow",
 		"session_id", sess.ID,
 		"failed_node_id", failedNodeID,
@@ -55,7 +50,7 @@ func (rm *RebindingManager) ExecuteRebinding(
 	locked, err := rm.store.AcquireLock(ctx, sess.ID, 30*time.Second)
 	if err != nil || !locked {
 		slog.Warn("[Rebinding] Could not acquire distributed lock for session", "session_id", sess.ID)
-		return nil, nil, fmt.Errorf("failed to acquire session lock for rebinding")
+		return nil, fmt.Errorf("failed to acquire session lock for rebinding")
 	}
 	defer func() {
 		_ = rm.store.ReleaseLock(ctx, sess.ID)
@@ -96,7 +91,7 @@ func (rm *RebindingManager) ExecuteRebinding(
 	newNode, err := selectNodeFn(ctx, nodes, states, userPriority, "", systemState)
 	if err != nil {
 		slog.Error("[Rebinding] Backup node selection failed", "session_id", sess.ID, "error", err)
-		return nil, nil, fmt.Errorf("no backup nodes available: %w", err)
+		return nil, fmt.Errorf("no backup nodes available: %w", err)
 	}
 	slog.Info("[Rebinding] Selected backup node for rebinding",
 		"session_id", sess.ID,
@@ -114,7 +109,7 @@ func (rm *RebindingManager) ExecuteRebinding(
 	}
 	if err := rm.lm.SaveLease(ctx, newLease); err != nil {
 		slog.Error("[Rebinding] Failed to save new lease", "session_id", sess.ID, "error", err)
-		return nil, nil, err
+		return nil, err
 	}
 
 	sess.Lease = newLease
@@ -122,25 +117,8 @@ func (rm *RebindingManager) ExecuteRebinding(
 	sess.State = "active"
 	if err := rm.sm.SaveSession(ctx, sess); err != nil {
 		slog.Error("[Rebinding] Failed to update session after rebinding", "session_id", sess.ID, "error", err)
-		return nil, nil, err
+		return nil, err
 	}
 
-	// 5. Retry request once
-	slog.Info("[Rebinding] Retrying request on backup node", "session_id", sess.ID, "new_node_id", newNode.NodeID)
-	res, execErr := rt.Execute(ctx, newNode.NodeID, reqPayload, stream)
-	if execErr != nil {
-		slog.Error("[Rebinding] Retry attempt on backup node failed",
-			"session_id", sess.ID,
-			"new_node_id", newNode.NodeID,
-			"error", execErr,
-		)
-		return nil, newNode, execErr
-	}
-
-	slog.Info("[Rebinding] Rebinding retry request completed successfully",
-		"session_id", sess.ID,
-		"new_node_id", newNode.NodeID,
-	)
-
-	return res, newNode, nil
+	return newNode, nil
 }

@@ -184,4 +184,3 @@ func TestHealthControllerDegradationStates(t *testing.T) {
 	sysState := hc.GetSystemState(ctx, "openai")
 	require.Equal(t, "DEGRADED", sysState)
 }
-

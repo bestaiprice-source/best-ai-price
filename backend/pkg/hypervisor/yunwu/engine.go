@@ -167,56 +167,76 @@ func (yh *YunwuHypervisor) HandleRequest(
 
 	// 7. Execute Runtime Request
 	execStart := time.Now()
-	meta, err := yh.rt.Execute(ctx, selectedNode.NodeID, reqPayload, stream)
 
-	// 8. Rebinding & Fallback handling if error
-	if err != nil {
-		slog.Warn("[YunwuHypervisor] Runtime request failed on selected Yunwu node, attempting Rebinding",
-			"failed_node_id", selectedNode.NodeID,
-			"account_name", selectedNode.AccountName,
-			"error", err,
+	var meta *runtime.ResponseMetadata
+	var execErr error
+	maxRetries := 3
+
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		slog.Info("[YunwuHypervisor] Executing upstream request",
+			"node_id", selectedNode.NodeID,
+			"session_id", sess.ID,
+			"attempt", attempt,
 		)
-		reboundNode, rebindErr := yh.rm.HandleYunwuFailure(ctx, selectedNode.NodeID, err, nodes)
+
+		// Compile session context and inject into payload (for Yunwu-specifics if needed)
+		if attempt > 0 {
+			reqPayload = yh.compileAndInjectContext(sess, reqPayload)
+		}
+
+		meta, execErr = yh.rt.Execute(ctx, selectedNode.NodeID, reqPayload, stream)
+
+		// 8. If successful, break
+		if execErr == nil {
+			break
+		}
+
+		slog.Warn("[YunwuHypervisor] Runtime request failed on selected Yunwu node",
+			"node_id", selectedNode.NodeID,
+			"account_name", selectedNode.AccountName,
+			"session_id", sess.ID,
+			"attempt", attempt,
+			"error", execErr,
+		)
+
+		if attempt == maxRetries {
+			slog.Error("[YunwuHypervisor] Max retries reached, failing request", "session_id", sess.ID)
+			break
+		}
+
+		// Rebind on failure
+		reboundNode, rebindErr := yh.rm.HandleYunwuFailure(ctx, selectedNode.NodeID, execErr, nodes)
 		if rebindErr == nil && reboundNode != nil {
-			slog.Info("[YunwuHypervisor] Retrying execution on rebound node",
+			slog.Info("[YunwuHypervisor] Rebinding succeeded, retrying",
+				"session_id", sess.ID,
 				"rebound_node_id", reboundNode.NodeID,
 				"rebound_account_name", reboundNode.AccountName,
 			)
+			selectedNode = reboundNode
 
-			// Compile session context and inject into retry payload
-			retryPayload := yh.compileAndInjectContext(sess, reqPayload)
-
-			meta, err = yh.rt.Execute(ctx, reboundNode.NodeID, retryPayload, stream)
-			if err == nil {
-				selectedNode = reboundNode
-				// Update session lease to rebound node
-				expiresAt := time.Now().Add(30 * time.Minute)
-				newLease := &lease.Lease{
-					LeaseID:   fmt.Sprintf("lease-yunwu-%d", time.Now().UnixNano()),
-					SessionID: sess.ID,
-					NodeID:    reboundNode.NodeID,
-					GrantedAt: time.Now(),
-					ExpiresAt: &expiresAt,
-				}
-				_ = yh.lm.SaveLease(ctx, newLease)
-			} else {
-				slog.Error("[YunwuHypervisor] Execution failed on rebound node",
-					"rebound_node_id", reboundNode.NodeID,
-					"error", err,
-				)
+			// Update session lease to rebound node
+			expiresAt := time.Now().Add(30 * time.Minute)
+			newLease := &lease.Lease{
+				LeaseID:   fmt.Sprintf("lease-yunwu-%d", time.Now().UnixNano()),
+				SessionID: sess.ID,
+				NodeID:    reboundNode.NodeID,
+				GrantedAt: time.Now(),
+				ExpiresAt: &expiresAt,
 			}
+			_ = yh.lm.SaveLease(ctx, newLease)
 		} else {
 			slog.Error("[YunwuHypervisor] Rebinding failed or no alternative nodes", "rebind_error", rebindErr)
+			break // No point in retrying if no alternatives
 		}
 	}
 
-	if err != nil {
+	if execErr != nil {
 		slog.Error("[YunwuHypervisor] Final execution failed",
 			"node_id", selectedNode.NodeID,
 			"elapsed_ms", time.Since(execStart).Milliseconds(),
-			"error", err,
+			"error", execErr,
 		)
-		return nil, err
+		return nil, execErr
 	}
 
 	latencyMs := time.Since(execStart).Milliseconds()
@@ -270,8 +290,18 @@ func (yh *YunwuHypervisor) HandleRequest(
 		"selected_node_id", selectedNode.NodeID,
 		"account_name", selectedNode.AccountName,
 		"latency_ms", latencyMs,
-		"tokens_in", func() int64 { if meta != nil { return meta.InputTokens }; return 0 }(),
-		"tokens_out", func() int64 { if meta != nil { return meta.OutputTokens }; return 0 }(),
+		"tokens_in", func() int64 {
+			if meta != nil {
+				return meta.InputTokens
+			}
+			return 0
+		}(),
+		"tokens_out", func() int64 {
+			if meta != nil {
+				return meta.OutputTokens
+			}
+			return 0
+		}(),
 		"total_units_consumed", units,
 	)
 
@@ -453,11 +483,11 @@ func (yh *YunwuHypervisor) compileAndInjectContext(sess *session.VirtualSession,
 
 	// Build compiler context from session
 	compCtx := compiler.ExecutionContext{
-		SystemPrompt:   sess.Context.SystemPrompt,
-		Summary:        sess.Context.Summary,
-		PinnedFacts:    sess.Context.PinnedFacts,
-		TerminalState:  sess.Context.TerminalState,
-		ToolState:      toolCallsToString(sess.Context.ToolState),
+		SystemPrompt:  sess.Context.SystemPrompt,
+		Summary:       sess.Context.Summary,
+		PinnedFacts:   sess.Context.PinnedFacts,
+		TerminalState: sess.Context.TerminalState,
+		ToolState:     toolCallsToString(sess.Context.ToolState),
 	}
 	for _, m := range sess.Context.RecentMessages {
 		compCtx.RecentMessages = append(compCtx.RecentMessages, compiler.Message{Role: m.Role, Content: m.Content})

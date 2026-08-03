@@ -7,9 +7,9 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/redis/go-redis/v9"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/health"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/storage"
+	"github.com/redis/go-redis/v9"
 )
 
 var (
@@ -105,4 +105,3 @@ func (rm *YunwuRebindingManager) GetRebinding24hCount(ctx context.Context) (int6
 	_ = rm.store.Redis().ZRemRangeByScore(ctx, "ash:yunwu:rebinding:24h", "-inf", fmt.Sprintf("%d", now-86400)).Err()
 	return rm.store.Redis().ZCard(ctx, "ash:yunwu:rebinding:24h").Result()
 }
-

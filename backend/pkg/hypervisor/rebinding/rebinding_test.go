@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"io"
 	"strings"
 	"testing"
 
@@ -19,7 +18,6 @@ import (
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/enttest"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/health"
-	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/runtime"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/session"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/storage"
 	_ "modernc.org/sqlite"
@@ -69,19 +67,15 @@ func TestExecuteRebindingSuccess(t *testing.T) {
 		"2": {NodeID: "2", SuccessRate: 1.0},
 	}
 
-	mockRt := runtime.NewMockRuntime(store)
 	selectFn := func(ctx context.Context, nodes []health.ExecutionNode, states map[string]health.NodeRuntimeState, userPriority int, activeLease string, systemState string) (*health.ExecutionNode, error) {
 		return &nodes[1], nil
 	}
 
 	upstreamErr := errors.New("upstream error status 429 Too Many Requests")
-	res, newNode, err := rm.ExecuteRebinding(
+	newNode, err := rm.RebindSession(
 		context.Background(),
 		sess,
 		"1",
-		[]byte(`{"prompt":"hello"}`),
-		io.Discard,
-		mockRt,
 		nodes,
 		states,
 		1,
@@ -91,7 +85,6 @@ func TestExecuteRebindingSuccess(t *testing.T) {
 	)
 
 	require.NoError(t, err)
-	assert.NotNil(t, res)
 	assert.Equal(t, "2", newNode.NodeID)
 }
 
@@ -111,18 +104,14 @@ func TestExecuteRebindingLockConflict(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, locked)
 
-	mockRt := runtime.NewMockRuntime(store)
 	selectFn := func(ctx context.Context, nodes []health.ExecutionNode, states map[string]health.NodeRuntimeState, userPriority int, activeLease string, systemState string) (*health.ExecutionNode, error) {
 		return &nodes[0], nil
 	}
 
-	_, _, err = rm.ExecuteRebinding(
+	_, err = rm.RebindSession(
 		context.Background(),
 		sess,
 		"1",
-		[]byte(`{}`),
-		io.Discard,
-		mockRt,
 		nil,
 		nil,
 		1,

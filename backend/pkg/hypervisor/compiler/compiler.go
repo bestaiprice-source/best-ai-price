@@ -11,12 +11,12 @@ type Message struct {
 }
 
 type ExecutionContext struct {
-	SystemPrompt    string    `json:"system_prompt"`
-	Summary         string    `json:"summary"`
-	PinnedFacts     []string  `json:"pinned_facts"`
-	RecentMessages  []Message `json:"recent_messages"`
-	TerminalState   string    `json:"terminal_state"`
-	ToolState       string    `json:"tool_state"`
+	SystemPrompt   string    `json:"system_prompt"`
+	Summary        string    `json:"summary"`
+	PinnedFacts    []string  `json:"pinned_facts"`
+	RecentMessages []Message `json:"recent_messages"`
+	TerminalState  string    `json:"terminal_state"`
+	ToolState      string    `json:"tool_state"`
 }
 
 type Compiler struct{}

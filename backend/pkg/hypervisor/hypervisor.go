@@ -205,27 +205,46 @@ func (h *Hypervisor) HandleRequest(ctx context.Context, ownerID string, conversa
 
 	_ = h.logEvent(ctx, ownerID, &sess.ID, &selectedNode.NodeID, "RequestStarted", nil)
 
-	// 7. Execute request using Runtime
-	slog.Info("[Hypervisor] Executing upstream request", "node_id", selectedNode.NodeID, "session_id", sess.ID)
-	res, execErr := h.rt.Execute(ctx, selectedNode.NodeID, reqPayload, stream)
+	_ = h.logEvent(ctx, ownerID, &sess.ID, &selectedNode.NodeID, "RequestStarted", nil)
 
-	// 8. If failed, handle Rebinding (Auto retry on another node)
-	if execErr != nil {
-		slog.Warn("[Hypervisor] Upstream request execution failed, triggering rebinding",
+	var res *runtime.ResponseMetadata
+	var execErr error
+	maxRetries := 3
+
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		// 7. Execute request using Runtime
+		slog.Info("[Hypervisor] Executing upstream request",
 			"node_id", selectedNode.NodeID,
 			"session_id", sess.ID,
+			"attempt", attempt,
+		)
+		res, execErr = h.rt.Execute(ctx, selectedNode.NodeID, reqPayload, stream)
+
+		// 8. If successful, break out of the loop
+		if execErr == nil {
+			break
+		}
+
+		slog.Warn("[Hypervisor] Upstream request execution failed",
+			"node_id", selectedNode.NodeID,
+			"session_id", sess.ID,
+			"attempt", attempt,
 			"error", execErr,
 		)
 		_ = h.logEvent(ctx, ownerID, &sess.ID, &selectedNode.NodeID, "RequestFailed", map[string]any{"error": execErr.Error()})
+
+		if attempt == maxRetries {
+			slog.Error("[Hypervisor] Max retries reached, failing request", "session_id", sess.ID)
+			return nil, execErr
+		}
+
+		// Trigger rebinding
 		_ = h.logEvent(ctx, ownerID, &sess.ID, &selectedNode.NodeID, "RebindingStarted", map[string]any{"reason": "upstream request failed"})
 
-		newRes, newSelectedNode, err := h.rm.ExecuteRebinding(
+		newSelectedNode, err := h.rm.RebindSession(
 			ctx,
 			sess,
 			selectedNode.NodeID,
-			reqPayload,
-			stream,
-			h.rt,
 			nodes,
 			states,
 			userPriority,
@@ -239,13 +258,12 @@ func (h *Hypervisor) HandleRequest(ctx context.Context, ownerID string, conversa
 			return nil, execErr
 		}
 
-		slog.Info("[Hypervisor] Rebinding succeeded",
+		slog.Info("[Hypervisor] Rebinding succeeded, retrying",
 			"session_id", sess.ID,
 			"old_node_id", selectedNode.NodeID,
 			"new_node_id", newSelectedNode.NodeID,
 		)
 		_ = h.logEvent(ctx, ownerID, &sess.ID, &newSelectedNode.NodeID, "RebindingSucceeded", nil)
-		res = newRes
 		selectedNode = newSelectedNode
 	}
 

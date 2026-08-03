@@ -1,0 +1,826 @@
+=== RUN   TestHypervisorDay2
+--- PASS: TestHypervisorDay2 (0.04s)
+=== RUN   TestHypervisorDay3
+2026/08/03 16:55:45 WARN [QuotaManager] User quota exceeded owner_id=user-owner-123 used_units=250000 limit=250000
+2026/08/03 16:55:45 WARN [QuotaManager] User quota exceeded owner_id=user-owner-123 used_units=250000 limit=250000
+    hypervisor_test.go:287: 
+        	Error Trace:	/home/cucum/dev/sub2api/backend/pkg/hypervisor/hypervisor_test.go:287
+        	Error:      	Received unexpected error:
+        	            	user quota exceeded
+        	Test:       	TestHypervisorDay3
+--- FAIL: TestHypervisorDay3 (0.03s)
+=== RUN   TestHealthControllerAndDegradation
+2026/08/03 16:55:45 INFO [Scheduler] Node selection completed winning_node_id=node-1 winning_score=74 total_candidates_evaluated=1
+2026/08/03 16:55:45 INFO [Scheduler] Node selection completed winning_node_id=node-1 winning_score=43 total_candidates_evaluated=1
+--- PASS: TestHealthControllerAndDegradation (0.03s)
+=== RUN   TestOpenAIMockAndStatsEndpoints
+--- PASS: TestOpenAIMockAndStatsEndpoints (0.03s)
+=== RUN   TestYunwuHypervisorDispatch
+2026/08/03 16:55:45 INFO [YunwuHypervisor] Initialized dedicated Yunwu Engine
+2026/08/03 16:55:45 INFO [HealthController] Starting background health reconciliation loop interval=10s
+2026/08/03 16:55:45 INFO [Hypervisor] Initialized engine health_controller_enabled=true rebinding_enabled=true quota_manager_enabled=true yunwu_engine_initialized=true
+2026/08/03 16:55:45 INFO [Hypervisor] Handling request owner_id=user-123 conversation_id=conv-yunwu-1 platform=yunwu payload_size=65
+2026/08/03 16:55:45 INFO [Hypervisor] Dispatching request to dedicated Yunwu Hypervisor Engine owner_id=user-123 conversation_id=conv-yunwu-1 platform=yunwu
+2026/08/03 16:55:45 INFO [YunwuHypervisor] Handling request via Yunwu Engine owner_id=user-123 conversation_id=conv-yunwu-1 platform=yunwu payload_size_bytes=65
+2026/08/03 16:55:45 INFO [YunwuScheduler] Selected best Yunwu execution node node_id=1 account_name=yunwu-node-1 score=155 total_candidates_evaluated=1
+2026/08/03 16:55:45 INFO [YunwuHypervisor] Executing upstream request node_id=1 session_id=session-yunwu-user-123-conv-yunwu-1 attempt=0
+2026/08/03 16:55:45 WARN [YunwuHypervisor] Failed to query model pricing model=gpt-4o error="SQL logic error: no such table: ash_vendor_models (1)"
+2026/08/03 16:55:45 INFO [YunwuHypervisor] Request executed successfully owner_id=user-123 selected_node_id=1 account_name=yunwu-node-1 latency_ms=0 tokens_in=15 tokens_out=10 total_units_consumed=50
+--- PASS: TestYunwuHypervisorDispatch (0.04s)
+=== RUN   TestHypervisorQuotaExceededAndLeaseResolution
+2026/08/03 16:55:45 INFO [YunwuHypervisor] Initialized dedicated Yunwu Engine
+2026/08/03 16:55:45 INFO [HealthController] Starting background health reconciliation loop interval=10s
+2026/08/03 16:55:45 INFO [Hypervisor] Initialized engine health_controller_enabled=true rebinding_enabled=true quota_manager_enabled=true yunwu_engine_initialized=true
+2026/08/03 16:55:45 INFO [Hypervisor] Handling request owner_id=user-exceeded conversation_id="" platform=anthropic payload_size=38
+2026/08/03 16:55:45 WARN [QuotaManager] User quota exceeded owner_id=user-exceeded used_units=200 limit=100
+2026/08/03 16:55:45 ERROR [Hypervisor] Quota check failed with error owner_id=user-exceeded error="user quota exceeded"
+2026/08/03 16:55:45 INFO [Hypervisor] Handling request owner_id=user-ok conversation_id="" platform=anthropic payload_size=38
+2026/08/03 16:55:45 INFO [Hypervisor] Created new virtual session session_id=session-user-ok-default owner_id=user-ok
+2026/08/03 16:55:45 INFO [Hypervisor] Loaded pool status total_nodes=1 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:45 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=1
+2026/08/03 16:55:45 INFO [Hypervisor] Scheduler selected node session_id=session-user-ok-default selected_node_id=1 account_name=anthropic-node-1
+2026/08/03 16:55:45 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-ok-default attempt=0
+2026/08/03 16:55:45 INFO [Hypervisor] Recorded request usage owner_id=user-ok session_id=session-user-ok-default node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+--- PASS: TestHypervisorQuotaExceededAndLeaseResolution (0.03s)
+=== RUN   TestHypervisorRebindingOnExecutionFailure
+2026/08/03 16:55:45 INFO [YunwuHypervisor] Initialized dedicated Yunwu Engine
+2026/08/03 16:55:45 INFO [HealthController] Starting background health reconciliation loop interval=10s
+2026/08/03 16:55:45 INFO [Hypervisor] Initialized engine health_controller_enabled=true rebinding_enabled=true quota_manager_enabled=true yunwu_engine_initialized=true
+2026/08/03 16:55:45 INFO [Hypervisor] Handling request owner_id=user-rebound conversation_id=conv-rebound platform=anthropic payload_size=18
+2026/08/03 16:55:45 INFO [Hypervisor] Created new virtual session session_id=session-user-rebound-conv-rebound owner_id=user-rebound
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=2 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=2
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-rebound-conv-rebound selected_node_id=1 account_name=node-fail-1
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-rebound-conv-rebound attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-rebound session_id=session-user-rebound-conv-rebound node_id=1 input_tokens=20 output_tokens=30 cost_units=50
+--- PASS: TestHypervisorRebindingOnExecutionFailure (0.03s)
+=== RUN   TestHypervisorNoNodesAvailableAndRedisFallback
+2026/08/03 16:55:46 INFO [YunwuHypervisor] Initialized dedicated Yunwu Engine
+2026/08/03 16:55:46 INFO [HealthController] Starting background health reconciliation loop interval=10s
+2026/08/03 16:55:46 INFO [Hypervisor] Initialized engine health_controller_enabled=true rebinding_enabled=true quota_manager_enabled=true yunwu_engine_initialized=true
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-empty conversation_id=conv-empty platform=anthropic payload_size=18
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-empty-conv-empty owner_id=user-empty
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=0 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 WARN [Scheduler] All nodes in cooldown or filtered out, relaxing cooldown restriction for single pool node
+2026/08/03 16:55:46 ERROR [Scheduler] No candidate execution nodes available in pool total_nodes=0
+2026/08/03 16:55:46 ERROR [Hypervisor] Scheduler node selection failed session_id=session-user-empty-conv-empty error="no execution nodes available"
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-redis conversation_id=conv-redis platform=anthropic payload_size=18
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-redis-conv-redis owner_id=user-redis
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=1 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=redis-node-1 winning_score=105 total_candidates_evaluated=1
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-redis-conv-redis selected_node_id=redis-node-1 account_name=""
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=redis-node-1 session_id=session-user-redis-conv-redis attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-redis session_id=session-user-redis-conv-redis node_id=redis-node-1 input_tokens=15 output_tokens=10 cost_units=25
+--- PASS: TestHypervisorNoNodesAvailableAndRedisFallback (0.04s)
+=== RUN   TestHypervisorHelperCoverage
+2026/08/03 16:55:46 INFO [YunwuHypervisor] Initialized dedicated Yunwu Engine
+2026/08/03 16:55:46 INFO [HealthController] Starting background health reconciliation loop interval=10s
+2026/08/03 16:55:46 INFO [Hypervisor] Initialized engine health_controller_enabled=true rebinding_enabled=true quota_manager_enabled=true yunwu_engine_initialized=true
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-h conversation_id=conv-h platform=anthropic payload_size=18
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-h-conv-h owner_id=user-h
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=1 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=104 total_candidates_evaluated=1
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-h-conv-h selected_node_id=1 account_name=helper-node-1
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-h-conv-h attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-h session_id=session-user-h-conv-h node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+--- PASS: TestHypervisorHelperCoverage (0.03s)
+=== RUN   TestHypervisorRebindingExhaustedFailure
+2026/08/03 16:55:46 INFO [YunwuHypervisor] Initialized dedicated Yunwu Engine
+2026/08/03 16:55:46 INFO [HealthController] Starting background health reconciliation loop interval=10s
+2026/08/03 16:55:46 INFO [Hypervisor] Initialized engine health_controller_enabled=true rebinding_enabled=true quota_manager_enabled=true yunwu_engine_initialized=true
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-all-fail conversation_id=conv-all-fail platform=anthropic payload_size=18
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-all-fail-conv-all-fail owner_id=user-all-fail
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=1 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=1
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-all-fail-conv-all-fail selected_node_id=1 account_name=fail-all-node-1
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-all-fail-conv-all-fail attempt=0
+2026/08/03 16:55:46 WARN [Hypervisor] Upstream request execution failed node_id=1 session_id=session-user-all-fail-conv-all-fail attempt=0 error="all nodes failed"
+2026/08/03 16:55:46 INFO [Rebinding] Initiating session rebinding workflow session_id=session-user-all-fail-conv-all-fail failed_node_id=1 exec_error="all nodes failed"
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=1
+2026/08/03 16:55:46 INFO [Rebinding] Selected backup node for rebinding session_id=session-user-all-fail-conv-all-fail new_node_id=1
+2026/08/03 16:55:46 INFO [Hypervisor] Rebinding succeeded, retrying session_id=session-user-all-fail-conv-all-fail old_node_id=1 new_node_id=1
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-all-fail-conv-all-fail attempt=1
+2026/08/03 16:55:46 WARN [Hypervisor] Upstream request execution failed node_id=1 session_id=session-user-all-fail-conv-all-fail attempt=1 error="all nodes failed"
+2026/08/03 16:55:46 INFO [Rebinding] Initiating session rebinding workflow session_id=session-user-all-fail-conv-all-fail failed_node_id=1 exec_error="all nodes failed"
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=1
+2026/08/03 16:55:46 INFO [Rebinding] Selected backup node for rebinding session_id=session-user-all-fail-conv-all-fail new_node_id=1
+2026/08/03 16:55:46 INFO [Hypervisor] Rebinding succeeded, retrying session_id=session-user-all-fail-conv-all-fail old_node_id=1 new_node_id=1
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-all-fail-conv-all-fail attempt=2
+2026/08/03 16:55:46 WARN [Hypervisor] Upstream request execution failed node_id=1 session_id=session-user-all-fail-conv-all-fail attempt=2 error="all nodes failed"
+2026/08/03 16:55:46 INFO [Rebinding] Initiating session rebinding workflow session_id=session-user-all-fail-conv-all-fail failed_node_id=1 exec_error="all nodes failed"
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=1
+2026/08/03 16:55:46 INFO [Rebinding] Selected backup node for rebinding session_id=session-user-all-fail-conv-all-fail new_node_id=1
+2026/08/03 16:55:46 INFO [Hypervisor] Rebinding succeeded, retrying session_id=session-user-all-fail-conv-all-fail old_node_id=1 new_node_id=1
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-all-fail-conv-all-fail attempt=3
+2026/08/03 16:55:46 WARN [Hypervisor] Upstream request execution failed node_id=1 session_id=session-user-all-fail-conv-all-fail attempt=3 error="all nodes failed"
+2026/08/03 16:55:46 ERROR [Hypervisor] Max retries reached, failing request session_id=session-user-all-fail-conv-all-fail
+--- PASS: TestHypervisorRebindingExhaustedFailure (0.04s)
+=== RUN   TestHighConcurrencyLoad
+2026/08/03 16:55:46 INFO [YunwuHypervisor] Initialized dedicated Yunwu Engine
+2026/08/03 16:55:46 INFO [HealthController] Starting background health reconciliation loop interval=10s
+2026/08/03 16:55:46 INFO [Hypervisor] Initialized engine health_controller_enabled=true rebinding_enabled=true quota_manager_enabled=true yunwu_engine_initialized=true
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-1 conversation_id=conv-1 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-9 conversation_id=conv-49 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-9 conversation_id=conv-99 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-0 conversation_id=conv-0 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-2 conversation_id=conv-2 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-4 conversation_id=conv-64 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-6 conversation_id=conv-26 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-6 conversation_id=conv-86 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-2 conversation_id=conv-52 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-3 conversation_id=conv-63 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-5 conversation_id=conv-15 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-5 conversation_id=conv-75 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-4 conversation_id=conv-14 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-3 conversation_id=conv-3 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-3 conversation_id=conv-93 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-7 conversation_id=conv-87 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-1 conversation_id=conv-51 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-0 conversation_id=conv-50 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-7 conversation_id=conv-27 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-5 conversation_id=conv-65 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-7 conversation_id=conv-57 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-4 conversation_id=conv-94 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-8 conversation_id=conv-28 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-2 conversation_id=conv-62 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-8 conversation_id=conv-18 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-8 conversation_id=conv-98 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-7 conversation_id=conv-67 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-6 conversation_id=conv-66 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-7 conversation_id=conv-7 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-8 conversation_id=conv-8 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-4 conversation_id=conv-44 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-1 conversation_id=conv-61 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-8 conversation_id=conv-58 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-8 conversation_id=conv-68 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-4 conversation_id=conv-4 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-9 conversation_id=conv-69 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-4 conversation_id=conv-54 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-5 conversation_id=conv-55 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-9 conversation_id=conv-9 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-0 conversation_id=conv-70 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-9 conversation_id=conv-59 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-7 conversation_id=conv-47 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-1 conversation_id=conv-91 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-3 conversation_id=conv-73 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-6 conversation_id=conv-16 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-6 conversation_id=conv-6 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-5 conversation_id=conv-45 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-8 conversation_id=conv-48 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-3 conversation_id=conv-43 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-5 conversation_id=conv-5 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-3 conversation_id=conv-23 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-6 conversation_id=conv-46 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-0 conversation_id=conv-60 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-7 conversation_id=conv-17 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-9 conversation_id=conv-79 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-3 conversation_id=conv-53 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-4 conversation_id=conv-24 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-1 conversation_id=conv-71 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-6 conversation_id=conv-56 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-9 conversation_id=conv-89 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-4 conversation_id=conv-74 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-5 conversation_id=conv-35 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-4 conversation_id=conv-84 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-6 conversation_id=conv-76 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-1 conversation_id=conv-21 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-7 conversation_id=conv-37 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-5 conversation_id=conv-85 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-0 conversation_id=conv-30 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-0 conversation_id=conv-10 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-5 conversation_id=conv-95 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-4 conversation_id=conv-34 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-9 conversation_id=conv-39 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-1 conversation_id=conv-11 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-1 conversation_id=conv-81 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-2 conversation_id=conv-82 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-0 conversation_id=conv-90 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-5 conversation_id=conv-25 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-3 conversation_id=conv-83 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-2 conversation_id=conv-72 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-1 conversation_id=conv-41 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-9 conversation_id=conv-19 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-1 conversation_id=conv-31 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-6 conversation_id=conv-36 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-2 conversation_id=conv-42 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-8 conversation_id=conv-38 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-0 conversation_id=conv-40 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-7 conversation_id=conv-77 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-3 conversation_id=conv-13 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-0 conversation_id=conv-20 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-8 conversation_id=conv-88 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-2 conversation_id=conv-92 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-9 conversation_id=conv-29 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-0 conversation_id=conv-80 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-2 conversation_id=conv-22 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-3 conversation_id=conv-33 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-7 conversation_id=conv-97 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-8 conversation_id=conv-78 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-2 conversation_id=conv-12 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-6 conversation_id=conv-96 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Handling request owner_id=user-2 conversation_id=conv-32 platform=anthropic payload_size=82
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-6-conv-76 owner_id=user-6
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-5-conv-35 owner_id=user-5
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-8-conv-98 owner_id=user-8
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-6-conv-96 owner_id=user-6
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-9-conv-49 owner_id=user-9
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-6-conv-56 owner_id=user-6
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-4-conv-44 owner_id=user-4
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-7-conv-27 owner_id=user-7
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-8-conv-78 owner_id=user-8
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-8-conv-28 owner_id=user-8
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-4-conv-94 owner_id=user-4
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-1-conv-1 owner_id=user-1
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-3-conv-73 owner_id=user-3
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-6-conv-66 owner_id=user-6
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-3-conv-23 owner_id=user-3
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-5-conv-15 owner_id=user-5
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-2-conv-42 owner_id=user-2
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-4-conv-94 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-5-conv-5 owner_id=user-5
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-8-conv-98 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-5-conv-75 owner_id=user-5
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-2-conv-2 owner_id=user-2
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-3-conv-43 owner_id=user-3
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-7-conv-67 owner_id=user-7
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-5-conv-55 owner_id=user-5
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-5-conv-85 owner_id=user-5
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-4-conv-44 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-0-conv-70 owner_id=user-0
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-8-conv-78 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-6-conv-66 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-7-conv-27 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-1-conv-1 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-6-conv-56 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-1-conv-91 owner_id=user-1
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-2-conv-32 owner_id=user-2
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-3-conv-23 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-0-conv-90 owner_id=user-0
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-8-conv-18 owner_id=user-8
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-1-conv-81 owner_id=user-1
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-6-conv-66 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-4-conv-94 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-2-conv-2 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-5-conv-15 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-2-conv-72 owner_id=user-2
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-0-conv-10 owner_id=user-0
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-6-conv-76 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-8-conv-58 owner_id=user-8
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-2-conv-42 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-6-conv-36 owner_id=user-6
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-5-conv-75 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-8-conv-38 owner_id=user-8
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-9-conv-99 owner_id=user-9
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-7-conv-67 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-7-conv-27 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-5-conv-55 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-0-conv-50 owner_id=user-0
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-0-conv-20 owner_id=user-0
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-3-conv-83 owner_id=user-3
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-1-conv-1 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-1-conv-51 owner_id=user-1
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-8-conv-8 owner_id=user-8
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-3-conv-3 owner_id=user-3
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-0-conv-0 owner_id=user-0
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-4-conv-14 owner_id=user-4
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-2-conv-32 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-8-conv-18 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-8-conv-88 owner_id=user-8
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-4-conv-34 owner_id=user-4
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-0-conv-60 owner_id=user-0
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-1-conv-81 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-5-conv-5 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-0-conv-30 owner_id=user-0
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-9-conv-9 owner_id=user-9
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-1-conv-41 owner_id=user-1
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-0-conv-40 owner_id=user-0
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-7-conv-67 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-0-conv-10 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-3-conv-23 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-5-conv-65 owner_id=user-5
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-0-conv-50 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-5-conv-15 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-7-conv-37 owner_id=user-7
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-2-conv-2 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-3-conv-93 owner_id=user-3
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-8-conv-8 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-7-conv-77 owner_id=user-7
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-5 session_id=session-user-5-conv-15 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-0-conv-80 owner_id=user-0
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-4-conv-14 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-4-conv-4 owner_id=user-4
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-8-conv-88 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-1-conv-71 owner_id=user-1
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-0-conv-40 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-0-conv-20 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-4 session_id=session-user-4-conv-94 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-1 session_id=session-user-1-conv-1 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-1-conv-51 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-8-conv-78 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-7 session_id=session-user-7-conv-67 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-3-conv-13 owner_id=user-3
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-0-conv-10 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-0-conv-60 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-4-conv-34 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-6 session_id=session-user-6-conv-66 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-0-conv-30 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-7 session_id=session-user-7-conv-27 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-7-conv-77 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-7-conv-37 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-3-conv-13 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-7-conv-17 owner_id=user-7
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-8-conv-18 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-0-conv-40 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-9-conv-29 owner_id=user-9
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-0-conv-60 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-9-conv-69 owner_id=user-9
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-1-conv-81 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-8-conv-88 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-6-conv-16 owner_id=user-6
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-4-conv-74 owner_id=user-4
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-9-conv-79 owner_id=user-9
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-6-conv-26 owner_id=user-6
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-1-conv-71 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-1-conv-41 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-1-conv-11 owner_id=user-1
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-4-conv-84 owner_id=user-4
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-7-conv-17 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-6-conv-96 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-5-conv-95 owner_id=user-5
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-1-conv-31 owner_id=user-1
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-1-conv-91 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-1-conv-61 owner_id=user-1
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-7-conv-7 owner_id=user-7
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-2-conv-92 owner_id=user-2
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-3-conv-73 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-8 session_id=session-user-8-conv-78 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-6-conv-86 owner_id=user-6
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-7-conv-17 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-3-conv-83 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-5-conv-85 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-2-conv-72 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-8-conv-58 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-3-conv-3 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-5-conv-85 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-5-conv-65 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-2-conv-72 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-0 session_id=session-user-0-conv-10 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-2-conv-82 owner_id=user-2
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-6-conv-46 owner_id=user-6
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-2-conv-62 owner_id=user-2
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-2-conv-52 owner_id=user-2
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-4-conv-4 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-9-conv-19 owner_id=user-9
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-9-conv-89 owner_id=user-9
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-7-conv-47 owner_id=user-7
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-3-conv-63 owner_id=user-3
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-5-conv-25 owner_id=user-5
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-8-conv-28 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-0-conv-80 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-7-conv-57 owner_id=user-7
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-5-conv-45 owner_id=user-5
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-6-conv-56 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-6-conv-6 owner_id=user-6
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-3 session_id=session-user-3-conv-23 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-7-conv-97 owner_id=user-7
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-7-conv-77 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-1-conv-11 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-6-conv-76 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-7-conv-87 owner_id=user-7
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-8-conv-38 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-4-conv-54 owner_id=user-4
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-6-conv-16 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-9-conv-49 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-1-conv-61 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-6-conv-36 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-6-conv-86 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-9-conv-69 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-7-conv-57 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-5-conv-25 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-1-conv-91 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-0 session_id=session-user-0-conv-60 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-0-conv-90 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-2-conv-42 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-1-conv-21 owner_id=user-1
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-6-conv-6 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-2-conv-82 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-1 session_id=session-user-1-conv-81 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-4-conv-84 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-0-conv-70 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-3-conv-83 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-4-conv-74 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-9-conv-59 owner_id=user-9
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-6-conv-26 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-9-conv-99 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-3-conv-33 owner_id=user-3
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-9-conv-79 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-7-conv-7 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-0-conv-30 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-1-conv-21 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-6-conv-46 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-5-conv-35 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-3-conv-43 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-8 session_id=session-user-8-conv-18 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-1-conv-51 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-2-conv-22 owner_id=user-2
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-3-conv-53 owner_id=user-3
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-9-conv-9 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-5-conv-95 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-9-conv-29 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-4-conv-64 owner_id=user-4
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-2-conv-92 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-0-conv-0 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-7-conv-47 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-2-conv-62 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-5-conv-45 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-3-conv-93 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-9-conv-89 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-4-conv-24 owner_id=user-4
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-4-conv-34 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-1-conv-31 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-8-conv-48 owner_id=user-8
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-7-conv-87 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-7-conv-97 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-2-conv-12 owner_id=user-2
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-1-conv-71 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-3-conv-63 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-3-conv-73 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-8-conv-68 owner_id=user-8
+2026/08/03 16:55:46 INFO [Hypervisor] Created new virtual session session_id=session-user-9-conv-39 owner_id=user-9
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-2-conv-52 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-9-conv-19 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-3 session_id=session-user-3-conv-83 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-3 session_id=session-user-3-conv-73 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-4-conv-54 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-4-conv-64 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-4-conv-24 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-4-conv-54 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-2-conv-12 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-8-conv-48 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-9-conv-59 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-9-conv-39 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-3-conv-33 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-5-conv-75 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-9-conv-19 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-0-conv-70 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-2-conv-32 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-9-conv-29 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-0-conv-50 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-3-conv-53 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-3-conv-43 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-0 session_id=session-user-0-conv-40 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-2-conv-22 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-2 session_id=session-user-2-conv-42 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-3-conv-33 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-8-conv-58 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-1-conv-31 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-7 session_id=session-user-7-conv-17 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Loaded pool status total_nodes=10 user_priority=1 system_state=NORMAL
+2026/08/03 16:55:46 INFO [Scheduler] Node selection completed winning_node_id=1 winning_score=105 total_candidates_evaluated=10
+2026/08/03 16:55:46 INFO [Hypervisor] Scheduler selected node session_id=session-user-8-conv-68 selected_node_id=1 account_name=LoadNode-1
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-3 session_id=session-user-3-conv-43 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-0-conv-80 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-4-conv-64 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-9-conv-79 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-4-conv-44 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-2-conv-22 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-6-conv-16 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-0 session_id=session-user-0-conv-70 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-0 session_id=session-user-0-conv-30 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-6-conv-6 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-7-conv-97 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-4 session_id=session-user-4-conv-64 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-9-conv-39 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-3-conv-93 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-6 session_id=session-user-6-conv-56 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-8 session_id=session-user-8-conv-58 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-4 session_id=session-user-4-conv-44 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-8-conv-68 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-1 session_id=session-user-1-conv-31 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-5 session_id=session-user-5-conv-85 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-4 session_id=session-user-4-conv-34 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-1 session_id=session-user-1-conv-51 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-2 session_id=session-user-2-conv-22 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-0-conv-90 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-9 session_id=session-user-9-conv-39 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-5 session_id=session-user-5-conv-75 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-1-conv-21 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-9 session_id=session-user-9-conv-29 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-5-conv-45 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-2-conv-82 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-8-conv-38 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-7-conv-87 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-2-conv-12 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-2-conv-92 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-1-conv-61 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-0-conv-0 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-6-conv-36 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-2 session_id=session-user-2-conv-92 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-5 session_id=session-user-5-conv-45 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-6 session_id=session-user-6-conv-16 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-6 session_id=session-user-6-conv-76 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-7-conv-47 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-0 session_id=session-user-0-conv-90 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-9-conv-89 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-1 session_id=session-user-1-conv-61 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-6-conv-86 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-6-conv-96 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-9 session_id=session-user-9-conv-79 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-6 session_id=session-user-6-conv-86 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-6-conv-46 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-6-conv-26 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-8 session_id=session-user-8-conv-38 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-1-conv-41 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-8-conv-48 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-7-conv-7 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-8-conv-28 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-7 session_id=session-user-7-conv-47 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-6 session_id=session-user-6-conv-26 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-1-conv-11 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-8-conv-8 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-7-conv-37 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-4-conv-84 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-0 session_id=session-user-0-conv-0 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-2-conv-62 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-3-conv-53 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-3-conv-3 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-9 session_id=session-user-9-conv-19 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-9-conv-69 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-3 session_id=session-user-3-conv-3 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-6 session_id=session-user-6-conv-46 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-5-conv-35 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-8 session_id=session-user-8-conv-68 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-1 session_id=session-user-1-conv-21 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-6 session_id=session-user-6-conv-36 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-0 session_id=session-user-0-conv-80 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-5-conv-25 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-8-conv-98 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-2 session_id=session-user-2-conv-2 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-8 session_id=session-user-8-conv-98 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-2 session_id=session-user-2-conv-82 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-4-conv-4 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-3-conv-63 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-9-conv-99 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-7-conv-57 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-1 session_id=session-user-1-conv-11 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-7 session_id=session-user-7-conv-97 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-8 session_id=session-user-8-conv-28 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-8 session_id=session-user-8-conv-48 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-4-conv-24 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-7 session_id=session-user-7-conv-57 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-5-conv-95 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-5 session_id=session-user-5-conv-95 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-7 session_id=session-user-7-conv-87 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-3 session_id=session-user-3-conv-53 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-1 session_id=session-user-1-conv-41 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-2-conv-52 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-3 session_id=session-user-3-conv-33 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-4-conv-74 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-2 session_id=session-user-2-conv-72 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-4 session_id=session-user-4-conv-4 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-4 session_id=session-user-4-conv-54 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-8 session_id=session-user-8-conv-88 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-6 session_id=session-user-6-conv-96 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-4 session_id=session-user-4-conv-24 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-9-conv-59 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-6 session_id=session-user-6-conv-6 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-5-conv-65 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-9 session_id=session-user-9-conv-69 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-5 session_id=session-user-5-conv-25 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-4 session_id=session-user-4-conv-84 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-2 session_id=session-user-2-conv-12 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-9 session_id=session-user-9-conv-89 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-4 session_id=session-user-4-conv-74 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-3 session_id=session-user-3-conv-93 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-4-conv-14 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-2 session_id=session-user-2-conv-52 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-0 session_id=session-user-0-conv-50 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-5 session_id=session-user-5-conv-35 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-7 session_id=session-user-7-conv-7 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-2 session_id=session-user-2-conv-32 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-5 session_id=session-user-5-conv-65 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-4 session_id=session-user-4-conv-14 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-9-conv-49 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-9 session_id=session-user-9-conv-99 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-2 session_id=session-user-2-conv-62 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-3 session_id=session-user-3-conv-63 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-9 session_id=session-user-9-conv-49 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-8 session_id=session-user-8-conv-8 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-7 session_id=session-user-7-conv-37 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-7 session_id=session-user-7-conv-77 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-5-conv-5 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-0-conv-20 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-3-conv-13 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-5 session_id=session-user-5-conv-5 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-1 session_id=session-user-1-conv-71 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-9-conv-9 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-3 session_id=session-user-3-conv-13 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Executing upstream request node_id=1 session_id=session-user-5-conv-55 attempt=0
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-9 session_id=session-user-9-conv-9 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-0 session_id=session-user-0-conv-20 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-9 session_id=session-user-9-conv-59 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-5 session_id=session-user-5-conv-55 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+2026/08/03 16:55:46 INFO [Hypervisor] Recorded request usage owner_id=user-1 session_id=session-user-1-conv-91 node_id=1 input_tokens=15 output_tokens=10 cost_units=25
+    load_test.go:70: Completed 100 concurrent requests in 259.530449ms (avg 2.59 ms/req)
+--- PASS: TestHighConcurrencyLoad (0.30s)
+FAIL
+FAIL	github.com/Wei-Shaw/sub2api/pkg/hypervisor	0.658s
+FAIL

@@ -283,6 +283,7 @@ func TestHypervisorDay3(t *testing.T) {
 	require.NoError(t, err)
 
 	// Now check quota again (should pass since limit increased to 500,000 and used is 250,000)
+	store.Redis().Del(ctx, "ash:quota_limit_cache:standard")
 	allowed, err = qm.CheckQuota(ctx, ownerID, "standard")
 	require.NoError(t, err)
 	require.True(t, allowed)
@@ -610,10 +611,3 @@ func TestHypervisorRebindingExhaustedFailure(t *testing.T) {
 	_, err = hyp.HandleRequest(ctx, "user-all-fail", "conv-all-fail", []byte(`{"model":"claude"}`), &buf, "anthropic")
 	require.Error(t, err)
 }
-
-
-
-
-
-
-

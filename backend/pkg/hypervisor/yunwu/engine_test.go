@@ -450,11 +450,3 @@ func TestToolCallsToString(t *testing.T) {
 	assert.Contains(t, result, "call_1")
 	assert.Contains(t, result, "call_2")
 }
-
-
-
-
-
-
-
-

@@ -717,4 +717,3 @@ func constructMessagesFromResponsesPayload(bodyMap map[string]any) []map[string]
 
 	return msgs
 }
-
