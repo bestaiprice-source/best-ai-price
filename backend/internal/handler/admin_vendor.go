@@ -1,0 +1,151 @@
+package handler
+
+import (
+	"database/sql"
+	"encoding/json"
+	"net/http"
+	"time"
+
+	"github.com/Wei-Shaw/sub2api/internal/model"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
+	"github.com/Wei-Shaw/sub2api/pkg/scraper"
+	"github.com/gin-gonic/gin"
+	"github.com/jmoiron/sqlx"
+)
+
+type AdminVendorHandler struct {
+	db *sqlx.DB
+}
+
+func NewAdminVendorHandler(db *sql.DB) *AdminVendorHandler {
+	return &AdminVendorHandler{db: sqlx.NewDb(db, "postgres")}
+}
+
+// GetVendors returns all vendors and their models
+func (h *AdminVendorHandler) GetVendors(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	var vendors []model.Vendor
+	err := h.db.SelectContext(ctx, &vendors, `SELECT * FROM ash_vendors ORDER BY name ASC`)
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, "Failed to get vendors")
+		return
+	}
+
+	var models []model.VendorModel
+	err = h.db.SelectContext(ctx, &models, `SELECT * FROM ash_vendor_models`)
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, "Failed to get vendor models")
+		return
+	}
+
+	// Group models by vendor
+	type VendorWithModels struct {
+		model.Vendor
+		Models []model.VendorModel `json:"models"`
+	}
+
+	var result []VendorWithModels
+	for _, v := range vendors {
+		vm := VendorWithModels{Vendor: v, Models: []model.VendorModel{}}
+		for _, m := range models {
+			if m.VendorID == v.ID {
+				vm.Models = append(vm.Models, m)
+			}
+		}
+		result = append(result, vm)
+	}
+
+	response.Success(c, result)
+}
+
+type AddVendorRequest struct {
+	URL string `json:"url" binding:"required"`
+}
+
+// AddVendor adds a new vendor by URL
+func (h *AdminVendorHandler) AddVendor(c *gin.Context) {
+	var req AddVendorRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	ctx := c.Request.Context()
+	var id string
+	err := h.db.QueryRowContext(ctx, `
+		INSERT INTO ash_vendors (name, url) 
+		VALUES ('Pending Scrape', $1) 
+		RETURNING id
+	`, req.URL).Scan(&id)
+
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, "Failed to add vendor")
+		return
+	}
+
+	// Trigger async scrape (or we can just return the ID and let frontend call scrape)
+	response.Success(c, gin.H{"id": id})
+}
+
+// ScrapeVendor triggers a manual scrape for a vendor
+func (h *AdminVendorHandler) ScrapeVendor(c *gin.Context) {
+	id := c.Param("id")
+	ctx := c.Request.Context()
+
+	var vendorURL string
+	err := h.db.QueryRowContext(ctx, `SELECT url FROM ash_vendors WHERE id = $1`, id).Scan(&vendorURL)
+	if err != nil {
+		response.Error(c, http.StatusNotFound, "Vendor not found")
+		return
+	}
+
+	s := scraper.NewOneAPIScraper()
+	res, err := s.Scrape(ctx, vendorURL)
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, "Failed to scrape vendor: "+err.Error())
+		return
+	}
+
+	// Update vendor in a transaction
+	tx, err := h.db.BeginTxx(ctx, nil)
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, "Failed to start transaction")
+		return
+	}
+	defer tx.Rollback()
+
+	now := time.Now()
+	pmJSON, _ := json.Marshal(res.PaymentMethods)
+
+	_, err = tx.ExecContext(ctx, `
+		UPDATE ash_vendors 
+		SET name = $1, payment_methods = $2, currency_type = $3, exchange_rate = $4, last_scraped_at = $5, updated_at = $5
+		WHERE id = $6
+	`, res.Name, pmJSON, res.CurrencyType, res.ExchangeRate, now, id)
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, "Failed to update vendor")
+		return
+	}
+
+	// Update models (upsert)
+	for _, m := range res.Models {
+		_, err = tx.ExecContext(ctx, `
+			INSERT INTO ash_vendor_models (vendor_id, model_name, input_price, output_price, is_available)
+			VALUES ($1, $2, $3, $4, $5)
+			ON CONFLICT (vendor_id, model_name) DO UPDATE 
+			SET input_price = EXCLUDED.input_price, output_price = EXCLUDED.output_price, is_available = EXCLUDED.is_available, updated_at = $6
+		`, id, m.ModelName, m.InputPrice, m.OutputPrice, m.IsAvailable, now)
+		if err != nil {
+			response.Error(c, http.StatusInternalServerError, "Failed to upsert models")
+			return
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		response.Error(c, http.StatusInternalServerError, "Failed to commit transaction")
+		return
+	}
+
+	response.Success(c, gin.H{"message": "Scrape successful", "models_count": len(res.Models)})
+}

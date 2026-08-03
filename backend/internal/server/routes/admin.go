@@ -476,6 +476,9 @@ func RegisterAdminRoutes(
 
 		// 使用记录管理
 		registerUsageRoutes(admin, h)
+		
+		// Вендоры (Vendors)
+		registerVendorRoutes(admin, h)
 
 		// 用户属性管理
 		registerUserAttributeRoutes(admin, h)
@@ -502,6 +505,12 @@ func registerAdminAPIKeyRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	{
 		apiKeys.PUT("/:id", h.Admin.APIKey.UpdateGroup)
 	}
+}
+
+func registerVendorRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	admin.GET("/vendors", h.AdminVendor.GetVendors)
+	admin.POST("/vendors", h.AdminVendor.AddVendor)
+	admin.POST("/vendors/:id/scrape", h.AdminVendor.ScrapeVendor)
 }
 
 func registerOpsRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
