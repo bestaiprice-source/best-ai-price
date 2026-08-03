@@ -77,6 +77,13 @@ func (yh *YunwuHypervisor) HandleRequest(
 		"payload_size_bytes", len(reqPayload),
 	)
 
+	// 0. Resolve Priority and Register User
+	userPriority := 1
+	if ua, err := yh.qm.GetUserAccess(ctx, ownerID, "yunwu"); err == nil && ua != nil {
+		userPriority = ua.Priority
+	}
+	_ = yh.qm.RegisterActiveUser(ctx, ownerID, "yunwu", userPriority)
+
 	// 1. Quota Check
 	allowed, err := yh.qm.CheckQuota(ctx, ownerID, "yunwu")
 	if err != nil {
@@ -136,11 +143,6 @@ func (yh *YunwuHypervisor) HandleRequest(
 		"total_nodes", len(nodes),
 		"system_state", systemState,
 	)
-
-	userPriority := 1
-	if ua, err := yh.qm.GetUserAccess(ctx, ownerID, "yunwu"); err == nil && ua != nil {
-		userPriority = ua.Priority
-	}
 
 	// 5. Select Best Node via YunwuScheduler
 	selectedNode, err := yh.sch.SelectNode(ctx, nodes, states, credits, userPriority, activeLeaseNodeID, systemState)

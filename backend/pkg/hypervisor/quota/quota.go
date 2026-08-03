@@ -12,8 +12,8 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/account"
 	"github.com/Wei-Shaw/sub2api/ent/ashusage"
-	"github.com/Wei-Shaw/sub2api/ent/user"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/storage"
+	"github.com/redis/go-redis/v9"
 )
 
 var (
@@ -131,14 +131,27 @@ func (qm *QuotaManager) CheckQuota(ctx context.Context, ownerID string, poolType
 		return false, ErrUserInactive
 	}
 
-	limit := ua.MonthlyLimit
-	if limit <= 0 {
-		dynLimit, err := qm.GetDynamicLimit(ctx, ownerID, poolType)
-		if err != nil {
-			slog.Error("[QuotaManager] Failed to compute dynamic pool limit", "owner_id", ownerID, "error", err)
-			return false, err
+	dynLimitPerWeight, err := qm.GetDynamicLimitPerWeight(ctx, poolType)
+	if err != nil {
+		slog.Error("[QuotaManager] Failed to compute dynamic pool limit", "error", err)
+		return false, err
+	}
+
+	priority := ua.Priority
+	if priority <= 0 {
+		priority = 1
+	}
+
+	dynLimit := dynLimitPerWeight * int64(priority)
+	if dynLimit <= 0 {
+		dynLimit = NodeCapacity * int64(priority)
+	}
+
+	limit := dynLimit
+	if ua.MonthlyLimit > 0 {
+		if dynLimit > ua.MonthlyLimit {
+			limit = ua.MonthlyLimit
 		}
-		limit = dynLimit
 	}
 
 	if ua.UsedUnits >= limit {
@@ -165,18 +178,31 @@ func (qm *QuotaManager) ConsumeQuota(ctx context.Context, ownerID string, poolTy
 	}
 
 	ua.UsedUnits += units
+	
+	// Track historical global usage for Yunwu to prevent the shrinking pool double-penalty
+	if poolType == "yunwu" {
+		qm.store.Redis().IncrBy(ctx, "ash:yunwu:total_used", units)
+	}
+	
 	return qm.SaveUserAccess(ctx, ua, poolType)
 }
 
-func (qm *QuotaManager) RegisterActiveUser(ctx context.Context, ownerID string) error {
-	return qm.store.Redis().SAdd(ctx, "ash:active_users", ownerID).Err()
+func (qm *QuotaManager) RegisterActiveUser(ctx context.Context, ownerID string, poolType string, priority int) error {
+	if priority <= 0 {
+		priority = 1
+	}
+	key := fmt.Sprintf("ash:active_users:%s", poolType)
+	return qm.store.Redis().ZAdd(ctx, key, redis.Z{
+		Score:  float64(priority),
+		Member: ownerID,
+	}).Err()
 }
 
 func (qm *QuotaManager) RegisterNode(ctx context.Context, nodeID string) error {
 	return qm.store.Redis().SAdd(ctx, "ash:nodes", nodeID).Err()
 }
 
-func (qm *QuotaManager) GetDynamicLimit(ctx context.Context, ownerID string, poolType string) (int64, error) {
+func (qm *QuotaManager) GetDynamicLimitPerWeight(ctx context.Context, poolType string) (int64, error) {
 	cacheKey := fmt.Sprintf("ash:quota_limit_cache:%s", poolType)
 	cachedVal, err := qm.store.Redis().Get(ctx, cacheKey).Result()
 	if err == nil && cachedVal != "" {
@@ -185,29 +211,34 @@ func (qm *QuotaManager) GetDynamicLimit(ctx context.Context, ownerID string, poo
 		}
 	}
 
-	activeUsers, _ := qm.store.DB().User.Query().
-		Where(user.Status("active")).
-		Count(ctx)
+	// Calculate total weights of active users in this pool
+	activeUsersKey := fmt.Sprintf("ash:active_users:%s", poolType)
+	members, err := qm.store.Redis().ZRangeWithScores(ctx, activeUsersKey, 0, -1).Result()
+	
+	var totalWeights float64 = 0
+	for _, m := range members {
+		totalWeights += m.Score
+	}
 
-	if activeUsers == 0 {
-		count, _ := qm.store.Redis().SCard(ctx, "ash:active_users").Result()
-		activeUsers = int(count)
+	if totalWeights == 0 {
+		totalWeights = 1 // Prevent division by zero
 	}
 
 	// Fetch all active nodes
 	var nodeIDs []int64
-	_ = qm.store.DB().Account.Query().
-		Where(
-			account.PlatformIn("anthropic", "openai"),
-			account.Status("active"),
-		).
-		Select(account.FieldID).
-		Scan(ctx, &nodeIDs)
+	if qm.store.DB() != nil {
+		_ = qm.store.DB().Account.Query().
+			Where(
+				account.PlatformIn("anthropic", "openai"),
+				account.Status("active"),
+			).
+			Select(account.FieldID).
+			Scan(ctx, &nodeIDs)
+	}
 
 	if len(nodeIDs) == 0 {
 		strIDs, _ := qm.store.Redis().SMembers(ctx, "ash:nodes").Result()
 		for _, sid := range strIDs {
-			// Extract numeric part for testing if it's like "node-1"
 			var id int64
 			if _, err := fmt.Sscanf(sid, "node-%d", &id); err == nil {
 				nodeIDs = append(nodeIDs, id)
@@ -215,10 +246,6 @@ func (qm *QuotaManager) GetDynamicLimit(ctx context.Context, ownerID string, poo
 				nodeIDs = append(nodeIDs, 1)
 			}
 		}
-	}
-
-	if activeUsers == 0 {
-		activeUsers = 1
 	}
 
 	var totalCapacityUnits int64 = 0
@@ -242,14 +269,20 @@ func (qm *QuotaManager) GetDynamicLimit(ctx context.Context, ownerID string, poo
 		}
 	}
 
+	// For Yunwu, add historical usage to prevent double-penalty shrinking pool
+	if poolType == "yunwu" {
+		totalUsed, _ := qm.store.Redis().Get(ctx, "ash:yunwu:total_used").Int64()
+		totalCapacityUnits += totalUsed
+	}
+
 	if totalCapacityUnits == 0 {
 		totalCapacityUnits = NodeCapacity
 	}
 
-	limit := totalCapacityUnits / int64(activeUsers)
+	limitPerWeight := totalCapacityUnits / int64(totalWeights)
 
 	// Cache the result
-	_ = qm.store.Redis().SetEx(ctx, cacheKey, limit, 60*time.Second).Err()
+	_ = qm.store.Redis().SetEx(ctx, cacheKey, limitPerWeight, 60*time.Second).Err()
 
-	return limit, nil
+	return limitPerWeight, nil
 }

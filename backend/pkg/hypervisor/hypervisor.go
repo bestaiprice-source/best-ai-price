@@ -144,11 +144,12 @@ func (h *Hypervisor) HandleRequest(ctx context.Context, ownerID string, conversa
 		return nil, err
 	}
 
-	// Resolve user priority
+	// Resolve user priority and register active user
 	userPriority := 1
 	if ua, err := h.qm.GetUserAccess(ctx, ownerID, "standard"); err == nil && ua != nil {
 		userPriority = ua.Priority
 	}
+	_ = h.qm.RegisterActiveUser(ctx, ownerID, "standard", userPriority)
 
 	// Fetch system state from Redis
 	systemState := h.hc.GetSystemState(ctx, platform)

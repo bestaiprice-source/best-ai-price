@@ -233,20 +233,20 @@ func TestHypervisorDay3(t *testing.T) {
 	ownerID := "user-owner-123"
 
 	// Register some active users and nodes to test dynamic limits
-	err := qm.RegisterActiveUser(ctx, "user-owner-123")
+	err := qm.RegisterActiveUser(ctx, "user-owner-123", "standard", 1)
 	require.NoError(t, err)
-	err = qm.RegisterActiveUser(ctx, "user-owner-456")
+	err = qm.RegisterActiveUser(ctx, "user-owner-456", "standard", 1)
 	require.NoError(t, err)
-	err = qm.RegisterActiveUser(ctx, "user-owner-789")
+	err = qm.RegisterActiveUser(ctx, "user-owner-789", "standard", 1)
 	require.NoError(t, err)
-	err = qm.RegisterActiveUser(ctx, "user-owner-abc")
+	err = qm.RegisterActiveUser(ctx, "user-owner-abc", "standard", 1)
 	require.NoError(t, err) // 4 active users
 
 	err = qm.RegisterNode(ctx, "node-1")
 	require.NoError(t, err) // 1 node registered
 
 	// 1 node capacity (1,000,000) / 4 active users = 250,000 limit
-	dynLimit, err := qm.GetDynamicLimit(ctx, ownerID, "standard")
+	dynLimit, err := qm.GetDynamicLimitPerWeight(ctx, "standard")
 	require.NoError(t, err)
 	require.Equal(t, int64(quota.NodeCapacity/4), dynLimit)
 

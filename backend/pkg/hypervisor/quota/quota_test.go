@@ -65,12 +65,12 @@ func TestQuotaManagerGetUserAccessAndCheckQuota(t *testing.T) {
 	assert.Equal(t, int64(500), ua.UsedUnits)
 
 	// Register active user and nodes for dynamic limit test
-	err = qm.RegisterActiveUser(ctx, ownerID)
+	err = qm.RegisterActiveUser(ctx, ownerID, "standard", 1)
 	require.NoError(t, err)
 	err = qm.RegisterNode(ctx, "node-1")
 	require.NoError(t, err)
 
-	dynLimit, err := qm.GetDynamicLimit(ctx, ownerID, "standard")
+	dynLimit, err := qm.GetDynamicLimitPerWeight(ctx, "standard")
 	require.NoError(t, err)
 	assert.Greater(t, dynLimit, int64(0))
 }
@@ -130,13 +130,11 @@ func TestQuotaManagerDynamicFairShareZeno(t *testing.T) {
 		Save(ctx)
 	require.NoError(t, err)
 
-	// Insert 4 active users in DB
+	// We don't need to insert active users in DB anymore, we use Redis ZSET!
+	// Insert 4 active users in Redis with Priority 1
 	for i := 1; i <= 4; i++ {
-		_, err = store.DB().User.Create().
-			SetEmail(fmt.Sprintf("user%d@test.com", i)).
-			SetPasswordHash("hash").
-			SetStatus("active").
-			Save(ctx)
+		uid := fmt.Sprintf("user-zeno-%d", i)
+		err = qm.RegisterActiveUser(ctx, uid, "yunwu", 1)
 		require.NoError(t, err)
 	}
 
@@ -144,7 +142,7 @@ func TestQuotaManagerDynamicFairShareZeno(t *testing.T) {
 	// 1 dollar = 1,000,000 units. Total pool = 10,000,000 units.
 	store.Redis().Set(ctx, fmt.Sprintf("ash:yunwu:credit:%d", acc.ID), "10.0", 0)
 
-	ownerID := "user-greedy"
+	ownerID := "user-zeno-1" // Use one of the registered users
 	// Create UserAccess in Redis so CheckQuota knows this user exists
 	ua := &UserAccess{
 		OwnerID:      ownerID,
@@ -158,7 +156,7 @@ func TestQuotaManagerDynamicFairShareZeno(t *testing.T) {
 
 	// 3. Check initial limit
 	// Expected limit: 10,000,000 / 4 = 2,500,000 units ($2.5)
-	limit, err := qm.GetDynamicLimit(ctx, ownerID, "yunwu")
+	limit, err := qm.GetDynamicLimitPerWeight(ctx, "yunwu")
 	require.NoError(t, err)
 	assert.Equal(t, int64(2500000), limit)
 
@@ -170,12 +168,12 @@ func TestQuotaManagerDynamicFairShareZeno(t *testing.T) {
 	store.Redis().Set(ctx, fmt.Sprintf("ash:yunwu:credit:%d", acc.ID), "9.0", 0)
 	store.Redis().Del(ctx, "ash:quota_limit_cache:yunwu")
 
-	// 5. Check limit again (Pool is $9.0 -> 9,000,000 units. Limit = 9M / 4 = 2,250,000)
-	limit, err = qm.GetDynamicLimit(ctx, ownerID, "yunwu")
+	// 5. Check limit again (Pool is $9.0 + 1M historic = 10M units. Limit = 10M / 4 = 2,500,000)
+	limit, err = qm.GetDynamicLimitPerWeight(ctx, "yunwu")
 	require.NoError(t, err)
-	assert.Equal(t, int64(2250000), limit)
+	assert.Equal(t, int64(2500000), limit) // LIMIT STAYS CONSTANT! No double penalty!
 
-	// Quota should still pass because UsedUnits (1M) < Limit (2.25M)
+	// Quota should still pass because UsedUnits (1M) < Limit (2.5M)
 	ok, err := qm.CheckQuota(ctx, ownerID, "yunwu")
 	require.NoError(t, err)
 	assert.True(t, ok)
@@ -188,21 +186,90 @@ func TestQuotaManagerDynamicFairShareZeno(t *testing.T) {
 	store.Redis().Set(ctx, fmt.Sprintf("ash:yunwu:credit:%d", acc.ID), "8.0", 0)
 	store.Redis().Del(ctx, "ash:quota_limit_cache:yunwu")
 
-	// 7. Check limit again (Pool is $8.0 -> 8,000,000 units. Limit = 8M / 4 = 2,000,000)
-	limit, err = qm.GetDynamicLimit(ctx, ownerID, "yunwu")
+	// 7. Check limit again (Pool is $8.0 + 2M historic = 10M units. Limit = 10M / 4 = 2,500,000)
+	limit, err = qm.GetDynamicLimitPerWeight(ctx, "yunwu")
 	require.NoError(t, err)
-	assert.Equal(t, int64(2000000), limit)
+	assert.Equal(t, int64(2500000), limit)
 
-	// 8. Quota check! UsedUnits (2M) == Limit (2M)! User A should be BLOCKED!
+	// 8. Quota check! UsedUnits (2M) < Limit (2.5M)! User A should NOT be blocked yet!
+	ok, err = qm.CheckQuota(ctx, ownerID, "yunwu")
+	require.NoError(t, err)
+	assert.True(t, ok)
+	
+	// 9. User A spends final 0.5M (500,000 units). Total spent = 2,500,000.
+	err = qm.ConsumeQuota(ctx, ownerID, "yunwu", 500000)
+	require.NoError(t, err)
+	store.Redis().Set(ctx, fmt.Sprintf("ash:yunwu:credit:%d", acc.ID), "7.5", 0)
+	store.Redis().Del(ctx, "ash:quota_limit_cache:yunwu")
+	
+	// 10. Now UsedUnits (2.5M) == Limit (2.5M)! User A should be BLOCKED!
 	ok, err = qm.CheckQuota(ctx, ownerID, "yunwu")
 	assert.ErrorIs(t, err, ErrQuotaExceeded)
 	assert.False(t, ok)
 
-	// 9. Proof that the pool is NOT empty!
-	// Pool has $8.0 remaining.
-	// 1 user is blocked. But 3 other users haven't spent anything, they can still spend their $2M share!
+	// 11. Proof that the pool is NOT empty!
 	val, _ := store.Redis().Get(ctx, fmt.Sprintf("ash:yunwu:credit:%d", acc.ID)).Result()
-	assert.Equal(t, "8.0", val)
+	assert.Equal(t, "7.5", val)
+}
+
+func TestQuotaManagerPriorityWeights(t *testing.T) {
+	store := newTestStorage(t)
+	qm := NewQuotaManager(store)
+	ctx := context.Background()
+
+	// Setup node
+	err := qm.RegisterNode(ctx, "node-prio-1")
+	require.NoError(t, err)
+
+	// User 1 has Priority 1, User 2 has Priority 2 (Total Weight = 3)
+	// Node capacity is 1,000,000 by default. Limit per weight = 1M / 3 = 333,333.
+	err = qm.RegisterActiveUser(ctx, "prio-1", "standard", 1)
+	require.NoError(t, err)
+	err = qm.RegisterActiveUser(ctx, "prio-2", "standard", 2)
+	require.NoError(t, err)
+
+	_ = qm.SaveUserAccess(ctx, &UserAccess{OwnerID: "prio-1", Priority: 1, IsActive: true}, "standard")
+	_ = qm.SaveUserAccess(ctx, &UserAccess{OwnerID: "prio-2", Priority: 2, IsActive: true}, "standard")
+
+	limitWeight, err := qm.GetDynamicLimitPerWeight(ctx, "standard")
+	require.NoError(t, err)
+	assert.Equal(t, int64(333333), limitWeight)
+	
+	// User 1 consumes 333,333 - OK
+	err = qm.ConsumeQuota(ctx, "prio-1", "standard", 333333)
+	require.NoError(t, err)
+	ok, _ := qm.CheckQuota(ctx, "prio-1", "standard")
+	assert.False(t, ok) // Blocks at exactly limit
+
+	// User 2 consumes 666,666 - OK
+	err = qm.ConsumeQuota(ctx, "prio-2", "standard", 666666)
+	require.NoError(t, err)
+	ok, _ = qm.CheckQuota(ctx, "prio-2", "standard")
+	assert.False(t, ok) // Blocks at exactly 2x limit
+}
+
+func TestQuotaManagerMonthlyLimit(t *testing.T) {
+	store := newTestStorage(t)
+	qm := NewQuotaManager(store)
+	ctx := context.Background()
+
+	err := qm.RegisterNode(ctx, "node-month-1")
+	require.NoError(t, err)
+	err = qm.RegisterActiveUser(ctx, "user-month-1", "standard", 1)
+	require.NoError(t, err)
+
+	// Dynamic limit is 1,000,000.
+	// We set MonthlyLimit to 500,000. It should cap the user.
+	ua := &UserAccess{OwnerID: "user-month-1", Priority: 1, IsActive: true, MonthlyLimit: 500000}
+	_ = qm.SaveUserAccess(ctx, ua, "standard")
+
+	err = qm.ConsumeQuota(ctx, "user-month-1", "standard", 500000)
+	require.NoError(t, err)
+	
+	ok, err := qm.CheckQuota(ctx, "user-month-1", "standard")
+	assert.ErrorIs(t, err, ErrQuotaExceeded)
+	assert.False(t, ok)
+
 }
 
 func TestQuotaManagerInactive(t *testing.T) {
