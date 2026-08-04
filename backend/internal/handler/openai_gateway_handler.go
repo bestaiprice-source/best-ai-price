@@ -392,7 +392,13 @@ func (h *OpenAIGatewayHandler) handleHypervisorChatCompletions(c *gin.Context) {
 	}
 
 	platform := "openai"
+	var keyPrefix string
 	if apiKey, ok := middleware2.GetAPIKeyFromGatewayContext(transportCtx); ok && apiKey != nil {
+		if len(apiKey.Key) > 10 {
+			keyPrefix = apiKey.Key[:10]
+		} else {
+			keyPrefix = apiKey.Key
+		}
 		// Use the specific group tied to this API key to determine platform
 		if apiKey.Group != nil && apiKey.Group.Platform != "" {
 			platform = apiKey.Group.Platform
@@ -406,6 +412,7 @@ func (h *OpenAIGatewayHandler) handleHypervisorChatCompletions(c *gin.Context) {
 		"platform", platform,
 		"owner_id", ownerID,
 		"conversation_id", conversationID,
+		"key_prefix", keyPrefix,
 	)
 
 	_, err = h.hypervisorEngine.HandleRequest(c.Request.Context(), ownerID, conversationID, body, c.Writer, platform)
