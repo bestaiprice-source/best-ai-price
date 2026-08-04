@@ -36,9 +36,11 @@ type Hypervisor struct {
 	comp  *compiler.Compiler
 	hc    *health.HealthController
 	yh    *yunwu.YunwuHypervisor
+	cfg   *config.HypervisorConfig
 }
 
 func NewHypervisor(store *storage.Storage, rt runtime.Runtime) *Hypervisor {
+	cfg := config.LoadFromEnv()
 	h := &Hypervisor{
 		store: store,
 		sm:    session.NewSessionManager(store),
@@ -48,13 +50,13 @@ func NewHypervisor(store *storage.Storage, rt runtime.Runtime) *Hypervisor {
 		qm:    quota.NewQuotaManager(store),
 		sch:   scheduler.NewScheduler(),
 		rt:    rt,
-		rm:    rebinding.NewRebindingManager(store),
+		rm:    rebinding.NewRebindingManager(store, cfg),
 		comp:  compiler.NewCompiler(),
 		hc:    health.NewHealthController(store),
 		yh:    yunwu.NewYunwuHypervisor(store, rt),
+		cfg:   cfg,
 	}
 
-	cfg := config.LoadFromEnv()
 	if cfg.EnableHealthController {
 		h.hc.Start(context.Background(), 10*time.Second)
 	}
@@ -215,7 +217,7 @@ func (h *Hypervisor) HandleRequest(ctx context.Context, ownerID string, conversa
 
 	var res *runtime.ResponseMetadata
 	var execErr error
-	maxRetries := 3
+	maxRetries := h.cfg.MaxRetry
 
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		// 7. Execute request using Runtime

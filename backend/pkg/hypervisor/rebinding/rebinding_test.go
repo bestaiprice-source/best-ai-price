@@ -17,6 +17,7 @@ import (
 	entsql "entgo.io/ent/dialect/sql"
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/enttest"
+	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/config"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/health"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/session"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/storage"
@@ -49,7 +50,7 @@ func newTestStorage(t *testing.T) *storage.Storage {
 
 func TestExecuteRebindingSuccess(t *testing.T) {
 	store := newTestStorage(t)
-	rm := NewRebindingManager(store)
+	rm := NewRebindingManager(store, config.LoadFromEnv())
 
 	sess := &session.VirtualSession{
 		ID:             "sess-rebinding-1",
@@ -90,7 +91,7 @@ func TestExecuteRebindingSuccess(t *testing.T) {
 
 func TestExecuteRebindingLockConflict(t *testing.T) {
 	store := newTestStorage(t)
-	rm := NewRebindingManager(store)
+	rm := NewRebindingManager(store, config.LoadFromEnv())
 
 	sess := &session.VirtualSession{
 		ID:             "sess-locked",

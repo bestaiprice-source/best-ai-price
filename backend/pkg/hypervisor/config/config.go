@@ -15,6 +15,7 @@ type HypervisorConfig struct {
 	EnableMockRuntime      bool `mapstructure:"enable_mock_runtime"`
 	MaxRetry               int  `mapstructure:"max_retry"`
 	NodeCooldownSeconds    int  `mapstructure:"node_cooldown_seconds"`
+	SessionLockTTLSeconds  int  `mapstructure:"session_lock_ttl_seconds"`
 }
 
 // LoadFromEnv loads Hypervisor config from environment variables as overrides/fallbacks.
@@ -29,6 +30,7 @@ func LoadFromEnv() *HypervisorConfig {
 		EnableMockRuntime:      getEnvBool("ASH_ENABLE_MOCK_RUNTIME", true),
 		MaxRetry:               getEnvInt("ASH_MAX_RETRY", 1),
 		NodeCooldownSeconds:    getEnvInt("ASH_NODE_COOLDOWN_SECONDS", 900),
+		SessionLockTTLSeconds:  getEnvInt("ASH_SESSION_LOCK_TTL_SECONDS", 120),
 	}
 	return cfg
 }

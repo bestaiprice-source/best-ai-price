@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/config"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/health"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/lease"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/session"
@@ -18,14 +19,16 @@ type RebindingManager struct {
 	lm    *lease.LeaseManager
 	sm    *session.SessionManager
 	nm    *health.NodeManager
+	cfg   *config.HypervisorConfig
 }
 
-func NewRebindingManager(store *storage.Storage) *RebindingManager {
+func NewRebindingManager(store *storage.Storage, cfg *config.HypervisorConfig) *RebindingManager {
 	return &RebindingManager{
 		store: store,
 		lm:    lease.NewLeaseManager(store),
 		sm:    session.NewSessionManager(store),
 		nm:    health.NewNodeManager(store),
+		cfg:   cfg,
 	}
 }
 
@@ -47,7 +50,8 @@ func (rm *RebindingManager) RebindSession(
 	)
 
 	// 1. Acquire Redis distributed lock
-	locked, err := rm.store.AcquireLock(ctx, sess.ID, 30*time.Second)
+	lockTTL := time.Duration(rm.cfg.SessionLockTTLSeconds) * time.Second
+	locked, err := rm.store.AcquireLock(ctx, sess.ID, lockTTL)
 	if err != nil || !locked {
 		slog.Warn("[Rebinding] Could not acquire distributed lock for session", "session_id", sess.ID)
 		return nil, fmt.Errorf("failed to acquire session lock for rebinding")

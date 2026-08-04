@@ -13,6 +13,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/account"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/compiler"
+	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/config"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/events"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/health"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/lease"
@@ -35,6 +36,7 @@ type YunwuHypervisor struct {
 	comp  *compiler.Compiler
 	hc    *YunwuHealthController
 	sw    *StatsWorker
+	cfg   *config.HypervisorConfig
 }
 
 func NewYunwuHypervisor(store *storage.Storage, rt runtime.Runtime) *YunwuHypervisor {
@@ -51,6 +53,7 @@ func NewYunwuHypervisor(store *storage.Storage, rt runtime.Runtime) *YunwuHyperv
 		comp:  compiler.NewCompiler(),
 		hc:    NewYunwuHealthController(store),
 		sw:    NewStatsWorker(store),
+		cfg:   config.LoadFromEnv(),
 	}
 
 	yh.hc.Start(context.Background(), 10*time.Second, func(ctx context.Context) []health.ExecutionNode {
@@ -180,7 +183,7 @@ func (yh *YunwuHypervisor) HandleRequest(
 
 	var meta *runtime.ResponseMetadata
 	var execErr error
-	maxRetries := 3
+	maxRetries := yh.cfg.MaxRetry
 
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		slog.Info("[YunwuHypervisor] Executing upstream request",
