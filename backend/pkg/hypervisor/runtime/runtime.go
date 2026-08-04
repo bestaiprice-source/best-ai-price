@@ -260,6 +260,34 @@ func (r *AnthropicRuntime) Execute(ctx context.Context, nodeID string, reqPayloa
 				bodyMap["max_tokens"] = 4096
 				modified = true
 			}
+
+			// Translate tool_choice from string or OpenAI object to Anthropic object
+			if tc, ok := bodyMap["tool_choice"]; ok && tc != nil {
+				if tcStr, ok := tc.(string); ok {
+					if tcStr == "auto" {
+						bodyMap["tool_choice"] = map[string]any{"type": "auto"}
+						modified = true
+					} else if tcStr == "required" {
+						bodyMap["tool_choice"] = map[string]any{"type": "any"}
+						modified = true
+					} else if tcStr == "none" {
+						delete(bodyMap, "tool_choice")
+						modified = true
+					}
+				} else if tcMap, ok := tc.(map[string]any); ok {
+					if typ, ok := tcMap["type"].(string); ok && typ == "function" {
+						if fn, ok := tcMap["function"].(map[string]any); ok {
+							if name, ok := fn["name"].(string); ok {
+								bodyMap["tool_choice"] = map[string]any{
+									"type": "tool",
+									"name": name,
+								}
+								modified = true
+							}
+						}
+					}
+				}
+			}
 		}
 
 		if modified {
