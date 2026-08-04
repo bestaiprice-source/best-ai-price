@@ -137,13 +137,43 @@ export async function toggleStatus(id: number, status: 'active' | 'inactive'): P
   return update(id, { status })
 }
 
+// ---------------- Admin Endpoints ----------------
+
+export async function listAdmin(
+  page: number = 1,
+  pageSize: number = 10,
+  filters?: { search?: string; status?: string; group_id?: number | string; user_id?: number | string },
+  options?: { signal?: AbortSignal }
+): Promise<PaginatedResponse<ApiKey>> {
+  const { data } = await apiClient.get<PaginatedResponse<ApiKey>>('/admin/api-keys', {
+    params: { page, page_size: pageSize, ...filters },
+    signal: options?.signal
+  })
+  return data
+}
+
+export async function updateAdmin(
+  id: number,
+  payload: UpdateApiKeyRequest
+): Promise<ApiKey> {
+  const { data } = await apiClient.put<ApiKey>(`/admin/api-keys/${id}`, payload)
+  return data
+}
+
+export async function removeAdmin(id: number): Promise<void> {
+  await apiClient.delete(`/admin/api-keys/${id}`)
+}
+
 export const keysAPI = {
   list,
   getById,
   create,
   update,
   delete: deleteKey,
-  toggleStatus
+  toggleStatus,
+  listAdmin,
+  updateAdmin,
+  removeAdmin
 }
 
 export default keysAPI

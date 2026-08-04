@@ -10,6 +10,13 @@
             @search="onFilterChange"
           />
           <Select
+            v-if="isAdmin"
+            :model-value="filterUserId"
+            class="w-40"
+            :options="userFilterOptions"
+            @update:model-value="onUserFilterChange"
+          />
+          <Select
             :model-value="filterGroupId"
             class="w-40"
             :options="groupFilterOptions"
@@ -66,6 +73,13 @@
                 />
                 <Icon v-else name="clipboard" size="sm" />
               </button>
+            </div>
+          </template>
+
+          <template #cell-owner="{ row }">
+            <div v-if="isAdmin" class="flex flex-col text-sm">
+              <span class="font-medium text-gray-900 dark:text-white">{{ row.user?.username || row.user?.email || 'N/A' }}</span>
+              <span class="text-xs text-gray-500">ID: {{ row.user_id }}</span>
             </div>
           </template>
 
@@ -1139,18 +1153,24 @@ const appStore = useAppStore()
 const onboardingStore = useOnboardingStore()
 const { copyToClipboard: clipboardCopy } = useClipboard()
 
-const columns = computed<Column[]>(() => [
-  { key: 'name', label: t('common.name'), sortable: true },
-  { key: 'key', label: t('keys.apiKey'), sortable: false },
-  { key: 'group', label: t('keys.group'), sortable: false },
-  { key: 'usage', label: t('keys.usage'), sortable: false },
-  { key: 'rate_limit', label: t('keys.rateLimitColumn'), sortable: false },
-  { key: 'expires_at', label: t('keys.expiresAt'), sortable: true },
-  { key: 'status', label: t('common.status'), sortable: true },
-  { key: 'last_used_at', label: t('keys.lastUsedAt'), sortable: true },
-  { key: 'created_at', label: t('keys.created'), sortable: true },
-  { key: 'actions', label: t('common.actions'), sortable: false }
-])
+const columns = computed<Column[]>(() => {
+  const cols: Column[] = [
+    { key: 'name', label: t('common.name'), sortable: true },
+    { key: 'key', label: t('keys.apiKey'), sortable: false },
+    { key: 'group', label: t('keys.group'), sortable: false },
+    { key: 'usage', label: t('keys.usage'), sortable: false },
+    { key: 'rate_limit', label: t('keys.rateLimitColumn'), sortable: false },
+    { key: 'expires_at', label: t('keys.expiresAt'), sortable: true },
+    { key: 'status', label: t('common.status'), sortable: true },
+    { key: 'last_used_at', label: t('keys.lastUsedAt'), sortable: true },
+    { key: 'created_at', label: t('keys.created'), sortable: true },
+    { key: 'actions', label: t('common.actions'), sortable: false }
+  ]
+  if (isAdmin.value) {
+    cols.splice(1, 0, { key: 'owner', label: 'Owner', sortable: false })
+  }
+  return cols
+})
 
 const apiKeys = ref<ApiKey[]>([])
 const groups = ref<Group[]>([])
@@ -1174,6 +1194,7 @@ const pagination = ref({
 const filterSearch = ref('')
 const filterStatus = ref('')
 const filterGroupId = ref<string | number>('')
+const filterUserId = ref<string | number>('')
 
 const showCreateModal = ref(false)
 const showEditModal = ref(false)
@@ -1308,6 +1329,24 @@ const onGroupFilterChange = (value: string | number | boolean | null) => {
   onFilterChange()
 }
 
+const onUserFilterChange = (value: string | number | boolean | null) => {
+  filterUserId.value = value as string | number
+  onFilterChange()
+}
+
+const userFilterOptions = computed(() => {
+  const options = [
+    { label: t('common.allUsers') || 'All Users', value: '' }
+  ]
+  allUsers.value.forEach(u => {
+    options.push({
+      label: `${u.email} (${u.username || 'no name'})`,
+      value: u.id
+    })
+  })
+  return options
+})
+
 const onStatusFilterChange = (value: string | number | boolean | null) => {
   filterStatus.value = value as string
   onFilterChange()
@@ -1376,12 +1415,14 @@ const loadApiKeys = async () => {
   loading.value = true
   try {
     // Build filters
-    const filters: { search?: string; status?: string; group_id?: number | string } = {}
+    const filters: { search?: string; status?: string; group_id?: number | string; user_id?: number | string } = {}
     if (filterSearch.value) filters.search = filterSearch.value
     if (filterStatus.value) filters.status = filterStatus.value
     if (filterGroupId.value !== '') filters.group_id = filterGroupId.value
+    if (filterUserId.value !== '') filters.user_id = filterUserId.value
 
-    const response = await keysAPI.list(pagination.value.page, pagination.value.page_size, filters, {
+    const listFn = isAdmin.value ? keysAPI.listAdmin : keysAPI.list
+    const response = await listFn(pagination.value.page, pagination.value.page_size, filters, {
       signal
     })
     if (signal.aborted) return
@@ -1493,7 +1534,11 @@ const editKey = (key: ApiKey) => {
 const toggleKeyStatus = async (key: ApiKey) => {
   const newStatus = key.status === 'active' ? 'inactive' : 'active'
   try {
-    await keysAPI.toggleStatus(key.id, newStatus)
+    if (isAdmin.value) {
+      await keysAPI.updateAdmin(key.id, { status: newStatus })
+    } else {
+      await keysAPI.toggleStatus(key.id, newStatus)
+    }
     appStore.showSuccess(
       newStatus === 'active' ? t('keys.keyEnabledSuccess') : t('keys.keyDisabledSuccess')
     )
@@ -1509,7 +1554,8 @@ const changeGroup = async (key: ApiKey, newGroupId: number | null) => {
   if (key.group_id === newGroupId) return
 
   try {
-    await keysAPI.update(key.id, { group_id: newGroupId, group_ids: newGroupId ? [newGroupId] : [] })
+    const updateFn = isAdmin.value ? keysAPI.updateAdmin : keysAPI.update
+    await updateFn(key.id, { group_id: newGroupId, group_ids: newGroupId ? [newGroupId] : [] })
     appStore.showSuccess(t('keys.groupChangedSuccess'))
     loadApiKeys()
   } catch (error) {
@@ -1590,7 +1636,8 @@ const handleSubmit = async () => {
   submitting.value = true
   try {
     if (showEditModal.value && selectedKey.value) {
-      await keysAPI.update(selectedKey.value.id, {
+      const updateFn = isAdmin.value ? keysAPI.updateAdmin : keysAPI.update
+      await updateFn(selectedKey.value.id, {
         name: formData.value.name,
         group_id: formData.value.group_ids[0] ?? null,
         group_ids: formData.value.group_ids,
@@ -1646,7 +1693,8 @@ const handleDelete = async () => {
   if (!selectedKey.value) return
 
   try {
-    await keysAPI.delete(selectedKey.value.id)
+    const deleteFn = isAdmin.value ? keysAPI.removeAdmin : keysAPI.delete
+    await deleteFn(selectedKey.value.id)
     appStore.showSuccess(t('keys.keyDeletedSuccess'))
     showDeleteDialog.value = false
     loadApiKeys()
@@ -1703,7 +1751,8 @@ const resetQuotaUsed = async () => {
   if (!selectedKey.value) return
   showResetQuotaDialog.value = false
   try {
-    await keysAPI.update(selectedKey.value.id, { reset_quota: true })
+    const updateFn = isAdmin.value ? keysAPI.updateAdmin : keysAPI.update
+    await updateFn(selectedKey.value.id, { reset_quota: true })
     appStore.showSuccess(t('keys.quotaResetSuccess'))
     // Update local state
     if (selectedKey.value) {
@@ -1731,7 +1780,8 @@ const resetRateLimitUsage = async () => {
   if (!selectedKey.value) return
   showResetRateLimitDialog.value = false
   try {
-    await keysAPI.update(selectedKey.value.id, { reset_rate_limit_usage: true })
+    const updateFn = isAdmin.value ? keysAPI.updateAdmin : keysAPI.update
+    await updateFn(selectedKey.value.id, { reset_rate_limit_usage: true })
     appStore.showSuccess(t('keys.rateLimitResetSuccess'))
     // Refresh key data
     await loadApiKeys()

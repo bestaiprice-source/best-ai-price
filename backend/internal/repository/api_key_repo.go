@@ -314,9 +314,15 @@ func (r *apiKeyRepository) Delete(ctx context.Context, id int64) error {
 }
 
 func (r *apiKeyRepository) ListByUserID(ctx context.Context, userID int64, params pagination.PaginationParams, filters service.APIKeyListFilters) ([]service.APIKey, *pagination.PaginationResult, error) {
-	q := r.activeQuery().Where(apikey.UserIDEQ(userID))
+	q := r.activeQuery()
+	if userID != 0 {
+		q = q.Where(apikey.UserIDEQ(userID))
+	}
 
 	// Apply filters
+	if filters.UserID != nil {
+		q = q.Where(apikey.UserIDEQ(*filters.UserID))
+	}
 	if filters.Search != "" {
 		q = q.Where(apikey.Or(
 			apikey.NameContainsFold(filters.Search),

@@ -49,6 +49,9 @@ type AdminService interface {
 	UpdateGroupSortOrders(ctx context.Context, updates []GroupSortOrderUpdate) error
 
 	// API Key management (admin)
+	AdminListAPIKeys(ctx context.Context, page, pageSize int, filters APIKeyListFilters) ([]APIKey, *pagination.PaginationResult, error)
+	AdminUpdateAPIKey(ctx context.Context, keyID int64, req UpdateAPIKeyRequest) (*APIKey, error)
+	AdminDeleteAPIKey(ctx context.Context, keyID int64) error
 	AdminUpdateAPIKeyGroupID(ctx context.Context, keyID int64, groupID *int64) (*AdminUpdateAPIKeyGroupIDResult, error)
 
 	// ReplaceUserGroup 替换用户的专属分组：授予新分组权限、迁移 Key、移除旧分组权限
@@ -1357,6 +1360,113 @@ func (s *adminServiceImpl) BatchSetGroupRateMultipliers(ctx context.Context, gro
 
 func (s *adminServiceImpl) UpdateGroupSortOrders(ctx context.Context, updates []GroupSortOrderUpdate) error {
 	return s.groupRepo.UpdateSortOrders(ctx, updates)
+}
+
+func (s *adminServiceImpl) AdminListAPIKeys(ctx context.Context, page, pageSize int, filters APIKeyListFilters) ([]APIKey, *pagination.PaginationResult, error) {
+	params := pagination.PaginationParams{Page: page, PageSize: pageSize}
+	// userID = 0 means don't filter by a specific owner
+	keys, pagination, err := s.apiKeyRepo.ListByUserID(ctx, 0, params, filters)
+	if err != nil {
+		return nil, nil, fmt.Errorf("list all api keys: %w", err)
+	}
+	return keys, pagination, nil
+}
+
+func (s *adminServiceImpl) AdminUpdateAPIKey(ctx context.Context, keyID int64, req UpdateAPIKeyRequest) (*APIKey, error) {
+	apiKey, err := s.apiKeyRepo.GetByID(ctx, keyID)
+	if err != nil {
+		return nil, fmt.Errorf("get api key: %w", err)
+	}
+
+	// Update fields (similar to regular APIKeyService.Update)
+	if req.Name != nil {
+		apiKey.Name = *req.Name
+	}
+	apiKey.AllowedModels = NormalizeAPIKeyAllowedModels(apiKey.AllowedModels)
+	
+	if req.GroupID != nil || req.GroupIDs != nil {
+		requestedGroupIDs := apiKey.GroupIDs
+		if req.GroupIDs != nil {
+			requestedGroupIDs = NormalizeAPIKeyGroupIDs(nil, *req.GroupIDs)
+		} else {
+			// Helper to resolve group IDs from main service is not easily accessible here
+			// but we can just use the provided ID.
+			if *req.GroupID == 0 {
+				requestedGroupIDs = []int64{}
+			} else {
+				requestedGroupIDs = []int64{*req.GroupID}
+			}
+		}
+		
+		apiKey.GroupIDs = requestedGroupIDs
+		apiKey.GroupID = PrimaryAPIKeyGroupID(requestedGroupIDs)
+	}
+
+	if req.Status != nil {
+		apiKey.Status = *req.Status
+	}
+
+	// Quota
+	if req.Quota != nil {
+		apiKey.Quota = *req.Quota
+	}
+	if req.ResetQuota != nil && *req.ResetQuota {
+		apiKey.QuotaUsed = 0
+	}
+
+	// Expiration time
+	if req.ClearExpiration {
+		apiKey.ExpiresAt = nil
+	} else if req.ExpiresAt != nil {
+		apiKey.ExpiresAt = req.ExpiresAt
+	}
+
+	// IP 
+	if len(req.IPWhitelist) > 0 {
+		apiKey.IPWhitelist = req.IPWhitelist
+	}
+	if len(req.IPBlacklist) > 0 {
+		apiKey.IPBlacklist = req.IPBlacklist
+	}
+
+	// Rate limit fields
+	if req.RateLimit5h != nil {
+		apiKey.RateLimit5h = *req.RateLimit5h
+	}
+	if req.RateLimit1d != nil {
+		apiKey.RateLimit1d = *req.RateLimit1d
+	}
+	if req.RateLimit7d != nil {
+		apiKey.RateLimit7d = *req.RateLimit7d
+	}
+	if req.ResetRateLimitUsage != nil && *req.ResetRateLimitUsage {
+		apiKey.Usage5h = 0
+		apiKey.Usage1d = 0
+		apiKey.Usage7d = 0
+		apiKey.Window5hStart = nil
+		apiKey.Window1dStart = nil
+		apiKey.Window7dStart = nil
+	}
+
+	if err := s.apiKeyRepo.Update(ctx, apiKey); err != nil {
+		return nil, fmt.Errorf("update api key: %w", err)
+	}
+	s.authCacheInvalidator.InvalidateAuthCacheByKey(ctx, apiKey.Key)
+
+	return apiKey, nil
+}
+
+func (s *adminServiceImpl) AdminDeleteAPIKey(ctx context.Context, keyID int64) error {
+	key, _, err := s.apiKeyRepo.GetKeyAndOwnerID(ctx, keyID)
+	if err != nil {
+		return err
+	}
+
+	if err := s.apiKeyRepo.Delete(ctx, keyID); err != nil {
+		return fmt.Errorf("delete api key: %w", err)
+	}
+	s.authCacheInvalidator.InvalidateAuthCacheByKey(ctx, key)
+	return nil
 }
 
 // AdminUpdateAPIKeyGroupID 管理员修改 API Key 分组绑定

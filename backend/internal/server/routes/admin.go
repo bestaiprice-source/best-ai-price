@@ -161,7 +161,9 @@ func ExecutableAdminRoutes(h *handler.Handlers) []gatewayctx.RouteDef {
 	}
 	if h.Admin.APIKey != nil {
 		out = append(out,
-			gatewayctx.RouteDef{Method: http.MethodPut, Path: "/api/v1/admin/api-keys/:id", Handler: h.Admin.APIKey.UpdateGroupGateway, Middleware: []string{"request_logger", "cors", "security_headers", "client_request_id", "admin_auth"}},
+			gatewayctx.RouteDef{Method: http.MethodGet, Path: "/api/v1/admin/api-keys", Handler: h.Admin.APIKey.ListGateway, Middleware: []string{"request_logger", "cors", "security_headers", "client_request_id", "admin_auth"}},
+			gatewayctx.RouteDef{Method: http.MethodPut, Path: "/api/v1/admin/api-keys/:id", Handler: h.Admin.APIKey.UpdateGateway, Middleware: []string{"request_logger", "cors", "security_headers", "client_request_id", "admin_auth"}},
+			gatewayctx.RouteDef{Method: http.MethodDelete, Path: "/api/v1/admin/api-keys/:id", Handler: h.Admin.APIKey.DeleteGateway, Middleware: []string{"request_logger", "cors", "security_headers", "client_request_id", "admin_auth"}},
 		)
 	}
 	if h.Admin.UserAttribute != nil {
@@ -503,7 +505,9 @@ func RegisterAdminRoutes(
 func registerAdminAPIKeyRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	apiKeys := admin.Group("/api-keys")
 	{
-		apiKeys.PUT("/:id", h.Admin.APIKey.UpdateGroup)
+		apiKeys.GET("", h.Admin.APIKey.List)
+		apiKeys.PUT("/:id", h.Admin.APIKey.Update)
+		apiKeys.DELETE("/:id", h.Admin.APIKey.Delete)
 	}
 }
 

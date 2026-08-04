@@ -227,5 +227,6 @@ func (k *APIKey) EffectiveUsage7d() float64 {
 type APIKeyListFilters struct {
 	Search  string
 	Status  string
+	UserID  *int64 // nil=不筛选, 0=无所有者(理论不存在), >0=指定用户
 	GroupID *int64 // nil=不筛选, 0=无分组, >0=指定分组
 }
