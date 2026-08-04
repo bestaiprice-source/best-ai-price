@@ -100,6 +100,7 @@ func (s *Scheduler) SelectNode(ctx context.Context, nodes []health.ExecutionNode
 		var queueDepth int
 		var recent429 int
 		var recentTimeout int
+		var usedTokens int64
 
 		if exists {
 			successRate = state.SuccessRate
@@ -107,6 +108,7 @@ func (s *Scheduler) SelectNode(ctx context.Context, nodes []health.ExecutionNode
 			queueDepth = state.QueueDepth
 			recent429 = state.Recent429
 			recentTimeout = state.RecentTimeouts
+			usedTokens = state.UsedTokens
 		}
 
 		// score = success_rate * 100
@@ -124,6 +126,11 @@ func (s *Scheduler) SelectNode(ctx context.Context, nodes []health.ExecutionNode
 
 		// - queue_depth * 5
 		score -= float64(queueDepth) * 5.0
+
+		// - used_tokens penalty for fair distribution
+		// 10k tokens = 1 point penalty. This organically distributes load across nodes
+		// without overriding health signals like success rate and latency.
+		score -= float64(usedTokens) / 10000.0
 
 		// Penalize more heavily based on degradation state
 		multiplier429 := 30.0

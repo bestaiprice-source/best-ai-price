@@ -26,6 +26,7 @@ type NodeRuntimeState struct {
 	QueueDepth     int        `json:"queue_depth"`
 	Recent429      int        `json:"recent_429"`
 	RecentTimeouts int        `json:"recent_timeouts"`
+	UsedTokens     int64      `json:"used_tokens"`
 	LastErrorAt    *time.Time `json:"last_error_at,omitempty"`
 	CooldownUntil  *time.Time `json:"cooldown_until,omitempty"`
 }

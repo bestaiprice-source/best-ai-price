@@ -299,6 +299,12 @@ func (h *Hypervisor) HandleRequest(ctx context.Context, ownerID string, conversa
 		if totalTokens > 0 {
 			_ = h.qm.ConsumeQuota(ctx, ownerID, "standard", totalTokens)
 			_, _ = h.store.RecordUsage(ctx, ownerID, &sess.ID, &selectedNode.NodeID, res.InputTokens, res.OutputTokens, costUnits)
+			
+			if state, err := h.hc.NodeManager().GetNodeRuntimeState(ctx, selectedNode.NodeID); err == nil && state != nil {
+				state.UsedTokens += int64(totalTokens)
+				_ = h.hc.NodeManager().SaveNodeRuntimeState(ctx, state)
+			}
+
 			slog.Info("[Hypervisor] Recorded request usage",
 				"hypervisor_mode", "standard",
 				"owner_id", ownerID,

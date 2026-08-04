@@ -25,6 +25,10 @@ func NewHealthController(store *storage.Storage) *HealthController {
 	}
 }
 
+func (hc *HealthController) NodeManager() *NodeManager {
+	return hc.nm
+}
+
 func (hc *HealthController) Start(ctx context.Context, interval time.Duration) {
 	slog.Info("[HealthController] Starting background health reconciliation loop", "interval", interval)
 	ticker := time.NewTicker(interval)
