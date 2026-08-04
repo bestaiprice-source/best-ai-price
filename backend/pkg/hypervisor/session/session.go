@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/ent/ashsession"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/lease"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/storage"
 )
@@ -115,7 +116,7 @@ func (sm *SessionManager) SaveSession(ctx context.Context, sess *VirtualSession)
 			SetState(sess.State).
 			SetCreatedAt(sess.CreatedAt).
 			SetUpdatedAt(sess.UpdatedAt).
-			OnConflict().
+			OnConflictColumns(ashsession.FieldID).
 			UpdateNewValues().
 			Exec(ctx)
 			
