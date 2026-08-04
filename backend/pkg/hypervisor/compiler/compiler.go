@@ -10,13 +10,24 @@ type Message struct {
 	Content string `json:"content"`
 }
 
+type ProjectSnapshot struct {
+	WorkspaceID string    `json:"workspace_id"`
+	GitBranch   string    `json:"git_branch"`
+	GitCommit   string    `json:"git_commit"`
+	DirtyFiles  []string  `json:"dirty_files"`
+	OpenFiles   []string  `json:"open_files"`
+	LastCommand string    `json:"last_command"`
+	SnapshotRef string    `json:"snapshot_ref"`
+}
+
 type ExecutionContext struct {
-	SystemPrompt   string    `json:"system_prompt"`
-	Summary        string    `json:"summary"`
-	PinnedFacts    []string  `json:"pinned_facts"`
-	RecentMessages []Message `json:"recent_messages"`
-	TerminalState  string    `json:"terminal_state"`
-	ToolState      string    `json:"tool_state"`
+	SystemPrompt   string           `json:"system_prompt"`
+	Summary        string           `json:"summary"`
+	PinnedFacts    []string         `json:"pinned_facts"`
+	RecentMessages []Message        `json:"recent_messages"`
+	TerminalState  string           `json:"terminal_state"`
+	ToolState      string           `json:"tool_state"`
+	ProjectState   *ProjectSnapshot `json:"project_state,omitempty"`
 }
 
 type Compiler struct{}
@@ -45,6 +56,25 @@ func (c *Compiler) Compile(ctx ExecutionContext) (string, error) {
 	}
 	if ctx.ToolState != "" {
 		prompt += fmt.Sprintf("Tool State:\n%s\n\n", ctx.ToolState)
+	}
+	if ctx.ProjectState != nil {
+		prompt += fmt.Sprintf("Project State:\nWorkspace: %s\nBranch: %s\nCommit: %s\n", ctx.ProjectState.WorkspaceID, ctx.ProjectState.GitBranch, ctx.ProjectState.GitCommit)
+		if len(ctx.ProjectState.DirtyFiles) > 0 {
+			prompt += "Dirty Files:\n"
+			for _, file := range ctx.ProjectState.DirtyFiles {
+				prompt += fmt.Sprintf("- %s\n", file)
+			}
+		}
+		if len(ctx.ProjectState.OpenFiles) > 0 {
+			prompt += "Open Files:\n"
+			for _, file := range ctx.ProjectState.OpenFiles {
+				prompt += fmt.Sprintf("- %s\n", file)
+			}
+		}
+		if ctx.ProjectState.LastCommand != "" {
+			prompt += fmt.Sprintf("Last Command:\n%s\n", ctx.ProjectState.LastCommand)
+		}
+		prompt += "\n"
 	}
 
 	slog.Debug("[Compiler] Compiled execution context",

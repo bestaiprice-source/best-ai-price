@@ -502,6 +502,17 @@ func (yh *YunwuHypervisor) compileAndInjectContext(sess *session.VirtualSession,
 		TerminalState: sess.Context.TerminalState,
 		ToolState:     toolCallsToString(sess.Context.ToolState),
 	}
+	if sess.Context.ProjectState != nil {
+		compCtx.ProjectState = &compiler.ProjectSnapshot{
+			WorkspaceID: sess.Context.ProjectState.WorkspaceID,
+			GitBranch:   sess.Context.ProjectState.GitBranch,
+			GitCommit:   sess.Context.ProjectState.GitCommit,
+			DirtyFiles:  sess.Context.ProjectState.DirtyFiles,
+			OpenFiles:   sess.Context.ProjectState.OpenFiles,
+			LastCommand: sess.Context.ProjectState.LastCommand,
+			SnapshotRef: sess.Context.ProjectState.SnapshotRef,
+		}
+	}
 	for _, m := range sess.Context.RecentMessages {
 		compCtx.RecentMessages = append(compCtx.RecentMessages, compiler.Message{Role: m.Role, Content: m.Content})
 	}

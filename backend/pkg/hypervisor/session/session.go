@@ -20,13 +20,25 @@ type ToolCall struct {
 	Function string `json:"function"`
 }
 
+type ProjectSnapshot struct {
+	WorkspaceID string    `json:"workspace_id"`
+	GitBranch   string    `json:"git_branch"`
+	GitCommit   string    `json:"git_commit"`
+	DirtyFiles  []string  `json:"dirty_files"`
+	OpenFiles   []string  `json:"open_files"`
+	LastCommand string    `json:"last_command"`
+	SnapshotRef string    `json:"snapshot_ref"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
 type ExecutionContext struct {
-	SystemPrompt   string     `json:"system_prompt"`
-	Summary        string     `json:"summary"`
-	PinnedFacts    []string   `json:"pinned_facts"`
-	RecentMessages []Message  `json:"recent_messages"`
-	TerminalState  string     `json:"terminal_state"`
-	ToolState      []ToolCall `json:"tool_state"`
+	SystemPrompt   string           `json:"system_prompt"`
+	Summary        string           `json:"summary"`
+	PinnedFacts    []string         `json:"pinned_facts"`
+	RecentMessages []Message        `json:"recent_messages"`
+	TerminalState  string           `json:"terminal_state"`
+	ToolState      []ToolCall       `json:"tool_state"`
+	ProjectState   *ProjectSnapshot `json:"project_state,omitempty"`
 }
 
 type VirtualSession struct {
