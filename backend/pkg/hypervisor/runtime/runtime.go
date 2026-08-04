@@ -241,13 +241,29 @@ func (r *AnthropicRuntime) Execute(ctx context.Context, nodeID string, reqPayloa
 	if json.Unmarshal(reqPayload, &bodyMap) == nil {
 		modified := false
 
-		msgs, hasMsgs := bodyMap["messages"]
-		if !hasMsgs || msgs == nil {
-			bodyMap["messages"] = constructMessagesFromResponsesPayload(bodyMap)
-			modified = true
-		} else if msgArr, ok := msgs.([]any); ok && len(msgArr) == 0 {
-			bodyMap["messages"] = constructMessagesFromResponsesPayload(bodyMap)
-			modified = true
+		targetIsResponsesAPI := strings.Contains(apiURL, "/responses")
+
+		if targetIsResponsesAPI {
+			if _, hasMsgs := bodyMap["messages"]; hasMsgs {
+				if _, hasInput := bodyMap["input"]; !hasInput {
+					bodyMap["input"] = constructInputFromMessagesPayload(bodyMap)
+				}
+				delete(bodyMap, "messages")
+				modified = true
+			}
+			if isOAuth {
+				bodyMap["store"] = false
+				modified = true
+			}
+		} else {
+			msgs, hasMsgs := bodyMap["messages"]
+			if !hasMsgs || msgs == nil {
+				bodyMap["messages"] = constructMessagesFromResponsesPayload(bodyMap)
+				modified = true
+			} else if msgArr, ok := msgs.([]any); ok && len(msgArr) == 0 {
+				bodyMap["messages"] = constructMessagesFromResponsesPayload(bodyMap)
+				modified = true
+			}
 		}
 
 		if !isChatCompletions || acc.Platform == "anthropic" || strings.HasSuffix(apiURL, "/messages") {
@@ -658,6 +674,38 @@ func extractTokens(data []byte) (int64, int64) {
 	}
 	return input, output
 }
+
+func constructInputFromMessagesPayload(bodyMap map[string]any) []map[string]any {
+	var input []map[string]any
+	msgs, ok := bodyMap["messages"].([]any)
+	if !ok {
+		return input
+	}
+	for _, msg := range msgs {
+		msgMap, ok := msg.(map[string]any)
+		if !ok {
+			continue
+		}
+		role, _ := msgMap["role"].(string)
+		if role == "" {
+			role = "user"
+		}
+		contentStr, _ := msgMap["content"].(string)
+		if contentStr != "" {
+			input = append(input, map[string]any{
+				"role": role,
+				"content": []map[string]any{
+					{
+						"type": "input_text",
+						"text": contentStr,
+					},
+				},
+			})
+		}
+	}
+	return input
+}
+
 
 func resolveUpstreamAPIURL(customURL string, platform string, isChatCompletions bool) string {
 	customURL = strings.TrimSpace(customURL)
