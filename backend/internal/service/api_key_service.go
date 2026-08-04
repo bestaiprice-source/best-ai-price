@@ -347,8 +347,7 @@ func (s *APIKeyService) validateAPIKeyGroups(ctx context.Context, user *User, re
 	}
 
 	groups := make([]*Group, 0, len(requestedGroupIDs))
-	var platform string
-	for idx, groupID := range requestedGroupIDs {
+	for _, groupID := range requestedGroupIDs {
 		group, err := s.groupRepo.GetByID(ctx, groupID)
 		if err != nil {
 			return nil, fmt.Errorf("get group: %w", err)
@@ -359,11 +358,6 @@ func (s *APIKeyService) validateAPIKeyGroups(ctx context.Context, user *User, re
 		if len(requestedGroupIDs) > 1 {
 			if group.IsSubscriptionType() {
 				return nil, infraerrors.BadRequest("API_KEY_MULTI_GROUP_SUBSCRIPTION_UNSUPPORTED", "multi-group API keys only support standard groups")
-			}
-			if idx == 0 {
-				platform = group.Platform
-			} else if group.Platform != platform {
-				return nil, infraerrors.BadRequest("API_KEY_MULTI_GROUP_PLATFORM_MISMATCH", "multi-group API keys must use groups from the same platform")
 			}
 		}
 		groups = append(groups, group)

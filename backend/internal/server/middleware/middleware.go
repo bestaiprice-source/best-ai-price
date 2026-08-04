@@ -163,15 +163,42 @@ func OpenAIErrorWriterContext(c gatewayctx.GatewayContext, status int, message s
 	})
 }
 
-// StrictPlatformFormat enforces that the API key's group platform matches the requested format (unless platform is yunwu).
+// StrictPlatformFormat enforces that the API key has a group matching the requested format (unless platform is yunwu).
+// If a non-primary group matches, it dynamically sets it as the active group for the request.
 func StrictPlatformFormat(expectedPlatform string, writeError GatewayErrorWriter) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := gatewayctx.FromGin(c)
 		apiKey, ok := GetAPIKeyFromGatewayContext(ctx)
-		if ok && apiKey != nil && apiKey.Group != nil {
-			groupPlatform := apiKey.Group.Platform
-			if groupPlatform != "yunwu" && groupPlatform != expectedPlatform {
-				msg := fmt.Sprintf("Invalid request format: API key belongs to a '%s' group, but this endpoint requires a '%s' formatted request.", groupPlatform, expectedPlatform)
+		if ok && apiKey != nil {
+			var matchedGroup *service.Group
+
+			// 1. Check primary group first
+			if apiKey.Group != nil && (apiKey.Group.Platform == expectedPlatform || apiKey.Group.Platform == "yunwu") {
+				matchedGroup = apiKey.Group
+			} else {
+				// 2. Fallback to secondary groups
+				for i := range apiKey.Groups {
+					g := apiKey.Groups[i]
+					if g != nil && (g.Platform == expectedPlatform || g.Platform == "yunwu") {
+						matchedGroup = g
+						break
+					}
+				}
+			}
+
+			if matchedGroup != nil {
+				// We found a matching group!
+				if apiKey.Group == nil || apiKey.Group.ID != matchedGroup.ID {
+					// Dynamically override the primary group for this request
+					apiKey.Group = matchedGroup
+					apiKey.GroupID = &matchedGroup.ID
+					// Update contexts
+					ctx.SetValue(string(ContextKeyAPIKey), apiKey)
+					setGroupContextGateway(ctx, matchedGroup)
+				}
+			} else {
+				// No matching group found for this endpoint format
+				msg := fmt.Sprintf("Invalid request format: API key has no groups matching the '%s' format.", expectedPlatform)
 				if writeError != nil {
 					writeError(c, http.StatusBadRequest, msg)
 				}
