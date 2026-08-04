@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
@@ -143,6 +144,43 @@ func GoogleErrorWriterContext(c gatewayctx.GatewayContext, status int, message s
 			"status":  googleapi.HTTPStatusToGoogleStatus(status),
 		},
 	})
+}
+
+// OpenAIErrorWriter 按 OpenAI API 规范输出错误
+func OpenAIErrorWriter(c *gin.Context, status int, message string) {
+	OpenAIErrorWriterContext(gatewayctx.FromGin(c), status, message)
+}
+
+func OpenAIErrorWriterContext(c gatewayctx.GatewayContext, status int, message string) {
+	if c == nil {
+		return
+	}
+	c.WriteJSON(status, gin.H{
+		"error": gin.H{
+			"type":    "invalid_request_error",
+			"message": message,
+		},
+	})
+}
+
+// StrictPlatformFormat enforces that the API key's group platform matches the requested format (unless platform is yunwu).
+func StrictPlatformFormat(expectedPlatform string, writeError GatewayErrorWriter) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx := gatewayctx.FromGin(c)
+		apiKey, ok := GetAPIKeyFromGatewayContext(ctx)
+		if ok && apiKey != nil && apiKey.Group != nil {
+			groupPlatform := apiKey.Group.Platform
+			if groupPlatform != "yunwu" && groupPlatform != expectedPlatform {
+				msg := fmt.Sprintf("Invalid request format: API key belongs to a '%s' group, but this endpoint requires a '%s' formatted request.", groupPlatform, expectedPlatform)
+				if writeError != nil {
+					writeError(c, http.StatusBadRequest, msg)
+				}
+				c.Abort()
+				return
+			}
+		}
+		c.Next()
+	}
 }
 
 // RequireGroupAssignment 检查 API Key 是否已分配到分组，
