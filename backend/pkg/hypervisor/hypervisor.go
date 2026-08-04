@@ -2,6 +2,7 @@ package hypervisor
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -76,18 +77,31 @@ func (h *Hypervisor) YunwuEngine() *yunwu.YunwuHypervisor {
 }
 
 func (h *Hypervisor) HandleRequest(ctx context.Context, ownerID string, conversationID string, reqPayload []byte, stream io.Writer, platform string) (*runtime.ResponseMetadata, error) {
+	// Extract model for logging
+	var payloadMap map[string]interface{}
+	var requestedModel string
+	if err := json.Unmarshal(reqPayload, &payloadMap); err == nil {
+		if m, ok := payloadMap["model"].(string); ok {
+			requestedModel = m
+		}
+	}
+
 	slog.Info("[Hypervisor] Handling request",
+		"hypervisor_mode", "standard",
 		"owner_id", ownerID,
 		"conversation_id", conversationID,
 		"platform", platform,
+		"model", requestedModel,
 		"payload_size", len(reqPayload),
 	)
 
 	if platform == "yunwu" && h.yh != nil {
 		slog.Info("[Hypervisor] Dispatching request to dedicated Yunwu Hypervisor Engine",
+			"hypervisor_mode", "yunwu",
 			"owner_id", ownerID,
 			"conversation_id", conversationID,
 			"platform", platform,
+			"model", requestedModel,
 		)
 		return h.yh.HandleRequest(ctx, ownerID, conversationID, reqPayload, stream, platform)
 	}
@@ -128,7 +142,7 @@ func (h *Hypervisor) HandleRequest(ctx context.Context, ownerID string, conversa
 			CreatedAt:      time.Now(),
 			UpdatedAt:      time.Now(),
 		}
-		slog.Info("[Hypervisor] Created new virtual session", "session_id", sessID, "owner_id", ownerID)
+		slog.Info("[Hypervisor] Created new virtual session", "hypervisor_mode", "standard", "session_id", sessID, "owner_id", ownerID)
 	} else {
 		slog.Debug("[Hypervisor] Resolved existing virtual session", "session_id", sessID, "version", sess.Version)
 	}
@@ -163,6 +177,7 @@ func (h *Hypervisor) HandleRequest(ctx context.Context, ownerID string, conversa
 	// Fetch system state from Redis
 	systemState := h.hc.GetSystemState(ctx, platform)
 	slog.Info("[Hypervisor] Loaded pool status",
+		"hypervisor_mode", "standard",
 		"total_nodes", len(nodes),
 		"user_priority", userPriority,
 		"system_state", systemState,
@@ -185,6 +200,7 @@ func (h *Hypervisor) HandleRequest(ctx context.Context, ownerID string, conversa
 		return nil, err
 	}
 	slog.Info("[Hypervisor] Scheduler selected node",
+		"hypervisor_mode", "standard",
 		"session_id", sess.ID,
 		"selected_node_id", selectedNode.NodeID,
 		"account_name", selectedNode.AccountName,
@@ -222,6 +238,7 @@ func (h *Hypervisor) HandleRequest(ctx context.Context, ownerID string, conversa
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		// 7. Execute request using Runtime
 		slog.Info("[Hypervisor] Executing upstream request",
+			"hypervisor_mode", "standard",
 			"node_id", selectedNode.NodeID,
 			"session_id", sess.ID,
 			"attempt", attempt,
@@ -283,6 +300,7 @@ func (h *Hypervisor) HandleRequest(ctx context.Context, ownerID string, conversa
 			_ = h.qm.ConsumeQuota(ctx, ownerID, "standard", totalTokens)
 			_, _ = h.store.RecordUsage(ctx, ownerID, &sess.ID, &selectedNode.NodeID, res.InputTokens, res.OutputTokens, costUnits)
 			slog.Info("[Hypervisor] Recorded request usage",
+				"hypervisor_mode", "standard",
 				"owner_id", ownerID,
 				"session_id", sess.ID,
 				"node_id", selectedNode.NodeID,
@@ -296,6 +314,18 @@ func (h *Hypervisor) HandleRequest(ctx context.Context, ownerID string, conversa
 				"cost_units":    costUnits,
 			})
 		}
+		
+		// 10. Request Succeeded Comprehensive Log
+		slog.Info("[Hypervisor] Request succeeded",
+			"hypervisor_mode", "standard",
+			"owner_id", ownerID,
+			"session_id", sess.ID,
+			"node_id", selectedNode.NodeID,
+			"account_name", selectedNode.AccountName,
+			"platform", platform,
+			"model", requestedModel,
+			"total_tokens", costUnits,
+		)
 		_ = h.logEvent(ctx, ownerID, &sess.ID, &selectedNode.NodeID, "RequestSucceeded", nil)
 	}
 

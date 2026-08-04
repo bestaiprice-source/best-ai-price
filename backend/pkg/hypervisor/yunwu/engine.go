@@ -73,11 +73,22 @@ func (yh *YunwuHypervisor) HandleRequest(
 	stream io.Writer,
 	platform string,
 ) (*runtime.ResponseMetadata, error) {
-	slog.Info("[YunwuHypervisor] Handling request via Yunwu Engine",
+	// Extract model for logging
+	var payloadMap map[string]interface{}
+	var requestedModel string
+	if err := json.Unmarshal(reqPayload, &payloadMap); err == nil {
+		if m, ok := payloadMap["model"].(string); ok {
+			requestedModel = m
+		}
+	}
+
+	slog.Info("[YunwuHypervisor] Handling Yunwu request",
+		"hypervisor_mode", "yunwu",
 		"owner_id", ownerID,
 		"conversation_id", conversationID,
 		"platform", platform,
-		"payload_size_bytes", len(reqPayload),
+		"model", requestedModel,
+		"payload_size", len(reqPayload),
 	)
 
 	// 0. Resolve Priority and Register User
@@ -150,7 +161,8 @@ func (yh *YunwuHypervisor) HandleRequest(
 	credits := yh.getAllYunwuNodeCredits(ctx, nodes)
 	systemState := yh.hc.GetSystemState(ctx)
 
-	slog.Debug("[YunwuHypervisor] Evaluated Yunwu pool status",
+	slog.Info("[YunwuHypervisor] Evaluated Yunwu pool status",
+		"hypervisor_mode", "yunwu",
 		"total_nodes", len(nodes),
 		"system_state", systemState,
 	)
@@ -172,7 +184,8 @@ func (yh *YunwuHypervisor) HandleRequest(
 		ExpiresAt: &expiresAt,
 	}
 	_ = yh.lm.SaveLease(ctx, newLease)
-	slog.Debug("[YunwuHypervisor] Granted lease for node",
+	slog.Info("[YunwuHypervisor] Granted lease for node",
+		"hypervisor_mode", "yunwu",
 		"lease_id", newLease.LeaseID,
 		"selected_node_id", selectedNode.NodeID,
 		"account_name", selectedNode.AccountName,
@@ -187,6 +200,7 @@ func (yh *YunwuHypervisor) HandleRequest(
 
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		slog.Info("[YunwuHypervisor] Executing upstream request",
+			"hypervisor_mode", "yunwu",
 			"node_id", selectedNode.NodeID,
 			"session_id", sess.ID,
 			"attempt", attempt,
@@ -263,18 +277,14 @@ func (yh *YunwuHypervisor) HandleRequest(
 	_ = yh.nm.SaveNodeRuntimeState(ctx, state)
 
 	// 9. Record usage
-	var units int64 = 0
 	if meta != nil {
-		// Parse requested model
 		var parsedReq struct {
 			Model string `json:"model"`
 		}
 		_ = json.Unmarshal(reqPayload, &parsedReq)
 		modelName := parsedReq.Model
 
-		// Default pricing
 		var inputPrice, outputPrice float64 = 0.002, 0.002
-
 		if modelName != "" && yh.store.DB() != nil {
 			rows, err := yh.store.DB().QueryContext(ctx, "SELECT input_price, output_price FROM ash_vendor_models WHERE model_name = $1 LIMIT 1", modelName)
 			if err == nil {
@@ -282,40 +292,35 @@ func (yh *YunwuHypervisor) HandleRequest(
 					_ = rows.Scan(&inputPrice, &outputPrice)
 				}
 				rows.Close()
-			} else {
-				slog.Warn("[YunwuHypervisor] Failed to query model pricing", "model", modelName, "error", err)
 			}
 		}
 
-		inputCost := (float64(meta.InputTokens) / 1000.0) * inputPrice
-		outputCost := (float64(meta.OutputTokens) / 1000.0) * outputPrice
-		totalCost := inputCost + outputCost
-		units = int64(totalCost * 1000000.0)
-
-		if units <= 0 {
-			units = 1
+		totalTokens := meta.InputTokens + meta.OutputTokens
+		costUnits := totalTokens
+		if totalTokens > 0 {
+			_ = yh.qm.ConsumeQuota(ctx, ownerID, "yunwu", int64(costUnits))
+			_, _ = yh.store.RecordUsage(ctx, ownerID, &sess.ID, &selectedNode.NodeID, meta.InputTokens, meta.OutputTokens, int64(costUnits))
+			slog.Info("[YunwuHypervisor] Recorded Yunwu request usage",
+				"hypervisor_mode", "yunwu",
+				"owner_id", ownerID,
+				"session_id", sess.ID,
+				"node_id", selectedNode.NodeID,
+				"input_tokens", meta.InputTokens,
+				"output_tokens", meta.OutputTokens,
+				"cost_units", costUnits,
+			)
 		}
-		_ = yh.qm.ConsumeQuota(ctx, ownerID, "yunwu", units)
 	}
 
-	slog.Info("[YunwuHypervisor] Request executed successfully",
+	slog.Info("[YunwuHypervisor] Request succeeded",
+		"hypervisor_mode", "yunwu",
 		"owner_id", ownerID,
-		"selected_node_id", selectedNode.NodeID,
+		"session_id", sess.ID,
+		"node_id", selectedNode.NodeID,
 		"account_name", selectedNode.AccountName,
-		"latency_ms", latencyMs,
-		"tokens_in", func() int64 {
-			if meta != nil {
-				return meta.InputTokens
-			}
-			return 0
-		}(),
-		"tokens_out", func() int64 {
-			if meta != nil {
-				return meta.OutputTokens
-			}
-			return 0
-		}(),
-		"total_units_consumed", units,
+		"platform", platform,
+		"model", requestedModel,
+		"latency_ms", time.Since(execStart).Milliseconds(),
 	)
 
 	return meta, nil

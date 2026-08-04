@@ -25,6 +25,10 @@ func (s *Storage) LogEvent(ctx context.Context, ownerID string, sessionID, nodeI
 
 // RecordUsage writes usage details to the ash_usages table
 func (s *Storage) RecordUsage(ctx context.Context, ownerID string, sessionID, nodeID *string, inputTokens, outputTokens, costUnits int64) (*ent.AshUsage, error) {
+	if s.db == nil {
+		return nil, nil
+	}
+	
 	builder := s.db.AshUsage.Create().
 		SetOwnerID(ownerID).
 		SetInputTokens(inputTokens).

@@ -312,9 +312,16 @@ func (r *AnthropicRuntime) Execute(ctx context.Context, nodeID string, reqPayloa
 		"is_stream", isStream,
 	)
 
+	reqStart := time.Now()
 	resp, err := client.Do(req)
+	latencyMs := time.Since(reqStart).Milliseconds()
+	
 	if err != nil {
-		slog.Error("[Runtime] Upstream HTTP request failed", "node_id", nodeID, "error", err)
+		slog.Error("[Runtime] Upstream HTTP request failed", 
+			"node_id", nodeID, 
+			"latency_ms", latencyMs,
+			"error", err,
+		)
 		return nil, err
 	}
 	defer resp.Body.Close()
@@ -441,6 +448,15 @@ func (r *AnthropicRuntime) Execute(ctx context.Context, nodeID string, reqPayloa
 	}
 
 	input, output := extractTokens(endBuf.Bytes())
+	
+	slog.Info("[Runtime] Upstream request completed",
+		"node_id", nodeID,
+		"status_code", resp.StatusCode,
+		"latency_ms", latencyMs,
+		"input_tokens", input,
+		"output_tokens", output,
+	)
+
 	return &ResponseMetadata{
 		StatusCode:   resp.StatusCode,
 		InputTokens:  input,

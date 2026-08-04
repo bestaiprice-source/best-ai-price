@@ -158,15 +158,16 @@ func (qm *QuotaManager) CheckQuota(ctx context.Context, ownerID string, poolType
 		slog.Warn("[QuotaManager] User quota exceeded",
 			"owner_id", ownerID,
 			"used_units", ua.UsedUnits,
-			"limit", limit,
+			"fair_use_limit", limit,
 		)
 		return false, ErrQuotaExceeded
 	}
 
-	slog.Debug("[QuotaManager] Quota check passed",
+	slog.Info("[QuotaManager] Quota check passed",
 		"owner_id", ownerID,
 		"used_units", ua.UsedUnits,
-		"limit", limit,
+		"fair_use_limit", limit,
+		"remaining_units", limit-ua.UsedUnits,
 	)
 	return true, nil
 }
@@ -231,8 +232,17 @@ func (qm *QuotaManager) ConsumeQuota(ctx context.Context, ownerID string, poolTy
 	if poolType == "yunwu" {
 		qm.store.Redis().IncrBy(ctx, "ash:yunwu:total_used", units)
 	}
-	
-	return qm.SaveUserAccess(ctx, ua, poolType)
+
+	err = qm.SaveUserAccess(ctx, ua, poolType)
+	if err == nil {
+		slog.Info("[QuotaManager] Consumed quota",
+			"owner_id", ownerID,
+			"pool_type", poolType,
+			"deducted_tokens", units,
+			"new_used_balance", ua.UsedUnits,
+		)
+	}
+	return err
 }
 
 func (qm *QuotaManager) RegisterActiveUser(ctx context.Context, ownerID string, poolType string, priority int) error {

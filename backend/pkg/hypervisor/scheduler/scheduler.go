@@ -173,8 +173,10 @@ func (s *Scheduler) SelectNode(ctx context.Context, nodes []health.ExecutionNode
 
 	slog.Info("[Scheduler] Node selection completed",
 		"winning_node_id", bestNode.NodeID,
+		"account_name", bestNode.AccountName,
 		"winning_score", bestScore,
 		"total_candidates_evaluated", len(finalCandidates),
+		"pool_size", len(nodes),
 	)
 
 	return bestNode, nil
