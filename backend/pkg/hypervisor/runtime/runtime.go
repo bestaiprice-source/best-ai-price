@@ -465,7 +465,7 @@ func (r *AnthropicRuntime) Execute(ctx context.Context, nodeID string, reqPayloa
 
 	// 6. Stream response and track end of stream for token usage
 	var outStream io.Writer = stream
-	if isResponsesAPI && isStream {
+	if isResponsesAPI && !strings.Contains(apiURL, "/responses") && isStream {
 		outStream = newResponsesSSETransformer(stream)
 	}
 
