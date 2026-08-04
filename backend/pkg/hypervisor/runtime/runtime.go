@@ -223,6 +223,11 @@ func (r *AnthropicRuntime) Execute(ctx context.Context, nodeID string, reqPayloa
 	}
 
 	apiURL := resolveUpstreamAPIURL(customURL, acc.Platform, isChatCompletions)
+	
+	isOAuth := acc.Type == "oauth"
+	if isOAuth && acc.Platform == "openai" && customURL == "" {
+		apiURL = "https://chatgpt.com/backend-api/codex/responses"
+	}
 
 	var payloadMap struct {
 		Stream bool `json:"stream"`
@@ -305,6 +310,15 @@ func (r *AnthropicRuntime) Execute(ctx context.Context, nodeID string, reqPayloa
 	if isChatCompletions || acc.Platform == "openai" {
 		req.Header.Set("Authorization", "Bearer "+apiKey)
 		req.Header.Set("Content-Type", "application/json")
+		if isOAuth && acc.Platform == "openai" {
+			req.Host = "chatgpt.com"
+			if isStream {
+				req.Header.Set("accept", "text/event-stream")
+			}
+			if chatgptAccID, ok := acc.Credentials["chatgpt_account_id"].(string); ok && chatgptAccID != "" {
+				req.Header.Set("chatgpt-account-id", chatgptAccID)
+			}
+		}
 	} else {
 		isOAuthOrSetupToken := acc.Type == "oauth" || acc.Type == "setup-token" || strings.HasPrefix(apiKey, "sk-ant-oat") || strings.HasPrefix(apiKey, "sk-oat")
 		if isOAuthOrSetupToken {
