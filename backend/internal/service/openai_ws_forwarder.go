@@ -2154,10 +2154,6 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 		transportCtx.SetHeader("Cache-Control", "no-cache")
 		transportCtx.SetHeader("Connection", "keep-alive")
 		transportCtx.SetHeader("X-Accel-Buffering", "no")
-		if err := transportCtx.Flush(); err != nil {
-			lease.MarkBroken()
-			return nil, wrapOpenAIWSFallback("streaming_not_supported", errors.New("streaming not supported"))
-		}
 	}
 
 	clientDisconnected := false

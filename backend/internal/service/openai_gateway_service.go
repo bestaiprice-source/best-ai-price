@@ -64,7 +64,7 @@ const (
 )
 
 func shouldApplyOpenAICodexOAuthTransform(account *Account) bool {
-	return account != nil && account.IsOpenAIOAuth() && !account.IsOpenAIChatWebMode()
+	return account != nil && account.Type == AccountTypeOAuth && !account.IsOpenAIChatWebMode()
 }
 
 // OpenAI allowed headers whitelist (for non-passthrough).
@@ -1329,23 +1329,23 @@ func (s *OpenAIGatewayService) resolveOpenAIUpstreamUserAgent(ctx context.Contex
 	if s != nil && s.cfg != nil && s.cfg.Gateway.ForceCodexCLI {
 		return codexCLIUserAgent
 	}
+	if fp := s.getOpenAISampledFingerprint(ctx, account); fp != nil {
+		if sampledUA := strings.TrimSpace(fp.UserAgent); sampledUA != "" && (fp.OfficialSampled || openai.IsCodexOfficialClientRequest(sampledUA)) {
+			return sampledUA
+		}
+	}
 	if c != nil {
 		if userAgent := strings.TrimSpace(c.HeaderValue("User-Agent")); userAgent != "" && isOfficialClient {
 			return userAgent
 		}
 	}
-	if fp := s.getOpenAISampledFingerprint(ctx, account); fp != nil {
-		if sampledUA := strings.TrimSpace(fp.UserAgent); sampledUA != "" && openai.IsCodexOfficialClientRequest(sampledUA) {
-			return sampledUA
-		}
+	if account != nil && account.Type == AccountTypeOAuth {
+		return codexCLIUserAgent
 	}
 	if c != nil {
 		if userAgent := strings.TrimSpace(c.HeaderValue("User-Agent")); userAgent != "" {
 			return userAgent
 		}
-	}
-	if account != nil && account.Type == AccountTypeOAuth {
-		return codexCLIUserAgent
 	}
 	return ""
 }
@@ -5599,7 +5599,7 @@ func (s *OpenAIGatewayService) validateUpstreamBaseURL(raw string) (string, erro
 		opts = urlvalidator.ValidationOptions{
 			AllowedHosts:     allowedHosts,
 			RequireAllowlist: s.cfg.Security.URLAllowlist.Enabled && s.cfg.Security.URLAllowlist.EnforceUpstreamHosts,
-			AllowPrivate:     s.cfg.Security.URLAllowlist.AllowPrivateHosts,
+			AllowPrivate:     !s.cfg.Security.URLAllowlist.Enabled || s.cfg.Security.URLAllowlist.AllowPrivateHosts,
 		}
 	}
 	normalized, err := urlvalidator.ValidateHTTPURL(raw, allowInsecureHTTP, opts)
