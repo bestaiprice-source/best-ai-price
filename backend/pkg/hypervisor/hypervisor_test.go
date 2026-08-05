@@ -449,7 +449,8 @@ func TestYunwuHypervisorDispatch(t *testing.T) {
 	hyp := hypervisor.NewHypervisor(store, rt)
 
 	require.NotNil(t, hyp.YunwuEngine())
-	snapshot := yunwu.BalanceSnapshot{GrantedUSD: 10, AvailableUSD: 10, AvailableMicroUSD: 10_000_000, Source: "test", SynchronizedAt: time.Now().UTC(), Status: "fresh"}
+	now := time.Now().UTC()
+	snapshot := yunwu.BalanceSnapshot{GrantedUSD: 10, AvailableUSD: 10, AvailableMicroUSD: 10_000_000, APIAvailableMicroUSD: 10_000_000, EstimatedAvailableMicroUSD: 10_000_000, ReserveMicroUSD: 1_000_000, StaleAt: now.Add(30 * time.Minute), Source: "test", SynchronizedAt: now, Status: "fresh"}
 	snapshotJSON, _ := json.Marshal(snapshot)
 	require.NoError(t, store.Redis().Set(ctx, "ash:yunwu:balance:"+fmt.Sprint(acc.ID), snapshotJSON, 0).Err())
 

@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -40,6 +41,134 @@ func (w hypervisorGatewayWriter) Write(p []byte) (int, error) { return w.ctx.Wri
 func (w hypervisorGatewayWriter) Header() http.Header         { return w.ctx.Header() }
 func (w hypervisorGatewayWriter) WriteHeader(status int)      { w.ctx.SetStatus(status) }
 func (w hypervisorGatewayWriter) Flush()                      { _ = w.ctx.Flush() }
+
+type yunwuLivePeer struct{ conn gatewayctx.WebSocketConn }
+
+func (p yunwuLivePeer) Read(ctx context.Context) (hyperruntime.WSMessageType, []byte, error) {
+	messageType, payload, err := p.conn.Read(ctx)
+	if messageType == gatewayctx.MessageBinary {
+		return hyperruntime.WSMessageBinary, payload, err
+	}
+	return hyperruntime.WSMessageText, payload, err
+}
+
+func (p yunwuLivePeer) Write(ctx context.Context, messageType hyperruntime.WSMessageType, payload []byte) error {
+	targetType := gatewayctx.MessageText
+	if messageType == hyperruntime.WSMessageBinary {
+		targetType = gatewayctx.MessageBinary
+	}
+	return p.conn.Write(ctx, targetType, payload)
+}
+
+// GeminiLive proxies the bidirectional Gemini Live API, including realtime
+// audio/video input and audio responses, through a balance-aware Yunwu node.
+func (h *GatewayHandler) GeminiLive(c *gin.Context) {
+	h.GeminiLiveGateway(gatewayctx.FromGin(c))
+}
+
+func (h *GatewayHandler) GeminiLiveGateway(c gatewayctx.GatewayContext) {
+	if !strings.EqualFold(strings.TrimSpace(c.HeaderValue("Upgrade")), "websocket") {
+		googleErrorContext(c, http.StatusUpgradeRequired, "WebSocket upgrade required")
+		return
+	}
+	apiKey, ok := middleware.GetAPIKeyFromGatewayContext(c)
+	if !ok || apiKey == nil || apiKey.Group == nil || apiKey.Group.Platform != service.PlatformYunwu {
+		googleErrorContext(c, http.StatusBadRequest, "A Yunwu group is required for Gemini Live")
+		return
+	}
+	subject, ok := middleware.GetAuthSubjectFromGatewayContext(c)
+	if !ok {
+		googleErrorContext(c, http.StatusUnauthorized, "Invalid API key")
+		return
+	}
+	if h.hypervisorEngine == nil || h.hypervisorEngine.YunwuEngine() == nil {
+		googleErrorContext(c, http.StatusServiceUnavailable, "Yunwu hypervisor is not initialized")
+		return
+	}
+	var subprotocols []string
+	for _, protocol := range strings.Split(c.HeaderValue("Sec-WebSocket-Protocol"), ",") {
+		if protocol = strings.TrimSpace(protocol); protocol != "" {
+			subprotocols = append(subprotocols, protocol)
+		}
+	}
+	conn, err := c.AcceptWebSocket(gatewayctx.WebSocketAcceptOptions{CompressionEnabled: true, Subprotocols: subprotocols})
+	if err != nil {
+		return
+	}
+	defer conn.CloseNow()
+	path := c.Path()
+	if path != "/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent" &&
+		path != "/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent" &&
+		path != "/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateMusic" {
+		return
+	}
+	query := c.Request().URL.Query()
+	query.Del("key")
+	if encoded := query.Encode(); encoded != "" {
+		path += "?" + encoded
+	}
+	err = h.hypervisorEngine.YunwuEngine().HandleLive(c.Context(), strconv.FormatInt(subject.UserID, 10), c.HeaderValue("X-Conversation-ID"), path, c.Header(), yunwuLivePeer{conn: conn})
+	if err != nil {
+		slog.Warn("Gemini Live session ended", "owner_id", subject.UserID, "error", err)
+	}
+}
+
+func (h *GatewayHandler) GeminiInteraction(c *gin.Context) {
+	h.GeminiInteractionGateway(gatewayctx.FromGin(c))
+}
+
+// GeminiInteractionGateway transparently serves the current multimodal
+// Interactions API, including stored/background interactions and SSE output.
+func (h *GatewayHandler) GeminiInteractionGateway(c gatewayctx.GatewayContext) {
+	apiKey, ok := middleware.GetAPIKeyFromGatewayContext(c)
+	if !ok || apiKey == nil || apiKey.Group == nil || apiKey.Group.Platform != service.PlatformYunwu {
+		googleErrorContext(c, http.StatusBadRequest, "A Yunwu group is required for Gemini Interactions")
+		return
+	}
+	subject, ok := middleware.GetAuthSubjectFromGatewayContext(c)
+	if !ok {
+		googleErrorContext(c, http.StatusUnauthorized, "Invalid API key")
+		return
+	}
+	if h.hypervisorEngine == nil || h.hypervisorEngine.YunwuEngine() == nil {
+		googleErrorContext(c, http.StatusServiceUnavailable, "Yunwu hypervisor is not initialized")
+		return
+	}
+	path := c.Path()
+	if !strings.HasPrefix(path, "/v1beta/interactions") && !strings.HasPrefix(path, "/v1/interactions") {
+		googleErrorContext(c, http.StatusBadRequest, "Invalid Gemini interaction path")
+		return
+	}
+	method := c.Method()
+	if method != http.MethodPost && method != http.MethodGet && method != http.MethodDelete {
+		googleErrorContext(c, http.StatusMethodNotAllowed, "Unsupported interaction method")
+		return
+	}
+	body := []byte(`{}`)
+	if method == http.MethodPost {
+		requestBody, err := pkghttputil.ReadRequestBodyWithPrealloc(c.Request())
+		if err != nil {
+			googleErrorContext(c, http.StatusBadRequest, "Failed to read interaction body")
+			return
+		}
+		if len(requestBody) > 0 {
+			body = requestBody
+		}
+	}
+	query := yunwuGeminiUpstreamQuery(c, nil)
+	if query != "" {
+		path += "?" + query
+	}
+	if c.QueryValue("stream") == "true" || bytes.Contains(body, []byte(`"stream":true`)) || bytes.Contains(body, []byte(`"stream": true`)) {
+		c.SetHeader("Content-Type", "text/event-stream")
+		c.SetHeader("Cache-Control", "no-cache, no-transform")
+	}
+	requestCtx := hyperruntime.WithUpstreamRequest(c.Context(), method, path, "application/json")
+	_, err := h.hypervisorEngine.HandleRequest(requestCtx, strconv.FormatInt(subject.UserID, 10), c.HeaderValue("X-Conversation-ID"), body, hypervisorGatewayWriter{ctx: c}, service.PlatformYunwu)
+	if err != nil {
+		googleErrorContext(c, http.StatusBadGateway, err.Error())
+	}
+}
 
 // GeminiV1BetaListModels proxies:
 // GET /v1beta/models
@@ -192,8 +321,8 @@ func (h *GatewayHandler) forwardYunwuGeminiGET(c gatewayctx.GatewayContext, path
 		googleErrorContext(c, http.StatusUnauthorized, "Invalid API key")
 		return
 	}
-	if rawQuery := c.Request().URL.RawQuery; rawQuery != "" {
-		path += "?" + rawQuery
+	if query := yunwuGeminiUpstreamQuery(c, nil); query != "" {
+		path += "?" + query
 	}
 	requestCtx := hyperruntime.WithUpstreamRequest(c.Context(), http.MethodGet, path, "application/json")
 	_, err := h.hypervisorEngine.HandleRequest(requestCtx, strconv.FormatInt(subject.UserID, 10), c.HeaderValue("X-Conversation-ID"), []byte(`{}`), hypervisorGatewayWriter{ctx: c}, service.PlatformYunwu)
@@ -235,8 +364,8 @@ func (h *GatewayHandler) GeminiV1BetaOperationGateway(c gatewayctx.GatewayContex
 		googleErrorContext(c, http.StatusBadRequest, "Invalid Gemini operation path")
 		return
 	}
-	if rawQuery := c.Request().URL.RawQuery; rawQuery != "" {
-		path += "?" + rawQuery
+	if query := yunwuGeminiUpstreamQuery(c, nil); query != "" {
+		path += "?" + query
 	}
 	method := c.Method()
 	if method != http.MethodGet && method != http.MethodDelete && method != http.MethodPost {
@@ -283,8 +412,8 @@ func (h *GatewayHandler) GeminiV1BetaFileGateway(c gatewayctx.GatewayContext) {
 		googleErrorContext(c, http.StatusBadRequest, "Invalid Gemini file path")
 		return
 	}
-	if rawQuery := c.Request().URL.RawQuery; rawQuery != "" {
-		path += "?" + rawQuery
+	if query := yunwuGeminiUpstreamQuery(c, nil); query != "" {
+		path += "?" + query
 	}
 	body := []byte(`{}`)
 	if c.Method() == http.MethodPost {
@@ -380,8 +509,12 @@ func (h *GatewayHandler) GeminiV1BetaModelsGateway(transportCtx gatewayctx.Gatew
 			transportCtx.SetHeader("Content-Type", "application/json")
 		}
 		path := "/v1beta/models/" + url.PathEscape(modelName) + ":" + action
+		updates := map[string]string{}
 		if stream {
-			path += "?alt=sse"
+			updates["alt"] = "sse"
+		}
+		if query := yunwuGeminiUpstreamQuery(transportCtx, updates); query != "" {
+			path += "?" + query
 		}
 		requestCtx := hyperruntime.WithUpstreamRequest(transportCtx.Context(), http.MethodPost, path, "application/json")
 		conversationID := transportCtx.HeaderValue("X-Conversation-ID")
@@ -777,6 +910,17 @@ func (h *GatewayHandler) GeminiV1BetaModelsGateway(transportCtx gatewayctx.Gatew
 		)
 		return
 	}
+}
+
+func yunwuGeminiUpstreamQuery(c gatewayctx.GatewayContext, updates map[string]string) string {
+	query := c.Request().URL.Query()
+	// The downstream service key authenticates this gateway and must never be
+	// disclosed to a Yunwu vendor. Upstream authentication uses node credentials.
+	query.Del("key")
+	for key, value := range updates {
+		query.Set(key, value)
+	}
+	return query.Encode()
 }
 
 func parseGeminiModelAction(rest string) (model string, action string, err error) {

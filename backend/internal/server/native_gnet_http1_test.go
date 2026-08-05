@@ -72,7 +72,7 @@ func TestDecodeBufferedRequestFastPathsBodylessRequests(t *testing.T) {
 	require.NotNil(t, req)
 	require.Equal(t, http.MethodGet, req.Method)
 	require.Equal(t, int64(0), req.ContentLength)
-	require.Same(t, http.NoBody, req.Body)
+	require.Equal(t, http.NoBody, req.Body)
 	require.Equal(t, len(raw), consumed)
 }
 

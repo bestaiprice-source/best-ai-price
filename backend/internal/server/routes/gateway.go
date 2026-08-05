@@ -96,8 +96,19 @@ func RegisterGatewayRoutes(
 		gemini.POST("/files", h.Gateway.GeminiV1BetaFile)
 		gemini.GET("/files/*filePath", h.Gateway.GeminiV1BetaFile)
 		gemini.DELETE("/files/*filePath", h.Gateway.GeminiV1BetaFile)
+		gemini.POST("/interactions", h.Gateway.GeminiInteraction)
+		gemini.GET("/interactions/*interactionPath", h.Gateway.GeminiInteraction)
+		gemini.POST("/interactions/*interactionPath", h.Gateway.GeminiInteraction)
+		gemini.DELETE("/interactions/*interactionPath", h.Gateway.GeminiInteraction)
 	}
 	r.POST("/upload/v1beta/files", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, middleware.APIKeyAuthWithSubscriptionGoogle(apiKeyService, subscriptionService, cfg), requireGroupGoogle, strictGoogle, h.Gateway.GeminiV1BetaFile)
+	r.GET("/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent", clientRequestID, opsErrorLogger, middleware.APIKeyAuthWithSubscriptionGoogle(apiKeyService, subscriptionService, cfg), requireGroupGoogle, strictGoogle, h.Gateway.GeminiLive)
+	r.GET("/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent", clientRequestID, opsErrorLogger, middleware.APIKeyAuthWithSubscriptionGoogle(apiKeyService, subscriptionService, cfg), requireGroupGoogle, strictGoogle, h.Gateway.GeminiLive)
+	r.GET("/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateMusic", clientRequestID, opsErrorLogger, middleware.APIKeyAuthWithSubscriptionGoogle(apiKeyService, subscriptionService, cfg), requireGroupGoogle, strictGoogle, h.Gateway.GeminiLive)
+	for _, method := range []string{http.MethodPost, http.MethodGet, http.MethodDelete} {
+		r.Handle(method, "/v1/interactions", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, middleware.APIKeyAuthWithSubscriptionGoogle(apiKeyService, subscriptionService, cfg), requireGroupGoogle, strictGoogle, h.Gateway.GeminiInteraction)
+		r.Handle(method, "/v1/interactions/*interactionPath", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, middleware.APIKeyAuthWithSubscriptionGoogle(apiKeyService, subscriptionService, cfg), requireGroupGoogle, strictGoogle, h.Gateway.GeminiInteraction)
+	}
 
 	// OpenAI Responses API（不带v1前缀的别名）
 	r.POST("/responses", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), requireGroupOpenAI, strictOpenAI, h.OpenAIGateway.Responses)
@@ -177,7 +188,7 @@ func ExecutableGatewayRoutes(h *handler.Handlers) []gatewayctx.RouteDef {
 	if h == nil || h.Gateway == nil {
 		return nil
 	}
-	return []gatewayctx.RouteDef{
+	routes := []gatewayctx.RouteDef{
 		{
 			Method:  http.MethodGet,
 			Path:    "/api/claude_cli/bootstrap",
@@ -582,6 +593,62 @@ func ExecutableGatewayRoutes(h *handler.Handlers) []gatewayctx.RouteDef {
 			},
 		},
 	}
+	return append(routes, yunwuExecutableMediaRoutes(h)...)
+}
+
+func yunwuExecutableMediaRoutes(h *handler.Handlers) []gatewayctx.RouteDef {
+	openAIMiddleware := []string{"request_logger", "cors", "security_headers", "gateway_body_limit", "client_request_id", "inbound_endpoint", "standard_api_key_auth", "require_group_anthropic"}
+	googleMiddleware := []string{"request_logger", "cors", "security_headers", "gateway_body_limit", "client_request_id", "inbound_endpoint", "google_api_key_auth", "require_group_google"}
+	var routes []gatewayctx.RouteDef
+	if h.OpenAIGateway != nil {
+		for _, route := range []struct{ method, path string }{
+			{http.MethodPost, "/v1/audio/speech"},
+			{http.MethodPost, "/v1/audio/transcriptions"},
+			{http.MethodPost, "/v1/audio/translations"},
+			{http.MethodPost, "/v1/videos"},
+			{http.MethodGet, "/v1/videos"},
+			{http.MethodPost, "/v1/videos/*videoPath"},
+			{http.MethodGet, "/v1/videos/*videoPath"},
+			{http.MethodDelete, "/v1/videos/*videoPath"},
+			{http.MethodPost, "/v1/video/generations"},
+		} {
+			routes = append(routes, gatewayctx.RouteDef{Method: route.method, Path: route.path, Handler: h.OpenAIGateway.YunwuMediaGateway, Middleware: append([]string(nil), openAIMiddleware...)})
+		}
+	}
+	for _, route := range []struct{ method, path string }{
+		{http.MethodGet, "/v1beta/operations/*operation"},
+		{http.MethodPost, "/v1beta/operations/*operation"},
+		{http.MethodDelete, "/v1beta/operations/*operation"},
+	} {
+		routes = append(routes, gatewayctx.RouteDef{Method: route.method, Path: route.path, Handler: h.Gateway.GeminiV1BetaOperationGateway, Middleware: append([]string(nil), googleMiddleware...)})
+	}
+	for _, route := range []struct{ method, path string }{
+		{http.MethodGet, "/v1beta/files"},
+		{http.MethodPost, "/v1beta/files"},
+		{http.MethodGet, "/v1beta/files/*filePath"},
+		{http.MethodDelete, "/v1beta/files/*filePath"},
+		{http.MethodPost, "/upload/v1beta/files"},
+	} {
+		routes = append(routes, gatewayctx.RouteDef{Method: route.method, Path: route.path, Handler: h.Gateway.GeminiV1BetaFileGateway, Middleware: append([]string(nil), googleMiddleware...)})
+	}
+	for _, path := range []string{
+		"/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent",
+		"/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent",
+		"/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateMusic",
+	} {
+		routes = append(routes, gatewayctx.RouteDef{Method: http.MethodGet, Path: path, Handler: h.Gateway.GeminiLiveGateway, Middleware: append([]string(nil), googleMiddleware...)})
+	}
+	for _, version := range []string{"v1beta", "v1"} {
+		for _, route := range []struct{ method, suffix string }{
+			{http.MethodPost, "/interactions"},
+			{http.MethodGet, "/interactions/*interactionPath"},
+			{http.MethodPost, "/interactions/*interactionPath"},
+			{http.MethodDelete, "/interactions/*interactionPath"},
+		} {
+			routes = append(routes, gatewayctx.RouteDef{Method: route.method, Path: "/" + version + route.suffix, Handler: h.Gateway.GeminiInteractionGateway, Middleware: append([]string(nil), googleMiddleware...)})
+		}
+	}
+	return routes
 }
 
 func openAIMessagesDispatchGateway(h *handler.Handlers) gatewayctx.HandlerFunc {

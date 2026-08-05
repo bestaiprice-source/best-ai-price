@@ -32,6 +32,18 @@ func (m *mockYunwuRuntime) Execute(ctx context.Context, nodeID string, reqPayloa
 	}, nil
 }
 
+type mockYunwuLiveRuntime struct {
+	mockYunwuRuntime
+	nodeID string
+	path   string
+}
+
+func (m *mockYunwuLiveRuntime) ProxyWebSocket(_ context.Context, nodeID, path string, _ http.Header, _ runtime.WebSocketPeer) error {
+	m.nodeID = nodeID
+	m.path = path
+	return nil
+}
+
 func setupTestYunwuStore(t *testing.T) *storage.Storage {
 	mr, err := miniredis.Run()
 	require.NoError(t, err)
@@ -107,6 +119,29 @@ func TestYunwuHypervisorEndToEnd(t *testing.T) {
 	assert.Equal(t, 1, status["healthy_nodes"])
 }
 
+func TestYunwuLiveUsesIsolatedFreshBalanceAndReconcilesReservation(t *testing.T) {
+	t.Setenv("ASH_YUNWU_TEST_MODE", "true")
+	store := setupTestYunwuStore(t)
+	rt := &mockYunwuLiveRuntime{}
+	yh := NewYunwuHypervisor(store, rt)
+	nm := health.NewNodeManager(store)
+	require.NoError(t, nm.SaveNode(context.Background(), &health.ExecutionNode{NodeID: "live-node", AccountName: "Live", Provider: "yunwu", State: "healthy"}))
+	require.NoError(t, store.Redis().SAdd(context.Background(), "ash:yunwu:nodes", "live-node").Err())
+	setTestBalance(t, store, "live-node", 50_000_000)
+	require.NoError(t, yh.qm.SaveUserAccess(context.Background(), &quota.UserAccess{OwnerID: "live-owner", MonthlyLimitMicroUSD: 50_000_000, Priority: 1, IsActive: true}, "yunwu"))
+
+	err := yh.HandleLive(context.Background(), "live-owner", "session", "/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent", nil, nil)
+	require.NoError(t, err)
+	assert.Equal(t, "live-node", rt.nodeID)
+	assert.Contains(t, rt.path, "BidiGenerateContent")
+	reserved, err := store.Redis().Get(context.Background(), reservedKey("live-node")).Int64()
+	if err != nil {
+		assert.ErrorIs(t, err, redis.Nil)
+	} else {
+		assert.Zero(t, reserved)
+	}
+}
+
 func TestYunwuRebindingOnFailure(t *testing.T) {
 	store := setupTestYunwuStore(t)
 	nm := health.NewNodeManager(store)
@@ -171,6 +206,7 @@ func TestClassifyMediaRequest(t *testing.T) {
 		{"speech", http.MethodPost, "/v1/audio/speech", "gemini-tts", `{}`, "audio", 1},
 		{"operation poll", http.MethodGet, "/v1beta/operations/abc", "", `{}`, "media_control", 0},
 		{"file upload", http.MethodPost, "/upload/v1beta/files", "", `{}`, "media_control", 0},
+		{"count tokens", http.MethodPost, "/v1beta/models/gemini-2.5-flash:countTokens", "gemini-2.5-flash", `{}`, "media_control", 0},
 		{"native text", http.MethodPost, "/v1beta/models/gemini-2.5-flash:generateContent", "gemini-2.5-flash", `{}`, "", 0},
 	}
 	for _, tc := range tests {
@@ -199,6 +235,14 @@ func TestYunwuOperationAffinityNames(t *testing.T) {
 func TestModelNameFromNativeGeminiRequest(t *testing.T) {
 	ctx := runtime.WithUpstreamRequest(context.Background(), http.MethodPost, "/v1beta/models/veo-3.0-generate-preview:predictLongRunning", "application/json")
 	assert.Equal(t, "veo-3.0-generate-preview", modelNameFromRequest(ctx))
+}
+
+func TestYunwuInteractionAffinityNames(t *testing.T) {
+	ctx := runtime.WithUpstreamRequest(context.Background(), http.MethodGet, "/v1beta/interactions/int-123?stream=true", "application/json")
+	assert.Equal(t, "int-123", interactionIDFromRequest(ctx))
+	createCtx := runtime.WithUpstreamRequest(context.Background(), http.MethodPost, "/v1beta/interactions", "application/json")
+	assert.Equal(t, "int-123", interactionIDFromResponse(createCtx, []byte(`{"id":"int-123","status":"in_progress"}`)))
+	assert.Empty(t, interactionIDFromResponse(context.Background(), []byte(`{"id":"int-123"}`)))
 }
 
 func TestYunwuHealthControllerAndStatsWorker(t *testing.T) {

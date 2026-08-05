@@ -180,5 +180,6 @@ func abortWithGoogleErrorContext(c gatewayctx.GatewayContext, status int, messag
 }
 
 func allowGoogleQueryKey(path string) bool {
-	return strings.HasPrefix(path, "/v1beta") || strings.HasPrefix(path, "/antigravity/v1beta")
+	return strings.HasPrefix(path, "/v1beta") || strings.HasPrefix(path, "/antigravity/v1beta") ||
+		strings.HasPrefix(path, "/v1/interactions") || strings.HasPrefix(path, "/ws/google.ai.generativelanguage.")
 }

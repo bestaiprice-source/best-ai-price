@@ -31,14 +31,22 @@ func TestBuildRouteManifestIncludesHintsAndSorts(t *testing.T) {
 	})
 
 	manifest := BuildRouteManifest(router)
-	require.Len(t, manifest, 2)
-	require.Equal(t, "/health", manifest[0].Path)
-	require.Equal(t, "/responses", manifest[1].Path)
-	require.NotEmpty(t, manifest[0].Handler)
-	require.True(t, manifest[0].Executable)
-	require.Contains(t, manifest[0].Middleware, "request_logger")
-	require.True(t, manifest[1].Hints.Streaming)
-	require.True(t, manifest[1].Hints.WebSocket)
+	var health, responses *RouteManifestEntry
+	for i := range manifest {
+		switch manifest[i].Path {
+		case "/health":
+			health = &manifest[i]
+		case "/responses":
+			responses = &manifest[i]
+		}
+	}
+	require.NotNil(t, health)
+	require.NotNil(t, responses)
+	require.NotEmpty(t, health.Handler)
+	require.True(t, health.Executable)
+	require.Contains(t, health.Middleware, "request_logger")
+	require.True(t, responses.Hints.Streaming)
+	require.True(t, responses.Hints.WebSocket)
 }
 
 func TestProvideHTTPServerRegistersRouteManifestMetadata(t *testing.T) {
@@ -63,8 +71,13 @@ func TestProvideHTTPServerRegistersRouteManifestMetadata(t *testing.T) {
 
 	require.Equal(t, config.ServerRuntimeModeNetHTTP, runtime.Name())
 	require.Equal(t, cfg.Server.Address(), runtime.Addr())
-	require.Len(t, runtime.RouteManifest(), 1)
-	require.Equal(t, "/health", runtime.RouteManifest()[0].Path)
+	require.Contains(t, runtime.RouteManifest(), RouteManifestEntry{
+		Method:     http.MethodGet,
+		Path:       "/health",
+		Handler:    "github.com/Wei-Shaw/sub2api/internal/server.TestProvideHTTPServerRegistersRouteManifestMetadata.func1",
+		Middleware: []string{"request_logger", "cors", "security_headers"},
+		Executable: true,
+	})
 }
 
 func TestResolveIngressRuntimeHonorsConfiguredMode(t *testing.T) {

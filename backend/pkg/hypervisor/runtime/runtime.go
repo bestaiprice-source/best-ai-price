@@ -18,6 +18,7 @@ import (
 	dbaccount "github.com/Wei-Shaw/sub2api/ent/account"
 	"github.com/Wei-Shaw/sub2api/internal/credentials"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/storage"
+	coderws "github.com/coder/websocket"
 )
 
 type ResponseMetadata struct {
@@ -28,6 +29,22 @@ type ResponseMetadata struct {
 
 type Runtime interface {
 	Execute(ctx context.Context, nodeID string, reqPayload []byte, stream io.Writer) (*ResponseMetadata, error)
+}
+
+type WSMessageType int
+
+const (
+	WSMessageText WSMessageType = iota + 1
+	WSMessageBinary
+)
+
+type WebSocketPeer interface {
+	Read(context.Context) (WSMessageType, []byte, error)
+	Write(context.Context, WSMessageType, []byte) error
+}
+
+type WebSocketRuntime interface {
+	ProxyWebSocket(context.Context, string, string, http.Header, WebSocketPeer) error
 }
 
 type upstreamRequestOverride struct {
@@ -230,6 +247,116 @@ func NewAnthropicRuntime(store *storage.Storage, decryptors ...credentials.Ciphe
 		decryptor = decryptors[0]
 	}
 	return &AnthropicRuntime{store: store, decryptor: decryptor}
+}
+
+// ProxyWebSocket transparently relays Gemini Live frames. The upstream origin
+// and credentials are always resolved from the selected Yunwu account.
+func (r *AnthropicRuntime) ProxyWebSocket(ctx context.Context, nodeID, path string, headers http.Header, downstream WebSocketPeer) error {
+	if path == "" || !strings.HasPrefix(path, "/") || strings.HasPrefix(path, "//") || strings.Contains(path, "://") {
+		return fmt.Errorf("invalid upstream websocket path")
+	}
+	id, err := strconv.ParseInt(nodeID, 10, 64)
+	if err != nil {
+		return fmt.Errorf("invalid Yunwu node ID: %w", err)
+	}
+	acc, err := r.store.DB().Account.Get(ctx, id)
+	if err != nil {
+		return fmt.Errorf("resolve Yunwu websocket account: %w", err)
+	}
+	creds, err := credentials.DecryptMap(acc.Credentials, r.decryptor)
+	if err != nil {
+		return fmt.Errorf("decrypt Yunwu websocket credentials: %w", err)
+	}
+	apiKey := ""
+	for _, key := range []string{"access_token", "api_key", "token", "key"} {
+		if value, ok := creds[key].(string); ok && strings.TrimSpace(value) != "" {
+			apiKey = strings.TrimSpace(value)
+			break
+		}
+	}
+	if apiKey == "" {
+		return fmt.Errorf("empty api_key credentials for node %s", nodeID)
+	}
+	baseURL, _ := creds["base_url"].(string)
+	origin, err := upstreamOrigin(baseURL)
+	if err != nil {
+		return err
+	}
+	u, err := url.Parse(origin + path)
+	if err != nil {
+		return err
+	}
+	if u.Scheme == "https" {
+		u.Scheme = "wss"
+	} else {
+		u.Scheme = "ws"
+	}
+	dialHeaders := make(http.Header)
+	liveAuth, _ := acc.Extra["yunwu_live_auth"].(string)
+	if strings.EqualFold(strings.TrimSpace(liveAuth), "query") {
+		query := u.Query()
+		query.Set("key", apiKey)
+		u.RawQuery = query.Encode()
+	} else {
+		dialHeaders.Set("Authorization", "Bearer "+apiKey)
+	}
+	var subprotocols []string
+	for _, protocol := range strings.Split(headers.Get("Sec-WebSocket-Protocol"), ",") {
+		if protocol = strings.TrimSpace(protocol); protocol != "" {
+			subprotocols = append(subprotocols, protocol)
+		}
+	}
+	upstream, _, err := coderws.Dial(ctx, u.String(), &coderws.DialOptions{HTTPHeader: dialHeaders, Subprotocols: subprotocols, CompressionMode: coderws.CompressionContextTakeover})
+	if err != nil {
+		// Dial errors can contain the URL; never expose query-auth credentials.
+		return fmt.Errorf("dial Yunwu Gemini Live websocket failed")
+	}
+	defer upstream.CloseNow()
+	upstream.SetReadLimit(64 << 20)
+
+	relayCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	errs := make(chan error, 2)
+	go func() {
+		for {
+			msgType, payload, readErr := downstream.Read(relayCtx)
+			if readErr != nil {
+				errs <- readErr
+				return
+			}
+			coderType := coderws.MessageText
+			if msgType == WSMessageBinary {
+				coderType = coderws.MessageBinary
+			}
+			if writeErr := upstream.Write(relayCtx, coderType, payload); writeErr != nil {
+				errs <- writeErr
+				return
+			}
+		}
+	}()
+	go func() {
+		for {
+			msgType, payload, readErr := upstream.Read(relayCtx)
+			if readErr != nil {
+				errs <- readErr
+				return
+			}
+			downType := WSMessageText
+			if msgType == coderws.MessageBinary {
+				downType = WSMessageBinary
+			}
+			if writeErr := downstream.Write(relayCtx, downType, payload); writeErr != nil {
+				errs <- writeErr
+				return
+			}
+		}
+	}()
+	err = <-errs
+	cancel()
+	if coderws.CloseStatus(err) == coderws.StatusNormalClosure || coderws.CloseStatus(err) == coderws.StatusGoingAway || errors.Is(err, context.Canceled) {
+		return nil
+	}
+	return err
 }
 
 func (r *AnthropicRuntime) Execute(ctx context.Context, nodeID string, reqPayload []byte, stream io.Writer) (*ResponseMetadata, error) {
@@ -615,7 +742,7 @@ func (r *AnthropicRuntime) Execute(ctx context.Context, nodeID string, reqPayloa
 
 	// 6. Stream response and track end of stream for token usage
 	var outStream io.Writer = stream
-	if isResponsesAPI && !strings.Contains(apiURL, "/responses") && isStream {
+	if !hasUpstreamOverride && isResponsesAPI && !strings.Contains(apiURL, "/responses") && isStream {
 		outStream = newResponsesSSETransformer(stream)
 	}
 
@@ -648,7 +775,7 @@ func (r *AnthropicRuntime) Execute(ctx context.Context, nodeID string, reqPayloa
 		}
 	}
 
-	if isChatCompletions && isStream {
+	if !hasUpstreamOverride && isChatCompletions && isStream {
 		_, _ = stream.Write([]byte("data: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_completed\"}}\n\n"))
 		if flusher, ok := stream.(http.Flusher); ok {
 			flusher.Flush()
@@ -826,31 +953,41 @@ func (t *responsesSSETransformer) Write(p []byte) (n int, err error) {
 }
 
 func extractTokens(data []byte) (int64, int64) {
-	str := string(data)
-	input := int64(0)
-	output := int64(0)
+	input := firstJSONInteger(data, "total_input_tokens", "promptTokenCount", "prompt_token_count", "prompt_tokens", "input_tokens")
+	output := firstJSONInteger(data, "total_output_tokens", "candidatesTokenCount", "candidates_token_count", "completion_tokens", "output_tokens")
+	thoughts := firstJSONInteger(data, "total_thought_tokens", "thoughtsTokenCount", "thoughts_token_count")
+	return input, output + thoughts
+}
 
-	if idx := strings.Index(str, `"input_tokens"`); idx != -1 {
-		sub := str[idx:]
-		if colIdx := strings.Index(sub, ":"); colIdx != -1 {
-			sub = sub[colIdx+1:]
-			var val int64
-			if _, scanErr := fmt.Sscanf(sub, "%d", &val); scanErr == nil {
-				input = val
+func firstJSONInteger(data []byte, keys ...string) int64 {
+	text := string(data)
+	for _, key := range keys {
+		needle := `"` + key + `"`
+		search := text
+		var found int64
+		matched := false
+		for {
+			idx := strings.Index(search, needle)
+			if idx < 0 {
+				break
 			}
+			after := search[idx+len(needle):]
+			colon := strings.IndexByte(after, ':')
+			if colon < 0 {
+				break
+			}
+			after = strings.TrimLeft(after[colon+1:], " \t\r\n")
+			var value int64
+			if _, err := fmt.Sscanf(after, "%d", &value); err == nil {
+				found, matched = value, true
+			}
+			search = after
+		}
+		if matched {
+			return found
 		}
 	}
-	if idx := strings.Index(str, `"output_tokens"`); idx != -1 {
-		sub := str[idx:]
-		if colIdx := strings.Index(sub, ":"); colIdx != -1 {
-			sub = sub[colIdx+1:]
-			var val int64
-			if _, scanErr := fmt.Sscanf(sub, "%d", &val); scanErr == nil {
-				output = val
-			}
-		}
-	}
-	return input, output
+	return 0
 }
 
 func constructInputFromMessagesPayload(bodyMap map[string]any) []map[string]any {

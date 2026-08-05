@@ -100,3 +100,29 @@ func TestExecutableGatewayRoutesOpenAIImagesPathsAreRegistered(t *testing.T) {
 		require.True(t, found, "path=%s should be present in executable gateway routes", path)
 	}
 }
+
+func TestExecutableGatewayRoutesYunwuMultimediaAreRegistered(t *testing.T) {
+	routes := ExecutableGatewayRoutes(&handler.Handlers{
+		Gateway:       &handler.GatewayHandler{},
+		OpenAIGateway: &handler.OpenAIGatewayHandler{},
+	})
+	expected := map[string]bool{
+		"POST /v1/audio/speech":             false,
+		"POST /v1/videos":                   false,
+		"GET /v1/videos/*videoPath":         false,
+		"GET /v1beta/operations/*operation": false,
+		"POST /upload/v1beta/files":         false,
+		"GET /ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent": false,
+		"GET /ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateMusic":  false,
+		"POST /v1beta/interactions": false,
+	}
+	for _, route := range routes {
+		key := route.Method + " " + route.Path
+		if _, ok := expected[key]; ok {
+			expected[key] = true
+		}
+	}
+	for route, found := range expected {
+		require.True(t, found, "route=%s should be present in executable gateway routes", route)
+	}
+}

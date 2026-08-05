@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
+	coderws "github.com/coder/websocket"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -28,6 +29,26 @@ import (
 )
 
 type runtimeTestCipher struct{}
+
+type testLivePeer struct {
+	first []byte
+	sent  bool
+	out   chan []byte
+}
+
+func (p *testLivePeer) Read(ctx context.Context) (WSMessageType, []byte, error) {
+	if !p.sent {
+		p.sent = true
+		return WSMessageText, p.first, nil
+	}
+	<-ctx.Done()
+	return WSMessageText, nil, ctx.Err()
+}
+
+func (p *testLivePeer) Write(_ context.Context, _ WSMessageType, payload []byte) error {
+	p.out <- append([]byte(nil), payload...)
+	return nil
+}
 
 func (runtimeTestCipher) Encrypt(value string) (string, error) { return "cipher(" + value + ")", nil }
 func (runtimeTestCipher) Decrypt(value string) (string, error) {
@@ -438,6 +459,50 @@ func TestYunwuUpstreamOverrideRejectsAbsoluteURL(t *testing.T) {
 	require.ErrorContains(t, err, "invalid upstream relative path")
 }
 
+func TestYunwuGeminiLiveWebSocketRelay(t *testing.T) {
+	store := newTestStorage(t)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent", r.URL.Path)
+		assert.Equal(t, "Bearer sk-live", r.Header.Get("Authorization"))
+		conn, err := coderws.Accept(w, r, nil)
+		require.NoError(t, err)
+		defer conn.Close(coderws.StatusNormalClosure, "done")
+		_, setup, err := conn.Read(r.Context())
+		require.NoError(t, err)
+		assert.Contains(t, string(setup), `"setup"`)
+		require.NoError(t, conn.Write(r.Context(), coderws.MessageText, []byte(`{"serverContent":{"modelTurn":{"parts":[{"inlineData":{"mimeType":"audio/pcm","data":"AAAA"}}]}}}`)))
+	}))
+	defer server.Close()
+	account, err := store.DB().Account.Create().
+		SetName("yunwu-live").SetPlatform("yunwu").SetType("api_key").SetStatus("active").
+		SetCredentials(map[string]any{"api_key": "sk-live", "base_url": server.URL}).Save(context.Background())
+	require.NoError(t, err)
+	peer := &testLivePeer{first: []byte(`{"setup":{"model":"models/gemini-live"}}`), out: make(chan []byte, 1)}
+	err = NewAnthropicRuntime(store).ProxyWebSocket(context.Background(), fmt.Sprint(account.ID), "/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent", nil, peer)
+	require.NoError(t, err)
+	select {
+	case response := <-peer.out:
+		assert.Contains(t, string(response), `"audio/pcm"`)
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for Gemini Live response")
+	}
+}
+
+func TestYunwuGeminiLiveQueryCredentialIsRedactedFromDialError(t *testing.T) {
+	store := newTestStorage(t)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { http.Error(w, "no websocket", http.StatusBadGateway) }))
+	server.Close()
+	account, err := store.DB().Account.Create().
+		SetName("yunwu-live-query").SetPlatform("yunwu").SetType("api_key").SetStatus("active").
+		SetExtra(map[string]any{"yunwu_live_auth": "query"}).
+		SetCredentials(map[string]any{"api_key": "secret-live-key", "base_url": server.URL}).Save(context.Background())
+	require.NoError(t, err)
+	err = NewAnthropicRuntime(store).ProxyWebSocket(context.Background(), fmt.Sprint(account.ID), "/ws/live", nil, &testLivePeer{})
+	require.Error(t, err)
+	assert.NotContains(t, err.Error(), "secret-live-key")
+	assert.NotContains(t, err.Error(), "?key=")
+}
+
 func TestResponsesSSETransformerDirect(t *testing.T) {
 	var buf bytes.Buffer
 	tr := newResponsesSSETransformer(&buf)
@@ -471,4 +536,13 @@ func TestConstructMessagesFromResponsesPayload(t *testing.T) {
 	assert.Equal(t, "Be concise.", msgs[0]["content"])
 	assert.Equal(t, "user", msgs[1]["role"])
 	assert.Equal(t, "Что такое телеграм?", msgs[1]["content"])
+}
+
+func TestExtractTokensSupportsGeminiAndInteractionsUsage(t *testing.T) {
+	input, output := extractTokens([]byte(`{"usageMetadata":{"promptTokenCount":258,"candidatesTokenCount":20,"thoughtsTokenCount":7}}`))
+	assert.Equal(t, int64(258), input)
+	assert.Equal(t, int64(27), output)
+	input, output = extractTokens([]byte(`{"usage":{"total_input_tokens":50,"total_output_tokens":10,"total_thought_tokens":22}}`))
+	assert.Equal(t, int64(50), input)
+	assert.Equal(t, int64(32), output)
 }

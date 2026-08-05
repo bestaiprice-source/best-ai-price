@@ -348,6 +348,21 @@ func TestApiKeyAuthWithSubscriptionGoogle_QueryKeyAllowedOnV1Beta(t *testing.T) 
 	require.Equal(t, http.StatusOK, rec.Code)
 }
 
+func TestApiKeyAuthWithSubscriptionGoogle_QueryKeyAllowedOnGeminiLiveWebSocket(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	apiKeyService := newTestAPIKeyService(fakeAPIKeyRepo{getByKey: func(_ context.Context, key string) (*service.APIKey, error) {
+		return &service.APIKey{ID: 1, Key: key, Status: service.StatusActive, User: &service.User{ID: 123, Status: service.StatusActive}}, nil
+	}})
+	r.Use(APIKeyAuthWithSubscriptionGoogle(apiKeyService, nil, &config.Config{RunMode: config.RunModeSimple}))
+	path := "/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent"
+	r.GET(path, func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"ok": true}) })
+	req := httptest.NewRequest(http.MethodGet, path+"?key=valid", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+}
+
 func TestApiKeyAuthWithSubscriptionGoogle_InvalidKey(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 

@@ -233,6 +233,12 @@ func (yh *YunwuHypervisor) HandleRequest(
 			operationNodeID = nodeID
 		}
 	}
+	if interactionID := interactionIDFromRequest(ctx); interactionID != "" {
+		if nodeID, lookupErr := yh.store.Redis().Get(ctx, yunwuInteractionNodeKey(interactionID)).Result(); lookupErr == nil && nodeID != "" {
+			activeLeaseNodeID = nodeID
+			operationNodeID = nodeID
+		}
+	}
 
 	// 4. Load Yunwu nodes and runtime credits
 	nodes, err := yh.getAllYunwuNodes(ctx)
@@ -413,6 +419,9 @@ func (yh *YunwuHypervisor) HandleRequest(
 	if operation := operationNameFromResponse(responseWriter.buf.Bytes()); operation != "" {
 		_ = yh.store.Redis().Set(ctx, yunwuOperationNodeKey(operation), selectedNode.NodeID, 7*24*time.Hour).Err()
 	}
+	if interactionID := interactionIDFromResponse(ctx, responseWriter.buf.Bytes()); interactionID != "" {
+		_ = yh.store.Redis().Set(ctx, yunwuInteractionNodeKey(interactionID), selectedNode.NodeID, 7*24*time.Hour).Err()
+	}
 
 	latencyMs := time.Since(execStart).Milliseconds()
 
@@ -494,6 +503,113 @@ func (yh *YunwuHypervisor) HandleRequest(
 	return meta, nil
 }
 
+// HandleLive proxies a bidirectional Gemini Live session through the isolated
+// Yunwu pool. A bounded maximum duration makes node and user cost reservable
+// before any realtime media is sent upstream.
+func (yh *YunwuHypervisor) HandleLive(ctx context.Context, ownerID, conversationID, path string, headers http.Header, peer runtime.WebSocketPeer) error {
+	userPriority := 1
+	if access, err := yh.qm.GetUserAccess(ctx, ownerID, "yunwu"); err == nil && access != nil {
+		userPriority = access.Priority
+	}
+	_ = yh.qm.RegisterActiveUser(ctx, ownerID, "yunwu", userPriority)
+	allowed, err := yh.qm.CheckQuota(ctx, ownerID, "yunwu")
+	if err != nil {
+		return err
+	}
+	if !allowed {
+		return quota.ErrQuotaExceeded
+	}
+	if err := yh.qm.AcquireConcurrentSlot(ctx, ownerID, "yunwu"); err != nil {
+		return err
+	}
+	defer yh.qm.ReleaseConcurrentSlot(context.Background(), ownerID, "yunwu")
+
+	nodes, err := yh.getAllYunwuNodes(ctx)
+	if err != nil {
+		return err
+	}
+	states := yh.getAllYunwuNodeStates(ctx, nodes)
+	credits := yh.getAllYunwuNodeCredits(ctx, nodes)
+	selected, err := yh.sch.SelectNode(ctx, nodes, states, credits, userPriority, "", yh.hc.GetSystemState(ctx))
+	if err != nil {
+		return err
+	}
+	maxMinutes := yh.liveMaxMinutes(ctx, selected.NodeID)
+	liveModel, usageUnit := "gemini-live", "live_audio_minute"
+	if strings.Contains(path, "BidiGenerateMusic") {
+		liveModel, usageUnit = "lyria-realtime", "live_music_minute"
+	}
+	pricePerMinute, fallback := yh.resolveMediaPrice(ctx, selected.NodeID, liveModel, mediaRequest{Kind: usageUnit, Units: 1})
+	if fallback {
+		observability.Default.YunwuFallbackPricing()
+	}
+	estimated := pricePerMinute * maxMinutes
+	requestID := fmt.Sprintf("live-%s-%d", ownerID, time.Now().UnixNano())
+	reserved, err := yh.sw.Reserve(ctx, selected.NodeID, requestID, max64(1, estimated), time.Duration(maxMinutes+2)*time.Minute)
+	if err != nil {
+		return err
+	}
+	if !reserved {
+		return quota.ErrQuotaExceeded
+	}
+	reservationOpen := true
+	defer func() {
+		if reservationOpen {
+			_, _ = yh.sw.ReleaseReservation(context.Background(), selected.NodeID, requestID)
+		}
+	}()
+
+	wsRuntime, ok := yh.rt.(runtime.WebSocketRuntime)
+	if !ok {
+		return fmt.Errorf("configured Yunwu runtime does not support websocket transport")
+	}
+	liveCtx, cancel := context.WithTimeout(ctx, time.Duration(maxMinutes)*time.Minute)
+	started := time.Now()
+	err = wsRuntime.ProxyWebSocket(liveCtx, selected.NodeID, path, headers, peer)
+	cancel()
+	duration := time.Since(started)
+	minutes := int64(math.Ceil(duration.Minutes()))
+	if minutes < 1 {
+		minutes = 1
+	}
+	if minutes > maxMinutes {
+		minutes = maxMinutes
+	}
+	billed := pricePerMinute * minutes
+	// A successfully established session is billable even when either peer
+	// closes it normally; a dial/setup failure is refunded by the defer above.
+	if duration >= time.Second || err == nil {
+		_, _ = yh.sw.ReconcileReservation(context.Background(), selected.NodeID, requestID, billed)
+		reservationOpen = false
+		if billed > 0 {
+			_ = yh.qm.ConsumeMicroUSD(context.Background(), ownerID, billed)
+			_, _ = yh.store.RecordUsageDetails(context.Background(), ownerID, nil, &selected.NodeID, 0, 0, minutes, "yunwu", "yunwu", liveModel, usageUnit, billed)
+			_, _ = yh.store.LogEvent(context.Background(), ownerID, nil, &selected.NodeID, "UsageRecorded", map[string]any{"usage_unit": usageUnit, "units": minutes, "billed_micro_usd": billed, "pool_type": "yunwu"})
+		}
+	}
+	return err
+}
+
+func (yh *YunwuHypervisor) liveMaxMinutes(ctx context.Context, nodeID string) int64 {
+	const defaultMax = int64(15)
+	if yh.store.DB() == nil {
+		return defaultMax
+	}
+	id, err := strconv.ParseInt(nodeID, 10, 64)
+	if err != nil {
+		return defaultMax
+	}
+	acc, err := yh.store.DB().Account.Get(ctx, id)
+	if err != nil || acc.Extra == nil {
+		return defaultMax
+	}
+	value, ok := numericMicroUSD(acc.Extra["yunwu_live_max_minutes"])
+	if !ok || value < 1 || value > 120 {
+		return defaultMax
+	}
+	return value
+}
+
 func CalculateBilledMicroUSD(inputTokens, outputTokens int64, inputPriceUSDPer1K, outputPriceUSDPer1K float64) int64 {
 	return int64(math.Ceil(float64(inputTokens)*inputPriceUSDPer1K*1000 + float64(outputTokens)*outputPriceUSDPer1K*1000))
 }
@@ -527,7 +643,7 @@ func classifyMediaRequest(ctx context.Context, model string, payload []byte) med
 		return mediaRequest{}
 	}
 	method, path := strings.ToUpper(req.Method), strings.ToLower(req.Path)
-	if method != http.MethodPost || strings.Contains(path, "/files") || strings.Contains(path, "/operations/") {
+	if method != http.MethodPost || strings.Contains(path, "/files") || strings.Contains(path, "/operations/") || strings.Contains(path, ":counttokens") || strings.HasSuffix(strings.Split(path, "?")[0], "/cancel") {
 		return mediaRequest{Kind: "media_control", Units: 0}
 	}
 	kind := ""
@@ -666,6 +782,44 @@ func operationNameFromResponse(body []byte) string {
 
 func yunwuOperationNodeKey(operation string) string {
 	return "ash:yunwu:operation_node:" + operation
+}
+
+func interactionIDFromRequest(ctx context.Context) string {
+	req, ok := runtime.UpstreamRequestFromContext(ctx)
+	if !ok {
+		return ""
+	}
+	path := req.Path
+	if i := strings.IndexByte(path, '?'); i >= 0 {
+		path = path[:i]
+	}
+	const prefix = "/interactions/"
+	i := strings.Index(path, prefix)
+	if i < 0 {
+		return ""
+	}
+	id := path[i+len(prefix):]
+	if slash := strings.IndexByte(id, '/'); slash >= 0 {
+		id = id[:slash]
+	}
+	return id
+}
+
+func interactionIDFromResponse(ctx context.Context, body []byte) string {
+	req, ok := runtime.UpstreamRequestFromContext(ctx)
+	if !ok || !strings.Contains(req.Path, "/interactions") {
+		return ""
+	}
+	var payload map[string]any
+	if json.Unmarshal(body, &payload) != nil {
+		return ""
+	}
+	id, _ := payload["id"].(string)
+	return strings.TrimSpace(id)
+}
+
+func yunwuInteractionNodeKey(id string) string {
+	return "ash:yunwu:interaction_node:" + id
 }
 
 func (yh *YunwuHypervisor) getAllYunwuNodes(ctx context.Context) ([]health.ExecutionNode, error) {
