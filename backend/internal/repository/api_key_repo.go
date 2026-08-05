@@ -2,7 +2,10 @@ package repository
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
+	"strings"
 	"time"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
@@ -19,6 +22,31 @@ import (
 type apiKeyRepository struct {
 	client *dbent.Client
 	sql    sqlExecutor
+}
+
+const apiKeyHashPrefix = "sha256:"
+
+// hashAPIKeyForStorage creates the deterministic lookup token persisted in
+// api_keys.key. Only a short non-secret prefix is retained for operator UX.
+func hashAPIKeyForStorage(key string) string {
+	if strings.HasPrefix(key, apiKeyHashPrefix) {
+		return key
+	}
+	prefix := key
+	if len(prefix) > 8 {
+		prefix = prefix[:8]
+	}
+	sum := sha256.Sum256([]byte(key))
+	return apiKeyHashPrefix + prefix + ":" + hex.EncodeToString(sum[:])
+}
+
+func apiKeyLookupValues(key string) []string {
+	hashed := hashAPIKeyForStorage(key)
+	if hashed == key {
+		return []string{hashed}
+	}
+	// Plaintext fallback supports rolling upgrades until migration 137 has run.
+	return []string{hashed, key}
 }
 
 func NewAPIKeyRepository(client *dbent.Client, sqlDB *sql.DB) service.APIKeyRepository {
@@ -39,9 +67,10 @@ func (r *apiKeyRepository) Create(ctx context.Context, key *service.APIKey) erro
 	key.GroupIDs = normalizedGroupIDs
 	key.GroupID = service.PrimaryAPIKeyGroupID(normalizedGroupIDs)
 
+	plaintextKey := key.Key
 	builder := r.client.APIKey.Create().
 		SetUserID(key.UserID).
-		SetKey(key.Key).
+		SetKey(hashAPIKeyForStorage(plaintextKey)).
 		SetName(key.Name).
 		SetStatus(key.Status).
 		SetAllowedModels(service.NormalizeAPIKeyAllowedModels(key.AllowedModels)).
@@ -63,6 +92,9 @@ func (r *apiKeyRepository) Create(ctx context.Context, key *service.APIKey) erro
 
 	created, err := builder.Save(ctx)
 	if err == nil {
+		// The cleartext is returned exactly once to the creator and never copied
+		// back from the persisted entity.
+		key.Key = plaintextKey
 		key.ID = created.ID
 		key.LastUsedAt = created.LastUsedAt
 		key.CreatedAt = created.CreatedAt
@@ -114,7 +146,7 @@ func (r *apiKeyRepository) GetKeyAndOwnerID(ctx context.Context, id int64) (stri
 
 func (r *apiKeyRepository) GetByKey(ctx context.Context, key string) (*service.APIKey, error) {
 	m, err := r.activeQuery().
-		Where(apikey.KeyEQ(key)).
+		Where(apikey.KeyIn(apiKeyLookupValues(key)...)).
 		WithUser().
 		WithGroup().
 		Only(ctx)
@@ -133,7 +165,7 @@ func (r *apiKeyRepository) GetByKey(ctx context.Context, key string) (*service.A
 
 func (r *apiKeyRepository) GetByKeyForAuth(ctx context.Context, key string) (*service.APIKey, error) {
 	m, err := r.activeQuery().
-		Where(apikey.KeyEQ(key)).
+		Where(apikey.KeyIn(apiKeyLookupValues(key)...)).
 		Select(
 			apikey.FieldID,
 			apikey.FieldUserID,
@@ -390,7 +422,7 @@ func (r *apiKeyRepository) CountByUserID(ctx context.Context, userID int64) (int
 }
 
 func (r *apiKeyRepository) ExistsByKey(ctx context.Context, key string) (bool, error) {
-	count, err := r.activeQuery().Where(apikey.KeyEQ(key)).Count(ctx)
+	count, err := r.activeQuery().Where(apikey.KeyIn(apiKeyLookupValues(key)...)).Count(ctx)
 	return count > 0, err
 }
 
@@ -791,7 +823,9 @@ func (r *apiKeyRepository) hydrateAPIKeysGroupState(ctx context.Context, keys []
 	}
 	apiKeyIDs := make([]int64, 0, len(keys))
 	for _, key := range keys {
-		if key != nil && key.ID > 0 {
+		// Multi-group keys always persist a primary group_id. Avoid a PostgreSQL
+		// array query for ungrouped keys (and make the hot auth path cheaper).
+		if key != nil && key.ID > 0 && key.GroupID != nil {
 			apiKeyIDs = append(apiKeyIDs, key.ID)
 		}
 	}

@@ -126,6 +126,10 @@ func (hc *HealthController) Reconcile(ctx context.Context) error {
 						"recent_429", state.Recent429,
 						"recent_timeouts", state.RecentTimeouts,
 					)
+					_, _ = hc.store.LogEvent(ctx, "system", nil, &nodeID, "NodeLimited", map[string]any{
+						"recent_429":      state.Recent429,
+						"recent_timeouts": state.RecentTimeouts,
+					})
 				}
 				node.State = "limited"
 			} else if node.State == "" {
@@ -158,6 +162,26 @@ func (hc *HealthController) Reconcile(ctx context.Context) error {
 			}
 		}
 
+		// Check for RECOVERY transition from SURVIVAL/DEGRADED to NORMAL/WARNING
+		prevKey := "ash:system:prev_state:" + plat
+		prevState, _ := hc.store.Redis().Get(ctx, prevKey).Result()
+		recoveryUntilKey := "ash:system:recovery_until:" + plat
+		recVal, _ := hc.store.Redis().Get(ctx, recoveryUntilKey).Result()
+
+		if (prevState == "SURVIVAL" || prevState == "DEGRADED") && (systemState == "NORMAL" || systemState == "WARNING") {
+			recUntil := time.Now().Add(5 * time.Minute)
+			_ = hc.store.Redis().Set(ctx, recoveryUntilKey, recUntil.Format(time.RFC3339), 5*time.Minute).Err()
+			systemState = "RECOVERY"
+		} else if recVal != "" {
+			if recTime, parseErr := time.Parse(time.RFC3339, recVal); parseErr == nil && time.Now().Before(recTime) {
+				if systemState == "NORMAL" || systemState == "WARNING" {
+					systemState = "RECOVERY"
+				}
+			}
+		}
+
+		_ = hc.store.Redis().Set(ctx, prevKey, systemState, 0).Err()
+
 		slog.Debug("[HealthController] Reconciled platform pool health",
 			"platform", plat,
 			"total_nodes", totalCount,
@@ -173,7 +197,7 @@ func (hc *HealthController) Reconcile(ctx context.Context) error {
 	anthropicState, _ := hc.store.Redis().Get(ctx, "ash:system:state:anthropic").Result()
 	openaiState, _ := hc.store.Redis().Get(ctx, "ash:system:state:openai").Result()
 
-	statesPriority := map[string]int{"SURVIVAL": 4, "DEGRADED": 3, "WARNING": 2, "NORMAL": 1}
+	statesPriority := map[string]int{"SURVIVAL": 5, "DEGRADED": 4, "WARNING": 3, "RECOVERY": 2, "NORMAL": 1}
 	if statesPriority[anthropicState] > statesPriority[gState] {
 		gState = anthropicState
 	}

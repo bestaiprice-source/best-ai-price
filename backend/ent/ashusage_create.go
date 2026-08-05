@@ -98,6 +98,76 @@ func (_c *AshUsageCreate) SetNillableCostUnits(v *int64) *AshUsageCreate {
 	return _c
 }
 
+// SetPoolType sets the "pool_type" field.
+func (_c *AshUsageCreate) SetPoolType(v string) *AshUsageCreate {
+	_c.mutation.SetPoolType(v)
+	return _c
+}
+
+// SetNillablePoolType sets the "pool_type" field if the given value is not nil.
+func (_c *AshUsageCreate) SetNillablePoolType(v *string) *AshUsageCreate {
+	if v != nil {
+		_c.SetPoolType(*v)
+	}
+	return _c
+}
+
+// SetProvider sets the "provider" field.
+func (_c *AshUsageCreate) SetProvider(v string) *AshUsageCreate {
+	_c.mutation.SetProvider(v)
+	return _c
+}
+
+// SetNillableProvider sets the "provider" field if the given value is not nil.
+func (_c *AshUsageCreate) SetNillableProvider(v *string) *AshUsageCreate {
+	if v != nil {
+		_c.SetProvider(*v)
+	}
+	return _c
+}
+
+// SetModel sets the "model" field.
+func (_c *AshUsageCreate) SetModel(v string) *AshUsageCreate {
+	_c.mutation.SetModel(v)
+	return _c
+}
+
+// SetNillableModel sets the "model" field if the given value is not nil.
+func (_c *AshUsageCreate) SetNillableModel(v *string) *AshUsageCreate {
+	if v != nil {
+		_c.SetModel(*v)
+	}
+	return _c
+}
+
+// SetUsageUnit sets the "usage_unit" field.
+func (_c *AshUsageCreate) SetUsageUnit(v string) *AshUsageCreate {
+	_c.mutation.SetUsageUnit(v)
+	return _c
+}
+
+// SetNillableUsageUnit sets the "usage_unit" field if the given value is not nil.
+func (_c *AshUsageCreate) SetNillableUsageUnit(v *string) *AshUsageCreate {
+	if v != nil {
+		_c.SetUsageUnit(*v)
+	}
+	return _c
+}
+
+// SetBilledMicroUsd sets the "billed_micro_usd" field.
+func (_c *AshUsageCreate) SetBilledMicroUsd(v int64) *AshUsageCreate {
+	_c.mutation.SetBilledMicroUsd(v)
+	return _c
+}
+
+// SetNillableBilledMicroUsd sets the "billed_micro_usd" field if the given value is not nil.
+func (_c *AshUsageCreate) SetNillableBilledMicroUsd(v *int64) *AshUsageCreate {
+	if v != nil {
+		_c.SetBilledMicroUsd(*v)
+	}
+	return _c
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (_c *AshUsageCreate) SetCreatedAt(v time.Time) *AshUsageCreate {
 	_c.mutation.SetCreatedAt(v)
@@ -159,6 +229,26 @@ func (_c *AshUsageCreate) defaults() {
 		v := ashusage.DefaultCostUnits
 		_c.mutation.SetCostUnits(v)
 	}
+	if _, ok := _c.mutation.PoolType(); !ok {
+		v := ashusage.DefaultPoolType
+		_c.mutation.SetPoolType(v)
+	}
+	if _, ok := _c.mutation.Provider(); !ok {
+		v := ashusage.DefaultProvider
+		_c.mutation.SetProvider(v)
+	}
+	if _, ok := _c.mutation.Model(); !ok {
+		v := ashusage.DefaultModel
+		_c.mutation.SetModel(v)
+	}
+	if _, ok := _c.mutation.UsageUnit(); !ok {
+		v := ashusage.DefaultUsageUnit
+		_c.mutation.SetUsageUnit(v)
+	}
+	if _, ok := _c.mutation.BilledMicroUsd(); !ok {
+		v := ashusage.DefaultBilledMicroUsd
+		_c.mutation.SetBilledMicroUsd(v)
+	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := ashusage.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
@@ -193,6 +283,21 @@ func (_c *AshUsageCreate) check() error {
 	}
 	if _, ok := _c.mutation.CostUnits(); !ok {
 		return &ValidationError{Name: "cost_units", err: errors.New(`ent: missing required field "AshUsage.cost_units"`)}
+	}
+	if _, ok := _c.mutation.PoolType(); !ok {
+		return &ValidationError{Name: "pool_type", err: errors.New(`ent: missing required field "AshUsage.pool_type"`)}
+	}
+	if _, ok := _c.mutation.Provider(); !ok {
+		return &ValidationError{Name: "provider", err: errors.New(`ent: missing required field "AshUsage.provider"`)}
+	}
+	if _, ok := _c.mutation.Model(); !ok {
+		return &ValidationError{Name: "model", err: errors.New(`ent: missing required field "AshUsage.model"`)}
+	}
+	if _, ok := _c.mutation.UsageUnit(); !ok {
+		return &ValidationError{Name: "usage_unit", err: errors.New(`ent: missing required field "AshUsage.usage_unit"`)}
+	}
+	if _, ok := _c.mutation.BilledMicroUsd(); !ok {
+		return &ValidationError{Name: "billed_micro_usd", err: errors.New(`ent: missing required field "AshUsage.billed_micro_usd"`)}
 	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "AshUsage.created_at"`)}
@@ -247,6 +352,26 @@ func (_c *AshUsageCreate) createSpec() (*AshUsage, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.CostUnits(); ok {
 		_spec.SetField(ashusage.FieldCostUnits, field.TypeInt64, value)
 		_node.CostUnits = value
+	}
+	if value, ok := _c.mutation.PoolType(); ok {
+		_spec.SetField(ashusage.FieldPoolType, field.TypeString, value)
+		_node.PoolType = value
+	}
+	if value, ok := _c.mutation.Provider(); ok {
+		_spec.SetField(ashusage.FieldProvider, field.TypeString, value)
+		_node.Provider = value
+	}
+	if value, ok := _c.mutation.Model(); ok {
+		_spec.SetField(ashusage.FieldModel, field.TypeString, value)
+		_node.Model = value
+	}
+	if value, ok := _c.mutation.UsageUnit(); ok {
+		_spec.SetField(ashusage.FieldUsageUnit, field.TypeString, value)
+		_node.UsageUnit = value
+	}
+	if value, ok := _c.mutation.BilledMicroUsd(); ok {
+		_spec.SetField(ashusage.FieldBilledMicroUsd, field.TypeInt64, value)
+		_node.BilledMicroUsd = value
 	}
 	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(ashusage.FieldCreatedAt, field.TypeTime, value)
@@ -403,6 +528,72 @@ func (u *AshUsageUpsert) UpdateCostUnits() *AshUsageUpsert {
 // AddCostUnits adds v to the "cost_units" field.
 func (u *AshUsageUpsert) AddCostUnits(v int64) *AshUsageUpsert {
 	u.Add(ashusage.FieldCostUnits, v)
+	return u
+}
+
+// SetPoolType sets the "pool_type" field.
+func (u *AshUsageUpsert) SetPoolType(v string) *AshUsageUpsert {
+	u.Set(ashusage.FieldPoolType, v)
+	return u
+}
+
+// UpdatePoolType sets the "pool_type" field to the value that was provided on create.
+func (u *AshUsageUpsert) UpdatePoolType() *AshUsageUpsert {
+	u.SetExcluded(ashusage.FieldPoolType)
+	return u
+}
+
+// SetProvider sets the "provider" field.
+func (u *AshUsageUpsert) SetProvider(v string) *AshUsageUpsert {
+	u.Set(ashusage.FieldProvider, v)
+	return u
+}
+
+// UpdateProvider sets the "provider" field to the value that was provided on create.
+func (u *AshUsageUpsert) UpdateProvider() *AshUsageUpsert {
+	u.SetExcluded(ashusage.FieldProvider)
+	return u
+}
+
+// SetModel sets the "model" field.
+func (u *AshUsageUpsert) SetModel(v string) *AshUsageUpsert {
+	u.Set(ashusage.FieldModel, v)
+	return u
+}
+
+// UpdateModel sets the "model" field to the value that was provided on create.
+func (u *AshUsageUpsert) UpdateModel() *AshUsageUpsert {
+	u.SetExcluded(ashusage.FieldModel)
+	return u
+}
+
+// SetUsageUnit sets the "usage_unit" field.
+func (u *AshUsageUpsert) SetUsageUnit(v string) *AshUsageUpsert {
+	u.Set(ashusage.FieldUsageUnit, v)
+	return u
+}
+
+// UpdateUsageUnit sets the "usage_unit" field to the value that was provided on create.
+func (u *AshUsageUpsert) UpdateUsageUnit() *AshUsageUpsert {
+	u.SetExcluded(ashusage.FieldUsageUnit)
+	return u
+}
+
+// SetBilledMicroUsd sets the "billed_micro_usd" field.
+func (u *AshUsageUpsert) SetBilledMicroUsd(v int64) *AshUsageUpsert {
+	u.Set(ashusage.FieldBilledMicroUsd, v)
+	return u
+}
+
+// UpdateBilledMicroUsd sets the "billed_micro_usd" field to the value that was provided on create.
+func (u *AshUsageUpsert) UpdateBilledMicroUsd() *AshUsageUpsert {
+	u.SetExcluded(ashusage.FieldBilledMicroUsd)
+	return u
+}
+
+// AddBilledMicroUsd adds v to the "billed_micro_usd" field.
+func (u *AshUsageUpsert) AddBilledMicroUsd(v int64) *AshUsageUpsert {
+	u.Add(ashusage.FieldBilledMicroUsd, v)
 	return u
 }
 
@@ -574,6 +765,83 @@ func (u *AshUsageUpsertOne) AddCostUnits(v int64) *AshUsageUpsertOne {
 func (u *AshUsageUpsertOne) UpdateCostUnits() *AshUsageUpsertOne {
 	return u.Update(func(s *AshUsageUpsert) {
 		s.UpdateCostUnits()
+	})
+}
+
+// SetPoolType sets the "pool_type" field.
+func (u *AshUsageUpsertOne) SetPoolType(v string) *AshUsageUpsertOne {
+	return u.Update(func(s *AshUsageUpsert) {
+		s.SetPoolType(v)
+	})
+}
+
+// UpdatePoolType sets the "pool_type" field to the value that was provided on create.
+func (u *AshUsageUpsertOne) UpdatePoolType() *AshUsageUpsertOne {
+	return u.Update(func(s *AshUsageUpsert) {
+		s.UpdatePoolType()
+	})
+}
+
+// SetProvider sets the "provider" field.
+func (u *AshUsageUpsertOne) SetProvider(v string) *AshUsageUpsertOne {
+	return u.Update(func(s *AshUsageUpsert) {
+		s.SetProvider(v)
+	})
+}
+
+// UpdateProvider sets the "provider" field to the value that was provided on create.
+func (u *AshUsageUpsertOne) UpdateProvider() *AshUsageUpsertOne {
+	return u.Update(func(s *AshUsageUpsert) {
+		s.UpdateProvider()
+	})
+}
+
+// SetModel sets the "model" field.
+func (u *AshUsageUpsertOne) SetModel(v string) *AshUsageUpsertOne {
+	return u.Update(func(s *AshUsageUpsert) {
+		s.SetModel(v)
+	})
+}
+
+// UpdateModel sets the "model" field to the value that was provided on create.
+func (u *AshUsageUpsertOne) UpdateModel() *AshUsageUpsertOne {
+	return u.Update(func(s *AshUsageUpsert) {
+		s.UpdateModel()
+	})
+}
+
+// SetUsageUnit sets the "usage_unit" field.
+func (u *AshUsageUpsertOne) SetUsageUnit(v string) *AshUsageUpsertOne {
+	return u.Update(func(s *AshUsageUpsert) {
+		s.SetUsageUnit(v)
+	})
+}
+
+// UpdateUsageUnit sets the "usage_unit" field to the value that was provided on create.
+func (u *AshUsageUpsertOne) UpdateUsageUnit() *AshUsageUpsertOne {
+	return u.Update(func(s *AshUsageUpsert) {
+		s.UpdateUsageUnit()
+	})
+}
+
+// SetBilledMicroUsd sets the "billed_micro_usd" field.
+func (u *AshUsageUpsertOne) SetBilledMicroUsd(v int64) *AshUsageUpsertOne {
+	return u.Update(func(s *AshUsageUpsert) {
+		s.SetBilledMicroUsd(v)
+	})
+}
+
+// AddBilledMicroUsd adds v to the "billed_micro_usd" field.
+func (u *AshUsageUpsertOne) AddBilledMicroUsd(v int64) *AshUsageUpsertOne {
+	return u.Update(func(s *AshUsageUpsert) {
+		s.AddBilledMicroUsd(v)
+	})
+}
+
+// UpdateBilledMicroUsd sets the "billed_micro_usd" field to the value that was provided on create.
+func (u *AshUsageUpsertOne) UpdateBilledMicroUsd() *AshUsageUpsertOne {
+	return u.Update(func(s *AshUsageUpsert) {
+		s.UpdateBilledMicroUsd()
 	})
 }
 
@@ -911,6 +1179,83 @@ func (u *AshUsageUpsertBulk) AddCostUnits(v int64) *AshUsageUpsertBulk {
 func (u *AshUsageUpsertBulk) UpdateCostUnits() *AshUsageUpsertBulk {
 	return u.Update(func(s *AshUsageUpsert) {
 		s.UpdateCostUnits()
+	})
+}
+
+// SetPoolType sets the "pool_type" field.
+func (u *AshUsageUpsertBulk) SetPoolType(v string) *AshUsageUpsertBulk {
+	return u.Update(func(s *AshUsageUpsert) {
+		s.SetPoolType(v)
+	})
+}
+
+// UpdatePoolType sets the "pool_type" field to the value that was provided on create.
+func (u *AshUsageUpsertBulk) UpdatePoolType() *AshUsageUpsertBulk {
+	return u.Update(func(s *AshUsageUpsert) {
+		s.UpdatePoolType()
+	})
+}
+
+// SetProvider sets the "provider" field.
+func (u *AshUsageUpsertBulk) SetProvider(v string) *AshUsageUpsertBulk {
+	return u.Update(func(s *AshUsageUpsert) {
+		s.SetProvider(v)
+	})
+}
+
+// UpdateProvider sets the "provider" field to the value that was provided on create.
+func (u *AshUsageUpsertBulk) UpdateProvider() *AshUsageUpsertBulk {
+	return u.Update(func(s *AshUsageUpsert) {
+		s.UpdateProvider()
+	})
+}
+
+// SetModel sets the "model" field.
+func (u *AshUsageUpsertBulk) SetModel(v string) *AshUsageUpsertBulk {
+	return u.Update(func(s *AshUsageUpsert) {
+		s.SetModel(v)
+	})
+}
+
+// UpdateModel sets the "model" field to the value that was provided on create.
+func (u *AshUsageUpsertBulk) UpdateModel() *AshUsageUpsertBulk {
+	return u.Update(func(s *AshUsageUpsert) {
+		s.UpdateModel()
+	})
+}
+
+// SetUsageUnit sets the "usage_unit" field.
+func (u *AshUsageUpsertBulk) SetUsageUnit(v string) *AshUsageUpsertBulk {
+	return u.Update(func(s *AshUsageUpsert) {
+		s.SetUsageUnit(v)
+	})
+}
+
+// UpdateUsageUnit sets the "usage_unit" field to the value that was provided on create.
+func (u *AshUsageUpsertBulk) UpdateUsageUnit() *AshUsageUpsertBulk {
+	return u.Update(func(s *AshUsageUpsert) {
+		s.UpdateUsageUnit()
+	})
+}
+
+// SetBilledMicroUsd sets the "billed_micro_usd" field.
+func (u *AshUsageUpsertBulk) SetBilledMicroUsd(v int64) *AshUsageUpsertBulk {
+	return u.Update(func(s *AshUsageUpsert) {
+		s.SetBilledMicroUsd(v)
+	})
+}
+
+// AddBilledMicroUsd adds v to the "billed_micro_usd" field.
+func (u *AshUsageUpsertBulk) AddBilledMicroUsd(v int64) *AshUsageUpsertBulk {
+	return u.Update(func(s *AshUsageUpsert) {
+		s.AddBilledMicroUsd(v)
+	})
+}
+
+// UpdateBilledMicroUsd sets the "billed_micro_usd" field to the value that was provided on create.
+func (u *AshUsageUpsertBulk) UpdateBilledMicroUsd() *AshUsageUpsertBulk {
+	return u.Update(func(s *AshUsageUpsert) {
+		s.UpdateBilledMicroUsd()
 	})
 }
 

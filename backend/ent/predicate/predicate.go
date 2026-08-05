@@ -33,6 +33,9 @@ type AshSession func(*sql.Selector)
 // AshUsage is the predicate function for ashusage builders.
 type AshUsage func(*sql.Selector)
 
+// AshUserPolicy is the predicate function for ashuserpolicy builders.
+type AshUserPolicy func(*sql.Selector)
+
 // AuthIdentity is the predicate function for authidentity builders.
 type AuthIdentity func(*sql.Selector)
 

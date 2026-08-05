@@ -134,6 +134,7 @@ func (sm *SessionManager) DeleteSession(ctx context.Context, sessionID string) e
 	
 	if sm.store.DB() != nil {
 		_ = sm.store.DB().AshSession.DeleteOneID(sessionID).Exec(ctx)
+		_, _ = sm.store.LogEvent(ctx, "system", &sessionID, nil, "SessionClosed", nil)
 	}
 	
 	return redisErr

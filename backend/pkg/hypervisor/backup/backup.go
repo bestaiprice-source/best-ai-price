@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/observability"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/session"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/storage"
 )
@@ -20,6 +21,10 @@ type ProjectSnapshot struct {
 	LastCommand string    `json:"last_command"`
 	SnapshotRef string    `json:"snapshot_ref"`
 	CreatedAt   time.Time `json:"created_at"`
+	// SessionState makes recovery independent from the Redis hot-state copy. It
+	// includes summary, recent messages, pinned facts, tool calls and project
+	// state through VirtualSession.ExecutionContext.
+	SessionState *session.VirtualSession `json:"session_state,omitempty"`
 }
 
 type BackupManager struct {
@@ -39,6 +44,14 @@ func SnapshotKey(sessionID string) string {
 }
 
 func (bm *BackupManager) CreateSnapshot(ctx context.Context, sessionID string, snapshot *ProjectSnapshot) error {
+	if snapshot == nil {
+		return fmt.Errorf("snapshot is required")
+	}
+	if snapshot.SessionState == nil {
+		if sess, err := bm.sm.GetSession(ctx, sessionID); err == nil && sess != nil {
+			snapshot.SessionState = sess
+		}
+	}
 	if snapshot.CreatedAt.IsZero() {
 		snapshot.CreatedAt = time.Now()
 	}
@@ -54,6 +67,7 @@ func (bm *BackupManager) CreateSnapshot(ctx context.Context, sessionID string, s
 		slog.Error("[BackupManager] Failed to save project snapshot to Redis", "session_id", sessionID, "error", err)
 		return err
 	}
+	observability.Default.Snapshot()
 
 	slog.Info("[BackupManager] Created project snapshot",
 		"session_id", sessionID,
@@ -91,8 +105,15 @@ func (bm *BackupManager) RestoreSessionFromSnapshot(ctx context.Context, session
 		return nil, fmt.Errorf("no project snapshot found for session %s: %w", sessionID, err)
 	}
 
-	sess, err := bm.sm.GetSession(ctx, sessionID)
-	if err != nil || sess == nil {
+	sess := snap.SessionState
+	if sess == nil {
+		var err error
+		sess, err = bm.sm.GetSession(ctx, sessionID)
+		if err != nil {
+			sess = nil
+		}
+	}
+	if sess == nil {
 		sess = &session.VirtualSession{
 			ID:        sessionID,
 			State:     "active",
@@ -101,6 +122,8 @@ func (bm *BackupManager) RestoreSessionFromSnapshot(ctx context.Context, session
 			UpdatedAt: time.Now(),
 		}
 	}
+	// Never allow the embedded state to change the requested storage key.
+	sess.ID = sessionID
 
 	sess.State = "active"
 	sess.UpdatedAt = time.Now()

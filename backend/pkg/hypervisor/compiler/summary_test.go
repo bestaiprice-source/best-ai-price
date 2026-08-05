@@ -17,6 +17,7 @@ import (
 	entsql "entgo.io/ent/dialect/sql"
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/enttest"
+	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/session"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/storage"
 	_ "modernc.org/sqlite"
 )
@@ -79,11 +80,23 @@ func TestSummaryWorkerGenerateAndTriggerAsync(t *testing.T) {
 		Summary:        "Initial overview",
 		RecentMessages: messages,
 	}
+	sm := session.NewSessionManager(store)
+	require.NoError(t, sm.SaveSession(context.Background(), &session.VirtualSession{
+		ID: "sess-summary-1", OwnerID: "user-1", ConversationID: "summary", State: "active",
+		Context: &session.ExecutionContext{}, CreatedAt: time.Now(), UpdatedAt: time.Now(),
+	}))
 
 	summary := sw.GenerateSummary(execCtx)
 	assert.Contains(t, summary, "Initial overview")
 	assert.Contains(t, summary, "22 total messages")
 
 	sw.TriggerAsyncSummary(context.Background(), "user-1", "sess-summary-1", execCtx)
-	time.Sleep(100 * time.Millisecond)
+	require.Eventually(t, func() bool {
+		sess, err := sm.GetSession(context.Background(), "sess-summary-1")
+		return err == nil && sess != nil && sess.Context != nil && strings.Contains(sess.Context.Summary, "22 total messages")
+	}, time.Second, 10*time.Millisecond)
+	events, err := store.DB().AshEvent.Query().All(context.Background())
+	require.NoError(t, err)
+	require.NotEmpty(t, events)
+	assert.Equal(t, "SummaryUpdated", events[len(events)-1].EventType)
 }

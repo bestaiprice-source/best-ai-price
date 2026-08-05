@@ -177,8 +177,12 @@ sub2api/
 | `ash:session:{session_id}` | Serialized `VirtualSession` state | Active session lifetime |
 | `ash:lease:{session_id}` | Active `Lease` binding | Lease duration |
 | `ash:node:{node_id}` | `NodeRuntimeState` metrics (`UsedTokens`, latencies, errors) | Persistent / Request updated |
+| `ash:node:{node_id}:runtime` | Detailed `NodeRuntimeState` execution metrics | Persistent |
 | `ash:lock:session:{session_id}` | Rebinding distributed lock (`SETNX`) | 120 seconds |
 | `ash:affinity:{owner_id}` | User node sticky assignment | 1-4 hours |
+| `ash:quota_used:{owner_id}:{pool}` | Atomic persistent counter for user used tokens | 31 days |
+| `ash:daily_usage:{owner_id}:{pool}:{date}` | Per-day usage counter for DailyBurst limit enforcement | 25 hours |
+| `ash:system:recovery_until:{platform}` | Recovery degradation state timer | 5 minutes |
 | `quota:concurrent:{user_id}` | Active concurrent request counter | Transient (Max 5) |
 
 ### Key PostgreSQL Tables

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand/v2"
+	"strings"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
@@ -102,6 +103,13 @@ func (s *APIKeyService) StartAuthCacheInvalidationSubscriber(ctx context.Context
 }
 
 func (s *APIKeyService) authCacheKey(key string) string {
+	// Repository list/delete paths return the at-rest token. Reuse its digest
+	// so invalidation targets the same cache entry as plaintext authentication.
+	if strings.HasPrefix(key, "sha256:") {
+		if idx := strings.LastIndexByte(key, ':'); idx >= 0 && idx+1 < len(key) {
+			return key[idx+1:]
+		}
+	}
 	sum := sha256.Sum256([]byte(key))
 	return hex.EncodeToString(sum[:])
 }

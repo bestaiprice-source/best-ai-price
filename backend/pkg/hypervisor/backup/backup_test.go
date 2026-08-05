@@ -17,6 +17,7 @@ import (
 	entsql "entgo.io/ent/dialect/sql"
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/enttest"
+	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/session"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/storage"
 	_ "modernc.org/sqlite"
 )
@@ -51,6 +52,16 @@ func TestBackupManagerCreateAndRestore(t *testing.T) {
 
 	ctx := context.Background()
 	sessID := "sess-backup-1"
+	richSession := &session.VirtualSession{
+		ID: sessID, OwnerID: "42", ConversationID: "conv-backup", State: "active", Version: 7,
+		Context: &session.ExecutionContext{
+			Summary: "decisions so far", PinnedFacts: []string{"use postgres"},
+			RecentMessages: []session.Message{{Role: "user", Content: "keep this"}},
+			TerminalState:  "go test ./...", ToolState: []session.ToolCall{{ID: "call-1", Type: "function", Function: "test"}},
+		},
+		CreatedAt: time.Now(), UpdatedAt: time.Now(),
+	}
+	require.NoError(t, session.NewSessionManager(store).SaveSession(ctx, richSession))
 
 	snap := &ProjectSnapshot{
 		WorkspaceID: "ws-dev",
@@ -70,11 +81,22 @@ func TestBackupManagerCreateAndRestore(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "ws-dev", fetched.WorkspaceID)
 	assert.Equal(t, "main", fetched.GitBranch)
+	require.NotNil(t, fetched.SessionState)
+	assert.Equal(t, "decisions so far", fetched.SessionState.Context.Summary)
+
+	// Simulate loss of both hot Redis state and the PostgreSQL session row.
+	require.NoError(t, store.Redis().Del(ctx, storage.SessionKey(sessID)).Err())
+	require.NoError(t, store.DB().AshSession.DeleteOneID(sessID).Exec(ctx))
 
 	restoredSess, err := bm.RestoreSessionFromSnapshot(ctx, sessID)
 	require.NoError(t, err)
 	assert.Equal(t, sessID, restoredSess.ID)
 	assert.Equal(t, "active", restoredSess.State)
+	assert.Equal(t, 7, restoredSess.Version)
+	require.NotNil(t, restoredSess.Context)
+	assert.Equal(t, "decisions so far", restoredSess.Context.Summary)
+	assert.Equal(t, "keep this", restoredSess.Context.RecentMessages[0].Content)
+	assert.Equal(t, "test", restoredSess.Context.ToolState[0].Function)
 
 	// Test missing snapshot
 	_, err = bm.RestoreSessionFromSnapshot(ctx, "non-existent-session")

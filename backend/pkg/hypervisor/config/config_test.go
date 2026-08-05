@@ -32,6 +32,6 @@ func TestConfigLoadFromEnvOverrides(t *testing.T) {
 
 	cfg := LoadFromEnv()
 	assert.False(t, cfg.Enabled)
-	assert.Equal(t, 3, cfg.MaxRetry)
+	assert.Equal(t, 1, cfg.MaxRetry)
 	assert.Equal(t, 300, cfg.NodeCooldownSeconds)
 }

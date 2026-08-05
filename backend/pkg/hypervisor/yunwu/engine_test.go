@@ -43,6 +43,14 @@ func setupTestYunwuStore(t *testing.T) *storage.Storage {
 	return storage.NewStorage(nil, rdb)
 }
 
+func setTestBalance(t *testing.T, store *storage.Storage, nodeID string, microUSD int64) {
+	t.Helper()
+	now := time.Now().UTC()
+	b, err := json.Marshal(BalanceSnapshot{AvailableUSD: float64(microUSD) / 1_000_000, AvailableMicroUSD: microUSD, APIAvailableMicroUSD: microUSD, EstimatedAvailableMicroUSD: microUSD, ReserveMicroUSD: microUSD / 10, SynchronizedAt: now, StaleAt: now.Add(30 * time.Minute), Status: "fresh"})
+	require.NoError(t, err)
+	require.NoError(t, store.Redis().Set(context.Background(), balanceKey(nodeID), b, 0).Err())
+}
+
 func TestYunwuHypervisorEndToEnd(t *testing.T) {
 	t.Setenv("ASH_YUNWU_TEST_MODE", "true")
 
@@ -64,8 +72,7 @@ func TestYunwuHypervisorEndToEnd(t *testing.T) {
 	require.NoError(t, err)
 
 	// Set test credit balance and node runtime state
-	err = store.Redis().Set(context.Background(), "ash:yunwu:credit:yunwu-101", 50.0, 24*time.Hour).Err()
-	require.NoError(t, err)
+	setTestBalance(t, store, "yunwu-101", 50_000_000)
 
 	err = nm.SaveNodeRuntimeState(context.Background(), &health.NodeRuntimeState{
 		NodeID:      "yunwu-101",
@@ -193,10 +200,11 @@ func TestStatsWorkerSyncNodeStats(t *testing.T) {
 	require.NotNil(t, grants)
 	assert.Equal(t, 80.0, grants.TotalAvailable)
 
-	// Verify saved to Redis
-	val, err := store.Redis().Get(ctx, "ash:yunwu:credit:yw-sync-1").Result()
+	// Verify the authoritative balance snapshot was saved (legacy credit keys are not written).
+	snapshot, err := sw.Snapshot(ctx, "yw-sync-1", time.Hour)
 	require.NoError(t, err)
-	assert.Equal(t, "80", val)
+	assert.Equal(t, int64(80_000_000), snapshot.APIAvailableMicroUSD)
+	assert.Equal(t, int64(8_000_000), snapshot.ReserveMicroUSD)
 }
 
 func TestStatsWorkerFallbackAndSyncLoop(t *testing.T) {
@@ -285,6 +293,8 @@ func TestYunwuReconcileHealthAndErrorRebinding(t *testing.T) {
 
 	_ = nm.SaveNode(ctx, node1)
 	_ = nm.SaveNode(ctx, node2)
+	setTestBalance(t, store, node1.NodeID, 10_000_000)
+	setTestBalance(t, store, node2.NodeID, 10_000_000)
 	_ = store.Redis().SAdd(ctx, "ash:yunwu:nodes", "yw-fail-1", "yw-ok-2").Err()
 
 	// Quota
@@ -306,7 +316,7 @@ func TestYunwuQuotaExceeded(t *testing.T) {
 	yh := NewYunwuHypervisor(store, &mockYunwuRuntime{})
 
 	// User exceeding quota
-	_ = yh.qm.SaveUserAccess(ctx, &quota.UserAccess{OwnerID: "u-exceeded", IsActive: true, MonthlyLimit: 100, UsedUnits: 150}, "yunwu")
+	_ = yh.qm.SaveUserAccess(ctx, &quota.UserAccess{OwnerID: "u-exceeded", IsActive: true, MonthlyLimitMicroUSD: 100, UsedMicroUSD: 150}, "yunwu")
 
 	var buf bytes.Buffer
 	_, err := yh.HandleRequest(ctx, "u-exceeded", "conv-1", []byte(`{"model":"claude"}`), &buf, "yunwu")
@@ -413,6 +423,11 @@ func TestYunwuContextCompilationEmptyContext(t *testing.T) {
 	sess.Context = &session.ExecutionContext{}
 	result = yh.compileAndInjectContext(sess, payload)
 	assert.Equal(t, string(payload), string(result))
+}
+
+func TestCalculateBilledMicroUSDRoundsUp(t *testing.T) {
+	assert.Equal(t, int64(3), CalculateBilledMicroUSD(1, 1, 0.0011, 0.0011))
+	assert.Equal(t, int64(10000), CalculateBilledMicroUSD(1000, 2000, 0.002, 0.004))
 }
 
 func TestExtractContentString(t *testing.T) {

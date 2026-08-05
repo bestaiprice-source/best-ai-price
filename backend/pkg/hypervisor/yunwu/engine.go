@@ -6,17 +6,23 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
+	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/account"
+	"github.com/Wei-Shaw/sub2api/internal/credentials"
+	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/backup"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/compiler"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/config"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/events"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/health"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/lease"
+	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/observability"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/quota"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/runtime"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/session"
@@ -24,42 +30,73 @@ import (
 )
 
 type YunwuHypervisor struct {
-	store *storage.Storage
-	sm    *session.SessionManager
-	lm    *lease.LeaseManager
-	nm    *health.NodeManager
-	ew    *events.EventWriter
-	qm    *quota.QuotaManager
-	sch   *YunwuScheduler
-	rt    runtime.Runtime
-	rm    *YunwuRebindingManager
-	comp  *compiler.Compiler
-	hc    *YunwuHealthController
-	sw    *StatsWorker
-	cfg   *config.HypervisorConfig
+	store     *storage.Storage
+	sm        *session.SessionManager
+	lm        *lease.LeaseManager
+	nm        *health.NodeManager
+	ew        *events.EventWriter
+	qm        *quota.QuotaManager
+	sch       *YunwuScheduler
+	rt        runtime.Runtime
+	rm        *YunwuRebindingManager
+	comp      *compiler.Compiler
+	summary   *compiler.SummaryWorker
+	bm        *backup.BackupManager
+	hc        *YunwuHealthController
+	sw        *StatsWorker
+	cfg       *config.HypervisorConfig
+	decryptor credentials.Cipher
 }
 
-func NewYunwuHypervisor(store *storage.Storage, rt runtime.Runtime) *YunwuHypervisor {
+type commitTrackingWriter struct {
+	w io.Writer
+	n int64
+}
+
+func (w *commitTrackingWriter) Write(p []byte) (int, error) {
+	n, err := w.w.Write(p)
+	w.n += int64(n)
+	return n, err
+}
+
+func (w *commitTrackingWriter) Committed() bool { return w.n > 0 }
+
+func (w *commitTrackingWriter) Flush() {
+	if flusher, ok := w.w.(http.Flusher); ok {
+		flusher.Flush()
+	}
+}
+
+func NewYunwuHypervisor(store *storage.Storage, rt runtime.Runtime, decryptors ...credentials.Cipher) *YunwuHypervisor {
+	var decryptor credentials.Cipher
+	if len(decryptors) > 0 {
+		decryptor = decryptors[0]
+	}
+	cfg := config.LoadFromEnv()
 	yh := &YunwuHypervisor{
-		store: store,
-		sm:    session.NewSessionManager(store),
-		lm:    lease.NewLeaseManager(store),
-		nm:    health.NewNodeManager(store),
-		ew:    events.NewEventWriter(store),
-		qm:    quota.NewQuotaManager(store),
-		sch:   NewYunwuScheduler(),
-		rt:    rt,
-		rm:    NewYunwuRebindingManager(store),
-		comp:  compiler.NewCompiler(),
-		hc:    NewYunwuHealthController(store),
-		sw:    NewStatsWorker(store),
-		cfg:   config.LoadFromEnv(),
+		store:     store,
+		sm:        session.NewSessionManager(store),
+		lm:        lease.NewLeaseManager(store),
+		nm:        health.NewNodeManager(store),
+		ew:        events.NewEventWriter(store),
+		qm:        quota.NewQuotaManager(store, cfg),
+		sch:       NewYunwuScheduler(),
+		rt:        rt,
+		rm:        NewYunwuRebindingManager(store),
+		comp:      compiler.NewCompiler(),
+		summary:   compiler.NewSummaryWorker(store),
+		bm:        backup.NewBackupManager(store),
+		hc:        NewYunwuHealthController(store),
+		sw:        NewStatsWorker(store, cfg),
+		cfg:       cfg,
+		decryptor: decryptor,
 	}
 
 	yh.hc.Start(context.Background(), 10*time.Second, func(ctx context.Context) []health.ExecutionNode {
 		nodes, _ := yh.getAllYunwuNodes(ctx)
 		return nodes
 	})
+	yh.startBalanceSync(context.Background())
 
 	slog.Info("[YunwuHypervisor] Initialized dedicated Yunwu Engine")
 	return yh
@@ -106,6 +143,7 @@ func (yh *YunwuHypervisor) HandleRequest(
 	}
 	if !allowed {
 		slog.Warn("[YunwuHypervisor] User quota exceeded", "owner_id", ownerID)
+		_, _ = yh.store.LogEvent(ctx, ownerID, nil, nil, "QuotaExceeded", map[string]any{"pool_type": "yunwu"})
 		return nil, quota.ErrQuotaExceeded
 	}
 
@@ -135,6 +173,7 @@ func (yh *YunwuHypervisor) HandleRequest(
 			UpdatedAt:      time.Now(),
 		}
 		slog.Debug("[YunwuHypervisor] Created new virtual session", "session_id", sessID)
+		_, _ = yh.store.LogEvent(ctx, ownerID, &sessID, nil, "SessionCreated", map[string]any{"pool_type": "yunwu"})
 	} else {
 		slog.Debug("[YunwuHypervisor] Reusing existing virtual session", "session_id", sessID, "state", sess.State)
 	}
@@ -142,6 +181,9 @@ func (yh *YunwuHypervisor) HandleRequest(
 	// 2.1 Extract and store session context from request payload
 	yh.extractAndStoreContext(sess, reqPayload)
 	_ = yh.sm.SaveSession(ctx, sess)
+	if yh.cfg.EnableSummary && sess.Context != nil {
+		yh.summary.TriggerAsyncSummary(ctx, ownerID, sess.ID, compilerContextFromYunwuSession(sess.Context))
+	}
 
 	// 3. Resolve active lease
 	var activeLeaseNodeID string
@@ -173,6 +215,26 @@ func (yh *YunwuHypervisor) HandleRequest(
 		slog.Error("[YunwuHypervisor] YunwuScheduler selection failed", "error", err, "total_nodes", len(nodes))
 		return nil, err
 	}
+	inputPrice, outputPrice, fallbackPrice := yh.resolvePrice(ctx, selectedNode.NodeID, requestedModel)
+	if fallbackPrice {
+		observability.Default.YunwuFallbackPricing()
+	}
+	estimatedMicroUSD := estimateRequestMicroUSD(reqPayload, inputPrice, outputPrice)
+	requestID := fmt.Sprintf("%s-%d", sess.ID, time.Now().UnixNano())
+	reserved, reserveErr := yh.sw.Reserve(ctx, selectedNode.NodeID, requestID, estimatedMicroUSD, 10*time.Minute)
+	if reserveErr != nil {
+		return nil, reserveErr
+	}
+	if !reserved {
+		return nil, quota.ErrQuotaExceeded
+	}
+	reservationNodeID := selectedNode.NodeID
+	reservationOpen := true
+	defer func() {
+		if reservationOpen {
+			_, _ = yh.sw.ReleaseReservation(context.Background(), reservationNodeID, requestID)
+		}
+	}()
 
 	// 6. Grant lease
 	expiresAt := time.Now().Add(30 * time.Minute)
@@ -184,6 +246,7 @@ func (yh *YunwuHypervisor) HandleRequest(
 		ExpiresAt: &expiresAt,
 	}
 	_ = yh.lm.SaveLease(ctx, newLease)
+	_, _ = yh.store.LogEvent(ctx, ownerID, &sess.ID, &selectedNode.NodeID, "RequestStarted", map[string]any{"pool_type": "yunwu"})
 	slog.Info("[YunwuHypervisor] Granted lease for node",
 		"hypervisor_mode", "yunwu",
 		"lease_id", newLease.LeaseID,
@@ -197,6 +260,10 @@ func (yh *YunwuHypervisor) HandleRequest(
 	var meta *runtime.ResponseMetadata
 	var execErr error
 	maxRetries := yh.cfg.MaxRetry
+	if !yh.cfg.EnableRebinding {
+		maxRetries = 0
+	}
+	responseWriter := &commitTrackingWriter{w: stream}
 
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		slog.Info("[YunwuHypervisor] Executing upstream request",
@@ -211,7 +278,7 @@ func (yh *YunwuHypervisor) HandleRequest(
 			reqPayload = yh.compileAndInjectContext(sess, reqPayload)
 		}
 
-		meta, execErr = yh.rt.Execute(ctx, selectedNode.NodeID, reqPayload, stream)
+		meta, execErr = yh.rt.Execute(ctx, selectedNode.NodeID, reqPayload, responseWriter)
 
 		// 8. If successful, break
 		if execErr == nil {
@@ -225,6 +292,14 @@ func (yh *YunwuHypervisor) HandleRequest(
 			"attempt", attempt,
 			"error", execErr,
 		)
+		_, _ = yh.store.LogEvent(ctx, ownerID, &sess.ID, &selectedNode.NodeID, "RequestFailed", map[string]any{"error": execErr.Error(), "attempt": attempt, "pool_type": "yunwu"})
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		if responseWriter.Committed() {
+			_, _ = yh.store.LogEvent(ctx, ownerID, &sess.ID, &selectedNode.NodeID, "RequestStreamInterrupted", map[string]any{"retry_suppressed": true, "pool_type": "yunwu"})
+			return nil, execErr
+		}
 
 		if attempt == maxRetries {
 			slog.Error("[YunwuHypervisor] Max retries reached, failing request", "session_id", sess.ID)
@@ -232,6 +307,11 @@ func (yh *YunwuHypervisor) HandleRequest(
 		}
 
 		// Rebind on failure
+		if yh.cfg.EnableBackup {
+			_ = yh.bm.CreateSnapshot(ctx, sess.ID, &backup.ProjectSnapshot{SessionState: sess})
+		}
+		_, _ = yh.store.LogEvent(ctx, ownerID, &sess.ID, &selectedNode.NodeID, "RebindingStarted", map[string]any{"reason": execErr.Error(), "pool_type": "yunwu"})
+		observability.Default.Rebinding()
 		reboundNode, rebindErr := yh.rm.HandleYunwuFailure(ctx, selectedNode.NodeID, execErr, nodes)
 		if rebindErr == nil && reboundNode != nil {
 			slog.Info("[YunwuHypervisor] Rebinding succeeded, retrying",
@@ -240,6 +320,7 @@ func (yh *YunwuHypervisor) HandleRequest(
 				"rebound_account_name", reboundNode.AccountName,
 			)
 			selectedNode = reboundNode
+			_, _ = yh.store.LogEvent(ctx, ownerID, &sess.ID, &reboundNode.NodeID, "RebindingSucceeded", map[string]any{"pool_type": "yunwu"})
 
 			// Update session lease to rebound node
 			expiresAt := time.Now().Add(30 * time.Minute)
@@ -253,6 +334,8 @@ func (yh *YunwuHypervisor) HandleRequest(
 			_ = yh.lm.SaveLease(ctx, newLease)
 		} else {
 			slog.Error("[YunwuHypervisor] Rebinding failed or no alternative nodes", "rebind_error", rebindErr)
+			_, _ = yh.store.LogEvent(ctx, ownerID, &sess.ID, nil, "RebindingFailed", map[string]any{"reason": fmt.Sprint(rebindErr), "pool_type": "yunwu"})
+			observability.Default.RebindingFailed()
 			break // No point in retrying if no alternatives
 		}
 	}
@@ -284,22 +367,22 @@ func (yh *YunwuHypervisor) HandleRequest(
 		_ = json.Unmarshal(reqPayload, &parsedReq)
 		modelName := parsedReq.Model
 
-		var inputPrice, outputPrice float64 = 0.002, 0.002
-		if modelName != "" && yh.store.DB() != nil {
-			rows, err := yh.store.DB().QueryContext(ctx, "SELECT input_price, output_price FROM ash_vendor_models WHERE model_name = $1 LIMIT 1", modelName)
-			if err == nil {
-				if rows.Next() {
-					_ = rows.Scan(&inputPrice, &outputPrice)
-				}
-				rows.Close()
-			}
+		inputPrice, outputPrice, fallback := yh.resolvePrice(ctx, selectedNode.NodeID, modelName)
+		if fallback {
+			observability.Default.YunwuFallbackPricing()
 		}
 
 		totalTokens := meta.InputTokens + meta.OutputTokens
 		costUnits := totalTokens
 		if totalTokens > 0 {
+			billedMicroUSD := CalculateBilledMicroUSD(meta.InputTokens, meta.OutputTokens, inputPrice, outputPrice)
+			_, _ = yh.sw.ReconcileReservation(ctx, reservationNodeID, requestID, billedMicroUSD)
+			reservationOpen = false
 			_ = yh.qm.ConsumeQuota(ctx, ownerID, "yunwu", int64(costUnits))
-			_, _ = yh.store.RecordUsage(ctx, ownerID, &sess.ID, &selectedNode.NodeID, meta.InputTokens, meta.OutputTokens, int64(costUnits))
+			_ = yh.qm.ConsumeMicroUSD(ctx, ownerID, billedMicroUSD)
+			_, _ = yh.store.RecordUsageDetails(ctx, ownerID, &sess.ID, &selectedNode.NodeID, meta.InputTokens, meta.OutputTokens, int64(costUnits), "yunwu", "yunwu", modelName, "micro_usd", billedMicroUSD)
+			observability.Default.AddUsage(int64(costUnits))
+			_, _ = yh.store.LogEvent(ctx, ownerID, &sess.ID, &selectedNode.NodeID, "UsageRecorded", map[string]any{"input_tokens": meta.InputTokens, "output_tokens": meta.OutputTokens, "cost_units": costUnits, "pool_type": "yunwu"})
 			slog.Info("[YunwuHypervisor] Recorded Yunwu request usage",
 				"hypervisor_mode", "yunwu",
 				"owner_id", ownerID,
@@ -322,8 +405,31 @@ func (yh *YunwuHypervisor) HandleRequest(
 		"model", requestedModel,
 		"latency_ms", time.Since(execStart).Milliseconds(),
 	)
+	_, _ = yh.store.LogEvent(ctx, ownerID, &sess.ID, &selectedNode.NodeID, "RequestSucceeded", map[string]any{"latency_ms": time.Since(execStart).Milliseconds(), "pool_type": "yunwu"})
 
 	return meta, nil
+}
+
+func CalculateBilledMicroUSD(inputTokens, outputTokens int64, inputPriceUSDPer1K, outputPriceUSDPer1K float64) int64 {
+	return int64(math.Ceil(float64(inputTokens)*inputPriceUSDPer1K*1000 + float64(outputTokens)*outputPriceUSDPer1K*1000))
+}
+
+func estimateRequestMicroUSD(payload []byte, inputPriceUSDPer1K, outputPriceUSDPer1K float64) int64 {
+	inputTokens := int64((len(payload) + 3) / 4)
+	outputTokens := int64(4096)
+	var request struct {
+		MaxTokens       *int64 `json:"max_tokens"`
+		MaxOutputTokens *int64 `json:"max_output_tokens"`
+	}
+	if json.Unmarshal(payload, &request) == nil {
+		if request.MaxTokens != nil && *request.MaxTokens >= 0 {
+			outputTokens = *request.MaxTokens
+		}
+		if request.MaxOutputTokens != nil && *request.MaxOutputTokens >= 0 {
+			outputTokens = *request.MaxOutputTokens
+		}
+	}
+	return CalculateBilledMicroUSD(inputTokens, outputTokens, inputPriceUSDPer1K, outputPriceUSDPer1K)
 }
 
 func (yh *YunwuHypervisor) getAllYunwuNodes(ctx context.Context) ([]health.ExecutionNode, error) {
@@ -331,7 +437,7 @@ func (yh *YunwuHypervisor) getAllYunwuNodes(ctx context.Context) ([]health.Execu
 
 	if yh.store != nil && yh.store.DB() != nil {
 		dbAccounts, _ = yh.store.DB().Account.Query().
-			Where(account.PlatformEqualFold("yunwu")).
+			Where(account.PlatformEqualFold("yunwu"), account.Status("active"), account.Schedulable(true)).
 			All(ctx)
 	}
 
@@ -384,16 +490,98 @@ func (yh *YunwuHypervisor) getAllYunwuNodeStates(ctx context.Context, nodes []he
 func (yh *YunwuHypervisor) getAllYunwuNodeCredits(ctx context.Context, nodes []health.ExecutionNode) map[string]float64 {
 	credits := make(map[string]float64)
 	for _, node := range nodes {
-		valStr, err := yh.store.Redis().Get(ctx, fmt.Sprintf("ash:yunwu:credit:%s", node.NodeID)).Result()
-		if err == nil && valStr != "" {
-			if val, err := strconv.ParseFloat(valStr, 64); err == nil {
-				credits[node.NodeID] = val
+		snap, err := yh.sw.Snapshot(ctx, node.NodeID, time.Duration(yh.cfg.YunwuBalanceStaleSeconds)*time.Second)
+		if err == nil && snap.Status == "fresh" {
+			allocatableMicroUSD := snap.EstimatedAvailableMicroUSD - snap.ReserveMicroUSD
+			allocatable := float64(allocatableMicroUSD) / 1_000_000
+			if allocatable > 0 {
+				credits[node.NodeID] = allocatable
 			}
-		} else {
-			credits[node.NodeID] = 100.0 // Default 100.0 if not yet synced
+		} else if err == nil && snap.Status == "stale" {
+			observability.Default.YunwuBalanceBecameStale()
+			_, _ = yh.store.LogEvent(ctx, "system", nil, &node.NodeID, "YunwuBalanceStale", map[string]any{"synchronized_at": snap.SynchronizedAt})
 		}
 	}
 	return credits
+}
+
+func (yh *YunwuHypervisor) startBalanceSync(ctx context.Context) {
+	syncAll := func() {
+		if yh.store == nil || yh.store.DB() == nil {
+			return
+		}
+		accounts, err := yh.store.DB().Account.Query().Where(account.PlatformEqualFold("yunwu"), account.Status("active")).All(ctx)
+		if err != nil {
+			return
+		}
+		for _, acc := range accounts {
+			creds, decErr := credentials.DecryptMap(acc.Credentials, yh.decryptor)
+			if decErr != nil {
+				observability.Default.YunwuBalanceSyncFailed()
+				_, _ = yh.store.LogEvent(ctx, "system", nil, nil, "YunwuBalanceSyncFailed", map[string]any{"node_id": fmt.Sprint(acc.ID), "error": decErr.Error()})
+				continue
+			}
+			apiKey, _ := creds["api_key"].(string)
+			baseURL, _ := creds["base_url"].(string)
+			if apiKey == "" {
+				continue
+			}
+			node := &health.ExecutionNode{NodeID: fmt.Sprint(acc.ID), AccountName: acc.Name, Provider: "yunwu"}
+			if _, syncErr := yh.sw.SyncNodeStats(ctx, node, apiKey, baseURL); syncErr != nil {
+				observability.Default.YunwuBalanceSyncFailed()
+				_, _ = yh.store.LogEvent(ctx, "system", nil, &node.NodeID, "YunwuBalanceSyncFailed", map[string]any{"error": syncErr.Error()})
+			}
+		}
+	}
+	go func() {
+		syncAll()
+		ticker := time.NewTicker(time.Duration(yh.cfg.YunwuBalanceSyncSeconds) * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				syncAll()
+			}
+		}
+	}()
+}
+
+func (yh *YunwuHypervisor) resolvePrice(ctx context.Context, nodeID, model string) (float64, float64, bool) {
+	in, out := yh.cfg.YunwuDefaultInputUSDPer1K, yh.cfg.YunwuDefaultOutputUSDPer1K
+	if yh.store.DB() == nil || model == "" {
+		return in, out, true
+	}
+	accID, _ := strconv.ParseInt(nodeID, 10, 64)
+	acc, err := yh.store.DB().Account.Get(ctx, accID)
+	if err != nil {
+		return in, out, true
+	}
+	var vendorID string
+	if acc.Extra != nil {
+		vendorID, _ = acc.Extra["yunwu_vendor_id"].(string)
+	}
+	if vendorID != "" {
+		if rows, err := yh.store.DB().QueryContext(ctx, `SELECT input_price,output_price FROM ash_vendor_models WHERE vendor_id=$1 AND model_name=$2 AND is_available=true`, vendorID, model); err == nil {
+			defer rows.Close()
+			if rows.Next() && rows.Scan(&in, &out) == nil {
+				return in, out, false
+			}
+		}
+	}
+	creds, _ := credentials.DecryptMap(acc.Credentials, yh.decryptor)
+	base, _ := creds["base_url"].(string)
+	base = strings.TrimRight(base, "/")
+	if base != "" {
+		if rows, err := yh.store.DB().QueryContext(ctx, `SELECT m.input_price,m.output_price FROM ash_vendor_models m JOIN ash_vendors v ON v.id=m.vendor_id WHERE rtrim(v.url,'/')=$1 AND m.model_name=$2 AND m.is_available=true`, base, model); err == nil {
+			defer rows.Close()
+			if rows.Next() && rows.Scan(&in, &out) == nil {
+				return in, out, false
+			}
+		}
+	}
+	return in, out, true
 }
 
 // GetHealthStatus returns the status summary of Yunwu Hypervisor Engine
@@ -426,6 +614,25 @@ func (yh *YunwuHypervisor) GetHealthStatus(ctx context.Context) map[string]any {
 
 // SyncNodeBalance triggers an immediate balance sync for a Yunwu node
 func (yh *YunwuHypervisor) SyncNodeBalance(ctx context.Context, nodeID string, apiKey string, baseURL string) (*YunwuCreditGrantsResponse, error) {
+	if apiKey == "" {
+		id, parseErr := strconv.ParseInt(nodeID, 10, 64)
+		if parseErr != nil {
+			return nil, parseErr
+		}
+		acc, getErr := yh.store.DB().Account.Get(ctx, id)
+		if getErr != nil {
+			return nil, getErr
+		}
+		decrypted, decErr := credentials.DecryptMap(acc.Credentials, yh.decryptor)
+		if decErr != nil {
+			return nil, decErr
+		}
+		apiKey, _ = decrypted["api_key"].(string)
+		baseURL, _ = decrypted["base_url"].(string)
+	}
+	if apiKey == "" {
+		return nil, fmt.Errorf("Yunwu API key is not configured")
+	}
 	node, err := yh.nm.GetNode(ctx, nodeID)
 	if err != nil || node == nil {
 		node = &health.ExecutionNode{
@@ -437,6 +644,11 @@ func (yh *YunwuHypervisor) SyncNodeBalance(ctx context.Context, nodeID string, a
 	}
 	return yh.sw.SyncNodeStats(ctx, node, apiKey, baseURL)
 }
+
+func (yh *YunwuHypervisor) BalanceSnapshot(ctx context.Context, nodeID string) (*BalanceSnapshot, error) {
+	return yh.sw.Snapshot(ctx, nodeID, time.Duration(yh.cfg.YunwuBalanceStaleSeconds)*time.Second)
+}
+func (yh *YunwuHypervisor) BalanceReservePercent() int { return yh.cfg.YunwuBalanceReservePercent }
 
 // rawRequestPayload is a minimal structure to extract messages and system prompt
 // from Anthropic/OpenAI-compatible JSON request payloads.
@@ -489,6 +701,20 @@ func (yh *YunwuHypervisor) extractAndStoreContext(sess *session.VirtualSession, 
 		"system_prompt_len", len(ctx.SystemPrompt),
 		"recent_messages_count", len(ctx.RecentMessages),
 	)
+}
+
+func compilerContextFromYunwuSession(ctx *session.ExecutionContext) compiler.ExecutionContext {
+	result := compiler.ExecutionContext{
+		SystemPrompt:  ctx.SystemPrompt,
+		Summary:       ctx.Summary,
+		PinnedFacts:   ctx.PinnedFacts,
+		TerminalState: ctx.TerminalState,
+		ToolState:     toolCallsToString(ctx.ToolState),
+	}
+	for _, message := range ctx.RecentMessages {
+		result.RecentMessages = append(result.RecentMessages, compiler.Message{Role: message.Role, Content: message.Content})
+	}
+	return result
 }
 
 // compileAndInjectContext compiles the session's ExecutionContext into a preamble

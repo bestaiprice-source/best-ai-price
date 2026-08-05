@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/usagestats"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 )
@@ -421,6 +422,23 @@ func (s *stubAdminService) GetUserBalanceHistory(ctx context.Context, userID int
 }
 
 func (s *stubAdminService) UpdateGroupSortOrders(ctx context.Context, updates []service.GroupSortOrderUpdate) error {
+	return nil
+}
+
+func (s *stubAdminService) AdminListAPIKeys(ctx context.Context, page, pageSize int, filters service.APIKeyListFilters) ([]service.APIKey, *pagination.PaginationResult, error) {
+	return s.apiKeys, &pagination.PaginationResult{Page: page, PageSize: pageSize, Total: int64(len(s.apiKeys))}, nil
+}
+
+func (s *stubAdminService) AdminUpdateAPIKey(ctx context.Context, keyID int64, req service.UpdateAPIKeyRequest) (*service.APIKey, error) {
+	for i := range s.apiKeys {
+		if s.apiKeys[i].ID == keyID {
+			return &s.apiKeys[i], nil
+		}
+	}
+	return nil, service.ErrAPIKeyNotFound
+}
+
+func (s *stubAdminService) AdminDeleteAPIKey(ctx context.Context, keyID int64) error {
 	return nil
 }
 

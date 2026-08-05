@@ -117,6 +117,18 @@ func (f AshUsageFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, er
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.AshUsageMutation", m)
 }
 
+// The AshUserPolicyFunc type is an adapter to allow the use of ordinary
+// function as AshUserPolicy mutator.
+type AshUserPolicyFunc func(context.Context, *ent.AshUserPolicyMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f AshUserPolicyFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.AshUserPolicyMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.AshUserPolicyMutation", m)
+}
+
 // The AuthIdentityFunc type is an adapter to allow the use of ordinary
 // function as AuthIdentity mutator.
 type AuthIdentityFunc func(context.Context, *ent.AuthIdentityMutation) (ent.Value, error)

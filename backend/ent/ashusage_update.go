@@ -145,6 +145,83 @@ func (_u *AshUsageUpdate) AddCostUnits(v int64) *AshUsageUpdate {
 	return _u
 }
 
+// SetPoolType sets the "pool_type" field.
+func (_u *AshUsageUpdate) SetPoolType(v string) *AshUsageUpdate {
+	_u.mutation.SetPoolType(v)
+	return _u
+}
+
+// SetNillablePoolType sets the "pool_type" field if the given value is not nil.
+func (_u *AshUsageUpdate) SetNillablePoolType(v *string) *AshUsageUpdate {
+	if v != nil {
+		_u.SetPoolType(*v)
+	}
+	return _u
+}
+
+// SetProvider sets the "provider" field.
+func (_u *AshUsageUpdate) SetProvider(v string) *AshUsageUpdate {
+	_u.mutation.SetProvider(v)
+	return _u
+}
+
+// SetNillableProvider sets the "provider" field if the given value is not nil.
+func (_u *AshUsageUpdate) SetNillableProvider(v *string) *AshUsageUpdate {
+	if v != nil {
+		_u.SetProvider(*v)
+	}
+	return _u
+}
+
+// SetModel sets the "model" field.
+func (_u *AshUsageUpdate) SetModel(v string) *AshUsageUpdate {
+	_u.mutation.SetModel(v)
+	return _u
+}
+
+// SetNillableModel sets the "model" field if the given value is not nil.
+func (_u *AshUsageUpdate) SetNillableModel(v *string) *AshUsageUpdate {
+	if v != nil {
+		_u.SetModel(*v)
+	}
+	return _u
+}
+
+// SetUsageUnit sets the "usage_unit" field.
+func (_u *AshUsageUpdate) SetUsageUnit(v string) *AshUsageUpdate {
+	_u.mutation.SetUsageUnit(v)
+	return _u
+}
+
+// SetNillableUsageUnit sets the "usage_unit" field if the given value is not nil.
+func (_u *AshUsageUpdate) SetNillableUsageUnit(v *string) *AshUsageUpdate {
+	if v != nil {
+		_u.SetUsageUnit(*v)
+	}
+	return _u
+}
+
+// SetBilledMicroUsd sets the "billed_micro_usd" field.
+func (_u *AshUsageUpdate) SetBilledMicroUsd(v int64) *AshUsageUpdate {
+	_u.mutation.ResetBilledMicroUsd()
+	_u.mutation.SetBilledMicroUsd(v)
+	return _u
+}
+
+// SetNillableBilledMicroUsd sets the "billed_micro_usd" field if the given value is not nil.
+func (_u *AshUsageUpdate) SetNillableBilledMicroUsd(v *int64) *AshUsageUpdate {
+	if v != nil {
+		_u.SetBilledMicroUsd(*v)
+	}
+	return _u
+}
+
+// AddBilledMicroUsd adds value to the "billed_micro_usd" field.
+func (_u *AshUsageUpdate) AddBilledMicroUsd(v int64) *AshUsageUpdate {
+	_u.mutation.AddBilledMicroUsd(v)
+	return _u
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (_u *AshUsageUpdate) SetCreatedAt(v time.Time) *AshUsageUpdate {
 	_u.mutation.SetCreatedAt(v)
@@ -255,6 +332,24 @@ func (_u *AshUsageUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.AddedCostUnits(); ok {
 		_spec.AddField(ashusage.FieldCostUnits, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.PoolType(); ok {
+		_spec.SetField(ashusage.FieldPoolType, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Provider(); ok {
+		_spec.SetField(ashusage.FieldProvider, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Model(); ok {
+		_spec.SetField(ashusage.FieldModel, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.UsageUnit(); ok {
+		_spec.SetField(ashusage.FieldUsageUnit, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.BilledMicroUsd(); ok {
+		_spec.SetField(ashusage.FieldBilledMicroUsd, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedBilledMicroUsd(); ok {
+		_spec.AddField(ashusage.FieldBilledMicroUsd, field.TypeInt64, value)
 	}
 	if value, ok := _u.mutation.CreatedAt(); ok {
 		_spec.SetField(ashusage.FieldCreatedAt, field.TypeTime, value)
@@ -393,6 +488,83 @@ func (_u *AshUsageUpdateOne) SetNillableCostUnits(v *int64) *AshUsageUpdateOne {
 // AddCostUnits adds value to the "cost_units" field.
 func (_u *AshUsageUpdateOne) AddCostUnits(v int64) *AshUsageUpdateOne {
 	_u.mutation.AddCostUnits(v)
+	return _u
+}
+
+// SetPoolType sets the "pool_type" field.
+func (_u *AshUsageUpdateOne) SetPoolType(v string) *AshUsageUpdateOne {
+	_u.mutation.SetPoolType(v)
+	return _u
+}
+
+// SetNillablePoolType sets the "pool_type" field if the given value is not nil.
+func (_u *AshUsageUpdateOne) SetNillablePoolType(v *string) *AshUsageUpdateOne {
+	if v != nil {
+		_u.SetPoolType(*v)
+	}
+	return _u
+}
+
+// SetProvider sets the "provider" field.
+func (_u *AshUsageUpdateOne) SetProvider(v string) *AshUsageUpdateOne {
+	_u.mutation.SetProvider(v)
+	return _u
+}
+
+// SetNillableProvider sets the "provider" field if the given value is not nil.
+func (_u *AshUsageUpdateOne) SetNillableProvider(v *string) *AshUsageUpdateOne {
+	if v != nil {
+		_u.SetProvider(*v)
+	}
+	return _u
+}
+
+// SetModel sets the "model" field.
+func (_u *AshUsageUpdateOne) SetModel(v string) *AshUsageUpdateOne {
+	_u.mutation.SetModel(v)
+	return _u
+}
+
+// SetNillableModel sets the "model" field if the given value is not nil.
+func (_u *AshUsageUpdateOne) SetNillableModel(v *string) *AshUsageUpdateOne {
+	if v != nil {
+		_u.SetModel(*v)
+	}
+	return _u
+}
+
+// SetUsageUnit sets the "usage_unit" field.
+func (_u *AshUsageUpdateOne) SetUsageUnit(v string) *AshUsageUpdateOne {
+	_u.mutation.SetUsageUnit(v)
+	return _u
+}
+
+// SetNillableUsageUnit sets the "usage_unit" field if the given value is not nil.
+func (_u *AshUsageUpdateOne) SetNillableUsageUnit(v *string) *AshUsageUpdateOne {
+	if v != nil {
+		_u.SetUsageUnit(*v)
+	}
+	return _u
+}
+
+// SetBilledMicroUsd sets the "billed_micro_usd" field.
+func (_u *AshUsageUpdateOne) SetBilledMicroUsd(v int64) *AshUsageUpdateOne {
+	_u.mutation.ResetBilledMicroUsd()
+	_u.mutation.SetBilledMicroUsd(v)
+	return _u
+}
+
+// SetNillableBilledMicroUsd sets the "billed_micro_usd" field if the given value is not nil.
+func (_u *AshUsageUpdateOne) SetNillableBilledMicroUsd(v *int64) *AshUsageUpdateOne {
+	if v != nil {
+		_u.SetBilledMicroUsd(*v)
+	}
+	return _u
+}
+
+// AddBilledMicroUsd adds value to the "billed_micro_usd" field.
+func (_u *AshUsageUpdateOne) AddBilledMicroUsd(v int64) *AshUsageUpdateOne {
+	_u.mutation.AddBilledMicroUsd(v)
 	return _u
 }
 
@@ -536,6 +708,24 @@ func (_u *AshUsageUpdateOne) sqlSave(ctx context.Context) (_node *AshUsage, err 
 	}
 	if value, ok := _u.mutation.AddedCostUnits(); ok {
 		_spec.AddField(ashusage.FieldCostUnits, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.PoolType(); ok {
+		_spec.SetField(ashusage.FieldPoolType, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Provider(); ok {
+		_spec.SetField(ashusage.FieldProvider, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Model(); ok {
+		_spec.SetField(ashusage.FieldModel, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.UsageUnit(); ok {
+		_spec.SetField(ashusage.FieldUsageUnit, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.BilledMicroUsd(); ok {
+		_spec.SetField(ashusage.FieldBilledMicroUsd, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedBilledMicroUsd(); ok {
+		_spec.AddField(ashusage.FieldBilledMicroUsd, field.TypeInt64, value)
 	}
 	if value, ok := _u.mutation.CreatedAt(); ok {
 		_spec.SetField(ashusage.FieldCreatedAt, field.TypeTime, value)

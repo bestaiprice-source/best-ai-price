@@ -410,6 +410,11 @@ var (
 		{Name: "input_tokens", Type: field.TypeInt64, Default: 0},
 		{Name: "output_tokens", Type: field.TypeInt64, Default: 0},
 		{Name: "cost_units", Type: field.TypeInt64, Default: 0},
+		{Name: "pool_type", Type: field.TypeString, Default: "legacy"},
+		{Name: "provider", Type: field.TypeString, Default: "legacy"},
+		{Name: "model", Type: field.TypeString, Default: ""},
+		{Name: "usage_unit", Type: field.TypeString, Default: "tokens"},
+		{Name: "billed_micro_usd", Type: field.TypeInt64, Default: 0},
 		{Name: "created_at", Type: field.TypeTime},
 	}
 	// AshUsagesTable holds the schema information for the "ash_usages" table.
@@ -417,6 +422,35 @@ var (
 		Name:       "ash_usages",
 		Columns:    AshUsagesColumns,
 		PrimaryKey: []*schema.Column{AshUsagesColumns[0]},
+	}
+	// AshUserPoliciesColumns holds the columns for the "ash_user_policies" table.
+	AshUserPoliciesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "owner_id", Type: field.TypeString, Size: 64},
+		{Name: "pool_type", Type: field.TypeString, Size: 32},
+		{Name: "plan_id", Type: field.TypeString, Size: 64, Default: "pool-basic"},
+		{Name: "monthly_limit", Type: field.TypeInt64, Default: 0},
+		{Name: "daily_burst", Type: field.TypeInt64, Default: 0},
+		{Name: "monthly_limit_micro_usd", Type: field.TypeInt64, Default: 0},
+		{Name: "daily_burst_micro_usd", Type: field.TypeInt64, Default: 0},
+		{Name: "priority", Type: field.TypeInt, Default: 1},
+		{Name: "deposit_state", Type: field.TypeString, Size: 32, Default: ""},
+		{Name: "is_active", Type: field.TypeBool, Default: true},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+	}
+	// AshUserPoliciesTable holds the schema information for the "ash_user_policies" table.
+	AshUserPoliciesTable = &schema.Table{
+		Name:       "ash_user_policies",
+		Columns:    AshUserPoliciesColumns,
+		PrimaryKey: []*schema.Column{AshUserPoliciesColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "ashuserpolicy_owner_id_pool_type",
+				Unique:  true,
+				Columns: []*schema.Column{AshUserPoliciesColumns[1], AshUserPoliciesColumns[2]},
+			},
+		},
 	}
 	// AuthIdentitiesColumns holds the columns for the "auth_identities" table.
 	AuthIdentitiesColumns = []*schema.Column{
@@ -1766,6 +1800,7 @@ var (
 		AshEventsTable,
 		AshSessionsTable,
 		AshUsagesTable,
+		AshUserPoliciesTable,
 		AuthIdentitiesTable,
 		AuthIdentityChannelsTable,
 		ChannelMonitorsTable,
@@ -1829,6 +1864,9 @@ func init() {
 	}
 	AshUsagesTable.Annotation = &entsql.Annotation{
 		Table: "ash_usages",
+	}
+	AshUserPoliciesTable.Annotation = &entsql.Annotation{
+		Table: "ash_user_policies",
 	}
 	AuthIdentitiesTable.ForeignKeys[0].RefTable = UsersTable
 	AuthIdentitiesTable.Annotation = &entsql.Annotation{

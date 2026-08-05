@@ -14,6 +14,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/ashevent"
 	"github.com/Wei-Shaw/sub2api/ent/ashsession"
 	"github.com/Wei-Shaw/sub2api/ent/ashusage"
+	"github.com/Wei-Shaw/sub2api/ent/ashuserpolicy"
 	"github.com/Wei-Shaw/sub2api/ent/authidentity"
 	"github.com/Wei-Shaw/sub2api/ent/authidentitychannel"
 	"github.com/Wei-Shaw/sub2api/ent/channelmonitor"
@@ -514,10 +515,124 @@ func init() {
 	ashusageDescCostUnits := ashusageFields[5].Descriptor()
 	// ashusage.DefaultCostUnits holds the default value on creation for the cost_units field.
 	ashusage.DefaultCostUnits = ashusageDescCostUnits.Default.(int64)
+	// ashusageDescPoolType is the schema descriptor for pool_type field.
+	ashusageDescPoolType := ashusageFields[6].Descriptor()
+	// ashusage.DefaultPoolType holds the default value on creation for the pool_type field.
+	ashusage.DefaultPoolType = ashusageDescPoolType.Default.(string)
+	// ashusageDescProvider is the schema descriptor for provider field.
+	ashusageDescProvider := ashusageFields[7].Descriptor()
+	// ashusage.DefaultProvider holds the default value on creation for the provider field.
+	ashusage.DefaultProvider = ashusageDescProvider.Default.(string)
+	// ashusageDescModel is the schema descriptor for model field.
+	ashusageDescModel := ashusageFields[8].Descriptor()
+	// ashusage.DefaultModel holds the default value on creation for the model field.
+	ashusage.DefaultModel = ashusageDescModel.Default.(string)
+	// ashusageDescUsageUnit is the schema descriptor for usage_unit field.
+	ashusageDescUsageUnit := ashusageFields[9].Descriptor()
+	// ashusage.DefaultUsageUnit holds the default value on creation for the usage_unit field.
+	ashusage.DefaultUsageUnit = ashusageDescUsageUnit.Default.(string)
+	// ashusageDescBilledMicroUsd is the schema descriptor for billed_micro_usd field.
+	ashusageDescBilledMicroUsd := ashusageFields[10].Descriptor()
+	// ashusage.DefaultBilledMicroUsd holds the default value on creation for the billed_micro_usd field.
+	ashusage.DefaultBilledMicroUsd = ashusageDescBilledMicroUsd.Default.(int64)
 	// ashusageDescCreatedAt is the schema descriptor for created_at field.
-	ashusageDescCreatedAt := ashusageFields[6].Descriptor()
+	ashusageDescCreatedAt := ashusageFields[11].Descriptor()
 	// ashusage.DefaultCreatedAt holds the default value on creation for the created_at field.
 	ashusage.DefaultCreatedAt = ashusageDescCreatedAt.Default.(func() time.Time)
+	ashuserpolicyFields := schema.AshUserPolicy{}.Fields()
+	_ = ashuserpolicyFields
+	// ashuserpolicyDescOwnerID is the schema descriptor for owner_id field.
+	ashuserpolicyDescOwnerID := ashuserpolicyFields[0].Descriptor()
+	// ashuserpolicy.OwnerIDValidator is a validator for the "owner_id" field. It is called by the builders before save.
+	ashuserpolicy.OwnerIDValidator = func() func(string) error {
+		validators := ashuserpolicyDescOwnerID.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(owner_id string) error {
+			for _, fn := range fns {
+				if err := fn(owner_id); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// ashuserpolicyDescPoolType is the schema descriptor for pool_type field.
+	ashuserpolicyDescPoolType := ashuserpolicyFields[1].Descriptor()
+	// ashuserpolicy.PoolTypeValidator is a validator for the "pool_type" field. It is called by the builders before save.
+	ashuserpolicy.PoolTypeValidator = func() func(string) error {
+		validators := ashuserpolicyDescPoolType.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(pool_type string) error {
+			for _, fn := range fns {
+				if err := fn(pool_type); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// ashuserpolicyDescPlanID is the schema descriptor for plan_id field.
+	ashuserpolicyDescPlanID := ashuserpolicyFields[2].Descriptor()
+	// ashuserpolicy.DefaultPlanID holds the default value on creation for the plan_id field.
+	ashuserpolicy.DefaultPlanID = ashuserpolicyDescPlanID.Default.(string)
+	// ashuserpolicy.PlanIDValidator is a validator for the "plan_id" field. It is called by the builders before save.
+	ashuserpolicy.PlanIDValidator = ashuserpolicyDescPlanID.Validators[0].(func(string) error)
+	// ashuserpolicyDescMonthlyLimit is the schema descriptor for monthly_limit field.
+	ashuserpolicyDescMonthlyLimit := ashuserpolicyFields[3].Descriptor()
+	// ashuserpolicy.DefaultMonthlyLimit holds the default value on creation for the monthly_limit field.
+	ashuserpolicy.DefaultMonthlyLimit = ashuserpolicyDescMonthlyLimit.Default.(int64)
+	// ashuserpolicy.MonthlyLimitValidator is a validator for the "monthly_limit" field. It is called by the builders before save.
+	ashuserpolicy.MonthlyLimitValidator = ashuserpolicyDescMonthlyLimit.Validators[0].(func(int64) error)
+	// ashuserpolicyDescDailyBurst is the schema descriptor for daily_burst field.
+	ashuserpolicyDescDailyBurst := ashuserpolicyFields[4].Descriptor()
+	// ashuserpolicy.DefaultDailyBurst holds the default value on creation for the daily_burst field.
+	ashuserpolicy.DefaultDailyBurst = ashuserpolicyDescDailyBurst.Default.(int64)
+	// ashuserpolicy.DailyBurstValidator is a validator for the "daily_burst" field. It is called by the builders before save.
+	ashuserpolicy.DailyBurstValidator = ashuserpolicyDescDailyBurst.Validators[0].(func(int64) error)
+	// ashuserpolicyDescMonthlyLimitMicroUsd is the schema descriptor for monthly_limit_micro_usd field.
+	ashuserpolicyDescMonthlyLimitMicroUsd := ashuserpolicyFields[5].Descriptor()
+	// ashuserpolicy.DefaultMonthlyLimitMicroUsd holds the default value on creation for the monthly_limit_micro_usd field.
+	ashuserpolicy.DefaultMonthlyLimitMicroUsd = ashuserpolicyDescMonthlyLimitMicroUsd.Default.(int64)
+	// ashuserpolicy.MonthlyLimitMicroUsdValidator is a validator for the "monthly_limit_micro_usd" field. It is called by the builders before save.
+	ashuserpolicy.MonthlyLimitMicroUsdValidator = ashuserpolicyDescMonthlyLimitMicroUsd.Validators[0].(func(int64) error)
+	// ashuserpolicyDescDailyBurstMicroUsd is the schema descriptor for daily_burst_micro_usd field.
+	ashuserpolicyDescDailyBurstMicroUsd := ashuserpolicyFields[6].Descriptor()
+	// ashuserpolicy.DefaultDailyBurstMicroUsd holds the default value on creation for the daily_burst_micro_usd field.
+	ashuserpolicy.DefaultDailyBurstMicroUsd = ashuserpolicyDescDailyBurstMicroUsd.Default.(int64)
+	// ashuserpolicy.DailyBurstMicroUsdValidator is a validator for the "daily_burst_micro_usd" field. It is called by the builders before save.
+	ashuserpolicy.DailyBurstMicroUsdValidator = ashuserpolicyDescDailyBurstMicroUsd.Validators[0].(func(int64) error)
+	// ashuserpolicyDescPriority is the schema descriptor for priority field.
+	ashuserpolicyDescPriority := ashuserpolicyFields[7].Descriptor()
+	// ashuserpolicy.DefaultPriority holds the default value on creation for the priority field.
+	ashuserpolicy.DefaultPriority = ashuserpolicyDescPriority.Default.(int)
+	// ashuserpolicy.PriorityValidator is a validator for the "priority" field. It is called by the builders before save.
+	ashuserpolicy.PriorityValidator = ashuserpolicyDescPriority.Validators[0].(func(int) error)
+	// ashuserpolicyDescDepositState is the schema descriptor for deposit_state field.
+	ashuserpolicyDescDepositState := ashuserpolicyFields[8].Descriptor()
+	// ashuserpolicy.DefaultDepositState holds the default value on creation for the deposit_state field.
+	ashuserpolicy.DefaultDepositState = ashuserpolicyDescDepositState.Default.(string)
+	// ashuserpolicy.DepositStateValidator is a validator for the "deposit_state" field. It is called by the builders before save.
+	ashuserpolicy.DepositStateValidator = ashuserpolicyDescDepositState.Validators[0].(func(string) error)
+	// ashuserpolicyDescIsActive is the schema descriptor for is_active field.
+	ashuserpolicyDescIsActive := ashuserpolicyFields[9].Descriptor()
+	// ashuserpolicy.DefaultIsActive holds the default value on creation for the is_active field.
+	ashuserpolicy.DefaultIsActive = ashuserpolicyDescIsActive.Default.(bool)
+	// ashuserpolicyDescCreatedAt is the schema descriptor for created_at field.
+	ashuserpolicyDescCreatedAt := ashuserpolicyFields[10].Descriptor()
+	// ashuserpolicy.DefaultCreatedAt holds the default value on creation for the created_at field.
+	ashuserpolicy.DefaultCreatedAt = ashuserpolicyDescCreatedAt.Default.(func() time.Time)
+	// ashuserpolicyDescUpdatedAt is the schema descriptor for updated_at field.
+	ashuserpolicyDescUpdatedAt := ashuserpolicyFields[11].Descriptor()
+	// ashuserpolicy.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	ashuserpolicy.DefaultUpdatedAt = ashuserpolicyDescUpdatedAt.Default.(func() time.Time)
+	// ashuserpolicy.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	ashuserpolicy.UpdateDefaultUpdatedAt = ashuserpolicyDescUpdatedAt.UpdateDefault.(func() time.Time)
 	authidentityMixin := schema.AuthIdentity{}.Mixin()
 	authidentityMixinFields0 := authidentityMixin[0].Fields()
 	_ = authidentityMixinFields0

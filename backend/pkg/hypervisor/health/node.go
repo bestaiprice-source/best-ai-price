@@ -20,15 +20,18 @@ type ExecutionNode struct {
 }
 
 type NodeRuntimeState struct {
-	NodeID         string     `json:"node_id"`
-	SuccessRate    float64    `json:"success_rate"`
-	AvgLatencyMs   int64      `json:"avg_latency_ms"`
-	QueueDepth     int        `json:"queue_depth"`
-	Recent429      int        `json:"recent_429"`
-	RecentTimeouts int        `json:"recent_timeouts"`
-	UsedTokens     int64      `json:"used_tokens"`
-	LastErrorAt    *time.Time `json:"last_error_at,omitempty"`
-	CooldownUntil  *time.Time `json:"cooldown_until,omitempty"`
+	NodeID             string     `json:"node_id"`
+	SuccessRate        float64    `json:"success_rate"`
+	AvgLatencyMs       int64      `json:"avg_latency_ms"`
+	QueueDepth         int        `json:"queue_depth"`
+	Recent429          int        `json:"recent_429"`
+	RecentTimeouts     int        `json:"recent_timeouts"`
+	UsedTokens         int64      `json:"used_tokens"`
+	TotalRequests      int64      `json:"total_requests"`
+	SuccessfulRequests int64      `json:"successful_requests"`
+	LastSuccessAt      *time.Time `json:"last_success_at,omitempty"`
+	LastErrorAt        *time.Time `json:"last_error_at,omitempty"`
+	CooldownUntil      *time.Time `json:"cooldown_until,omitempty"`
 }
 
 type NodeManager struct {

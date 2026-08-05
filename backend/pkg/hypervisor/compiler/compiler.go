@@ -77,6 +77,14 @@ func (c *Compiler) Compile(ctx ExecutionContext) (string, error) {
 		prompt += "\n"
 	}
 
+	if len(ctx.RecentMessages) > 0 {
+		prompt += "Recent Messages:\n"
+		for _, msg := range ctx.RecentMessages {
+			prompt += fmt.Sprintf("[%s]: %s\n", msg.Role, msg.Content)
+		}
+		prompt += "\n"
+	}
+
 	slog.Debug("[Compiler] Compiled execution context",
 		"compiled_length", len(prompt),
 		"has_system_prompt", ctx.SystemPrompt != "",

@@ -38,6 +38,11 @@ func (AshUsage) Fields() []ent.Field {
 			Default(0),
 		field.Int64("cost_units").
 			Default(0),
+		field.String("pool_type").Default("legacy"),
+		field.String("provider").Default("legacy"),
+		field.String("model").Default(""),
+		field.String("usage_unit").Default("tokens"),
+		field.Int64("billed_micro_usd").Default(0),
 		field.Time("created_at").
 			Default(time.Now),
 	}

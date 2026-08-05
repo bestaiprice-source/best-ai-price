@@ -7,15 +7,22 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/observability"
+	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/session"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/storage"
 )
 
 type SummaryWorker struct {
 	store *storage.Storage
+	sm    *session.SessionManager
 }
 
 func NewSummaryWorker(store *storage.Storage) *SummaryWorker {
-	return &SummaryWorker{store: store}
+	var sm *session.SessionManager
+	if store != nil {
+		sm = session.NewSessionManager(store)
+	}
+	return &SummaryWorker{store: store, sm: sm}
 }
 
 // ShouldSummarize checks if history length exceeds thresholds (>20 messages or >8000 chars)
@@ -60,6 +67,7 @@ func (sw *SummaryWorker) TriggerAsyncSummary(ctx context.Context, ownerID string
 	if !sw.ShouldSummarize(execCtx) {
 		return
 	}
+	observability.Default.SummaryJob()
 
 	slog.Info("[SummaryWorker] Triggering async conversation summarization", "session_id", sessionID, "message_count", len(execCtx.RecentMessages))
 
@@ -68,6 +76,19 @@ func (sw *SummaryWorker) TriggerAsyncSummary(ctx context.Context, ownerID string
 		defer cancel()
 
 		summaryText := sw.GenerateSummary(execCtx)
+		if sw.sm != nil {
+			if sess, err := sw.sm.GetSession(bgCtx, sessionID); err == nil && sess != nil {
+				if sess.Context == nil {
+					sess.Context = &session.ExecutionContext{}
+				}
+				sess.Context.Summary = summaryText
+				sess.UpdatedAt = time.Now()
+				if err := sw.sm.SaveSession(bgCtx, sess); err != nil {
+					slog.Error("[SummaryWorker] Failed to persist summary", "session_id", sessionID, "error", err)
+					return
+				}
+			}
+		}
 
 		// Log SummaryUpdated event
 		if sw.store != nil {

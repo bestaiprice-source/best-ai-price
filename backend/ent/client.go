@@ -24,6 +24,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/ashevent"
 	"github.com/Wei-Shaw/sub2api/ent/ashsession"
 	"github.com/Wei-Shaw/sub2api/ent/ashusage"
+	"github.com/Wei-Shaw/sub2api/ent/ashuserpolicy"
 	"github.com/Wei-Shaw/sub2api/ent/authidentity"
 	"github.com/Wei-Shaw/sub2api/ent/authidentitychannel"
 	"github.com/Wei-Shaw/sub2api/ent/channelmonitor"
@@ -80,6 +81,8 @@ type Client struct {
 	AshSession *AshSessionClient
 	// AshUsage is the client for interacting with the AshUsage builders.
 	AshUsage *AshUsageClient
+	// AshUserPolicy is the client for interacting with the AshUserPolicy builders.
+	AshUserPolicy *AshUserPolicyClient
 	// AuthIdentity is the client for interacting with the AuthIdentity builders.
 	AuthIdentity *AuthIdentityClient
 	// AuthIdentityChannel is the client for interacting with the AuthIdentityChannel builders.
@@ -158,6 +161,7 @@ func (c *Client) init() {
 	c.AshEvent = NewAshEventClient(c.config)
 	c.AshSession = NewAshSessionClient(c.config)
 	c.AshUsage = NewAshUsageClient(c.config)
+	c.AshUserPolicy = NewAshUserPolicyClient(c.config)
 	c.AuthIdentity = NewAuthIdentityClient(c.config)
 	c.AuthIdentityChannel = NewAuthIdentityChannelClient(c.config)
 	c.ChannelMonitor = NewChannelMonitorClient(c.config)
@@ -288,6 +292,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		AshEvent:                      NewAshEventClient(cfg),
 		AshSession:                    NewAshSessionClient(cfg),
 		AshUsage:                      NewAshUsageClient(cfg),
+		AshUserPolicy:                 NewAshUserPolicyClient(cfg),
 		AuthIdentity:                  NewAuthIdentityClient(cfg),
 		AuthIdentityChannel:           NewAuthIdentityChannelClient(cfg),
 		ChannelMonitor:                NewChannelMonitorClient(cfg),
@@ -345,6 +350,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		AshEvent:                      NewAshEventClient(cfg),
 		AshSession:                    NewAshSessionClient(cfg),
 		AshUsage:                      NewAshUsageClient(cfg),
+		AshUserPolicy:                 NewAshUserPolicyClient(cfg),
 		AuthIdentity:                  NewAuthIdentityClient(cfg),
 		AuthIdentityChannel:           NewAuthIdentityChannelClient(cfg),
 		ChannelMonitor:                NewChannelMonitorClient(cfg),
@@ -404,15 +410,15 @@ func (c *Client) Close() error {
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
 		c.APIKey, c.Account, c.AccountGroup, c.Announcement, c.AnnouncementRead,
-		c.AshDeposit, c.AshEvent, c.AshSession, c.AshUsage, c.AuthIdentity,
-		c.AuthIdentityChannel, c.ChannelMonitor, c.ChannelMonitorDailyRollup,
-		c.ChannelMonitorHistory, c.ChannelMonitorRequestTemplate,
-		c.ErrorPassthroughRule, c.Group, c.IdempotencyRecord,
-		c.IdentityAdoptionDecision, c.PaymentAuditLog, c.PaymentOrder,
-		c.PaymentProviderInstance, c.PendingAuthSession, c.PromoCode, c.PromoCodeUsage,
-		c.Proxy, c.RedeemCode, c.SecuritySecret, c.Setting, c.SubscriptionPlan,
-		c.TLSFingerprintProfile, c.UsageCleanupTask, c.UsageLog, c.User,
-		c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
+		c.AshDeposit, c.AshEvent, c.AshSession, c.AshUsage, c.AshUserPolicy,
+		c.AuthIdentity, c.AuthIdentityChannel, c.ChannelMonitor,
+		c.ChannelMonitorDailyRollup, c.ChannelMonitorHistory,
+		c.ChannelMonitorRequestTemplate, c.ErrorPassthroughRule, c.Group,
+		c.IdempotencyRecord, c.IdentityAdoptionDecision, c.PaymentAuditLog,
+		c.PaymentOrder, c.PaymentProviderInstance, c.PendingAuthSession, c.PromoCode,
+		c.PromoCodeUsage, c.Proxy, c.RedeemCode, c.SecuritySecret, c.Setting,
+		c.SubscriptionPlan, c.TLSFingerprintProfile, c.UsageCleanupTask, c.UsageLog,
+		c.User, c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
 		c.UserSubscription,
 	} {
 		n.Use(hooks...)
@@ -424,15 +430,15 @@ func (c *Client) Use(hooks ...Hook) {
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
 		c.APIKey, c.Account, c.AccountGroup, c.Announcement, c.AnnouncementRead,
-		c.AshDeposit, c.AshEvent, c.AshSession, c.AshUsage, c.AuthIdentity,
-		c.AuthIdentityChannel, c.ChannelMonitor, c.ChannelMonitorDailyRollup,
-		c.ChannelMonitorHistory, c.ChannelMonitorRequestTemplate,
-		c.ErrorPassthroughRule, c.Group, c.IdempotencyRecord,
-		c.IdentityAdoptionDecision, c.PaymentAuditLog, c.PaymentOrder,
-		c.PaymentProviderInstance, c.PendingAuthSession, c.PromoCode, c.PromoCodeUsage,
-		c.Proxy, c.RedeemCode, c.SecuritySecret, c.Setting, c.SubscriptionPlan,
-		c.TLSFingerprintProfile, c.UsageCleanupTask, c.UsageLog, c.User,
-		c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
+		c.AshDeposit, c.AshEvent, c.AshSession, c.AshUsage, c.AshUserPolicy,
+		c.AuthIdentity, c.AuthIdentityChannel, c.ChannelMonitor,
+		c.ChannelMonitorDailyRollup, c.ChannelMonitorHistory,
+		c.ChannelMonitorRequestTemplate, c.ErrorPassthroughRule, c.Group,
+		c.IdempotencyRecord, c.IdentityAdoptionDecision, c.PaymentAuditLog,
+		c.PaymentOrder, c.PaymentProviderInstance, c.PendingAuthSession, c.PromoCode,
+		c.PromoCodeUsage, c.Proxy, c.RedeemCode, c.SecuritySecret, c.Setting,
+		c.SubscriptionPlan, c.TLSFingerprintProfile, c.UsageCleanupTask, c.UsageLog,
+		c.User, c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
 		c.UserSubscription,
 	} {
 		n.Intercept(interceptors...)
@@ -460,6 +466,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.AshSession.mutate(ctx, m)
 	case *AshUsageMutation:
 		return c.AshUsage.mutate(ctx, m)
+	case *AshUserPolicyMutation:
+		return c.AshUserPolicy.mutate(ctx, m)
 	case *AuthIdentityMutation:
 		return c.AuthIdentity.mutate(ctx, m)
 	case *AuthIdentityChannelMutation:
@@ -1864,6 +1872,139 @@ func (c *AshUsageClient) mutate(ctx context.Context, m *AshUsageMutation) (Value
 		return (&AshUsageDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown AshUsage mutation op: %q", m.Op())
+	}
+}
+
+// AshUserPolicyClient is a client for the AshUserPolicy schema.
+type AshUserPolicyClient struct {
+	config
+}
+
+// NewAshUserPolicyClient returns a client for the AshUserPolicy from the given config.
+func NewAshUserPolicyClient(c config) *AshUserPolicyClient {
+	return &AshUserPolicyClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `ashuserpolicy.Hooks(f(g(h())))`.
+func (c *AshUserPolicyClient) Use(hooks ...Hook) {
+	c.hooks.AshUserPolicy = append(c.hooks.AshUserPolicy, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `ashuserpolicy.Intercept(f(g(h())))`.
+func (c *AshUserPolicyClient) Intercept(interceptors ...Interceptor) {
+	c.inters.AshUserPolicy = append(c.inters.AshUserPolicy, interceptors...)
+}
+
+// Create returns a builder for creating a AshUserPolicy entity.
+func (c *AshUserPolicyClient) Create() *AshUserPolicyCreate {
+	mutation := newAshUserPolicyMutation(c.config, OpCreate)
+	return &AshUserPolicyCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of AshUserPolicy entities.
+func (c *AshUserPolicyClient) CreateBulk(builders ...*AshUserPolicyCreate) *AshUserPolicyCreateBulk {
+	return &AshUserPolicyCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *AshUserPolicyClient) MapCreateBulk(slice any, setFunc func(*AshUserPolicyCreate, int)) *AshUserPolicyCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &AshUserPolicyCreateBulk{err: fmt.Errorf("calling to AshUserPolicyClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*AshUserPolicyCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &AshUserPolicyCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for AshUserPolicy.
+func (c *AshUserPolicyClient) Update() *AshUserPolicyUpdate {
+	mutation := newAshUserPolicyMutation(c.config, OpUpdate)
+	return &AshUserPolicyUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *AshUserPolicyClient) UpdateOne(_m *AshUserPolicy) *AshUserPolicyUpdateOne {
+	mutation := newAshUserPolicyMutation(c.config, OpUpdateOne, withAshUserPolicy(_m))
+	return &AshUserPolicyUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *AshUserPolicyClient) UpdateOneID(id int64) *AshUserPolicyUpdateOne {
+	mutation := newAshUserPolicyMutation(c.config, OpUpdateOne, withAshUserPolicyID(id))
+	return &AshUserPolicyUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for AshUserPolicy.
+func (c *AshUserPolicyClient) Delete() *AshUserPolicyDelete {
+	mutation := newAshUserPolicyMutation(c.config, OpDelete)
+	return &AshUserPolicyDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *AshUserPolicyClient) DeleteOne(_m *AshUserPolicy) *AshUserPolicyDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *AshUserPolicyClient) DeleteOneID(id int64) *AshUserPolicyDeleteOne {
+	builder := c.Delete().Where(ashuserpolicy.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &AshUserPolicyDeleteOne{builder}
+}
+
+// Query returns a query builder for AshUserPolicy.
+func (c *AshUserPolicyClient) Query() *AshUserPolicyQuery {
+	return &AshUserPolicyQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeAshUserPolicy},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a AshUserPolicy entity by its id.
+func (c *AshUserPolicyClient) Get(ctx context.Context, id int64) (*AshUserPolicy, error) {
+	return c.Query().Where(ashuserpolicy.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *AshUserPolicyClient) GetX(ctx context.Context, id int64) *AshUserPolicy {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *AshUserPolicyClient) Hooks() []Hook {
+	return c.hooks.AshUserPolicy
+}
+
+// Interceptors returns the client interceptors.
+func (c *AshUserPolicyClient) Interceptors() []Interceptor {
+	return c.inters.AshUserPolicy
+}
+
+func (c *AshUserPolicyClient) mutate(ctx context.Context, m *AshUserPolicyMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&AshUserPolicyCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&AshUserPolicyUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&AshUserPolicyUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&AshUserPolicyDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown AshUserPolicy mutation op: %q", m.Op())
 	}
 }
 
@@ -6585,25 +6726,25 @@ func (c *UserSubscriptionClient) mutate(ctx context.Context, m *UserSubscription
 type (
 	hooks struct {
 		APIKey, Account, AccountGroup, Announcement, AnnouncementRead, AshDeposit,
-		AshEvent, AshSession, AshUsage, AuthIdentity, AuthIdentityChannel,
-		ChannelMonitor, ChannelMonitorDailyRollup, ChannelMonitorHistory,
-		ChannelMonitorRequestTemplate, ErrorPassthroughRule, Group, IdempotencyRecord,
-		IdentityAdoptionDecision, PaymentAuditLog, PaymentOrder,
-		PaymentProviderInstance, PendingAuthSession, PromoCode, PromoCodeUsage, Proxy,
-		RedeemCode, SecuritySecret, Setting, SubscriptionPlan, TLSFingerprintProfile,
-		UsageCleanupTask, UsageLog, User, UserAllowedGroup, UserAttributeDefinition,
-		UserAttributeValue, UserSubscription []ent.Hook
+		AshEvent, AshSession, AshUsage, AshUserPolicy, AuthIdentity,
+		AuthIdentityChannel, ChannelMonitor, ChannelMonitorDailyRollup,
+		ChannelMonitorHistory, ChannelMonitorRequestTemplate, ErrorPassthroughRule,
+		Group, IdempotencyRecord, IdentityAdoptionDecision, PaymentAuditLog,
+		PaymentOrder, PaymentProviderInstance, PendingAuthSession, PromoCode,
+		PromoCodeUsage, Proxy, RedeemCode, SecuritySecret, Setting, SubscriptionPlan,
+		TLSFingerprintProfile, UsageCleanupTask, UsageLog, User, UserAllowedGroup,
+		UserAttributeDefinition, UserAttributeValue, UserSubscription []ent.Hook
 	}
 	inters struct {
 		APIKey, Account, AccountGroup, Announcement, AnnouncementRead, AshDeposit,
-		AshEvent, AshSession, AshUsage, AuthIdentity, AuthIdentityChannel,
-		ChannelMonitor, ChannelMonitorDailyRollup, ChannelMonitorHistory,
-		ChannelMonitorRequestTemplate, ErrorPassthroughRule, Group, IdempotencyRecord,
-		IdentityAdoptionDecision, PaymentAuditLog, PaymentOrder,
-		PaymentProviderInstance, PendingAuthSession, PromoCode, PromoCodeUsage, Proxy,
-		RedeemCode, SecuritySecret, Setting, SubscriptionPlan, TLSFingerprintProfile,
-		UsageCleanupTask, UsageLog, User, UserAllowedGroup, UserAttributeDefinition,
-		UserAttributeValue, UserSubscription []ent.Interceptor
+		AshEvent, AshSession, AshUsage, AshUserPolicy, AuthIdentity,
+		AuthIdentityChannel, ChannelMonitor, ChannelMonitorDailyRollup,
+		ChannelMonitorHistory, ChannelMonitorRequestTemplate, ErrorPassthroughRule,
+		Group, IdempotencyRecord, IdentityAdoptionDecision, PaymentAuditLog,
+		PaymentOrder, PaymentProviderInstance, PendingAuthSession, PromoCode,
+		PromoCodeUsage, Proxy, RedeemCode, SecuritySecret, Setting, SubscriptionPlan,
+		TLSFingerprintProfile, UsageCleanupTask, UsageLog, User, UserAllowedGroup,
+		UserAttributeDefinition, UserAttributeValue, UserSubscription []ent.Interceptor
 	}
 )
 

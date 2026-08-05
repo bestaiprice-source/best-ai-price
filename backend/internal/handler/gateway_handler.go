@@ -13,6 +13,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/domain"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/antigravity"
@@ -28,7 +29,6 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/server/gatewayctx"
 	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
-	"github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/runtime"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/storage"
@@ -80,6 +80,7 @@ func NewGatewayHandler(
 	settingService *service.SettingService,
 	entClient *ent.Client,
 	redisClient *redis.Client,
+	secretEncryptor service.SecretEncryptor,
 ) *GatewayHandler {
 	pingInterval := time.Duration(0)
 	maxAccountSwitches := 10
@@ -101,11 +102,11 @@ func NewGatewayHandler(
 	}
 
 	hyperStore := storage.NewStorage(entClient, redisClient)
-	var rt runtime.Runtime = runtime.NewAnthropicRuntime(hyperStore)
+	var rt runtime.Runtime = runtime.NewAnthropicRuntime(hyperStore, secretEncryptor)
 	if os.Getenv("ASH_ENABLE_MOCK_RUNTIME") == "true" {
 		rt = runtime.NewMockRuntime(hyperStore)
 	}
-	engine := hypervisor.NewHypervisor(hyperStore, rt)
+	engine := hypervisor.NewHypervisor(hyperStore, rt, secretEncryptor)
 
 	return &GatewayHandler{
 		gatewayService:            gatewayService,

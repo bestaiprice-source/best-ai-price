@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/health"
@@ -49,7 +50,13 @@ func (rm *YunwuRebindingManager) HandleYunwuFailure(
 		}
 	}
 
-	state.Recent429++
+	errorText := strings.ToLower(errReason.Error())
+	if strings.Contains(errorText, "429") || strings.Contains(errorText, "too many requests") {
+		state.Recent429++
+	}
+	if errors.Is(errReason, context.DeadlineExceeded) || strings.Contains(errorText, "timeout") || strings.Contains(errorText, "deadline exceeded") {
+		state.RecentTimeouts++
+	}
 	state.CooldownUntil = &cooldownUntil
 	_ = rm.nm.SaveNodeRuntimeState(ctx, state)
 

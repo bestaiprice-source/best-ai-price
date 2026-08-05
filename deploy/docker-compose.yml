@@ -146,7 +146,17 @@ services:
       # Hypervisor (ASH) Configuration
       # =======================================================================
       - ASH_ENABLED=${ASH_ENABLED:-false}
-      - ASH_ENABLE_MOCK_RUNTIME=${ASH_ENABLE_MOCK_RUNTIME:-true}
+      - ASH_ENABLE_REBINDING=${ASH_ENABLE_REBINDING:-true}
+      - ASH_ENABLE_AFFINITY=${ASH_ENABLE_AFFINITY:-true}
+      - ASH_ENABLE_SUMMARY=${ASH_ENABLE_SUMMARY:-true}
+      - ASH_ENABLE_HEALTH_CONTROLLER=${ASH_ENABLE_HEALTH_CONTROLLER:-true}
+      - ASH_ENABLE_QUOTA_MANAGER=${ASH_ENABLE_QUOTA_MANAGER:-true}
+      - ASH_ENABLE_USAGE_RECORDER=${ASH_ENABLE_USAGE_RECORDER:-true}
+      - ASH_ENABLE_BACKUP=${ASH_ENABLE_BACKUP:-true}
+      - ASH_ENABLE_MOCK_RUNTIME=${ASH_ENABLE_MOCK_RUNTIME:-false}
+      - ASH_MAX_RETRY=${ASH_MAX_RETRY:-1}
+      - ASH_NODE_COOLDOWN_SECONDS=${ASH_NODE_COOLDOWN_SECONDS:-900}
+      - ASH_SESSION_LOCK_TTL_SECONDS=${ASH_SESSION_LOCK_TTL_SECONDS:-120}
     depends_on:
       postgres:
         condition: service_healthy

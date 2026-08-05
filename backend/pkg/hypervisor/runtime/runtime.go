@@ -16,6 +16,7 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/ent"
 	dbaccount "github.com/Wei-Shaw/sub2api/ent/account"
+	"github.com/Wei-Shaw/sub2api/internal/credentials"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/storage"
 )
 
@@ -31,12 +32,15 @@ type Runtime interface {
 
 // MockRuntime implements Runtime for simulating upstream responses and testing failures
 type MockRuntime struct {
-	store           *storage.Storage
-	SuccessDelay    time.Duration
-	SlowStreamDelay time.Duration
-	Force429        bool
-	ForceTimeout    bool
-	ForceDisconnect bool
+	store                *storage.Storage
+	SuccessDelay         time.Duration
+	SlowStreamDelay      time.Duration
+	Force429             bool
+	ForceTimeout         bool
+	ForceDisconnect      bool
+	ForceBrokenSSE       bool
+	ForceToolUse         bool
+	ForceInvalidResponse bool
 }
 
 func NewMockRuntime(store *storage.Storage) *MockRuntime {
@@ -61,6 +65,11 @@ func (m *MockRuntime) Execute(ctx context.Context, nodeID string, reqPayload []b
 		return nil, errors.New("upstream connection closed abruptly")
 	}
 
+	if m.ForceInvalidResponse {
+		_, _ = stream.Write([]byte("this is not a valid upstream response"))
+		return nil, errors.New("invalid upstream response")
+	}
+
 	if m.SuccessDelay > 0 {
 		time.Sleep(m.SuccessDelay)
 	}
@@ -82,6 +91,18 @@ func (m *MockRuntime) Execute(ctx context.Context, nodeID string, reqPayload []b
 	}
 
 	if platform == "openai" {
+		if m.ForceBrokenSSE {
+			_, _ = stream.Write([]byte("data: {\"choices\":[{\"delta\":\n\n"))
+			return nil, errors.New("broken SSE stream")
+		}
+		if m.ForceToolUse {
+			events := []string{
+				"data: {\"id\":\"chatcmpl-mock\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_mock\",\"type\":\"function\",\"function\":{\"name\":\"mock_tool\",\"arguments\":\"{}\"}}]},\"finish_reason\":null}]}\n\n",
+				"data: {\"id\":\"chatcmpl-mock\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"tool_calls\"}]}\n\n",
+				"data: [DONE]\n\n",
+			}
+			return m.writeMockEvents(ctx, stream, events)
+		}
 		events := []string{
 			"data: {\"id\":\"chatcmpl-mock\",\"object\":\"chat.completion.chunk\",\"created\":1677858342,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"\"},\"finish_reason\":null}]}\n\n",
 			"data: {\"id\":\"chatcmpl-mock\",\"object\":\"chat.completion.chunk\",\"created\":1677858342,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"Hello \"},\"finish_reason\":null}]}\n\n",
@@ -90,23 +111,22 @@ func (m *MockRuntime) Execute(ctx context.Context, nodeID string, reqPayload []b
 			"data: {\"id\":\"chatcmpl-mock\",\"object\":\"chat.completion.chunk\",\"created\":1677858342,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n",
 			"data: [DONE]\n\n",
 		}
-		for _, ev := range events {
-			if m.SlowStreamDelay > 0 {
-				time.Sleep(m.SlowStreamDelay)
-			}
-			_, err := stream.Write([]byte(ev))
-			if err != nil {
-				return nil, err
-			}
-			if flusher, ok := stream.(http.Flusher); ok {
-				flusher.Flush()
-			}
+		return m.writeMockEvents(ctx, stream, events)
+	}
+
+	if m.ForceBrokenSSE {
+		_, _ = stream.Write([]byte("event: content_block_delta\ndata: {\"type\":\"content_block_delta\"\n\n"))
+		return nil, errors.New("broken SSE stream")
+	}
+	if m.ForceToolUse {
+		events := []string{
+			"event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_mock_tool\",\"role\":\"assistant\",\"content\":[]}}\n\n",
+			"event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_mock\",\"name\":\"mock_tool\",\"input\":{}}}\n\n",
+			"event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\n",
+			"event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\"},\"usage\":{\"input_tokens\":15,\"output_tokens\":10}}\n\n",
+			"event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n",
 		}
-		return &ResponseMetadata{
-			InputTokens:  15,
-			OutputTokens: 10,
-			StatusCode:   200,
-		}, nil
+		return m.writeMockEvents(ctx, stream, events)
 	}
 
 	// Simulating standard Anthropic SSE stream
@@ -121,9 +141,21 @@ func (m *MockRuntime) Execute(ctx context.Context, nodeID string, reqPayload []b
 		"event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n",
 	}
 
+	return m.writeMockEvents(ctx, stream, events)
+}
+
+func (m *MockRuntime) writeMockEvents(ctx context.Context, stream io.Writer, events []string) (*ResponseMetadata, error) {
 	for _, ev := range events {
 		if m.SlowStreamDelay > 0 {
-			time.Sleep(m.SlowStreamDelay)
+			timer := time.NewTimer(m.SlowStreamDelay)
+			select {
+			case <-timer.C:
+			case <-ctx.Done():
+				if !timer.Stop() {
+					<-timer.C
+				}
+				return nil, ctx.Err()
+			}
 		}
 		_, err := stream.Write([]byte(ev))
 		if err != nil {
@@ -143,11 +175,16 @@ func (m *MockRuntime) Execute(ctx context.Context, nodeID string, reqPayload []b
 
 // AnthropicRuntime implements the real upstream communication with Claude API
 type AnthropicRuntime struct {
-	store *storage.Storage
+	store     *storage.Storage
+	decryptor credentials.Cipher
 }
 
-func NewAnthropicRuntime(store *storage.Storage) *AnthropicRuntime {
-	return &AnthropicRuntime{store: store}
+func NewAnthropicRuntime(store *storage.Storage, decryptors ...credentials.Cipher) *AnthropicRuntime {
+	var decryptor credentials.Cipher
+	if len(decryptors) > 0 {
+		decryptor = decryptors[0]
+	}
+	return &AnthropicRuntime{store: store, decryptor: decryptor}
 }
 
 func (r *AnthropicRuntime) Execute(ctx context.Context, nodeID string, reqPayload []byte, stream io.Writer) (*ResponseMetadata, error) {
@@ -169,11 +206,25 @@ func (r *AnthropicRuntime) Execute(ctx context.Context, nodeID string, reqPayloa
 		}
 	}
 
+	accountCredentials, err := credentials.DecryptMap(acc.Credentials, r.decryptor)
+	if err != nil {
+		return nil, fmt.Errorf("decrypt credentials for node %s: %w", nodeID, err)
+	}
+	if r.decryptor != nil && credentials.NeedsEncryption(acc.Credentials) {
+		encrypted, encryptErr := credentials.EncryptMap(acc.Credentials, r.decryptor)
+		if encryptErr != nil {
+			return nil, fmt.Errorf("migrate credentials for node %s: %w", nodeID, encryptErr)
+		}
+		if _, updateErr := dbClient.Account.UpdateOneID(acc.ID).SetCredentials(encrypted).Save(ctx); updateErr != nil {
+			return nil, fmt.Errorf("persist encrypted credentials for node %s: %w", nodeID, updateErr)
+		}
+	}
+
 	// Extract API Key / Token from Credentials
 	var apiKey string
 	keysToTry := []string{"access_token", "api_key", "token", "setup_token", "key", "session_key"}
 	for _, k := range keysToTry {
-		if val, ok := acc.Credentials[k].(string); ok && strings.TrimSpace(val) != "" {
+		if val, ok := accountCredentials[k].(string); ok && strings.TrimSpace(val) != "" {
 			apiKey = strings.TrimSpace(val)
 			break
 		}
@@ -201,7 +252,7 @@ func (r *AnthropicRuntime) Execute(ctx context.Context, nodeID string, reqPayloa
 	}
 
 	// 4. Create HTTP Request
-	customURL, _ := acc.Credentials["base_url"].(string)
+	customURL, _ := accountCredentials["base_url"].(string)
 
 	isChatCompletions := false
 	if acc.Platform == "openai" {
@@ -223,7 +274,7 @@ func (r *AnthropicRuntime) Execute(ctx context.Context, nodeID string, reqPayloa
 	}
 
 	apiURL := resolveUpstreamAPIURL(customURL, acc.Platform, isChatCompletions)
-	
+
 	isOAuth := acc.Type == "oauth"
 	if isOAuth && acc.Platform == "openai" && customURL == "" {
 		apiURL = "https://chatgpt.com/backend-api/codex/responses"
@@ -331,7 +382,7 @@ func (r *AnthropicRuntime) Execute(ctx context.Context, nodeID string, reqPayloa
 			if isStream {
 				req.Header.Set("accept", "text/event-stream")
 			}
-			if chatgptAccID, ok := acc.Credentials["chatgpt_account_id"].(string); ok && chatgptAccID != "" {
+			if chatgptAccID, ok := accountCredentials["chatgpt_account_id"].(string); ok && chatgptAccID != "" {
 				req.Header.Set("chatgpt-account-id", chatgptAccID)
 			}
 		}
@@ -373,10 +424,10 @@ func (r *AnthropicRuntime) Execute(ctx context.Context, nodeID string, reqPayloa
 	reqStart := time.Now()
 	resp, err := client.Do(req)
 	latencyMs := time.Since(reqStart).Milliseconds()
-	
+
 	if err != nil {
-		slog.Error("[Runtime] Upstream HTTP request failed", 
-			"node_id", nodeID, 
+		slog.Error("[Runtime] Upstream HTTP request failed",
+			"node_id", nodeID,
 			"latency_ms", latencyMs,
 			"error", err,
 		)
@@ -506,7 +557,7 @@ func (r *AnthropicRuntime) Execute(ctx context.Context, nodeID string, reqPayloa
 	}
 
 	input, output := extractTokens(endBuf.Bytes())
-	
+
 	slog.Info("[Runtime] Upstream request completed",
 		"node_id", nodeID,
 		"status_code", resp.StatusCode,
@@ -705,7 +756,6 @@ func constructInputFromMessagesPayload(bodyMap map[string]any) []map[string]any 
 	}
 	return input
 }
-
 
 func resolveUpstreamAPIURL(customURL string, platform string, isChatCompletions bool) string {
 	customURL = strings.TrimSpace(customURL)

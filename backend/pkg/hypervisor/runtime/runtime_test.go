@@ -21,9 +21,46 @@ import (
 	entsql "entgo.io/ent/dialect/sql"
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/enttest"
+	"github.com/Wei-Shaw/sub2api/internal/credentials"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/storage"
 	_ "modernc.org/sqlite"
 )
+
+type runtimeTestCipher struct{}
+
+func (runtimeTestCipher) Encrypt(value string) (string, error) { return "cipher(" + value + ")", nil }
+func (runtimeTestCipher) Decrypt(value string) (string, error) {
+	return strings.TrimSuffix(strings.TrimPrefix(value, "cipher("), ")"), nil
+}
+
+func TestAnthropicRuntimeDecryptsEnvelopeBeforeUpstreamUse(t *testing.T) {
+	store := newTestStorage(t)
+	ctx := context.Background()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "Bearer sk-encrypted", r.Header.Get("Authorization"))
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"usage":{"input_tokens":1,"output_tokens":1}}`))
+	}))
+	defer server.Close()
+
+	acc, err := store.DB().Account.Create().
+		SetName("encrypted-runtime-account").
+		SetPlatform("openai").
+		SetType("api_key").
+		SetStatus("active").
+		SetCredentials(map[string]any{
+			"api_key":  credentials.EnvelopePrefix + "cipher(sk-encrypted)",
+			"base_url": server.URL,
+		}).
+		Save(ctx)
+	require.NoError(t, err)
+
+	_, err = NewAnthropicRuntime(store, runtimeTestCipher{}).Execute(ctx, fmt.Sprintf("%d", acc.ID), []byte(`{"model":"gpt-test"}`), &bytes.Buffer{})
+	require.NoError(t, err)
+	stored, err := store.DB().Account.Get(ctx, acc.ID)
+	require.NoError(t, err)
+	assert.NotEqual(t, "sk-encrypted", stored.Credentials["api_key"])
+}
 
 func newTestStorage(t *testing.T) *storage.Storage {
 	t.Helper()
@@ -79,6 +116,42 @@ func TestMockRuntimeSuccessAndFailures(t *testing.T) {
 	defer cancel()
 	_, err = mockRt.Execute(ctx, "node-1", []byte(`{}`), &buf)
 	assert.Error(t, err)
+}
+
+func TestMockRuntimeRequiredAdvancedScenarios(t *testing.T) {
+	store := newTestStorage(t)
+	ctx := context.Background()
+
+	for _, platform := range []string{"anthropic", "openai", "yunwu"} {
+		t.Run(platform, func(t *testing.T) {
+			acc, err := store.DB().Account.Create().
+				SetName("mock-" + platform).
+				SetPlatform(platform).
+				SetType("api_key").
+				SetStatus("active").
+				SetCredentials(map[string]any{"api_key": "test"}).
+				Save(ctx)
+			require.NoError(t, err)
+			nodeID := fmt.Sprintf("%d", acc.ID)
+
+			mock := NewMockRuntime(store)
+			mock.ForceToolUse = true
+			var toolBuf bytes.Buffer
+			_, err = mock.Execute(ctx, nodeID, nil, &toolBuf)
+			require.NoError(t, err)
+			assert.Contains(t, toolBuf.String(), "mock_tool")
+
+			mock.ForceToolUse = false
+			mock.ForceBrokenSSE = true
+			_, err = mock.Execute(ctx, nodeID, nil, &bytes.Buffer{})
+			require.ErrorContains(t, err, "broken SSE")
+
+			mock.ForceBrokenSSE = false
+			mock.ForceInvalidResponse = true
+			_, err = mock.Execute(ctx, nodeID, nil, &bytes.Buffer{})
+			require.ErrorContains(t, err, "invalid upstream response")
+		})
+	}
 }
 
 func TestAnthropicRuntimeExecution(t *testing.T) {

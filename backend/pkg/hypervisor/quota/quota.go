@@ -12,13 +12,16 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/account"
 	"github.com/Wei-Shaw/sub2api/ent/ashusage"
+	"github.com/Wei-Shaw/sub2api/ent/ashuserpolicy"
+	hyperconfig "github.com/Wei-Shaw/sub2api/pkg/hypervisor/config"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/storage"
 	"github.com/redis/go-redis/v9"
 )
 
 var (
-	ErrQuotaExceeded = errors.New("user quota exceeded")
-	ErrUserInactive  = errors.New("user is inactive")
+	ErrQuotaExceeded      = errors.New("user quota exceeded")
+	ErrUserInactive       = errors.New("user is inactive")
+	ErrDailyBurstExceeded = errors.New("daily burst limit exceeded")
 )
 
 const (
@@ -27,39 +30,78 @@ const (
 )
 
 type UserAccess struct {
-	OwnerID      string `json:"owner_id"`
-	PlanID       string `json:"plan_id"`
-	MonthlyLimit int64  `json:"monthly_limit"`
-	DailyBurst   int64  `json:"daily_burst"`
-	UsedUnits    int64  `json:"used_units"`
-	Priority     int    `json:"priority"`
-	DepositState string `json:"deposit_state"`
-	IsActive     bool   `json:"is_active"`
+	OwnerID              string `json:"owner_id"`
+	PlanID               string `json:"plan_id"`
+	MonthlyLimit         int64  `json:"monthly_limit"`
+	DailyBurst           int64  `json:"daily_burst"`
+	UsedUnits            int64  `json:"used_units"`
+	MonthlyLimitMicroUSD int64  `json:"monthly_limit_micro_usd"`
+	DailyBurstMicroUSD   int64  `json:"daily_burst_micro_usd"`
+	UsedMicroUSD         int64  `json:"used_micro_usd"`
+	Priority             int    `json:"priority"`
+	DepositState         string `json:"deposit_state"`
+	IsActive             bool   `json:"is_active"`
 }
 
 type QuotaManager struct {
 	store *storage.Storage
+	cfg   *hyperconfig.HypervisorConfig
 }
 
-func NewQuotaManager(store *storage.Storage) *QuotaManager {
-	return &QuotaManager{store: store}
+func NewQuotaManager(store *storage.Storage, configs ...*hyperconfig.HypervisorConfig) *QuotaManager {
+	cfg := hyperconfig.LoadFromEnv()
+	if len(configs) > 0 && configs[0] != nil {
+		cfg = configs[0]
+	}
+	return &QuotaManager{store: store, cfg: cfg}
 }
 
 func UserAccessKey(ownerID string, poolType string) string {
 	return fmt.Sprintf("ash:quota:%s:%s", ownerID, poolType)
 }
 
+func monthKey() string { return time.Now().UTC().Format("2006-01") }
+func usageKey(ownerID, poolType string) string {
+	return fmt.Sprintf("ash:quota_used:%s:%s:%s", ownerID, poolType, monthKey())
+}
+func moneyUsageKey(ownerID string) string {
+	return fmt.Sprintf("ash:quota_used_micro_usd:%s:yunwu:%s", ownerID, monthKey())
+}
+
 func (qm *QuotaManager) GetUserAccess(ctx context.Context, ownerID string, poolType string) (*UserAccess, error) {
+	usedKey := usageKey(ownerID, poolType)
+	var usedUnits int64
+	uVal, uErr := qm.store.Redis().Get(ctx, usedKey).Int64()
+	if uErr == nil {
+		usedUnits = uVal
+	}
+
 	key := UserAccessKey(ownerID, poolType)
 	data, err := qm.store.Redis().Get(ctx, key).Bytes()
 	if err == nil {
 		var ua UserAccess
 		if json.Unmarshal(data, &ua) == nil {
+			if uErr == nil {
+				ua.UsedUnits = usedUnits
+			}
+			if poolType == "yunwu" {
+				if monetary, moneyErr := qm.store.Redis().Get(ctx, moneyUsageKey(ownerID)).Int64(); moneyErr == nil {
+					ua.UsedMicroUSD = monetary
+				}
+			}
 			return &ua, nil
 		}
 	}
 
-	// Fallback to database query if not found in Redis
+	// PostgreSQL is the durable policy source; Redis only caches it.
+	var policy *ent.AshUserPolicy
+	if qm.store.DB() != nil {
+		policy, _ = qm.store.DB().AshUserPolicy.Query().
+			Where(ashuserpolicy.OwnerID(ownerID), ashuserpolicy.PoolType(poolType)).
+			Only(ctx)
+	}
+
+	// Fallback to the owning user only when no explicit policy exists.
 	var id int64
 	isActive := true
 	if _, parseErr := fmt.Sscanf(ownerID, "%d", &id); parseErr == nil {
@@ -69,31 +111,28 @@ func (qm *QuotaManager) GetUserAccess(ctx context.Context, ownerID string, poolT
 		}
 	}
 
-	// For legacy compatibility, we don't differentiate usage history right now if it's the first time loaded.
-	// But it will differentiate going forward because UsedUnits is saved to Redis per pool.
-	var sum []struct {
-		Cost int64 `json:"cost" xml:"cost"`
-	}
-	now := time.Now()
-	startOfMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+	if uErr != nil {
+		var sum []struct {
+			Cost int64 `json:"cost" xml:"cost"`
+		}
+		now := time.Now()
+		startOfMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
 
-	_ = qm.store.DB().AshUsage.Query().
-		Where(
-			ashusage.OwnerID(ownerID),
-			ashusage.CreatedAtGTE(startOfMonth),
-		).
-		Aggregate(
-			ent.As(ent.Sum(ashusage.FieldCostUnits), "cost"),
-		).
-		Scan(ctx, &sum)
+		query := qm.store.DB().AshUsage.Query().
+			Where(
+				ashusage.OwnerID(ownerID),
+				ashusage.PoolType(poolType),
+				ashusage.CreatedAtGTE(startOfMonth),
+			)
+		_ = query.
+			Aggregate(
+				ent.As(ent.Sum(ashusage.FieldCostUnits), "cost"),
+			).
+			Scan(ctx, &sum)
 
-	var usedUnits int64
-	if len(sum) > 0 {
-		// Ideally we would filter by poolType in the DB, but since usage records don't have it yet, we just start fresh for new pools
-		if poolType == "yunwu" {
-			usedUnits = 0 // start Yunwu from 0 for cleaner separation
-		} else {
+		if len(sum) > 0 {
 			usedUnits = sum[0].Cost
+			_ = qm.store.Redis().Set(ctx, usedKey, usedUnits, 31*24*time.Hour).Err()
 		}
 	}
 
@@ -105,21 +144,107 @@ func (qm *QuotaManager) GetUserAccess(ctx context.Context, ownerID string, poolT
 		Priority:     1,
 		IsActive:     isActive,
 	}
+	if policy != nil {
+		ua.PlanID = policy.PlanID
+		ua.MonthlyLimit = policy.MonthlyLimit
+		ua.DailyBurst = policy.DailyBurst
+		ua.MonthlyLimitMicroUSD = policy.MonthlyLimitMicroUsd
+		ua.DailyBurstMicroUSD = policy.DailyBurstMicroUsd
+		ua.Priority = policy.Priority
+		ua.DepositState = policy.DepositState
+		ua.IsActive = policy.IsActive
+	}
+	if poolType == "yunwu" && qm.store.DB() != nil {
+		var money []struct {
+			Cost int64 `json:"cost"`
+		}
+		_ = qm.store.DB().AshUsage.Query().Where(ashusage.OwnerID(ownerID), ashusage.PoolType("yunwu"), ashusage.CreatedAtGTE(time.Date(time.Now().Year(), time.Now().Month(), 1, 0, 0, 0, 0, time.Local))).Aggregate(ent.As(ent.Sum(ashusage.FieldBilledMicroUsd), "cost")).Scan(ctx, &money)
+		if len(money) > 0 {
+			ua.UsedMicroUSD = money[0].Cost
+		}
+		_ = qm.store.Redis().Set(ctx, moneyUsageKey(ownerID), ua.UsedMicroUSD, 35*24*time.Hour).Err()
+	}
 	// Cache in Redis for subsequent checks
 	_ = qm.SaveUserAccess(ctx, ua, poolType)
 	return ua, nil
 }
 
 func (qm *QuotaManager) SaveUserAccess(ctx context.Context, ua *UserAccess, poolType string) error {
+	if qm.store.DB() != nil {
+		if ua.Priority <= 0 {
+			ua.Priority = 1
+		}
+		err := qm.store.DB().AshUserPolicy.Create().
+			SetOwnerID(ua.OwnerID).SetPoolType(poolType).SetPlanID(ua.PlanID).
+			SetMonthlyLimit(ua.MonthlyLimit).SetDailyBurst(ua.DailyBurst).
+			SetMonthlyLimitMicroUsd(ua.MonthlyLimitMicroUSD).SetDailyBurstMicroUsd(ua.DailyBurstMicroUSD).
+			SetPriority(ua.Priority).SetDepositState(ua.DepositState).SetIsActive(ua.IsActive).
+			OnConflictColumns(ashuserpolicy.FieldOwnerID, ashuserpolicy.FieldPoolType).
+			UpdateNewValues().Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("persist user quota policy: %w", err)
+		}
+	}
 	key := UserAccessKey(ua.OwnerID, poolType)
 	data, err := json.Marshal(ua)
 	if err != nil {
 		return err
 	}
-	return qm.store.Redis().Set(ctx, key, data, 1*time.Hour).Err()
+	usedKey := usageKey(ua.OwnerID, poolType)
+	_ = qm.store.Redis().Set(ctx, usedKey, ua.UsedUnits, 31*24*time.Hour).Err()
+	if poolType == "yunwu" {
+		_ = qm.store.Redis().Set(ctx, moneyUsageKey(ua.OwnerID), ua.UsedMicroUSD, 35*24*time.Hour).Err()
+	}
+	if err := qm.store.Redis().Set(ctx, key, data, 1*time.Hour).Err(); err != nil {
+		return err
+	}
+	_ = qm.store.Redis().Del(ctx, "ash:quota_limit_cache:"+poolType, "ash:quota_limit_cache:standard:anthropic", "ash:quota_limit_cache:standard:openai").Err()
+	createdMarker := fmt.Sprintf("ash:event:user_created:%s:%s", poolType, ua.OwnerID)
+	if created, _ := qm.store.Redis().SetNX(ctx, createdMarker, "1", 0).Result(); created {
+		_, _ = qm.store.LogEvent(ctx, ua.OwnerID, nil, nil, "UserCreated", map[string]any{
+			"pool_type": poolType,
+			"plan_id":   ua.PlanID,
+		})
+	}
+	return nil
+}
+
+func (qm *QuotaManager) GetDailyUsage(ctx context.Context, ownerID string, poolType string) (int64, error) {
+	today := time.Now().Format("2006-01-02")
+	dailyKey := fmt.Sprintf("ash:daily_usage:%s:%s:%s", ownerID, poolType, today)
+	val, err := qm.store.Redis().Get(ctx, dailyKey).Int64()
+	if err == redis.Nil {
+		if qm.store.DB() == nil {
+			return 0, nil
+		}
+		start := time.Now().Truncate(24 * time.Hour)
+		var sum []struct {
+			Cost int64 `json:"cost"`
+		}
+		q := qm.store.DB().AshUsage.Query().Where(ashusage.OwnerID(ownerID), ashusage.PoolType(poolType), ashusage.CreatedAtGTE(start))
+		if e := q.Aggregate(ent.As(ent.Sum(ashusage.FieldCostUnits), "cost")).Scan(ctx, &sum); e != nil {
+			return 0, e
+		}
+		if len(sum) > 0 {
+			val = sum[0].Cost
+		}
+		_ = qm.store.Redis().Set(ctx, dailyKey, val, 25*time.Hour).Err()
+		return val, nil
+	}
+	return val, err
 }
 
 func (qm *QuotaManager) CheckQuota(ctx context.Context, ownerID string, poolType string) (bool, error) {
+	return qm.CheckQuotaScope(ctx, ownerID, poolType)
+}
+
+// CheckQuotaScope accepts standard:anthropic, standard:openai, or yunwu.
+// Standard usage remains shared while provider capacity is isolated.
+func (qm *QuotaManager) CheckQuotaScope(ctx context.Context, ownerID string, scope string) (bool, error) {
+	poolType := scope
+	if len(scope) > len("standard:") && scope[:len("standard:")] == "standard:" {
+		poolType = "standard"
+	}
 	ua, err := qm.GetUserAccess(ctx, ownerID, poolType)
 	if err != nil {
 		slog.Error("[QuotaManager] Failed to get user access", "owner_id", ownerID, "error", err)
@@ -131,7 +256,32 @@ func (qm *QuotaManager) CheckQuota(ctx context.Context, ownerID string, poolType
 		return false, ErrUserInactive
 	}
 
-	dynLimitPerWeight, err := qm.GetDynamicLimitPerWeight(ctx, poolType)
+	if ua.DailyBurst > 0 {
+		dailyUsed, _ := qm.GetDailyUsage(ctx, ownerID, poolType)
+		if dailyUsed >= ua.DailyBurst {
+			slog.Warn("[QuotaManager] Daily burst limit exceeded",
+				"owner_id", ownerID,
+				"daily_used", dailyUsed,
+				"daily_burst_limit", ua.DailyBurst,
+			)
+			return false, ErrDailyBurstExceeded
+		}
+	}
+	if poolType == "yunwu" && ua.DailyBurstMicroUSD > 0 {
+		key := fmt.Sprintf("ash:daily_usage_micro_usd:%s:%s", ownerID, time.Now().UTC().Format("2006-01-02"))
+		used, _ := qm.store.Redis().Get(ctx, key).Int64()
+		if used >= ua.DailyBurstMicroUSD {
+			return false, ErrDailyBurstExceeded
+		}
+	}
+	if poolType == "standard" && ua.MonthlyLimit > 0 && ua.UsedUnits >= ua.MonthlyLimit {
+		return false, ErrQuotaExceeded
+	}
+	if poolType == "yunwu" && ua.MonthlyLimitMicroUSD > 0 && ua.UsedMicroUSD >= ua.MonthlyLimitMicroUSD {
+		return false, ErrQuotaExceeded
+	}
+
+	dynLimitPerWeight, err := qm.GetDynamicLimitPerWeight(ctx, scope)
 	if err != nil {
 		slog.Error("[QuotaManager] Failed to compute dynamic pool limit", "error", err)
 		return false, err
@@ -147,14 +297,44 @@ func (qm *QuotaManager) CheckQuota(ctx context.Context, ownerID string, poolType
 		dynLimit = NodeCapacity * int64(priority)
 	}
 
-	limit := dynLimit
-	if ua.MonthlyLimit > 0 {
-		if dynLimit > ua.MonthlyLimit {
-			limit = ua.MonthlyLimit
+	limit, used := dynLimit, ua.UsedUnits
+	if scope != poolType {
+		var usageErr error
+		used, usageErr = qm.store.Redis().Get(ctx, usageKey(ownerID, scope)).Int64()
+		if usageErr == redis.Nil && qm.store.DB() != nil {
+			provider := scope[len("standard:"):]
+			var sum []struct {
+				Cost int64 `json:"cost"`
+			}
+			start := time.Date(time.Now().UTC().Year(), time.Now().UTC().Month(), 1, 0, 0, 0, 0, time.UTC)
+			_ = qm.store.DB().AshUsage.Query().Where(ashusage.OwnerID(ownerID), ashusage.PoolType("standard"), ashusage.Provider(provider), ashusage.CreatedAtGTE(start)).Aggregate(ent.As(ent.Sum(ashusage.FieldCostUnits), "cost")).Scan(ctx, &sum)
+			if len(sum) > 0 {
+				used = sum[0].Cost
+			}
+			_ = qm.store.Redis().Set(ctx, usageKey(ownerID, scope), used, 35*24*time.Hour).Err()
 		}
 	}
+	if poolType == "yunwu" {
+		used = ua.UsedMicroUSD
+	}
 
-	if ua.UsedUnits >= limit {
+	warningLimit := limit
+	if poolType == "standard" && ua.MonthlyLimit > 0 && ua.MonthlyLimit < warningLimit {
+		warningLimit = ua.MonthlyLimit
+	}
+	if float64(used) >= float64(warningLimit)*0.8 && float64(used) < float64(warningLimit) {
+		slog.Warn("[QuotaManager] Quota warning: user approaching quota limit",
+			"owner_id", ownerID,
+			"used_units", used,
+			"fair_use_limit", warningLimit,
+		)
+		_, _ = qm.store.LogEvent(ctx, ownerID, nil, nil, "QuotaWarning", map[string]any{
+			"used_units":     used,
+			"fair_use_limit": warningLimit,
+		})
+	}
+
+	if used >= limit {
 		slog.Warn("[QuotaManager] User quota exceeded",
 			"owner_id", ownerID,
 			"used_units", ua.UsedUnits,
@@ -176,23 +356,23 @@ func (qm *QuotaManager) CheckQuota(ctx context.Context, ownerID string, poolType
 // This prevents bypassing the quota system via high-concurrency bursts (TOCTOU attacks).
 func (qm *QuotaManager) AcquireConcurrentSlot(ctx context.Context, ownerID string, poolType string) error {
 	key := fmt.Sprintf("ash:concurrent_reqs:%s:%s", poolType, ownerID)
-	
+
 	// Increment active requests
 	count, err := qm.store.Redis().Incr(ctx, key).Result()
 	if err != nil {
 		return err
 	}
-	
+
 	// Ensure cleanup if process crashes (5 mins is longer than max request time)
 	qm.store.Redis().Expire(ctx, key, 5*time.Minute)
-	
+
 	// Hard limit of 5 concurrent requests for Fair Use stop-loss
 	if count > 5 {
 		qm.store.Redis().Decr(ctx, key)
 		slog.Warn("[QuotaManager] Concurrent request limit exceeded", "owner_id", ownerID, "active", count)
 		return errors.New("concurrent request limit exceeded (max 5)")
 	}
-	
+
 	return nil
 }
 
@@ -202,47 +382,58 @@ func (qm *QuotaManager) ReleaseConcurrentSlot(ctx context.Context, ownerID strin
 }
 
 func (qm *QuotaManager) ConsumeQuota(ctx context.Context, ownerID string, poolType string, units int64) error {
-	lockKey := fmt.Sprintf("ash:lock:quota:%s:%s", poolType, ownerID)
-
-	// Acquire lock with timeout
-	locked := false
-	for i := 0; i < 50; i++ {
-		ok, err := qm.store.Redis().SetNX(ctx, lockKey, "1", 5*time.Second).Result()
-		if err == nil && ok {
-			locked = true
-			break
-		}
-		time.Sleep(100 * time.Millisecond)
+	if units <= 0 {
+		return nil
 	}
 
-	if !locked {
-		slog.Error("[QuotaManager] Timeout acquiring quota lock", "owner_id", ownerID)
-		return errors.New("timeout acquiring quota lock")
-	}
-	defer qm.store.Redis().Del(context.Background(), lockKey)
-
-	ua, err := qm.GetUserAccess(ctx, ownerID, poolType)
+	usedKey := usageKey(ownerID, poolType)
+	newUsed, err := qm.store.Redis().IncrBy(ctx, usedKey, units).Result()
 	if err != nil {
+		slog.Error("[QuotaManager] Failed to increment used units", "owner_id", ownerID, "error", err)
 		return err
 	}
 
-	ua.UsedUnits += units
-	
-	// Track historical global usage for Yunwu to prevent the shrinking pool double-penalty
-	if poolType == "yunwu" {
-		qm.store.Redis().IncrBy(ctx, "ash:yunwu:total_used", units)
-	}
+	// Increment daily usage for DailyBurst enforcement
+	today := time.Now().Format("2006-01-02")
+	dailyKey := fmt.Sprintf("ash:daily_usage:%s:%s:%s", ownerID, poolType, today)
+	_ = qm.store.Redis().IncrBy(ctx, dailyKey, units).Err()
+	qm.store.Redis().Expire(ctx, dailyKey, 25*time.Hour)
 
-	err = qm.SaveUserAccess(ctx, ua, poolType)
-	if err == nil {
-		slog.Info("[QuotaManager] Consumed quota",
-			"owner_id", ownerID,
-			"pool_type", poolType,
-			"deducted_tokens", units,
-			"new_used_balance", ua.UsedUnits,
-		)
+	// Update cached UserAccess struct if present
+	if !(len(poolType) > len("standard:") && poolType[:len("standard:")] == "standard:") {
+		ua, getErr := qm.GetUserAccess(ctx, ownerID, poolType)
+		if getErr == nil && ua != nil {
+			ua.UsedUnits = newUsed
+			_ = qm.SaveUserAccess(ctx, ua, poolType)
+		}
 	}
-	return err
+	slog.Info("[QuotaManager] Consumed quota",
+		"owner_id", ownerID,
+		"pool_type", poolType,
+		"deducted_tokens", units,
+		"new_used_balance", newUsed,
+	)
+	return nil
+}
+
+func (qm *QuotaManager) ConsumeMicroUSD(ctx context.Context, ownerID string, microUSD int64) error {
+	if microUSD <= 0 {
+		return nil
+	}
+	newUsed, err := qm.store.Redis().IncrBy(ctx, moneyUsageKey(ownerID), microUSD).Result()
+	if err != nil {
+		return err
+	}
+	_ = qm.store.Redis().IncrBy(ctx, fmt.Sprintf("ash:yunwu:pool_used_micro_usd:%s", monthKey()), microUSD).Err()
+	today := time.Now().UTC().Format("2006-01-02")
+	key := fmt.Sprintf("ash:daily_usage_micro_usd:%s:%s", ownerID, today)
+	_ = qm.store.Redis().IncrBy(ctx, key, microUSD).Err()
+	_ = qm.store.Redis().Expire(ctx, key, 49*time.Hour).Err()
+	if ua, getErr := qm.GetUserAccess(ctx, ownerID, "yunwu"); getErr == nil {
+		ua.UsedMicroUSD = newUsed
+		_ = qm.SaveUserAccess(ctx, ua, "yunwu")
+	}
+	return nil
 }
 
 func (qm *QuotaManager) RegisterActiveUser(ctx context.Context, ownerID string, poolType string, priority int) error {
@@ -250,10 +441,15 @@ func (qm *QuotaManager) RegisterActiveUser(ctx context.Context, ownerID string, 
 		priority = 1
 	}
 	key := fmt.Sprintf("ash:active_users:%s", poolType)
-	return qm.store.Redis().ZAdd(ctx, key, redis.Z{
-		Score:  float64(priority),
+	pipe := qm.store.Redis().TxPipeline()
+	pipe.ZAdd(ctx, key, redis.Z{
+		Score:  float64(time.Now().Unix()),
 		Member: ownerID,
-	}).Err()
+	})
+	pipe.HSet(ctx, fmt.Sprintf("ash:active_user_priority:%s", poolType), ownerID, priority)
+	pipe.Del(ctx, fmt.Sprintf("ash:quota_limit_cache:%s", poolType), "ash:quota_limit_cache:standard:anthropic", "ash:quota_limit_cache:standard:openai")
+	_, err := pipe.Exec(ctx)
+	return err
 }
 
 func (qm *QuotaManager) RegisterNode(ctx context.Context, nodeID string) error {
@@ -269,13 +465,32 @@ func (qm *QuotaManager) GetDynamicLimitPerWeight(ctx context.Context, poolType s
 		}
 	}
 
-	// Calculate total weights of active users in this pool
-	activeUsersKey := fmt.Sprintf("ash:active_users:%s", poolType)
+	activePool := poolType
+	if len(poolType) > len("standard:") && poolType[:len("standard:")] == "standard:" {
+		activePool = "standard"
+	}
+	activeUsersKey := fmt.Sprintf("ash:active_users:%s", activePool)
+	window := int64(qm.cfg.ActiveUserWindowSeconds)
+	cutoff := strconv.FormatInt(time.Now().Unix()-window, 10)
+	expired, _ := qm.store.Redis().ZRangeByScore(ctx, activeUsersKey, &redis.ZRangeBy{Min: "-inf", Max: cutoff}).Result()
+	pipe := qm.store.Redis().TxPipeline()
+	pipe.ZRemRangeByScore(ctx, activeUsersKey, "-inf", cutoff)
+	if len(expired) > 0 {
+		pipe.HDel(ctx, fmt.Sprintf("ash:active_user_priority:%s", activePool), expired...)
+	}
+	_, _ = pipe.Exec(ctx)
 	members, err := qm.store.Redis().ZRangeWithScores(ctx, activeUsersKey, 0, -1).Result()
-	
+	if err != nil {
+		return 0, err
+	}
+
 	var totalWeights float64 = 0
 	for _, m := range members {
-		totalWeights += m.Score
+		priority, pErr := qm.store.Redis().HGet(ctx, fmt.Sprintf("ash:active_user_priority:%s", activePool), fmt.Sprint(m.Member)).Int()
+		if pErr != nil || priority <= 0 {
+			priority = 1
+		}
+		totalWeights += float64(priority)
 	}
 
 	if totalWeights == 0 {
@@ -285,16 +500,24 @@ func (qm *QuotaManager) GetDynamicLimitPerWeight(ctx context.Context, poolType s
 	// Fetch all active nodes
 	var nodeIDs []int64
 	if qm.store.DB() != nil {
+		providers := []string{"anthropic", "openai"}
+		if len(poolType) > len("standard:") && poolType[:len("standard:")] == "standard:" {
+			providers = []string{poolType[len("standard:"):]}
+		}
+		if poolType == "yunwu" {
+			providers = []string{"yunwu"}
+		}
 		_ = qm.store.DB().Account.Query().
 			Where(
-				account.PlatformIn("anthropic", "openai"),
+				account.PlatformIn(providers...),
 				account.Status("active"),
+				account.Schedulable(true),
 			).
 			Select(account.FieldID).
 			Scan(ctx, &nodeIDs)
 	}
 
-	if len(nodeIDs) == 0 {
+	if len(nodeIDs) == 0 && qm.cfg.EnableMockRuntime {
 		strIDs, _ := qm.store.Redis().SMembers(ctx, "ash:nodes").Result()
 		for _, sid := range strIDs {
 			var id int64
@@ -306,35 +529,47 @@ func (qm *QuotaManager) GetDynamicLimitPerWeight(ctx context.Context, poolType s
 		}
 	}
 
-	var totalCapacityUnits int64 = 0
-
-	for _, id := range nodeIDs {
-		// Try to fetch credit from redis (for Yunwu accounts)
-		valStr, err := qm.store.Redis().Get(ctx, fmt.Sprintf("ash:yunwu:credit:%d", id)).Result()
-		isYunwu := err == nil && valStr != ""
-
-		if poolType == "yunwu" {
-			if isYunwu {
-				var val float64
-				if _, scanErr := fmt.Sscanf(valStr, "%f", &val); scanErr == nil {
-					totalCapacityUnits += int64(val * 1_000_000)
+	var totalCapacityUnits int64
+	if poolType == "yunwu" {
+		keys, _ := qm.store.Redis().Keys(ctx, "ash:yunwu:balance:*").Result()
+		var remaining int64
+		for _, key := range keys {
+			var snap struct {
+				AvailableMicroUSD          int64     `json:"available_micro_usd"`
+				EstimatedAvailableMicroUSD int64     `json:"estimated_available_micro_usd"`
+				ReserveMicroUSD            int64     `json:"reserve_micro_usd"`
+				SynchronizedAt             time.Time `json:"synchronized_at"`
+				Status                     string    `json:"status"`
+			}
+			if data, e := qm.store.Redis().Get(ctx, key).Bytes(); e == nil && json.Unmarshal(data, &snap) == nil && snap.Status == "fresh" && time.Since(snap.SynchronizedAt) <= time.Duration(qm.cfg.YunwuBalanceStaleSeconds)*time.Second {
+				available := snap.EstimatedAvailableMicroUSD
+				if available == 0 {
+					available = snap.AvailableMicroUSD
+				}
+				if snap.ReserveMicroUSD > 0 {
+					available -= snap.ReserveMicroUSD
+				}
+				if available > 0 {
+					remaining += available
 				}
 			}
-		} else if poolType == "standard" {
-			if !isYunwu {
-				totalCapacityUnits += NodeCapacity
-			}
 		}
+		localUsed, _ := qm.store.Redis().Get(ctx, fmt.Sprintf("ash:yunwu:pool_used_micro_usd:%s", monthKey())).Int64()
+		totalCapacityUnits = remaining + localUsed
 	}
 
-	// For Yunwu, add historical usage to prevent double-penalty shrinking pool
-	if poolType == "yunwu" {
-		totalUsed, _ := qm.store.Redis().Get(ctx, "ash:yunwu:total_used").Int64()
-		totalCapacityUnits += totalUsed
+	for _, id := range nodeIDs {
+		if poolType != "yunwu" {
+			totalCapacityUnits += NodeCapacity
+		}
+		_ = id
 	}
-
 	if totalCapacityUnits == 0 {
-		totalCapacityUnits = NodeCapacity
+		if poolType == "standard" && qm.cfg.EnableMockRuntime {
+			totalCapacityUnits = NodeCapacity
+		} else {
+			return 0, fmt.Errorf("no healthy %s nodes", providerName(poolType))
+		}
 	}
 
 	limitPerWeight := totalCapacityUnits / int64(totalWeights)
@@ -343,4 +578,11 @@ func (qm *QuotaManager) GetDynamicLimitPerWeight(ctx context.Context, poolType s
 	_ = qm.store.Redis().SetEx(ctx, cacheKey, limitPerWeight, 60*time.Second).Err()
 
 	return limitPerWeight, nil
+}
+
+func providerName(scope string) string {
+	if len(scope) > len("standard:") && scope[:len("standard:")] == "standard:" {
+		return scope[len("standard:"):]
+	}
+	return scope
 }

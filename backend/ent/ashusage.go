@@ -29,6 +29,16 @@ type AshUsage struct {
 	OutputTokens int64 `json:"output_tokens,omitempty"`
 	// CostUnits holds the value of the "cost_units" field.
 	CostUnits int64 `json:"cost_units,omitempty"`
+	// PoolType holds the value of the "pool_type" field.
+	PoolType string `json:"pool_type,omitempty"`
+	// Provider holds the value of the "provider" field.
+	Provider string `json:"provider,omitempty"`
+	// Model holds the value of the "model" field.
+	Model string `json:"model,omitempty"`
+	// UsageUnit holds the value of the "usage_unit" field.
+	UsageUnit string `json:"usage_unit,omitempty"`
+	// BilledMicroUsd holds the value of the "billed_micro_usd" field.
+	BilledMicroUsd int64 `json:"billed_micro_usd,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
 	CreatedAt    time.Time `json:"created_at,omitempty"`
 	selectValues sql.SelectValues
@@ -39,9 +49,9 @@ func (*AshUsage) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case ashusage.FieldID, ashusage.FieldInputTokens, ashusage.FieldOutputTokens, ashusage.FieldCostUnits:
+		case ashusage.FieldID, ashusage.FieldInputTokens, ashusage.FieldOutputTokens, ashusage.FieldCostUnits, ashusage.FieldBilledMicroUsd:
 			values[i] = new(sql.NullInt64)
-		case ashusage.FieldOwnerID, ashusage.FieldSessionID, ashusage.FieldNodeID:
+		case ashusage.FieldOwnerID, ashusage.FieldSessionID, ashusage.FieldNodeID, ashusage.FieldPoolType, ashusage.FieldProvider, ashusage.FieldModel, ashusage.FieldUsageUnit:
 			values[i] = new(sql.NullString)
 		case ashusage.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
@@ -103,6 +113,36 @@ func (_m *AshUsage) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field cost_units", values[i])
 			} else if value.Valid {
 				_m.CostUnits = value.Int64
+			}
+		case ashusage.FieldPoolType:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field pool_type", values[i])
+			} else if value.Valid {
+				_m.PoolType = value.String
+			}
+		case ashusage.FieldProvider:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field provider", values[i])
+			} else if value.Valid {
+				_m.Provider = value.String
+			}
+		case ashusage.FieldModel:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field model", values[i])
+			} else if value.Valid {
+				_m.Model = value.String
+			}
+		case ashusage.FieldUsageUnit:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field usage_unit", values[i])
+			} else if value.Valid {
+				_m.UsageUnit = value.String
+			}
+		case ashusage.FieldBilledMicroUsd:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field billed_micro_usd", values[i])
+			} else if value.Valid {
+				_m.BilledMicroUsd = value.Int64
 			}
 		case ashusage.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
@@ -167,6 +207,21 @@ func (_m *AshUsage) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("cost_units=")
 	builder.WriteString(fmt.Sprintf("%v", _m.CostUnits))
+	builder.WriteString(", ")
+	builder.WriteString("pool_type=")
+	builder.WriteString(_m.PoolType)
+	builder.WriteString(", ")
+	builder.WriteString("provider=")
+	builder.WriteString(_m.Provider)
+	builder.WriteString(", ")
+	builder.WriteString("model=")
+	builder.WriteString(_m.Model)
+	builder.WriteString(", ")
+	builder.WriteString("usage_unit=")
+	builder.WriteString(_m.UsageUnit)
+	builder.WriteString(", ")
+	builder.WriteString("billed_micro_usd=")
+	builder.WriteString(fmt.Sprintf("%v", _m.BilledMicroUsd))
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
 	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))

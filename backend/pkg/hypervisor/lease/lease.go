@@ -50,10 +50,20 @@ func (lm *LeaseManager) SaveLease(ctx context.Context, l *Lease) error {
 			return nil // Already expired, don't write
 		}
 	}
-	return lm.store.Redis().Set(ctx, key, data, ttl).Err()
+	err = lm.store.Redis().Set(ctx, key, data, ttl).Err()
+	if err == nil {
+		_, _ = lm.store.LogEvent(ctx, "system", &l.SessionID, &l.NodeID, "LeaseGranted", map[string]any{
+			"lease_id": l.LeaseID,
+		})
+	}
+	return err
 }
 
 func (lm *LeaseManager) DeleteLease(ctx context.Context, sessionID string) error {
 	key := storage.LeaseKey(sessionID)
-	return lm.store.Redis().Del(ctx, key).Err()
+	err := lm.store.Redis().Del(ctx, key).Err()
+	if err == nil {
+		_, _ = lm.store.LogEvent(ctx, "system", &sessionID, nil, "LeaseReleased", nil)
+	}
+	return err
 }

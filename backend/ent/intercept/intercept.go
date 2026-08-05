@@ -17,6 +17,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/ashevent"
 	"github.com/Wei-Shaw/sub2api/ent/ashsession"
 	"github.com/Wei-Shaw/sub2api/ent/ashusage"
+	"github.com/Wei-Shaw/sub2api/ent/ashuserpolicy"
 	"github.com/Wei-Shaw/sub2api/ent/authidentity"
 	"github.com/Wei-Shaw/sub2api/ent/authidentitychannel"
 	"github.com/Wei-Shaw/sub2api/ent/channelmonitor"
@@ -346,6 +347,33 @@ func (f TraverseAshUsage) Traverse(ctx context.Context, q ent.Query) error {
 		return f(ctx, q)
 	}
 	return fmt.Errorf("unexpected query type %T. expect *ent.AshUsageQuery", q)
+}
+
+// The AshUserPolicyFunc type is an adapter to allow the use of ordinary function as a Querier.
+type AshUserPolicyFunc func(context.Context, *ent.AshUserPolicyQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f AshUserPolicyFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.AshUserPolicyQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.AshUserPolicyQuery", q)
+}
+
+// The TraverseAshUserPolicy type is an adapter to allow the use of ordinary function as Traverser.
+type TraverseAshUserPolicy func(context.Context, *ent.AshUserPolicyQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraverseAshUserPolicy) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraverseAshUserPolicy) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.AshUserPolicyQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.AshUserPolicyQuery", q)
 }
 
 // The AuthIdentityFunc type is an adapter to allow the use of ordinary function as a Querier.
@@ -1152,6 +1180,8 @@ func NewQuery(q ent.Query) (Query, error) {
 		return &query[*ent.AshSessionQuery, predicate.AshSession, ashsession.OrderOption]{typ: ent.TypeAshSession, tq: q}, nil
 	case *ent.AshUsageQuery:
 		return &query[*ent.AshUsageQuery, predicate.AshUsage, ashusage.OrderOption]{typ: ent.TypeAshUsage, tq: q}, nil
+	case *ent.AshUserPolicyQuery:
+		return &query[*ent.AshUserPolicyQuery, predicate.AshUserPolicy, ashuserpolicy.OrderOption]{typ: ent.TypeAshUserPolicy, tq: q}, nil
 	case *ent.AuthIdentityQuery:
 		return &query[*ent.AuthIdentityQuery, predicate.AuthIdentity, authidentity.OrderOption]{typ: ent.TypeAuthIdentity, tq: q}, nil
 	case *ent.AuthIdentityChannelQuery:

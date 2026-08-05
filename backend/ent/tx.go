@@ -32,6 +32,8 @@ type Tx struct {
 	AshSession *AshSessionClient
 	// AshUsage is the client for interacting with the AshUsage builders.
 	AshUsage *AshUsageClient
+	// AshUserPolicy is the client for interacting with the AshUserPolicy builders.
+	AshUserPolicy *AshUserPolicyClient
 	// AuthIdentity is the client for interacting with the AuthIdentity builders.
 	AuthIdentity *AuthIdentityClient
 	// AuthIdentityChannel is the client for interacting with the AuthIdentityChannel builders.
@@ -230,6 +232,7 @@ func (tx *Tx) init() {
 	tx.AshEvent = NewAshEventClient(tx.config)
 	tx.AshSession = NewAshSessionClient(tx.config)
 	tx.AshUsage = NewAshUsageClient(tx.config)
+	tx.AshUserPolicy = NewAshUserPolicyClient(tx.config)
 	tx.AuthIdentity = NewAuthIdentityClient(tx.config)
 	tx.AuthIdentityChannel = NewAuthIdentityChannelClient(tx.config)
 	tx.ChannelMonitor = NewChannelMonitorClient(tx.config)

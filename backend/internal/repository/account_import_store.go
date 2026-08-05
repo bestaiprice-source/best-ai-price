@@ -3,15 +3,17 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"strings"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
+	"github.com/Wei-Shaw/sub2api/internal/credentials"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/lib/pq"
 )
 
-func ProvideAccountImportAccountStore(client *dbent.Client, sqlDB *sql.DB, schedulerCache service.SchedulerCache) service.AccountImportAccountStore {
-	return newAccountRepositoryWithSQL(client, sqlDB, schedulerCache)
+func ProvideAccountImportAccountStore(client *dbent.Client, sqlDB *sql.DB, schedulerCache service.SchedulerCache, encryptor service.SecretEncryptor) service.AccountImportAccountStore {
+	return newAccountRepositoryWithSQL(client, sqlDB, schedulerCache, encryptor)
 }
 
 func (r *accountRepository) CreateImportPlaceholders(ctx context.Context, accounts []*service.Account) error {
@@ -23,12 +25,16 @@ func (r *accountRepository) CreateImportPlaceholders(ctx context.Context, accoun
 		if account == nil {
 			continue
 		}
+		encryptedCredentials, err := credentials.EncryptMap(normalizeJSONMap(account.Credentials), r.encryptor)
+		if err != nil {
+			return fmt.Errorf("encrypt imported account credentials: %w", err)
+		}
 		builder := r.client.Account.Create().
 			SetName(account.Name).
 			SetNillableNotes(account.Notes).
 			SetPlatform(account.Platform).
 			SetType(account.Type).
-			SetCredentials(normalizeJSONMap(account.Credentials)).
+			SetCredentials(encryptedCredentials).
 			SetExtra(normalizeJSONMap(account.Extra)).
 			SetConcurrency(account.Concurrency).
 			SetPriority(account.Priority).

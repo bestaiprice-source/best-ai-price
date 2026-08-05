@@ -46,7 +46,7 @@ func (s *YunwuScheduler) SelectNode(
 
 		// Check credit balance (if tracked)
 		credit, tracked := credits[node.NodeID]
-		if tracked && credit <= 0.01 && len(nodes) > 1 {
+		if !tracked || credit <= 0 {
 			slog.Warn("[YunwuScheduler] Excluding exhausted credit Yunwu node", "node_id", node.NodeID, "available_credit", credit)
 			continue
 		}
@@ -65,15 +65,6 @@ func (s *YunwuScheduler) SelectNode(
 		}
 
 		candidates = append(candidates, node)
-	}
-
-	if len(candidates) == 0 {
-		slog.Warn("[YunwuScheduler] All Yunwu nodes filtered out, relaxing cooldown for pool")
-		for _, node := range nodes {
-			if node.State != "unavailable" {
-				candidates = append(candidates, node)
-			}
-		}
 	}
 
 	if len(candidates) == 0 {

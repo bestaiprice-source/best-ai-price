@@ -25,6 +25,16 @@ const (
 	FieldOutputTokens = "output_tokens"
 	// FieldCostUnits holds the string denoting the cost_units field in the database.
 	FieldCostUnits = "cost_units"
+	// FieldPoolType holds the string denoting the pool_type field in the database.
+	FieldPoolType = "pool_type"
+	// FieldProvider holds the string denoting the provider field in the database.
+	FieldProvider = "provider"
+	// FieldModel holds the string denoting the model field in the database.
+	FieldModel = "model"
+	// FieldUsageUnit holds the string denoting the usage_unit field in the database.
+	FieldUsageUnit = "usage_unit"
+	// FieldBilledMicroUsd holds the string denoting the billed_micro_usd field in the database.
+	FieldBilledMicroUsd = "billed_micro_usd"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
 	FieldCreatedAt = "created_at"
 	// Table holds the table name of the ashusage in the database.
@@ -40,6 +50,11 @@ var Columns = []string{
 	FieldInputTokens,
 	FieldOutputTokens,
 	FieldCostUnits,
+	FieldPoolType,
+	FieldProvider,
+	FieldModel,
+	FieldUsageUnit,
+	FieldBilledMicroUsd,
 	FieldCreatedAt,
 }
 
@@ -66,6 +81,16 @@ var (
 	DefaultOutputTokens int64
 	// DefaultCostUnits holds the default value on creation for the "cost_units" field.
 	DefaultCostUnits int64
+	// DefaultPoolType holds the default value on creation for the "pool_type" field.
+	DefaultPoolType string
+	// DefaultProvider holds the default value on creation for the "provider" field.
+	DefaultProvider string
+	// DefaultModel holds the default value on creation for the "model" field.
+	DefaultModel string
+	// DefaultUsageUnit holds the default value on creation for the "usage_unit" field.
+	DefaultUsageUnit string
+	// DefaultBilledMicroUsd holds the default value on creation for the "billed_micro_usd" field.
+	DefaultBilledMicroUsd int64
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
 	DefaultCreatedAt func() time.Time
 )
@@ -106,6 +131,31 @@ func ByOutputTokens(opts ...sql.OrderTermOption) OrderOption {
 // ByCostUnits orders the results by the cost_units field.
 func ByCostUnits(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldCostUnits, opts...).ToFunc()
+}
+
+// ByPoolType orders the results by the pool_type field.
+func ByPoolType(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPoolType, opts...).ToFunc()
+}
+
+// ByProvider orders the results by the provider field.
+func ByProvider(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldProvider, opts...).ToFunc()
+}
+
+// ByModel orders the results by the model field.
+func ByModel(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldModel, opts...).ToFunc()
+}
+
+// ByUsageUnit orders the results by the usage_unit field.
+func ByUsageUnit(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldUsageUnit, opts...).ToFunc()
+}
+
+// ByBilledMicroUsd orders the results by the billed_micro_usd field.
+func ByBilledMicroUsd(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldBilledMicroUsd, opts...).ToFunc()
 }
 
 // ByCreatedAt orders the results by the created_at field.

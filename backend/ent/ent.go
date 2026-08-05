@@ -21,6 +21,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/ashevent"
 	"github.com/Wei-Shaw/sub2api/ent/ashsession"
 	"github.com/Wei-Shaw/sub2api/ent/ashusage"
+	"github.com/Wei-Shaw/sub2api/ent/ashuserpolicy"
 	"github.com/Wei-Shaw/sub2api/ent/authidentity"
 	"github.com/Wei-Shaw/sub2api/ent/authidentitychannel"
 	"github.com/Wei-Shaw/sub2api/ent/channelmonitor"
@@ -119,6 +120,7 @@ func checkColumn(t, c string) error {
 			ashevent.Table:                      ashevent.ValidColumn,
 			ashsession.Table:                    ashsession.ValidColumn,
 			ashusage.Table:                      ashusage.ValidColumn,
+			ashuserpolicy.Table:                 ashuserpolicy.ValidColumn,
 			authidentity.Table:                  authidentity.ValidColumn,
 			authidentitychannel.Table:           authidentitychannel.ValidColumn,
 			channelmonitor.Table:                channelmonitor.ValidColumn,

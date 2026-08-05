@@ -84,6 +84,31 @@ func CostUnits(v int64) predicate.AshUsage {
 	return predicate.AshUsage(sql.FieldEQ(FieldCostUnits, v))
 }
 
+// PoolType applies equality check predicate on the "pool_type" field. It's identical to PoolTypeEQ.
+func PoolType(v string) predicate.AshUsage {
+	return predicate.AshUsage(sql.FieldEQ(FieldPoolType, v))
+}
+
+// Provider applies equality check predicate on the "provider" field. It's identical to ProviderEQ.
+func Provider(v string) predicate.AshUsage {
+	return predicate.AshUsage(sql.FieldEQ(FieldProvider, v))
+}
+
+// Model applies equality check predicate on the "model" field. It's identical to ModelEQ.
+func Model(v string) predicate.AshUsage {
+	return predicate.AshUsage(sql.FieldEQ(FieldModel, v))
+}
+
+// UsageUnit applies equality check predicate on the "usage_unit" field. It's identical to UsageUnitEQ.
+func UsageUnit(v string) predicate.AshUsage {
+	return predicate.AshUsage(sql.FieldEQ(FieldUsageUnit, v))
+}
+
+// BilledMicroUsd applies equality check predicate on the "billed_micro_usd" field. It's identical to BilledMicroUsdEQ.
+func BilledMicroUsd(v int64) predicate.AshUsage {
+	return predicate.AshUsage(sql.FieldEQ(FieldBilledMicroUsd, v))
+}
+
 // CreatedAt applies equality check predicate on the "created_at" field. It's identical to CreatedAtEQ.
 func CreatedAt(v time.Time) predicate.AshUsage {
 	return predicate.AshUsage(sql.FieldEQ(FieldCreatedAt, v))
@@ -422,6 +447,306 @@ func CostUnitsLT(v int64) predicate.AshUsage {
 // CostUnitsLTE applies the LTE predicate on the "cost_units" field.
 func CostUnitsLTE(v int64) predicate.AshUsage {
 	return predicate.AshUsage(sql.FieldLTE(FieldCostUnits, v))
+}
+
+// PoolTypeEQ applies the EQ predicate on the "pool_type" field.
+func PoolTypeEQ(v string) predicate.AshUsage {
+	return predicate.AshUsage(sql.FieldEQ(FieldPoolType, v))
+}
+
+// PoolTypeNEQ applies the NEQ predicate on the "pool_type" field.
+func PoolTypeNEQ(v string) predicate.AshUsage {
+	return predicate.AshUsage(sql.FieldNEQ(FieldPoolType, v))
+}
+
+// PoolTypeIn applies the In predicate on the "pool_type" field.
+func PoolTypeIn(vs ...string) predicate.AshUsage {
+	return predicate.AshUsage(sql.FieldIn(FieldPoolType, vs...))
+}
+
+// PoolTypeNotIn applies the NotIn predicate on the "pool_type" field.
+func PoolTypeNotIn(vs ...string) predicate.AshUsage {
+	return predicate.AshUsage(sql.FieldNotIn(FieldPoolType, vs...))
+}
+
+// PoolTypeGT applies the GT predicate on the "pool_type" field.
+func PoolTypeGT(v string) predicate.AshUsage {
+	return predicate.AshUsage(sql.FieldGT(FieldPoolType, v))
+}
+
+// PoolTypeGTE applies the GTE predicate on the "pool_type" field.
+func PoolTypeGTE(v string) predicate.AshUsage {
+	return predicate.AshUsage(sql.FieldGTE(FieldPoolType, v))
+}
+
+// PoolTypeLT applies the LT predicate on the "pool_type" field.
+func PoolTypeLT(v string) predicate.AshUsage {
+	return predicate.AshUsage(sql.FieldLT(FieldPoolType, v))
+}
+
+// PoolTypeLTE applies the LTE predicate on the "pool_type" field.
+func PoolTypeLTE(v string) predicate.AshUsage {
+	return predicate.AshUsage(sql.FieldLTE(FieldPoolType, v))
+}
+
+// PoolTypeContains applies the Contains predicate on the "pool_type" field.
+func PoolTypeContains(v string) predicate.AshUsage {
+	return predicate.AshUsage(sql.FieldContains(FieldPoolType, v))
+}
+
+// PoolTypeHasPrefix applies the HasPrefix predicate on the "pool_type" field.
+func PoolTypeHasPrefix(v string) predicate.AshUsage {
+	return predicate.AshUsage(sql.FieldHasPrefix(FieldPoolType, v))
+}
+
+// PoolTypeHasSuffix applies the HasSuffix predicate on the "pool_type" field.
+func PoolTypeHasSuffix(v string) predicate.AshUsage {
+	return predicate.AshUsage(sql.FieldHasSuffix(FieldPoolType, v))
+}
+
+// PoolTypeEqualFold applies the EqualFold predicate on the "pool_type" field.
+func PoolTypeEqualFold(v string) predicate.AshUsage {
+	return predicate.AshUsage(sql.FieldEqualFold(FieldPoolType, v))
+}
+
+// PoolTypeContainsFold applies the ContainsFold predicate on the "pool_type" field.
+func PoolTypeContainsFold(v string) predicate.AshUsage {
+	return predicate.AshUsage(sql.FieldContainsFold(FieldPoolType, v))
+}
+
+// ProviderEQ applies the EQ predicate on the "provider" field.
+func ProviderEQ(v string) predicate.AshUsage {
+	return predicate.AshUsage(sql.FieldEQ(FieldProvider, v))
+}
+
+// ProviderNEQ applies the NEQ predicate on the "provider" field.
+func ProviderNEQ(v string) predicate.AshUsage {
+	return predicate.AshUsage(sql.FieldNEQ(FieldProvider, v))
+}
+
+// ProviderIn applies the In predicate on the "provider" field.
+func ProviderIn(vs ...string) predicate.AshUsage {
+	return predicate.AshUsage(sql.FieldIn(FieldProvider, vs...))
+}
+
+// ProviderNotIn applies the NotIn predicate on the "provider" field.
+func ProviderNotIn(vs ...string) predicate.AshUsage {
+	return predicate.AshUsage(sql.FieldNotIn(FieldProvider, vs...))
+}
+
+// ProviderGT applies the GT predicate on the "provider" field.
+func ProviderGT(v string) predicate.AshUsage {
+	return predicate.AshUsage(sql.FieldGT(FieldProvider, v))
+}
+
+// ProviderGTE applies the GTE predicate on the "provider" field.
+func ProviderGTE(v string) predicate.AshUsage {
+	return predicate.AshUsage(sql.FieldGTE(FieldProvider, v))
+}
+
+// ProviderLT applies the LT predicate on the "provider" field.
+func ProviderLT(v string) predicate.AshUsage {
+	return predicate.AshUsage(sql.FieldLT(FieldProvider, v))
+}
+
+// ProviderLTE applies the LTE predicate on the "provider" field.
+func ProviderLTE(v string) predicate.AshUsage {
+	return predicate.AshUsage(sql.FieldLTE(FieldProvider, v))
+}
+
+// ProviderContains applies the Contains predicate on the "provider" field.
+func ProviderContains(v string) predicate.AshUsage {
+	return predicate.AshUsage(sql.FieldContains(FieldProvider, v))
+}
+
+// ProviderHasPrefix applies the HasPrefix predicate on the "provider" field.
+func ProviderHasPrefix(v string) predicate.AshUsage {
+	return predicate.AshUsage(sql.FieldHasPrefix(FieldProvider, v))
+}
+
+// ProviderHasSuffix applies the HasSuffix predicate on the "provider" field.
+func ProviderHasSuffix(v string) predicate.AshUsage {
+	return predicate.AshUsage(sql.FieldHasSuffix(FieldProvider, v))
+}
+
+// ProviderEqualFold applies the EqualFold predicate on the "provider" field.
+func ProviderEqualFold(v string) predicate.AshUsage {
+	return predicate.AshUsage(sql.FieldEqualFold(FieldProvider, v))
+}
+
+// ProviderContainsFold applies the ContainsFold predicate on the "provider" field.
+func ProviderContainsFold(v string) predicate.AshUsage {
+	return predicate.AshUsage(sql.FieldContainsFold(FieldProvider, v))
+}
+
+// ModelEQ applies the EQ predicate on the "model" field.
+func ModelEQ(v string) predicate.AshUsage {
+	return predicate.AshUsage(sql.FieldEQ(FieldModel, v))
+}
+
+// ModelNEQ applies the NEQ predicate on the "model" field.
+func ModelNEQ(v string) predicate.AshUsage {
+	return predicate.AshUsage(sql.FieldNEQ(FieldModel, v))
+}
+
+// ModelIn applies the In predicate on the "model" field.
+func ModelIn(vs ...string) predicate.AshUsage {
+	return predicate.AshUsage(sql.FieldIn(FieldModel, vs...))
+}
+
+// ModelNotIn applies the NotIn predicate on the "model" field.
+func ModelNotIn(vs ...string) predicate.AshUsage {
+	return predicate.AshUsage(sql.FieldNotIn(FieldModel, vs...))
+}
+
+// ModelGT applies the GT predicate on the "model" field.
+func ModelGT(v string) predicate.AshUsage {
+	return predicate.AshUsage(sql.FieldGT(FieldModel, v))
+}
+
+// ModelGTE applies the GTE predicate on the "model" field.
+func ModelGTE(v string) predicate.AshUsage {
+	return predicate.AshUsage(sql.FieldGTE(FieldModel, v))
+}
+
+// ModelLT applies the LT predicate on the "model" field.
+func ModelLT(v string) predicate.AshUsage {
+	return predicate.AshUsage(sql.FieldLT(FieldModel, v))
+}
+
+// ModelLTE applies the LTE predicate on the "model" field.
+func ModelLTE(v string) predicate.AshUsage {
+	return predicate.AshUsage(sql.FieldLTE(FieldModel, v))
+}
+
+// ModelContains applies the Contains predicate on the "model" field.
+func ModelContains(v string) predicate.AshUsage {
+	return predicate.AshUsage(sql.FieldContains(FieldModel, v))
+}
+
+// ModelHasPrefix applies the HasPrefix predicate on the "model" field.
+func ModelHasPrefix(v string) predicate.AshUsage {
+	return predicate.AshUsage(sql.FieldHasPrefix(FieldModel, v))
+}
+
+// ModelHasSuffix applies the HasSuffix predicate on the "model" field.
+func ModelHasSuffix(v string) predicate.AshUsage {
+	return predicate.AshUsage(sql.FieldHasSuffix(FieldModel, v))
+}
+
+// ModelEqualFold applies the EqualFold predicate on the "model" field.
+func ModelEqualFold(v string) predicate.AshUsage {
+	return predicate.AshUsage(sql.FieldEqualFold(FieldModel, v))
+}
+
+// ModelContainsFold applies the ContainsFold predicate on the "model" field.
+func ModelContainsFold(v string) predicate.AshUsage {
+	return predicate.AshUsage(sql.FieldContainsFold(FieldModel, v))
+}
+
+// UsageUnitEQ applies the EQ predicate on the "usage_unit" field.
+func UsageUnitEQ(v string) predicate.AshUsage {
+	return predicate.AshUsage(sql.FieldEQ(FieldUsageUnit, v))
+}
+
+// UsageUnitNEQ applies the NEQ predicate on the "usage_unit" field.
+func UsageUnitNEQ(v string) predicate.AshUsage {
+	return predicate.AshUsage(sql.FieldNEQ(FieldUsageUnit, v))
+}
+
+// UsageUnitIn applies the In predicate on the "usage_unit" field.
+func UsageUnitIn(vs ...string) predicate.AshUsage {
+	return predicate.AshUsage(sql.FieldIn(FieldUsageUnit, vs...))
+}
+
+// UsageUnitNotIn applies the NotIn predicate on the "usage_unit" field.
+func UsageUnitNotIn(vs ...string) predicate.AshUsage {
+	return predicate.AshUsage(sql.FieldNotIn(FieldUsageUnit, vs...))
+}
+
+// UsageUnitGT applies the GT predicate on the "usage_unit" field.
+func UsageUnitGT(v string) predicate.AshUsage {
+	return predicate.AshUsage(sql.FieldGT(FieldUsageUnit, v))
+}
+
+// UsageUnitGTE applies the GTE predicate on the "usage_unit" field.
+func UsageUnitGTE(v string) predicate.AshUsage {
+	return predicate.AshUsage(sql.FieldGTE(FieldUsageUnit, v))
+}
+
+// UsageUnitLT applies the LT predicate on the "usage_unit" field.
+func UsageUnitLT(v string) predicate.AshUsage {
+	return predicate.AshUsage(sql.FieldLT(FieldUsageUnit, v))
+}
+
+// UsageUnitLTE applies the LTE predicate on the "usage_unit" field.
+func UsageUnitLTE(v string) predicate.AshUsage {
+	return predicate.AshUsage(sql.FieldLTE(FieldUsageUnit, v))
+}
+
+// UsageUnitContains applies the Contains predicate on the "usage_unit" field.
+func UsageUnitContains(v string) predicate.AshUsage {
+	return predicate.AshUsage(sql.FieldContains(FieldUsageUnit, v))
+}
+
+// UsageUnitHasPrefix applies the HasPrefix predicate on the "usage_unit" field.
+func UsageUnitHasPrefix(v string) predicate.AshUsage {
+	return predicate.AshUsage(sql.FieldHasPrefix(FieldUsageUnit, v))
+}
+
+// UsageUnitHasSuffix applies the HasSuffix predicate on the "usage_unit" field.
+func UsageUnitHasSuffix(v string) predicate.AshUsage {
+	return predicate.AshUsage(sql.FieldHasSuffix(FieldUsageUnit, v))
+}
+
+// UsageUnitEqualFold applies the EqualFold predicate on the "usage_unit" field.
+func UsageUnitEqualFold(v string) predicate.AshUsage {
+	return predicate.AshUsage(sql.FieldEqualFold(FieldUsageUnit, v))
+}
+
+// UsageUnitContainsFold applies the ContainsFold predicate on the "usage_unit" field.
+func UsageUnitContainsFold(v string) predicate.AshUsage {
+	return predicate.AshUsage(sql.FieldContainsFold(FieldUsageUnit, v))
+}
+
+// BilledMicroUsdEQ applies the EQ predicate on the "billed_micro_usd" field.
+func BilledMicroUsdEQ(v int64) predicate.AshUsage {
+	return predicate.AshUsage(sql.FieldEQ(FieldBilledMicroUsd, v))
+}
+
+// BilledMicroUsdNEQ applies the NEQ predicate on the "billed_micro_usd" field.
+func BilledMicroUsdNEQ(v int64) predicate.AshUsage {
+	return predicate.AshUsage(sql.FieldNEQ(FieldBilledMicroUsd, v))
+}
+
+// BilledMicroUsdIn applies the In predicate on the "billed_micro_usd" field.
+func BilledMicroUsdIn(vs ...int64) predicate.AshUsage {
+	return predicate.AshUsage(sql.FieldIn(FieldBilledMicroUsd, vs...))
+}
+
+// BilledMicroUsdNotIn applies the NotIn predicate on the "billed_micro_usd" field.
+func BilledMicroUsdNotIn(vs ...int64) predicate.AshUsage {
+	return predicate.AshUsage(sql.FieldNotIn(FieldBilledMicroUsd, vs...))
+}
+
+// BilledMicroUsdGT applies the GT predicate on the "billed_micro_usd" field.
+func BilledMicroUsdGT(v int64) predicate.AshUsage {
+	return predicate.AshUsage(sql.FieldGT(FieldBilledMicroUsd, v))
+}
+
+// BilledMicroUsdGTE applies the GTE predicate on the "billed_micro_usd" field.
+func BilledMicroUsdGTE(v int64) predicate.AshUsage {
+	return predicate.AshUsage(sql.FieldGTE(FieldBilledMicroUsd, v))
+}
+
+// BilledMicroUsdLT applies the LT predicate on the "billed_micro_usd" field.
+func BilledMicroUsdLT(v int64) predicate.AshUsage {
+	return predicate.AshUsage(sql.FieldLT(FieldBilledMicroUsd, v))
+}
+
+// BilledMicroUsdLTE applies the LTE predicate on the "billed_micro_usd" field.
+func BilledMicroUsdLTE(v int64) predicate.AshUsage {
+	return predicate.AshUsage(sql.FieldLTE(FieldBilledMicroUsd, v))
 }
 
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.

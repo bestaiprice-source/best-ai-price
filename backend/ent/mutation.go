@@ -21,6 +21,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/ashevent"
 	"github.com/Wei-Shaw/sub2api/ent/ashsession"
 	"github.com/Wei-Shaw/sub2api/ent/ashusage"
+	"github.com/Wei-Shaw/sub2api/ent/ashuserpolicy"
 	"github.com/Wei-Shaw/sub2api/ent/authidentity"
 	"github.com/Wei-Shaw/sub2api/ent/authidentitychannel"
 	"github.com/Wei-Shaw/sub2api/ent/channelmonitor"
@@ -72,6 +73,7 @@ const (
 	TypeAshEvent                      = "AshEvent"
 	TypeAshSession                    = "AshSession"
 	TypeAshUsage                      = "AshUsage"
+	TypeAshUserPolicy                 = "AshUserPolicy"
 	TypeAuthIdentity                  = "AuthIdentity"
 	TypeAuthIdentityChannel           = "AuthIdentityChannel"
 	TypeChannelMonitor                = "ChannelMonitor"
@@ -9079,23 +9081,29 @@ func (m *AshSessionMutation) ResetEdge(name string) error {
 // AshUsageMutation represents an operation that mutates the AshUsage nodes in the graph.
 type AshUsageMutation struct {
 	config
-	op               Op
-	typ              string
-	id               *int64
-	owner_id         *string
-	session_id       *string
-	node_id          *string
-	input_tokens     *int64
-	addinput_tokens  *int64
-	output_tokens    *int64
-	addoutput_tokens *int64
-	cost_units       *int64
-	addcost_units    *int64
-	created_at       *time.Time
-	clearedFields    map[string]struct{}
-	done             bool
-	oldValue         func(context.Context) (*AshUsage, error)
-	predicates       []predicate.AshUsage
+	op                  Op
+	typ                 string
+	id                  *int64
+	owner_id            *string
+	session_id          *string
+	node_id             *string
+	input_tokens        *int64
+	addinput_tokens     *int64
+	output_tokens       *int64
+	addoutput_tokens    *int64
+	cost_units          *int64
+	addcost_units       *int64
+	pool_type           *string
+	provider            *string
+	model               *string
+	usage_unit          *string
+	billed_micro_usd    *int64
+	addbilled_micro_usd *int64
+	created_at          *time.Time
+	clearedFields       map[string]struct{}
+	done                bool
+	oldValue            func(context.Context) (*AshUsage, error)
+	predicates          []predicate.AshUsage
 }
 
 var _ ent.Mutation = (*AshUsageMutation)(nil)
@@ -9498,6 +9506,206 @@ func (m *AshUsageMutation) ResetCostUnits() {
 	m.addcost_units = nil
 }
 
+// SetPoolType sets the "pool_type" field.
+func (m *AshUsageMutation) SetPoolType(s string) {
+	m.pool_type = &s
+}
+
+// PoolType returns the value of the "pool_type" field in the mutation.
+func (m *AshUsageMutation) PoolType() (r string, exists bool) {
+	v := m.pool_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPoolType returns the old "pool_type" field's value of the AshUsage entity.
+// If the AshUsage object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AshUsageMutation) OldPoolType(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPoolType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPoolType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPoolType: %w", err)
+	}
+	return oldValue.PoolType, nil
+}
+
+// ResetPoolType resets all changes to the "pool_type" field.
+func (m *AshUsageMutation) ResetPoolType() {
+	m.pool_type = nil
+}
+
+// SetProvider sets the "provider" field.
+func (m *AshUsageMutation) SetProvider(s string) {
+	m.provider = &s
+}
+
+// Provider returns the value of the "provider" field in the mutation.
+func (m *AshUsageMutation) Provider() (r string, exists bool) {
+	v := m.provider
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldProvider returns the old "provider" field's value of the AshUsage entity.
+// If the AshUsage object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AshUsageMutation) OldProvider(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldProvider is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldProvider requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldProvider: %w", err)
+	}
+	return oldValue.Provider, nil
+}
+
+// ResetProvider resets all changes to the "provider" field.
+func (m *AshUsageMutation) ResetProvider() {
+	m.provider = nil
+}
+
+// SetModel sets the "model" field.
+func (m *AshUsageMutation) SetModel(s string) {
+	m.model = &s
+}
+
+// Model returns the value of the "model" field in the mutation.
+func (m *AshUsageMutation) Model() (r string, exists bool) {
+	v := m.model
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldModel returns the old "model" field's value of the AshUsage entity.
+// If the AshUsage object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AshUsageMutation) OldModel(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldModel is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldModel requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldModel: %w", err)
+	}
+	return oldValue.Model, nil
+}
+
+// ResetModel resets all changes to the "model" field.
+func (m *AshUsageMutation) ResetModel() {
+	m.model = nil
+}
+
+// SetUsageUnit sets the "usage_unit" field.
+func (m *AshUsageMutation) SetUsageUnit(s string) {
+	m.usage_unit = &s
+}
+
+// UsageUnit returns the value of the "usage_unit" field in the mutation.
+func (m *AshUsageMutation) UsageUnit() (r string, exists bool) {
+	v := m.usage_unit
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUsageUnit returns the old "usage_unit" field's value of the AshUsage entity.
+// If the AshUsage object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AshUsageMutation) OldUsageUnit(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUsageUnit is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUsageUnit requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUsageUnit: %w", err)
+	}
+	return oldValue.UsageUnit, nil
+}
+
+// ResetUsageUnit resets all changes to the "usage_unit" field.
+func (m *AshUsageMutation) ResetUsageUnit() {
+	m.usage_unit = nil
+}
+
+// SetBilledMicroUsd sets the "billed_micro_usd" field.
+func (m *AshUsageMutation) SetBilledMicroUsd(i int64) {
+	m.billed_micro_usd = &i
+	m.addbilled_micro_usd = nil
+}
+
+// BilledMicroUsd returns the value of the "billed_micro_usd" field in the mutation.
+func (m *AshUsageMutation) BilledMicroUsd() (r int64, exists bool) {
+	v := m.billed_micro_usd
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBilledMicroUsd returns the old "billed_micro_usd" field's value of the AshUsage entity.
+// If the AshUsage object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AshUsageMutation) OldBilledMicroUsd(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBilledMicroUsd is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBilledMicroUsd requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBilledMicroUsd: %w", err)
+	}
+	return oldValue.BilledMicroUsd, nil
+}
+
+// AddBilledMicroUsd adds i to the "billed_micro_usd" field.
+func (m *AshUsageMutation) AddBilledMicroUsd(i int64) {
+	if m.addbilled_micro_usd != nil {
+		*m.addbilled_micro_usd += i
+	} else {
+		m.addbilled_micro_usd = &i
+	}
+}
+
+// AddedBilledMicroUsd returns the value that was added to the "billed_micro_usd" field in this mutation.
+func (m *AshUsageMutation) AddedBilledMicroUsd() (r int64, exists bool) {
+	v := m.addbilled_micro_usd
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetBilledMicroUsd resets all changes to the "billed_micro_usd" field.
+func (m *AshUsageMutation) ResetBilledMicroUsd() {
+	m.billed_micro_usd = nil
+	m.addbilled_micro_usd = nil
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (m *AshUsageMutation) SetCreatedAt(t time.Time) {
 	m.created_at = &t
@@ -9568,7 +9776,7 @@ func (m *AshUsageMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *AshUsageMutation) Fields() []string {
-	fields := make([]string, 0, 7)
+	fields := make([]string, 0, 12)
 	if m.owner_id != nil {
 		fields = append(fields, ashusage.FieldOwnerID)
 	}
@@ -9586,6 +9794,21 @@ func (m *AshUsageMutation) Fields() []string {
 	}
 	if m.cost_units != nil {
 		fields = append(fields, ashusage.FieldCostUnits)
+	}
+	if m.pool_type != nil {
+		fields = append(fields, ashusage.FieldPoolType)
+	}
+	if m.provider != nil {
+		fields = append(fields, ashusage.FieldProvider)
+	}
+	if m.model != nil {
+		fields = append(fields, ashusage.FieldModel)
+	}
+	if m.usage_unit != nil {
+		fields = append(fields, ashusage.FieldUsageUnit)
+	}
+	if m.billed_micro_usd != nil {
+		fields = append(fields, ashusage.FieldBilledMicroUsd)
 	}
 	if m.created_at != nil {
 		fields = append(fields, ashusage.FieldCreatedAt)
@@ -9610,6 +9833,16 @@ func (m *AshUsageMutation) Field(name string) (ent.Value, bool) {
 		return m.OutputTokens()
 	case ashusage.FieldCostUnits:
 		return m.CostUnits()
+	case ashusage.FieldPoolType:
+		return m.PoolType()
+	case ashusage.FieldProvider:
+		return m.Provider()
+	case ashusage.FieldModel:
+		return m.Model()
+	case ashusage.FieldUsageUnit:
+		return m.UsageUnit()
+	case ashusage.FieldBilledMicroUsd:
+		return m.BilledMicroUsd()
 	case ashusage.FieldCreatedAt:
 		return m.CreatedAt()
 	}
@@ -9633,6 +9866,16 @@ func (m *AshUsageMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldOutputTokens(ctx)
 	case ashusage.FieldCostUnits:
 		return m.OldCostUnits(ctx)
+	case ashusage.FieldPoolType:
+		return m.OldPoolType(ctx)
+	case ashusage.FieldProvider:
+		return m.OldProvider(ctx)
+	case ashusage.FieldModel:
+		return m.OldModel(ctx)
+	case ashusage.FieldUsageUnit:
+		return m.OldUsageUnit(ctx)
+	case ashusage.FieldBilledMicroUsd:
+		return m.OldBilledMicroUsd(ctx)
 	case ashusage.FieldCreatedAt:
 		return m.OldCreatedAt(ctx)
 	}
@@ -9686,6 +9929,41 @@ func (m *AshUsageMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetCostUnits(v)
 		return nil
+	case ashusage.FieldPoolType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPoolType(v)
+		return nil
+	case ashusage.FieldProvider:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetProvider(v)
+		return nil
+	case ashusage.FieldModel:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetModel(v)
+		return nil
+	case ashusage.FieldUsageUnit:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUsageUnit(v)
+		return nil
+	case ashusage.FieldBilledMicroUsd:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBilledMicroUsd(v)
+		return nil
 	case ashusage.FieldCreatedAt:
 		v, ok := value.(time.Time)
 		if !ok {
@@ -9710,6 +9988,9 @@ func (m *AshUsageMutation) AddedFields() []string {
 	if m.addcost_units != nil {
 		fields = append(fields, ashusage.FieldCostUnits)
 	}
+	if m.addbilled_micro_usd != nil {
+		fields = append(fields, ashusage.FieldBilledMicroUsd)
+	}
 	return fields
 }
 
@@ -9724,6 +10005,8 @@ func (m *AshUsageMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedOutputTokens()
 	case ashusage.FieldCostUnits:
 		return m.AddedCostUnits()
+	case ashusage.FieldBilledMicroUsd:
+		return m.AddedBilledMicroUsd()
 	}
 	return nil, false
 }
@@ -9753,6 +10036,13 @@ func (m *AshUsageMutation) AddField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddCostUnits(v)
+		return nil
+	case ashusage.FieldBilledMicroUsd:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddBilledMicroUsd(v)
 		return nil
 	}
 	return fmt.Errorf("unknown AshUsage numeric field %s", name)
@@ -9814,6 +10104,21 @@ func (m *AshUsageMutation) ResetField(name string) error {
 	case ashusage.FieldCostUnits:
 		m.ResetCostUnits()
 		return nil
+	case ashusage.FieldPoolType:
+		m.ResetPoolType()
+		return nil
+	case ashusage.FieldProvider:
+		m.ResetProvider()
+		return nil
+	case ashusage.FieldModel:
+		m.ResetModel()
+		return nil
+	case ashusage.FieldUsageUnit:
+		m.ResetUsageUnit()
+		return nil
+	case ashusage.FieldBilledMicroUsd:
+		m.ResetBilledMicroUsd()
+		return nil
 	case ashusage.FieldCreatedAt:
 		m.ResetCreatedAt()
 		return nil
@@ -9867,6 +10172,1094 @@ func (m *AshUsageMutation) ClearEdge(name string) error {
 // It returns an error if the edge is not defined in the schema.
 func (m *AshUsageMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown AshUsage edge %s", name)
+}
+
+// AshUserPolicyMutation represents an operation that mutates the AshUserPolicy nodes in the graph.
+type AshUserPolicyMutation struct {
+	config
+	op                         Op
+	typ                        string
+	id                         *int64
+	owner_id                   *string
+	pool_type                  *string
+	plan_id                    *string
+	monthly_limit              *int64
+	addmonthly_limit           *int64
+	daily_burst                *int64
+	adddaily_burst             *int64
+	monthly_limit_micro_usd    *int64
+	addmonthly_limit_micro_usd *int64
+	daily_burst_micro_usd      *int64
+	adddaily_burst_micro_usd   *int64
+	priority                   *int
+	addpriority                *int
+	deposit_state              *string
+	is_active                  *bool
+	created_at                 *time.Time
+	updated_at                 *time.Time
+	clearedFields              map[string]struct{}
+	done                       bool
+	oldValue                   func(context.Context) (*AshUserPolicy, error)
+	predicates                 []predicate.AshUserPolicy
+}
+
+var _ ent.Mutation = (*AshUserPolicyMutation)(nil)
+
+// ashuserpolicyOption allows management of the mutation configuration using functional options.
+type ashuserpolicyOption func(*AshUserPolicyMutation)
+
+// newAshUserPolicyMutation creates new mutation for the AshUserPolicy entity.
+func newAshUserPolicyMutation(c config, op Op, opts ...ashuserpolicyOption) *AshUserPolicyMutation {
+	m := &AshUserPolicyMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeAshUserPolicy,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withAshUserPolicyID sets the ID field of the mutation.
+func withAshUserPolicyID(id int64) ashuserpolicyOption {
+	return func(m *AshUserPolicyMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *AshUserPolicy
+		)
+		m.oldValue = func(ctx context.Context) (*AshUserPolicy, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().AshUserPolicy.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withAshUserPolicy sets the old AshUserPolicy of the mutation.
+func withAshUserPolicy(node *AshUserPolicy) ashuserpolicyOption {
+	return func(m *AshUserPolicyMutation) {
+		m.oldValue = func(context.Context) (*AshUserPolicy, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m AshUserPolicyMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m AshUserPolicyMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *AshUserPolicyMutation) ID() (id int64, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *AshUserPolicyMutation) IDs(ctx context.Context) ([]int64, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int64{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().AshUserPolicy.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetOwnerID sets the "owner_id" field.
+func (m *AshUserPolicyMutation) SetOwnerID(s string) {
+	m.owner_id = &s
+}
+
+// OwnerID returns the value of the "owner_id" field in the mutation.
+func (m *AshUserPolicyMutation) OwnerID() (r string, exists bool) {
+	v := m.owner_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldOwnerID returns the old "owner_id" field's value of the AshUserPolicy entity.
+// If the AshUserPolicy object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AshUserPolicyMutation) OldOwnerID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldOwnerID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldOwnerID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldOwnerID: %w", err)
+	}
+	return oldValue.OwnerID, nil
+}
+
+// ResetOwnerID resets all changes to the "owner_id" field.
+func (m *AshUserPolicyMutation) ResetOwnerID() {
+	m.owner_id = nil
+}
+
+// SetPoolType sets the "pool_type" field.
+func (m *AshUserPolicyMutation) SetPoolType(s string) {
+	m.pool_type = &s
+}
+
+// PoolType returns the value of the "pool_type" field in the mutation.
+func (m *AshUserPolicyMutation) PoolType() (r string, exists bool) {
+	v := m.pool_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPoolType returns the old "pool_type" field's value of the AshUserPolicy entity.
+// If the AshUserPolicy object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AshUserPolicyMutation) OldPoolType(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPoolType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPoolType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPoolType: %w", err)
+	}
+	return oldValue.PoolType, nil
+}
+
+// ResetPoolType resets all changes to the "pool_type" field.
+func (m *AshUserPolicyMutation) ResetPoolType() {
+	m.pool_type = nil
+}
+
+// SetPlanID sets the "plan_id" field.
+func (m *AshUserPolicyMutation) SetPlanID(s string) {
+	m.plan_id = &s
+}
+
+// PlanID returns the value of the "plan_id" field in the mutation.
+func (m *AshUserPolicyMutation) PlanID() (r string, exists bool) {
+	v := m.plan_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPlanID returns the old "plan_id" field's value of the AshUserPolicy entity.
+// If the AshUserPolicy object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AshUserPolicyMutation) OldPlanID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPlanID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPlanID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPlanID: %w", err)
+	}
+	return oldValue.PlanID, nil
+}
+
+// ResetPlanID resets all changes to the "plan_id" field.
+func (m *AshUserPolicyMutation) ResetPlanID() {
+	m.plan_id = nil
+}
+
+// SetMonthlyLimit sets the "monthly_limit" field.
+func (m *AshUserPolicyMutation) SetMonthlyLimit(i int64) {
+	m.monthly_limit = &i
+	m.addmonthly_limit = nil
+}
+
+// MonthlyLimit returns the value of the "monthly_limit" field in the mutation.
+func (m *AshUserPolicyMutation) MonthlyLimit() (r int64, exists bool) {
+	v := m.monthly_limit
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldMonthlyLimit returns the old "monthly_limit" field's value of the AshUserPolicy entity.
+// If the AshUserPolicy object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AshUserPolicyMutation) OldMonthlyLimit(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldMonthlyLimit is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldMonthlyLimit requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldMonthlyLimit: %w", err)
+	}
+	return oldValue.MonthlyLimit, nil
+}
+
+// AddMonthlyLimit adds i to the "monthly_limit" field.
+func (m *AshUserPolicyMutation) AddMonthlyLimit(i int64) {
+	if m.addmonthly_limit != nil {
+		*m.addmonthly_limit += i
+	} else {
+		m.addmonthly_limit = &i
+	}
+}
+
+// AddedMonthlyLimit returns the value that was added to the "monthly_limit" field in this mutation.
+func (m *AshUserPolicyMutation) AddedMonthlyLimit() (r int64, exists bool) {
+	v := m.addmonthly_limit
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetMonthlyLimit resets all changes to the "monthly_limit" field.
+func (m *AshUserPolicyMutation) ResetMonthlyLimit() {
+	m.monthly_limit = nil
+	m.addmonthly_limit = nil
+}
+
+// SetDailyBurst sets the "daily_burst" field.
+func (m *AshUserPolicyMutation) SetDailyBurst(i int64) {
+	m.daily_burst = &i
+	m.adddaily_burst = nil
+}
+
+// DailyBurst returns the value of the "daily_burst" field in the mutation.
+func (m *AshUserPolicyMutation) DailyBurst() (r int64, exists bool) {
+	v := m.daily_burst
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDailyBurst returns the old "daily_burst" field's value of the AshUserPolicy entity.
+// If the AshUserPolicy object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AshUserPolicyMutation) OldDailyBurst(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDailyBurst is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDailyBurst requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDailyBurst: %w", err)
+	}
+	return oldValue.DailyBurst, nil
+}
+
+// AddDailyBurst adds i to the "daily_burst" field.
+func (m *AshUserPolicyMutation) AddDailyBurst(i int64) {
+	if m.adddaily_burst != nil {
+		*m.adddaily_burst += i
+	} else {
+		m.adddaily_burst = &i
+	}
+}
+
+// AddedDailyBurst returns the value that was added to the "daily_burst" field in this mutation.
+func (m *AshUserPolicyMutation) AddedDailyBurst() (r int64, exists bool) {
+	v := m.adddaily_burst
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetDailyBurst resets all changes to the "daily_burst" field.
+func (m *AshUserPolicyMutation) ResetDailyBurst() {
+	m.daily_burst = nil
+	m.adddaily_burst = nil
+}
+
+// SetMonthlyLimitMicroUsd sets the "monthly_limit_micro_usd" field.
+func (m *AshUserPolicyMutation) SetMonthlyLimitMicroUsd(i int64) {
+	m.monthly_limit_micro_usd = &i
+	m.addmonthly_limit_micro_usd = nil
+}
+
+// MonthlyLimitMicroUsd returns the value of the "monthly_limit_micro_usd" field in the mutation.
+func (m *AshUserPolicyMutation) MonthlyLimitMicroUsd() (r int64, exists bool) {
+	v := m.monthly_limit_micro_usd
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldMonthlyLimitMicroUsd returns the old "monthly_limit_micro_usd" field's value of the AshUserPolicy entity.
+// If the AshUserPolicy object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AshUserPolicyMutation) OldMonthlyLimitMicroUsd(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldMonthlyLimitMicroUsd is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldMonthlyLimitMicroUsd requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldMonthlyLimitMicroUsd: %w", err)
+	}
+	return oldValue.MonthlyLimitMicroUsd, nil
+}
+
+// AddMonthlyLimitMicroUsd adds i to the "monthly_limit_micro_usd" field.
+func (m *AshUserPolicyMutation) AddMonthlyLimitMicroUsd(i int64) {
+	if m.addmonthly_limit_micro_usd != nil {
+		*m.addmonthly_limit_micro_usd += i
+	} else {
+		m.addmonthly_limit_micro_usd = &i
+	}
+}
+
+// AddedMonthlyLimitMicroUsd returns the value that was added to the "monthly_limit_micro_usd" field in this mutation.
+func (m *AshUserPolicyMutation) AddedMonthlyLimitMicroUsd() (r int64, exists bool) {
+	v := m.addmonthly_limit_micro_usd
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetMonthlyLimitMicroUsd resets all changes to the "monthly_limit_micro_usd" field.
+func (m *AshUserPolicyMutation) ResetMonthlyLimitMicroUsd() {
+	m.monthly_limit_micro_usd = nil
+	m.addmonthly_limit_micro_usd = nil
+}
+
+// SetDailyBurstMicroUsd sets the "daily_burst_micro_usd" field.
+func (m *AshUserPolicyMutation) SetDailyBurstMicroUsd(i int64) {
+	m.daily_burst_micro_usd = &i
+	m.adddaily_burst_micro_usd = nil
+}
+
+// DailyBurstMicroUsd returns the value of the "daily_burst_micro_usd" field in the mutation.
+func (m *AshUserPolicyMutation) DailyBurstMicroUsd() (r int64, exists bool) {
+	v := m.daily_burst_micro_usd
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDailyBurstMicroUsd returns the old "daily_burst_micro_usd" field's value of the AshUserPolicy entity.
+// If the AshUserPolicy object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AshUserPolicyMutation) OldDailyBurstMicroUsd(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDailyBurstMicroUsd is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDailyBurstMicroUsd requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDailyBurstMicroUsd: %w", err)
+	}
+	return oldValue.DailyBurstMicroUsd, nil
+}
+
+// AddDailyBurstMicroUsd adds i to the "daily_burst_micro_usd" field.
+func (m *AshUserPolicyMutation) AddDailyBurstMicroUsd(i int64) {
+	if m.adddaily_burst_micro_usd != nil {
+		*m.adddaily_burst_micro_usd += i
+	} else {
+		m.adddaily_burst_micro_usd = &i
+	}
+}
+
+// AddedDailyBurstMicroUsd returns the value that was added to the "daily_burst_micro_usd" field in this mutation.
+func (m *AshUserPolicyMutation) AddedDailyBurstMicroUsd() (r int64, exists bool) {
+	v := m.adddaily_burst_micro_usd
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetDailyBurstMicroUsd resets all changes to the "daily_burst_micro_usd" field.
+func (m *AshUserPolicyMutation) ResetDailyBurstMicroUsd() {
+	m.daily_burst_micro_usd = nil
+	m.adddaily_burst_micro_usd = nil
+}
+
+// SetPriority sets the "priority" field.
+func (m *AshUserPolicyMutation) SetPriority(i int) {
+	m.priority = &i
+	m.addpriority = nil
+}
+
+// Priority returns the value of the "priority" field in the mutation.
+func (m *AshUserPolicyMutation) Priority() (r int, exists bool) {
+	v := m.priority
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPriority returns the old "priority" field's value of the AshUserPolicy entity.
+// If the AshUserPolicy object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AshUserPolicyMutation) OldPriority(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPriority is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPriority requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPriority: %w", err)
+	}
+	return oldValue.Priority, nil
+}
+
+// AddPriority adds i to the "priority" field.
+func (m *AshUserPolicyMutation) AddPriority(i int) {
+	if m.addpriority != nil {
+		*m.addpriority += i
+	} else {
+		m.addpriority = &i
+	}
+}
+
+// AddedPriority returns the value that was added to the "priority" field in this mutation.
+func (m *AshUserPolicyMutation) AddedPriority() (r int, exists bool) {
+	v := m.addpriority
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetPriority resets all changes to the "priority" field.
+func (m *AshUserPolicyMutation) ResetPriority() {
+	m.priority = nil
+	m.addpriority = nil
+}
+
+// SetDepositState sets the "deposit_state" field.
+func (m *AshUserPolicyMutation) SetDepositState(s string) {
+	m.deposit_state = &s
+}
+
+// DepositState returns the value of the "deposit_state" field in the mutation.
+func (m *AshUserPolicyMutation) DepositState() (r string, exists bool) {
+	v := m.deposit_state
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDepositState returns the old "deposit_state" field's value of the AshUserPolicy entity.
+// If the AshUserPolicy object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AshUserPolicyMutation) OldDepositState(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDepositState is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDepositState requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDepositState: %w", err)
+	}
+	return oldValue.DepositState, nil
+}
+
+// ResetDepositState resets all changes to the "deposit_state" field.
+func (m *AshUserPolicyMutation) ResetDepositState() {
+	m.deposit_state = nil
+}
+
+// SetIsActive sets the "is_active" field.
+func (m *AshUserPolicyMutation) SetIsActive(b bool) {
+	m.is_active = &b
+}
+
+// IsActive returns the value of the "is_active" field in the mutation.
+func (m *AshUserPolicyMutation) IsActive() (r bool, exists bool) {
+	v := m.is_active
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldIsActive returns the old "is_active" field's value of the AshUserPolicy entity.
+// If the AshUserPolicy object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AshUserPolicyMutation) OldIsActive(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldIsActive is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldIsActive requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldIsActive: %w", err)
+	}
+	return oldValue.IsActive, nil
+}
+
+// ResetIsActive resets all changes to the "is_active" field.
+func (m *AshUserPolicyMutation) ResetIsActive() {
+	m.is_active = nil
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *AshUserPolicyMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *AshUserPolicyMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the AshUserPolicy entity.
+// If the AshUserPolicy object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AshUserPolicyMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *AshUserPolicyMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *AshUserPolicyMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *AshUserPolicyMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the AshUserPolicy entity.
+// If the AshUserPolicy object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AshUserPolicyMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *AshUserPolicyMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// Where appends a list predicates to the AshUserPolicyMutation builder.
+func (m *AshUserPolicyMutation) Where(ps ...predicate.AshUserPolicy) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the AshUserPolicyMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *AshUserPolicyMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.AshUserPolicy, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *AshUserPolicyMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *AshUserPolicyMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (AshUserPolicy).
+func (m *AshUserPolicyMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *AshUserPolicyMutation) Fields() []string {
+	fields := make([]string, 0, 12)
+	if m.owner_id != nil {
+		fields = append(fields, ashuserpolicy.FieldOwnerID)
+	}
+	if m.pool_type != nil {
+		fields = append(fields, ashuserpolicy.FieldPoolType)
+	}
+	if m.plan_id != nil {
+		fields = append(fields, ashuserpolicy.FieldPlanID)
+	}
+	if m.monthly_limit != nil {
+		fields = append(fields, ashuserpolicy.FieldMonthlyLimit)
+	}
+	if m.daily_burst != nil {
+		fields = append(fields, ashuserpolicy.FieldDailyBurst)
+	}
+	if m.monthly_limit_micro_usd != nil {
+		fields = append(fields, ashuserpolicy.FieldMonthlyLimitMicroUsd)
+	}
+	if m.daily_burst_micro_usd != nil {
+		fields = append(fields, ashuserpolicy.FieldDailyBurstMicroUsd)
+	}
+	if m.priority != nil {
+		fields = append(fields, ashuserpolicy.FieldPriority)
+	}
+	if m.deposit_state != nil {
+		fields = append(fields, ashuserpolicy.FieldDepositState)
+	}
+	if m.is_active != nil {
+		fields = append(fields, ashuserpolicy.FieldIsActive)
+	}
+	if m.created_at != nil {
+		fields = append(fields, ashuserpolicy.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, ashuserpolicy.FieldUpdatedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *AshUserPolicyMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case ashuserpolicy.FieldOwnerID:
+		return m.OwnerID()
+	case ashuserpolicy.FieldPoolType:
+		return m.PoolType()
+	case ashuserpolicy.FieldPlanID:
+		return m.PlanID()
+	case ashuserpolicy.FieldMonthlyLimit:
+		return m.MonthlyLimit()
+	case ashuserpolicy.FieldDailyBurst:
+		return m.DailyBurst()
+	case ashuserpolicy.FieldMonthlyLimitMicroUsd:
+		return m.MonthlyLimitMicroUsd()
+	case ashuserpolicy.FieldDailyBurstMicroUsd:
+		return m.DailyBurstMicroUsd()
+	case ashuserpolicy.FieldPriority:
+		return m.Priority()
+	case ashuserpolicy.FieldDepositState:
+		return m.DepositState()
+	case ashuserpolicy.FieldIsActive:
+		return m.IsActive()
+	case ashuserpolicy.FieldCreatedAt:
+		return m.CreatedAt()
+	case ashuserpolicy.FieldUpdatedAt:
+		return m.UpdatedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *AshUserPolicyMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case ashuserpolicy.FieldOwnerID:
+		return m.OldOwnerID(ctx)
+	case ashuserpolicy.FieldPoolType:
+		return m.OldPoolType(ctx)
+	case ashuserpolicy.FieldPlanID:
+		return m.OldPlanID(ctx)
+	case ashuserpolicy.FieldMonthlyLimit:
+		return m.OldMonthlyLimit(ctx)
+	case ashuserpolicy.FieldDailyBurst:
+		return m.OldDailyBurst(ctx)
+	case ashuserpolicy.FieldMonthlyLimitMicroUsd:
+		return m.OldMonthlyLimitMicroUsd(ctx)
+	case ashuserpolicy.FieldDailyBurstMicroUsd:
+		return m.OldDailyBurstMicroUsd(ctx)
+	case ashuserpolicy.FieldPriority:
+		return m.OldPriority(ctx)
+	case ashuserpolicy.FieldDepositState:
+		return m.OldDepositState(ctx)
+	case ashuserpolicy.FieldIsActive:
+		return m.OldIsActive(ctx)
+	case ashuserpolicy.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case ashuserpolicy.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown AshUserPolicy field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *AshUserPolicyMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case ashuserpolicy.FieldOwnerID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetOwnerID(v)
+		return nil
+	case ashuserpolicy.FieldPoolType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPoolType(v)
+		return nil
+	case ashuserpolicy.FieldPlanID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPlanID(v)
+		return nil
+	case ashuserpolicy.FieldMonthlyLimit:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetMonthlyLimit(v)
+		return nil
+	case ashuserpolicy.FieldDailyBurst:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDailyBurst(v)
+		return nil
+	case ashuserpolicy.FieldMonthlyLimitMicroUsd:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetMonthlyLimitMicroUsd(v)
+		return nil
+	case ashuserpolicy.FieldDailyBurstMicroUsd:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDailyBurstMicroUsd(v)
+		return nil
+	case ashuserpolicy.FieldPriority:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPriority(v)
+		return nil
+	case ashuserpolicy.FieldDepositState:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDepositState(v)
+		return nil
+	case ashuserpolicy.FieldIsActive:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetIsActive(v)
+		return nil
+	case ashuserpolicy.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case ashuserpolicy.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown AshUserPolicy field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *AshUserPolicyMutation) AddedFields() []string {
+	var fields []string
+	if m.addmonthly_limit != nil {
+		fields = append(fields, ashuserpolicy.FieldMonthlyLimit)
+	}
+	if m.adddaily_burst != nil {
+		fields = append(fields, ashuserpolicy.FieldDailyBurst)
+	}
+	if m.addmonthly_limit_micro_usd != nil {
+		fields = append(fields, ashuserpolicy.FieldMonthlyLimitMicroUsd)
+	}
+	if m.adddaily_burst_micro_usd != nil {
+		fields = append(fields, ashuserpolicy.FieldDailyBurstMicroUsd)
+	}
+	if m.addpriority != nil {
+		fields = append(fields, ashuserpolicy.FieldPriority)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *AshUserPolicyMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case ashuserpolicy.FieldMonthlyLimit:
+		return m.AddedMonthlyLimit()
+	case ashuserpolicy.FieldDailyBurst:
+		return m.AddedDailyBurst()
+	case ashuserpolicy.FieldMonthlyLimitMicroUsd:
+		return m.AddedMonthlyLimitMicroUsd()
+	case ashuserpolicy.FieldDailyBurstMicroUsd:
+		return m.AddedDailyBurstMicroUsd()
+	case ashuserpolicy.FieldPriority:
+		return m.AddedPriority()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *AshUserPolicyMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case ashuserpolicy.FieldMonthlyLimit:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddMonthlyLimit(v)
+		return nil
+	case ashuserpolicy.FieldDailyBurst:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddDailyBurst(v)
+		return nil
+	case ashuserpolicy.FieldMonthlyLimitMicroUsd:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddMonthlyLimitMicroUsd(v)
+		return nil
+	case ashuserpolicy.FieldDailyBurstMicroUsd:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddDailyBurstMicroUsd(v)
+		return nil
+	case ashuserpolicy.FieldPriority:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddPriority(v)
+		return nil
+	}
+	return fmt.Errorf("unknown AshUserPolicy numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *AshUserPolicyMutation) ClearedFields() []string {
+	return nil
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *AshUserPolicyMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *AshUserPolicyMutation) ClearField(name string) error {
+	return fmt.Errorf("unknown AshUserPolicy nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *AshUserPolicyMutation) ResetField(name string) error {
+	switch name {
+	case ashuserpolicy.FieldOwnerID:
+		m.ResetOwnerID()
+		return nil
+	case ashuserpolicy.FieldPoolType:
+		m.ResetPoolType()
+		return nil
+	case ashuserpolicy.FieldPlanID:
+		m.ResetPlanID()
+		return nil
+	case ashuserpolicy.FieldMonthlyLimit:
+		m.ResetMonthlyLimit()
+		return nil
+	case ashuserpolicy.FieldDailyBurst:
+		m.ResetDailyBurst()
+		return nil
+	case ashuserpolicy.FieldMonthlyLimitMicroUsd:
+		m.ResetMonthlyLimitMicroUsd()
+		return nil
+	case ashuserpolicy.FieldDailyBurstMicroUsd:
+		m.ResetDailyBurstMicroUsd()
+		return nil
+	case ashuserpolicy.FieldPriority:
+		m.ResetPriority()
+		return nil
+	case ashuserpolicy.FieldDepositState:
+		m.ResetDepositState()
+		return nil
+	case ashuserpolicy.FieldIsActive:
+		m.ResetIsActive()
+		return nil
+	case ashuserpolicy.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case ashuserpolicy.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown AshUserPolicy field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *AshUserPolicyMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *AshUserPolicyMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *AshUserPolicyMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *AshUserPolicyMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *AshUserPolicyMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *AshUserPolicyMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *AshUserPolicyMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown AshUserPolicy unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *AshUserPolicyMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown AshUserPolicy edge %s", name)
 }
 
 // AuthIdentityMutation represents an operation that mutates the AuthIdentity nodes in the graph.

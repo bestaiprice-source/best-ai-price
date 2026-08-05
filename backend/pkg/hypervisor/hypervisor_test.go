@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
+	"github.com/Wei-Shaw/sub2api/ent/ashevent"
 	"github.com/Wei-Shaw/sub2api/ent/enttest"
 	"github.com/alicebob/miniredis/v2"
 	"github.com/redis/go-redis/v9"
@@ -26,6 +28,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/scheduler"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/session"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/storage"
+	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/yunwu"
 
 	"entgo.io/ent/dialect"
 	entsql "entgo.io/ent/dialect/sql"
@@ -446,6 +449,9 @@ func TestYunwuHypervisorDispatch(t *testing.T) {
 	hyp := hypervisor.NewHypervisor(store, rt)
 
 	require.NotNil(t, hyp.YunwuEngine())
+	snapshot := yunwu.BalanceSnapshot{GrantedUSD: 10, AvailableUSD: 10, AvailableMicroUSD: 10_000_000, Source: "test", SynchronizedAt: time.Now().UTC(), Status: "fresh"}
+	snapshotJSON, _ := json.Marshal(snapshot)
+	require.NoError(t, store.Redis().Set(ctx, "ash:yunwu:balance:"+fmt.Sprint(acc.ID), snapshotJSON, 0).Err())
 
 	var buf bytes.Buffer
 	res, err := hyp.HandleRequest(ctx, "user-123", "conv-yunwu-1", []byte(`{"model":"gpt-4o","messages":[{"role":"user","content":"hello"}]}`), &buf, "yunwu")
@@ -493,11 +499,16 @@ func TestHypervisorQuotaExceededAndLeaseResolution(t *testing.T) {
 	require.NotNil(t, res)
 }
 
-type failingFirstNodeRuntime struct{}
+type failingFirstNodeRuntime struct {
+	failedNodeID string
+	calls        int
+}
 
 func (f *failingFirstNodeRuntime) Execute(ctx context.Context, nodeID string, reqPayload []byte, stream io.Writer) (*runtime.ResponseMetadata, error) {
-	if strings.Contains(nodeID, "node-fail") {
-		return nil, errors.New("test failure")
+	f.calls++
+	if f.calls == 1 {
+		f.failedNodeID = nodeID
+		return nil, errors.New("upstream error 429 Too Many Requests")
 	}
 	return &runtime.ResponseMetadata{StatusCode: 200, InputTokens: 20, OutputTokens: 30}, nil
 }
@@ -533,6 +544,62 @@ func TestHypervisorRebindingOnExecutionFailure(t *testing.T) {
 	res, err := hyp.HandleRequest(ctx, "user-rebound", "conv-rebound", []byte(`{"model":"claude"}`), &buf, "anthropic")
 	require.NoError(t, err)
 	require.NotNil(t, res)
+	require.NotEmpty(t, rt.failedNodeID)
+	failedState, err := health.NewNodeManager(store).GetNodeRuntimeState(ctx, rt.failedNodeID)
+	require.NoError(t, err)
+	require.Equal(t, 1, failedState.Recent429)
+	require.NotNil(t, failedState.CooldownUntil)
+	failedNode, err := health.NewNodeManager(store).GetNode(ctx, rt.failedNodeID)
+	require.NoError(t, err)
+	require.Equal(t, "cooldown", failedNode.State)
+}
+
+type countingFailureRuntime struct {
+	calls        int
+	writePartial bool
+}
+
+func (r *countingFailureRuntime) Execute(_ context.Context, _ string, _ []byte, stream io.Writer) (*runtime.ResponseMetadata, error) {
+	r.calls++
+	if r.writePartial {
+		_, _ = stream.Write([]byte("event: message_start\n"))
+	}
+	return nil, errors.New("upstream timeout")
+}
+
+func createTwoHypervisorAccounts(t *testing.T, ctx context.Context, store *storage.Storage) {
+	t.Helper()
+	for _, name := range []string{"retry-node-1", "retry-node-2"} {
+		_, err := store.DB().Account.Create().SetName(name).SetPlatform("anthropic").SetType("api_key").SetStatus("active").SetCredentials(map[string]any{"api_key": "test"}).Save(ctx)
+		require.NoError(t, err)
+	}
+}
+
+func TestHypervisorRebindingDisabledReturnsOriginalError(t *testing.T) {
+	t.Setenv("ASH_ENABLE_REBINDING", "false")
+	store := newTestStorage(t)
+	ctx := context.Background()
+	createTwoHypervisorAccounts(t, ctx, store)
+	rt := &countingFailureRuntime{}
+
+	_, err := hypervisor.NewHypervisor(store, rt).HandleRequest(ctx, "no-rebind-user", "conv", []byte(`{"model":"claude"}`), &bytes.Buffer{}, "anthropic")
+	require.ErrorContains(t, err, "upstream timeout")
+	require.Equal(t, 1, rt.calls)
+}
+
+func TestHypervisorDoesNotRetryCommittedStream(t *testing.T) {
+	t.Setenv("ASH_ENABLE_REBINDING", "true")
+	store := newTestStorage(t)
+	ctx := context.Background()
+	createTwoHypervisorAccounts(t, ctx, store)
+	rt := &countingFailureRuntime{writePartial: true}
+
+	_, err := hypervisor.NewHypervisor(store, rt).HandleRequest(ctx, "stream-user", "conv", []byte(`{"model":"claude","stream":true}`), &bytes.Buffer{}, "anthropic")
+	require.ErrorContains(t, err, "upstream timeout")
+	require.Equal(t, 1, rt.calls)
+	count, countErr := store.DB().AshEvent.Query().Where(ashevent.EventType("RequestStreamInterrupted")).Count(ctx)
+	require.NoError(t, countErr)
+	require.Equal(t, 1, count)
 }
 
 func TestHypervisorNoNodesAvailableAndRedisFallback(t *testing.T) {
@@ -544,7 +611,7 @@ func TestHypervisorNoNodesAvailableAndRedisFallback(t *testing.T) {
 	// No nodes in DB or Redis -> returns ErrNoNodesAvailable
 	var buf bytes.Buffer
 	_, err := hyp.HandleRequest(ctx, "user-empty", "conv-empty", []byte(`{"model":"claude"}`), &buf, "anthropic")
-	require.ErrorIs(t, err, scheduler.ErrNoNodesAvailable)
+	require.ErrorContains(t, err, "no healthy anthropic nodes")
 
 	// Redis nodes fallback
 	nm := health.NewNodeManager(store)
