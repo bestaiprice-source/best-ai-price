@@ -693,33 +693,39 @@ func (s *AccountTestService) testClaudeAccountConnection(c gatewayctx.GatewayCon
 		// OAuth or Setup Token - use Bearer token
 		useBearer = true
 		apiURL = testClaudeAPIURL
-		authToken = account.GetCredential("access_token")
+		authToken = strings.TrimSpace(account.GetCredential("access_token"))
 		if authToken == "" {
 			return s.sendErrorAndEnd(c, "No access token available")
 		}
 	} else if account.Type == "apikey" || account.Type == "api" {
-		// API Key - use x-api-key header
-		useBearer = (account.Platform == PlatformYunwu)
-		authToken = account.GetCredential("api_key")
+		authToken = strings.TrimSpace(account.GetCredential("api_key"))
 		if authToken == "" {
 			return s.sendErrorAndEnd(c, "No API key available")
 		}
-
-		baseURL := account.GetBaseURL()
-		if baseURL == "" {
-			if account.Platform == PlatformYunwu {
-				baseURL = "https://yunwu.ai/v1"
-			} else {
-				baseURL = "https://api.anthropic.com"
+		// Older imports can contain a Claude Code OAuth token in api_key while
+		// retaining the legacy "api" account type. Treat the token according to
+		// its protocol instead of sending it as x-api-key.
+		useBearer = account.Platform == PlatformYunwu || isClaudeOAuthAccessToken(authToken)
+		if useBearer && account.Platform != PlatformYunwu {
+			apiURL = testClaudeAPIURL
+		} else {
+			// API Key - use x-api-key header
+			baseURL := account.GetBaseURL()
+			if baseURL == "" {
+				if account.Platform == PlatformYunwu {
+					baseURL = "https://yunwu.ai/v1"
+				} else {
+					baseURL = "https://api.anthropic.com"
+				}
 			}
+			normalizedBaseURL, err := s.validateUpstreamBaseURL(baseURL)
+			if err != nil {
+				return s.sendErrorAndEnd(c, fmt.Sprintf("Invalid base URL: %s", err.Error()))
+			}
+			base := strings.TrimSuffix(normalizedBaseURL, "/")
+			base = strings.TrimSuffix(base, "/v1")
+			apiURL = base + "/v1/messages?beta=true"
 		}
-		normalizedBaseURL, err := s.validateUpstreamBaseURL(baseURL)
-		if err != nil {
-			return s.sendErrorAndEnd(c, fmt.Sprintf("Invalid base URL: %s", err.Error()))
-		}
-		base := strings.TrimSuffix(normalizedBaseURL, "/")
-		base = strings.TrimSuffix(base, "/v1")
-		apiURL = base + "/v1/messages?beta=true"
 	} else {
 		return s.sendErrorAndEnd(c, fmt.Sprintf("Unsupported account type: %s", account.Type))
 	}
@@ -756,10 +762,13 @@ func (s *AccountTestService) testClaudeAccountConnection(c gatewayctx.GatewayCon
 	}
 
 	// Set authentication header
-	if useBearer || account.Platform == PlatformYunwu {
+	if account.Platform == PlatformYunwu {
 		req.Header.Set("anthropic-beta", claude.DefaultBetaHeader)
 		req.Header.Set("Authorization", "Bearer "+authToken)
 		req.Header.Set("x-api-key", authToken)
+	} else if useBearer {
+		req.Header.Set("anthropic-beta", claude.DefaultBetaHeader)
+		req.Header.Set("Authorization", "Bearer "+authToken)
 	} else {
 		req.Header.Set("anthropic-beta", claude.APIKeyBetaHeader)
 		req.Header.Set("x-api-key", authToken)
@@ -791,6 +800,11 @@ func (s *AccountTestService) testClaudeAccountConnection(c gatewayctx.GatewayCon
 
 	// Process SSE stream
 	return s.processClaudeStream(c, resp.Body)
+}
+
+func isClaudeOAuthAccessToken(token string) bool {
+	token = strings.ToLower(strings.TrimSpace(token))
+	return strings.HasPrefix(token, "sk-ant-oat") || strings.HasPrefix(token, "sk-oat")
 }
 
 // testBedrockAccountConnection tests a Bedrock (SigV4 or API Key) account using non-streaming invoke
