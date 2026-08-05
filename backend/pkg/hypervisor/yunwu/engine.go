@@ -1102,27 +1102,41 @@ func (yh *YunwuHypervisor) getAllYunwuNodeCredits(ctx context.Context, nodes []h
 func (yh *YunwuHypervisor) startBalanceSync(ctx context.Context) {
 	syncAll := func() {
 		if yh.store == nil || yh.store.DB() == nil {
+			slog.Warn("[YunwuStatsWorker] Balance sync skipped: database is unavailable")
 			return
 		}
 		accounts, err := yh.store.DB().Account.Query().Where(account.PlatformEqualFold("yunwu"), account.Status("active")).All(ctx)
 		if err != nil {
+			slog.Warn("[YunwuStatsWorker] Failed to list Yunwu accounts for balance sync", "error", err)
 			return
 		}
+		slog.Info("[YunwuStatsWorker] Starting Yunwu balance sync", "accounts", len(accounts))
 		for _, acc := range accounts {
 			creds, decErr := credentials.DecryptMap(acc.Credentials, yh.decryptor)
 			if decErr != nil {
 				observability.Default.YunwuBalanceSyncFailed()
+				slog.Warn("[YunwuStatsWorker] Balance sync failed: cannot decrypt account credentials",
+					"node_id", fmt.Sprint(acc.ID),
+					"error", decErr,
+				)
 				_, _ = yh.store.LogEvent(ctx, "system", nil, nil, "YunwuBalanceSyncFailed", map[string]any{"node_id": fmt.Sprint(acc.ID), "error": decErr.Error()})
 				continue
 			}
 			apiKey, _ := creds["api_key"].(string)
 			baseURL, _ := creds["base_url"].(string)
 			if apiKey == "" {
+				observability.Default.YunwuBalanceSyncFailed()
+				slog.Warn("[YunwuStatsWorker] Balance sync skipped: account API key is empty", "node_id", fmt.Sprint(acc.ID))
+				_, _ = yh.store.LogEvent(ctx, "system", nil, nil, "YunwuBalanceSyncFailed", map[string]any{"node_id": fmt.Sprint(acc.ID), "error": "account API key is empty"})
 				continue
 			}
 			node := &health.ExecutionNode{NodeID: fmt.Sprint(acc.ID), AccountName: acc.Name, Provider: "yunwu"}
 			if _, syncErr := yh.sw.SyncNodeStats(ctx, node, apiKey, baseURL); syncErr != nil {
 				observability.Default.YunwuBalanceSyncFailed()
+				slog.Warn("[YunwuStatsWorker] Yunwu balance sync failed",
+					"node_id", node.NodeID,
+					"error", syncErr,
+				)
 				_, _ = yh.store.LogEvent(ctx, "system", nil, &node.NodeID, "YunwuBalanceSyncFailed", map[string]any{"error": syncErr.Error()})
 			}
 		}
