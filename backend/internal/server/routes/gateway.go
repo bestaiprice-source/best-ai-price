@@ -64,6 +64,15 @@ func RegisterGatewayRoutes(
 		gateway.POST("/chat/completions", requireGroupOpenAI, strictOpenAI, h.OpenAIGateway.ChatCompletions)
 		gateway.POST("/images/generations", requireGroupOpenAI, strictOpenAI, h.OpenAIGateway.Images)
 		gateway.POST("/images/edits", requireGroupOpenAI, strictOpenAI, h.OpenAIGateway.Images)
+		gateway.POST("/audio/speech", requireGroupOpenAI, strictOpenAI, h.OpenAIGateway.YunwuMedia)
+		gateway.POST("/audio/transcriptions", requireGroupOpenAI, strictOpenAI, h.OpenAIGateway.YunwuMedia)
+		gateway.POST("/audio/translations", requireGroupOpenAI, strictOpenAI, h.OpenAIGateway.YunwuMedia)
+		gateway.POST("/videos", requireGroupOpenAI, strictOpenAI, h.OpenAIGateway.YunwuMedia)
+		gateway.GET("/videos", requireGroupOpenAI, strictOpenAI, h.OpenAIGateway.YunwuMedia)
+		gateway.POST("/videos/*videoPath", requireGroupOpenAI, strictOpenAI, h.OpenAIGateway.YunwuMedia)
+		gateway.GET("/videos/*videoPath", requireGroupOpenAI, strictOpenAI, h.OpenAIGateway.YunwuMedia)
+		gateway.DELETE("/videos/*videoPath", requireGroupOpenAI, strictOpenAI, h.OpenAIGateway.YunwuMedia)
+		gateway.POST("/video/generations", requireGroupOpenAI, strictOpenAI, h.OpenAIGateway.YunwuMedia)
 	}
 
 	// Gemini 原生 API 兼容层（Gemini SDK/CLI 直连）
@@ -80,7 +89,15 @@ func RegisterGatewayRoutes(
 		gemini.GET("/models/:model", h.Gateway.GeminiV1BetaGetModel)
 		// Gin treats ":" as a param marker, but Gemini uses "{model}:{action}" in the same segment.
 		gemini.POST("/models/*modelAction", h.Gateway.GeminiV1BetaModels)
+		gemini.GET("/operations/*operation", h.Gateway.GeminiV1BetaOperation)
+		gemini.POST("/operations/*operation", h.Gateway.GeminiV1BetaOperation)
+		gemini.DELETE("/operations/*operation", h.Gateway.GeminiV1BetaOperation)
+		gemini.GET("/files", h.Gateway.GeminiV1BetaFile)
+		gemini.POST("/files", h.Gateway.GeminiV1BetaFile)
+		gemini.GET("/files/*filePath", h.Gateway.GeminiV1BetaFile)
+		gemini.DELETE("/files/*filePath", h.Gateway.GeminiV1BetaFile)
 	}
+	r.POST("/upload/v1beta/files", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, middleware.APIKeyAuthWithSubscriptionGoogle(apiKeyService, subscriptionService, cfg), requireGroupGoogle, strictGoogle, h.Gateway.GeminiV1BetaFile)
 
 	// OpenAI Responses API（不带v1前缀的别名）
 	r.POST("/responses", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), requireGroupOpenAI, strictOpenAI, h.OpenAIGateway.Responses)

@@ -8,7 +8,9 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -21,6 +23,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/server/gatewayctx"
 	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
+	hyperruntime "github.com/Wei-Shaw/sub2api/pkg/hypervisor/runtime"
 	"github.com/google/uuid"
 
 	"github.com/gin-gonic/gin"
@@ -30,6 +33,13 @@ import (
 // geminiCLITmpDirRegex 用于从 Gemini CLI 请求体中提取 tmp 目录的哈希值
 // 匹配格式: /Users/xxx/.gemini/tmp/[64位十六进制哈希]
 var geminiCLITmpDirRegex = regexp.MustCompile(`/\.gemini/tmp/([A-Fa-f0-9]{64})`)
+
+type hypervisorGatewayWriter struct{ ctx gatewayctx.GatewayContext }
+
+func (w hypervisorGatewayWriter) Write(p []byte) (int, error) { return w.ctx.WriteBytes(0, p) }
+func (w hypervisorGatewayWriter) Header() http.Header         { return w.ctx.Header() }
+func (w hypervisorGatewayWriter) WriteHeader(status int)      { w.ctx.SetStatus(status) }
+func (w hypervisorGatewayWriter) Flush()                      { _ = w.ctx.Flush() }
 
 // GeminiV1BetaListModels proxies:
 // GET /v1beta/models
@@ -45,8 +55,8 @@ func (h *GatewayHandler) GeminiV1BetaListModelsGateway(transportCtx gatewayctx.G
 	}
 	// 检查平台：优先使用强制平台（/antigravity 路由），否则要求 gemini 分组
 	forcePlatform, hasForcePlatform := middleware.GetForcePlatformFromGatewayContext(transportCtx)
-	if !hasForcePlatform && (apiKey.Group == nil || apiKey.Group.Platform != service.PlatformGemini) {
-		googleErrorContext(transportCtx, http.StatusBadRequest, "API key group platform is not gemini")
+	if !hasForcePlatform && (apiKey.Group == nil || (apiKey.Group.Platform != service.PlatformGemini && apiKey.Group.Platform != service.PlatformYunwu)) {
+		googleErrorContext(transportCtx, http.StatusBadRequest, "API key group platform is not gemini or yunwu")
 		return
 	}
 
@@ -55,6 +65,10 @@ func (h *GatewayHandler) GeminiV1BetaListModelsGateway(transportCtx gatewayctx.G
 		fallback := antigravity.FallbackGeminiModelsList()
 		fallback.Models = filterAntigravityGeminiModelsForAPIKey(apiKey, fallback.Models)
 		transportCtx.WriteJSON(http.StatusOK, fallback)
+		return
+	}
+	if !hasForcePlatform && apiKey.Group.Platform == service.PlatformYunwu {
+		h.forwardYunwuGeminiGET(transportCtx, "/v1beta/models")
 		return
 	}
 
@@ -114,8 +128,8 @@ func (h *GatewayHandler) GeminiV1BetaGetModelGateway(transportCtx gatewayctx.Gat
 	}
 	// 检查平台：优先使用强制平台（/antigravity 路由），否则要求 gemini 分组
 	forcePlatform, hasForcePlatform := middleware.GetForcePlatformFromGatewayContext(transportCtx)
-	if !hasForcePlatform && (apiKey.Group == nil || apiKey.Group.Platform != service.PlatformGemini) {
-		googleErrorContext(transportCtx, http.StatusBadRequest, "API key group platform is not gemini")
+	if !hasForcePlatform && (apiKey.Group == nil || (apiKey.Group.Platform != service.PlatformGemini && apiKey.Group.Platform != service.PlatformYunwu)) {
+		googleErrorContext(transportCtx, http.StatusBadRequest, "API key group platform is not gemini or yunwu")
 		return
 	}
 
@@ -132,6 +146,10 @@ func (h *GatewayHandler) GeminiV1BetaGetModelGateway(transportCtx gatewayctx.Gat
 	// 强制 antigravity 模式：返回 antigravity 模型信息
 	if forcePlatform == service.PlatformAntigravity {
 		transportCtx.WriteJSON(http.StatusOK, antigravity.FallbackGeminiModel(modelName))
+		return
+	}
+	if !hasForcePlatform && apiKey.Group.Platform == service.PlatformYunwu {
+		h.forwardYunwuGeminiGET(transportCtx, "/v1beta/models/"+url.PathEscape(modelName))
 		return
 	}
 
@@ -164,11 +182,129 @@ func (h *GatewayHandler) GeminiV1BetaGetModelGateway(transportCtx gatewayctx.Gat
 	writeUpstreamResponseContext(transportCtx, res)
 }
 
+func (h *GatewayHandler) forwardYunwuGeminiGET(c gatewayctx.GatewayContext, path string) {
+	if h.hypervisorEngine == nil || h.hypervisorEngine.YunwuEngine() == nil {
+		googleErrorContext(c, http.StatusServiceUnavailable, "Yunwu hypervisor is not initialized")
+		return
+	}
+	subject, ok := middleware.GetAuthSubjectFromGatewayContext(c)
+	if !ok {
+		googleErrorContext(c, http.StatusUnauthorized, "Invalid API key")
+		return
+	}
+	if rawQuery := c.Request().URL.RawQuery; rawQuery != "" {
+		path += "?" + rawQuery
+	}
+	requestCtx := hyperruntime.WithUpstreamRequest(c.Context(), http.MethodGet, path, "application/json")
+	_, err := h.hypervisorEngine.HandleRequest(requestCtx, strconv.FormatInt(subject.UserID, 10), c.HeaderValue("X-Conversation-ID"), []byte(`{}`), hypervisorGatewayWriter{ctx: c}, service.PlatformYunwu)
+	if err != nil {
+		googleErrorContext(c, http.StatusBadGateway, err.Error())
+	}
+}
+
 // GeminiV1BetaModels proxies Gemini native REST endpoints like:
 // POST /v1beta/models/{model}:generateContent
 // POST /v1beta/models/{model}:streamGenerateContent?alt=sse
 func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 	h.GeminiV1BetaModelsGateway(gatewayctx.FromGin(c))
+}
+
+// GeminiV1BetaOperation proxies polling/cancel/delete of long-running Gemini
+// media operations (for example Veo video generation) through a Yunwu group.
+func (h *GatewayHandler) GeminiV1BetaOperation(c *gin.Context) {
+	h.GeminiV1BetaOperationGateway(gatewayctx.FromGin(c))
+}
+
+func (h *GatewayHandler) GeminiV1BetaOperationGateway(c gatewayctx.GatewayContext) {
+	apiKey, ok := middleware.GetAPIKeyFromGatewayContext(c)
+	if !ok || apiKey == nil || apiKey.Group == nil || apiKey.Group.Platform != service.PlatformYunwu {
+		googleErrorContext(c, http.StatusBadRequest, "A Yunwu group is required for Gemini media operations")
+		return
+	}
+	if h.hypervisorEngine == nil || h.hypervisorEngine.YunwuEngine() == nil {
+		googleErrorContext(c, http.StatusServiceUnavailable, "Yunwu hypervisor is not initialized")
+		return
+	}
+	subject, ok := middleware.GetAuthSubjectFromGatewayContext(c)
+	if !ok {
+		googleErrorContext(c, http.StatusUnauthorized, "Invalid API key")
+		return
+	}
+	path := c.Path()
+	if !strings.HasPrefix(path, "/v1beta/operations/") {
+		googleErrorContext(c, http.StatusBadRequest, "Invalid Gemini operation path")
+		return
+	}
+	if rawQuery := c.Request().URL.RawQuery; rawQuery != "" {
+		path += "?" + rawQuery
+	}
+	method := c.Method()
+	if method != http.MethodGet && method != http.MethodDelete && method != http.MethodPost {
+		googleErrorContext(c, http.StatusMethodNotAllowed, "Unsupported operation method")
+		return
+	}
+	body := []byte(`{}`)
+	if method == http.MethodPost {
+		if requestBody, err := pkghttputil.ReadRequestBodyWithPrealloc(c.Request()); err == nil && len(requestBody) > 0 {
+			body = requestBody
+		}
+	}
+	requestCtx := hyperruntime.WithUpstreamRequest(c.Context(), method, path, "application/json")
+	_, err := h.hypervisorEngine.HandleRequest(requestCtx, strconv.FormatInt(subject.UserID, 10), c.HeaderValue("X-Conversation-ID"), body, hypervisorGatewayWriter{ctx: c}, service.PlatformYunwu)
+	if err != nil {
+		googleErrorContext(c, http.StatusBadGateway, err.Error())
+	}
+}
+
+// GeminiV1BetaFile proxies Gemini Files API upload/list/get/delete calls. This
+// enables large image, audio, and video inputs without embedding base64 data in
+// every generateContent request.
+func (h *GatewayHandler) GeminiV1BetaFile(c *gin.Context) {
+	h.GeminiV1BetaFileGateway(gatewayctx.FromGin(c))
+}
+
+func (h *GatewayHandler) GeminiV1BetaFileGateway(c gatewayctx.GatewayContext) {
+	apiKey, ok := middleware.GetAPIKeyFromGatewayContext(c)
+	if !ok || apiKey == nil || apiKey.Group == nil || apiKey.Group.Platform != service.PlatformYunwu {
+		googleErrorContext(c, http.StatusBadRequest, "A Yunwu group is required for Gemini Files API")
+		return
+	}
+	if h.hypervisorEngine == nil || h.hypervisorEngine.YunwuEngine() == nil {
+		googleErrorContext(c, http.StatusServiceUnavailable, "Yunwu hypervisor is not initialized")
+		return
+	}
+	subject, ok := middleware.GetAuthSubjectFromGatewayContext(c)
+	if !ok {
+		googleErrorContext(c, http.StatusUnauthorized, "Invalid API key")
+		return
+	}
+	path := c.Path()
+	if !strings.HasPrefix(path, "/v1beta/files") && path != "/upload/v1beta/files" {
+		googleErrorContext(c, http.StatusBadRequest, "Invalid Gemini file path")
+		return
+	}
+	if rawQuery := c.Request().URL.RawQuery; rawQuery != "" {
+		path += "?" + rawQuery
+	}
+	body := []byte(`{}`)
+	if c.Method() == http.MethodPost {
+		requestBody, err := pkghttputil.ReadRequestBodyWithPrealloc(c.Request())
+		if err != nil {
+			googleErrorContext(c, http.StatusBadRequest, "Failed to read upload body")
+			return
+		}
+		body = requestBody
+	}
+	contentType := c.HeaderValue("Content-Type")
+	if strings.TrimSpace(contentType) == "" {
+		contentType = "application/json"
+	}
+	requestCtx := hyperruntime.WithUpstreamRequest(c.Context(), c.Method(), path, contentType)
+	requestCtx = hyperruntime.WithUpstreamRequestHeaders(requestCtx, c.Header())
+	_, err := h.hypervisorEngine.HandleRequest(requestCtx, strconv.FormatInt(subject.UserID, 10), c.HeaderValue("X-Conversation-ID"), body, hypervisorGatewayWriter{ctx: c}, service.PlatformYunwu)
+	if err != nil {
+		googleErrorContext(c, http.StatusBadGateway, err.Error())
+	}
 }
 
 func (h *GatewayHandler) GeminiV1BetaModelsGateway(transportCtx gatewayctx.GatewayContext) {
@@ -191,12 +327,15 @@ func (h *GatewayHandler) GeminiV1BetaModelsGateway(transportCtx gatewayctx.Gatew
 	)
 	requestStart := time.Now()
 
-	// 检查平台：优先使用强制平台（/antigravity 路由，中间件已设置 request.Context），否则要求 gemini 分组
+	// 检查平台：Yunwu groups use the isolated balance-aware hypervisor while
+	// preserving the native Gemini request/response schema byte-for-byte.
+	useYunwu := false
 	if !middleware.HasForcePlatformContext(transportCtx) {
-		if apiKey.Group == nil || apiKey.Group.Platform != service.PlatformGemini {
-			googleErrorContext(transportCtx, http.StatusBadRequest, "API key group platform is not gemini")
+		if apiKey.Group == nil || (apiKey.Group.Platform != service.PlatformGemini && apiKey.Group.Platform != service.PlatformYunwu) {
+			googleErrorContext(transportCtx, http.StatusBadRequest, "API key group platform is not gemini or yunwu")
 			return
 		}
+		useYunwu = apiKey.Group.Platform == service.PlatformYunwu
 	}
 
 	modelName, action, err := parseGeminiModelAction(strings.TrimPrefix(transportCtx.PathParam("modelAction"), "/"))
@@ -228,6 +367,30 @@ func (h *GatewayHandler) GeminiV1BetaModelsGateway(transportCtx gatewayctx.Gatew
 
 	setOpsRequestContextGateway(transportCtx, modelName, stream, body)
 	setOpsEndpointContextGateway(transportCtx, "", int16(service.RequestTypeFromLegacy(stream, false)))
+
+	if useYunwu {
+		if h.hypervisorEngine == nil || h.hypervisorEngine.YunwuEngine() == nil {
+			googleErrorContext(transportCtx, http.StatusServiceUnavailable, "Yunwu hypervisor is not initialized")
+			return
+		}
+		if stream {
+			transportCtx.SetHeader("Content-Type", "text/event-stream")
+			transportCtx.SetHeader("Cache-Control", "no-cache, no-transform")
+		} else {
+			transportCtx.SetHeader("Content-Type", "application/json")
+		}
+		path := "/v1beta/models/" + url.PathEscape(modelName) + ":" + action
+		if stream {
+			path += "?alt=sse"
+		}
+		requestCtx := hyperruntime.WithUpstreamRequest(transportCtx.Context(), http.MethodPost, path, "application/json")
+		conversationID := transportCtx.HeaderValue("X-Conversation-ID")
+		_, forwardErr := h.hypervisorEngine.HandleRequest(requestCtx, strconv.FormatInt(authSubject.UserID, 10), conversationID, body, hypervisorGatewayWriter{ctx: transportCtx}, service.PlatformYunwu)
+		if forwardErr != nil {
+			googleErrorContext(transportCtx, http.StatusBadGateway, forwardErr.Error())
+		}
+		return
+	}
 
 	// Get subscription (may be nil)
 	subscription, _ := middleware.GetSubscriptionFromGatewayContext(transportCtx)

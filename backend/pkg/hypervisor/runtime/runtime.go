@@ -30,6 +30,51 @@ type Runtime interface {
 	Execute(ctx context.Context, nodeID string, reqPayload []byte, stream io.Writer) (*ResponseMetadata, error)
 }
 
+type upstreamRequestOverride struct {
+	Method      string
+	Path        string
+	ContentType string
+	Headers     http.Header
+}
+
+// UpstreamRequest describes the vendor-relative request selected by a gateway.
+// It intentionally contains no origin or credentials.
+type UpstreamRequest struct {
+	Method      string
+	Path        string
+	ContentType string
+	Headers     http.Header
+}
+
+type upstreamRequestOverrideKey struct{}
+
+// WithUpstreamRequest selects a vendor-relative endpoint for protocol-specific
+// APIs such as Gemini generateContent and asynchronous media operations.
+// Only absolute-path URLs are accepted by Execute; origins always come from the
+// selected account and therefore cannot be supplied by clients.
+func WithUpstreamRequest(ctx context.Context, method, path, contentType string) context.Context {
+	return context.WithValue(ctx, upstreamRequestOverrideKey{}, upstreamRequestOverride{Method: method, Path: path, ContentType: contentType})
+}
+
+// WithUpstreamRequestHeaders adds protocol headers required by resumable media
+// APIs. Authentication headers are deliberately ignored by Execute.
+func WithUpstreamRequestHeaders(ctx context.Context, headers http.Header) context.Context {
+	override, ok := ctx.Value(upstreamRequestOverrideKey{}).(upstreamRequestOverride)
+	if !ok {
+		return ctx
+	}
+	override.Headers = headers.Clone()
+	return context.WithValue(ctx, upstreamRequestOverrideKey{}, override)
+}
+
+func UpstreamRequestFromContext(ctx context.Context) (UpstreamRequest, bool) {
+	override, ok := ctx.Value(upstreamRequestOverrideKey{}).(upstreamRequestOverride)
+	if !ok {
+		return UpstreamRequest{}, false
+	}
+	return UpstreamRequest{Method: override.Method, Path: override.Path, ContentType: override.ContentType, Headers: override.Headers.Clone()}, true
+}
+
 // MockRuntime implements Runtime for simulating upstream responses and testing failures
 type MockRuntime struct {
 	store                *storage.Storage
@@ -262,18 +307,47 @@ func (r *AnthropicRuntime) Execute(ctx context.Context, nodeID string, reqPayloa
 		if json.Unmarshal(reqPayload, &bodyMap) == nil {
 			modelStr, _ := bodyMap["model"].(string)
 			modelLower := strings.ToLower(modelStr)
-			if strings.HasPrefix(modelLower, "gpt-") ||
-				strings.HasPrefix(modelLower, "o1-") ||
-				strings.HasPrefix(modelLower, "o3-") ||
-				strings.HasPrefix(modelLower, "text-") ||
-				bodyMap["input"] != nil ||
-				bodyMap["instructions"] != nil {
+			protocol, _ := acc.Extra["yunwu_protocol"].(string)
+			protocol = strings.ToLower(strings.TrimSpace(protocol))
+			if protocol == "openai" || protocol == "responses" ||
+				(protocol == "" && (strings.HasPrefix(modelLower, "gemini-") ||
+					strings.HasPrefix(modelLower, "imagen-") ||
+					strings.HasPrefix(modelLower, "veo-") ||
+					strings.HasPrefix(modelLower, "lyria-") ||
+					strings.HasPrefix(modelLower, "chirp-") ||
+					strings.HasPrefix(modelLower, "gpt-") ||
+					strings.HasPrefix(modelLower, "o1-") ||
+					strings.HasPrefix(modelLower, "o3-") ||
+					strings.HasPrefix(modelLower, "text-") ||
+					bodyMap["input"] != nil ||
+					bodyMap["instructions"] != nil)) {
 				isChatCompletions = true
 			}
 		}
 	}
 
 	apiURL := resolveUpstreamAPIURL(customURL, acc.Platform, isChatCompletions)
+	requestMethod := http.MethodPost
+	requestContentType := "application/json"
+	_, hasUpstreamOverride := ctx.Value(upstreamRequestOverrideKey{}).(upstreamRequestOverride)
+	if override, ok := ctx.Value(upstreamRequestOverrideKey{}).(upstreamRequestOverride); ok {
+		if override.Path == "" || !strings.HasPrefix(override.Path, "/") || strings.HasPrefix(override.Path, "//") || strings.Contains(override.Path, "://") {
+			return nil, fmt.Errorf("invalid upstream relative path")
+		}
+		method := strings.ToUpper(strings.TrimSpace(override.Method))
+		if method != http.MethodGet && method != http.MethodPost && method != http.MethodDelete {
+			return nil, fmt.Errorf("unsupported upstream method %q", override.Method)
+		}
+		origin, originErr := upstreamOrigin(customURL)
+		if originErr != nil {
+			return nil, originErr
+		}
+		apiURL = origin + override.Path
+		requestMethod = method
+		if strings.TrimSpace(override.ContentType) != "" {
+			requestContentType = override.ContentType
+		}
+	}
 
 	isOAuth := acc.Type == "oauth"
 	if isOAuth && acc.Platform == "openai" && customURL == "" {
@@ -289,7 +363,9 @@ func (r *AnthropicRuntime) Execute(ctx context.Context, nodeID string, reqPayloa
 	}
 
 	var bodyMap map[string]any
-	if json.Unmarshal(reqPayload, &bodyMap) == nil {
+	// Explicit endpoint overrides are transparent protocol tunnels. Applying
+	// chat-schema conversion here would corrupt native Gemini and media bodies.
+	if !hasUpstreamOverride && json.Unmarshal(reqPayload, &bodyMap) == nil {
 		modified := false
 
 		targetIsResponsesAPI := strings.Contains(apiURL, "/responses")
@@ -369,14 +445,18 @@ func (r *AnthropicRuntime) Execute(ctx context.Context, nodeID string, reqPayloa
 		}
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewReader(reqPayload))
+	var requestBody io.Reader = bytes.NewReader(reqPayload)
+	if requestMethod == http.MethodGet || requestMethod == http.MethodDelete {
+		requestBody = nil
+	}
+	req, err := http.NewRequestWithContext(ctx, requestMethod, apiURL, requestBody)
 	if err != nil {
 		return nil, err
 	}
 
 	if isChatCompletions || acc.Platform == "openai" {
 		req.Header.Set("Authorization", "Bearer "+apiKey)
-		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Content-Type", requestContentType)
 		if isOAuth && acc.Platform == "openai" {
 			req.Host = "chatgpt.com"
 			if isStream {
@@ -398,11 +478,21 @@ func (r *AnthropicRuntime) Execute(ctx context.Context, nodeID string, reqPayloa
 			req.Header.Set("User-Agent", "Claude-Code/0.2.29")
 		}
 		req.Header.Set("anthropic-version", "2023-06-01")
-		req.Header.Set("content-type", "application/json")
+		req.Header.Set("content-type", requestContentType)
 		if isStream {
 			req.Header.Set("accept", "text/event-stream")
 		} else {
 			req.Header.Set("accept", "application/json")
+		}
+	}
+	if override, ok := ctx.Value(upstreamRequestOverrideKey{}).(upstreamRequestOverride); ok {
+		for _, name := range []string{"Accept", "Range", "X-Goog-Upload-Command", "X-Goog-Upload-Header-Content-Length", "X-Goog-Upload-Header-Content-Type", "X-Goog-Upload-Offset", "X-Goog-Upload-Protocol"} {
+			if len(override.Headers.Values(name)) > 0 {
+				req.Header.Del(name)
+			}
+			for _, value := range override.Headers.Values(name) {
+				req.Header.Add(name, value)
+			}
 		}
 	}
 
@@ -501,9 +591,18 @@ func (r *AnthropicRuntime) Execute(ctx context.Context, nodeID string, reqPayloa
 		}
 	}
 
-	if resp.StatusCode != http.StatusOK {
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
 		bodyBytes, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("upstream error status %d: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	// Preserve media and async-operation response metadata. The gateway writer
+	// implements this interface, while tests and buffered callers remain valid.
+	if headerWriter, ok := stream.(interface{ Header() http.Header }); ok {
+		copyUpstreamResponseHeaders(headerWriter.Header(), resp.Header)
+	}
+	if statusWriter, ok := stream.(interface{ WriteHeader(int) }); ok && resp.StatusCode != http.StatusOK {
+		statusWriter.WriteHeader(resp.StatusCode)
 	}
 
 	isResponsesAPI := false
@@ -571,6 +670,34 @@ func (r *AnthropicRuntime) Execute(ctx context.Context, nodeID string, reqPayloa
 		InputTokens:  input,
 		OutputTokens: output,
 	}, nil
+}
+
+func upstreamOrigin(raw string) (string, error) {
+	if strings.TrimSpace(raw) == "" {
+		raw = "https://yunwu.ai"
+	}
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return "", fmt.Errorf("invalid upstream base URL")
+	}
+	return u.Scheme + "://" + u.Host, nil
+}
+
+func copyUpstreamResponseHeaders(dst, src http.Header) {
+	for _, name := range []string{
+		"Content-Type", "Content-Length", "Content-Disposition", "Content-Encoding",
+		"Cache-Control", "ETag", "Last-Modified", "Location", "Retry-After",
+		"X-Request-ID", "OpenAI-Request-ID",
+		"X-Goog-Upload-URL", "X-Goog-Upload-Status", "X-Goog-Upload-Command",
+		"X-Goog-Upload-Offset", "X-Goog-Upload-Chunk-Granularity",
+	} {
+		if values := src.Values(name); len(values) > 0 {
+			dst.Del(name)
+			for _, value := range values {
+				dst.Add(name, value)
+			}
+		}
+	}
 }
 
 type responsesSSETransformer struct {

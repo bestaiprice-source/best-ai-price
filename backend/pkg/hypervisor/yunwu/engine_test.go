@@ -161,6 +161,46 @@ func TestYunwuSchedulerScoringAndSelection(t *testing.T) {
 	require.ErrorIs(t, err, ErrNoYunwuNodesAvailable)
 }
 
+func TestClassifyMediaRequest(t *testing.T) {
+	tests := []struct {
+		name, method, path, model, body, kind string
+		units                                 int64
+	}{
+		{"image batch", http.MethodPost, "/v1/images/generations", "imagen-3", `{"n":3}`, "images", 3},
+		{"video seconds", http.MethodPost, "/v1/videos", "veo-3", `{"duration":8}`, "video", 8},
+		{"speech", http.MethodPost, "/v1/audio/speech", "gemini-tts", `{}`, "audio", 1},
+		{"operation poll", http.MethodGet, "/v1beta/operations/abc", "", `{}`, "media_control", 0},
+		{"file upload", http.MethodPost, "/upload/v1beta/files", "", `{}`, "media_control", 0},
+		{"native text", http.MethodPost, "/v1beta/models/gemini-2.5-flash:generateContent", "gemini-2.5-flash", `{}`, "", 0},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := runtime.WithUpstreamRequest(context.Background(), tc.method, tc.path, "application/json")
+			got := classifyMediaRequest(ctx, tc.model, []byte(tc.body))
+			assert.Equal(t, tc.kind, got.Kind)
+			assert.Equal(t, tc.units, got.Units)
+		})
+	}
+}
+
+func TestNumericMicroUSDUsesConservativeCeil(t *testing.T) {
+	got, ok := numericMicroUSD("1250.01")
+	require.True(t, ok)
+	assert.Equal(t, int64(1251), got)
+}
+
+func TestYunwuOperationAffinityNames(t *testing.T) {
+	ctx := runtime.WithUpstreamRequest(context.Background(), http.MethodGet, "/v1beta/operations/veo-job-1?alt=json", "application/json")
+	assert.Equal(t, "operations/veo-job-1", operationNameFromRequest(ctx))
+	assert.Equal(t, "operations/veo-job-1", operationNameFromResponse([]byte(`{"name":"operations/veo-job-1","done":false}`)))
+	assert.Empty(t, operationNameFromResponse([]byte(`{"name":"files/abc"}`)))
+}
+
+func TestModelNameFromNativeGeminiRequest(t *testing.T) {
+	ctx := runtime.WithUpstreamRequest(context.Background(), http.MethodPost, "/v1beta/models/veo-3.0-generate-preview:predictLongRunning", "application/json")
+	assert.Equal(t, "veo-3.0-generate-preview", modelNameFromRequest(ctx))
+}
+
 func TestYunwuHealthControllerAndStatsWorker(t *testing.T) {
 	store := setupTestYunwuStore(t)
 	ctx, cancel := context.WithCancel(context.Background())

@@ -1,6 +1,7 @@
 package yunwu
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -8,6 +9,7 @@ import (
 	"log/slog"
 	"math"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -53,6 +55,22 @@ type commitTrackingWriter struct {
 	n int64
 }
 
+type responseCaptureWriter struct {
+	*commitTrackingWriter
+	buf bytes.Buffer
+}
+
+func (w *responseCaptureWriter) Write(p []byte) (int, error) {
+	if w.buf.Len() < 64*1024 {
+		remaining := 64*1024 - w.buf.Len()
+		if remaining > len(p) {
+			remaining = len(p)
+		}
+		_, _ = w.buf.Write(p[:remaining])
+	}
+	return w.commitTrackingWriter.Write(p)
+}
+
 func (w *commitTrackingWriter) Write(p []byte) (int, error) {
 	n, err := w.w.Write(p)
 	w.n += int64(n)
@@ -64,6 +82,19 @@ func (w *commitTrackingWriter) Committed() bool { return w.n > 0 }
 func (w *commitTrackingWriter) Flush() {
 	if flusher, ok := w.w.(http.Flusher); ok {
 		flusher.Flush()
+	}
+}
+
+func (w *commitTrackingWriter) Header() http.Header {
+	if hw, ok := w.w.(interface{ Header() http.Header }); ok {
+		return hw.Header()
+	}
+	return make(http.Header)
+}
+
+func (w *commitTrackingWriter) WriteHeader(statusCode int) {
+	if hw, ok := w.w.(interface{ WriteHeader(int) }); ok {
+		hw.WriteHeader(statusCode)
 	}
 }
 
@@ -117,6 +148,9 @@ func (yh *YunwuHypervisor) HandleRequest(
 		if m, ok := payloadMap["model"].(string); ok {
 			requestedModel = m
 		}
+	}
+	if requestedModel == "" {
+		requestedModel = modelNameFromRequest(ctx)
 	}
 
 	slog.Info("[YunwuHypervisor] Handling Yunwu request",
@@ -192,12 +226,28 @@ func (yh *YunwuHypervisor) HandleRequest(
 		activeLeaseNodeID = currentLease.NodeID
 		slog.Debug("[YunwuHypervisor] Found active session lease", "session_id", sess.ID, "lease_node_id", activeLeaseNodeID)
 	}
+	operationNodeID := ""
+	if operation := operationNameFromRequest(ctx); operation != "" {
+		if nodeID, lookupErr := yh.store.Redis().Get(ctx, yunwuOperationNodeKey(operation)).Result(); lookupErr == nil && nodeID != "" {
+			activeLeaseNodeID = nodeID
+			operationNodeID = nodeID
+		}
+	}
 
 	// 4. Load Yunwu nodes and runtime credits
 	nodes, err := yh.getAllYunwuNodes(ctx)
 	if err != nil {
 		slog.Error("[YunwuHypervisor] Failed to fetch Yunwu nodes", "error", err)
 		return nil, err
+	}
+	if operationNodeID != "" {
+		bound := nodes[:0]
+		for _, node := range nodes {
+			if node.NodeID == operationNodeID {
+				bound = append(bound, node)
+			}
+		}
+		nodes = bound
 	}
 	states := yh.getAllYunwuNodeStates(ctx, nodes)
 	credits := yh.getAllYunwuNodeCredits(ctx, nodes)
@@ -215,13 +265,25 @@ func (yh *YunwuHypervisor) HandleRequest(
 		slog.Error("[YunwuHypervisor] YunwuScheduler selection failed", "error", err, "total_nodes", len(nodes))
 		return nil, err
 	}
+	media := classifyMediaRequest(ctx, requestedModel, reqPayload)
 	inputPrice, outputPrice, fallbackPrice := yh.resolvePrice(ctx, selectedNode.NodeID, requestedModel)
+	estimatedMicroUSD := int64(0)
+	if media.Kind != "" {
+		estimatedMicroUSD, fallbackPrice = yh.resolveMediaPrice(ctx, selectedNode.NodeID, requestedModel, media)
+	} else {
+		estimatedMicroUSD = estimateRequestMicroUSD(reqPayload, inputPrice, outputPrice)
+	}
 	if fallbackPrice {
 		observability.Default.YunwuFallbackPricing()
 	}
-	estimatedMicroUSD := estimateRequestMicroUSD(reqPayload, inputPrice, outputPrice)
+	// Even non-billable control-plane calls atomically validate that the chosen
+	// node still has allocatable balance. The 1 micro-USD hold is refunded.
+	reservationEstimate := estimatedMicroUSD
+	if reservationEstimate <= 0 {
+		reservationEstimate = 1
+	}
 	requestID := fmt.Sprintf("%s-%d", sess.ID, time.Now().UnixNano())
-	reserved, reserveErr := yh.sw.Reserve(ctx, selectedNode.NodeID, requestID, estimatedMicroUSD, 10*time.Minute)
+	reserved, reserveErr := yh.sw.Reserve(ctx, selectedNode.NodeID, requestID, reservationEstimate, 10*time.Minute)
 	if reserveErr != nil {
 		return nil, reserveErr
 	}
@@ -263,7 +325,7 @@ func (yh *YunwuHypervisor) HandleRequest(
 	if !yh.cfg.EnableRebinding {
 		maxRetries = 0
 	}
-	responseWriter := &commitTrackingWriter{w: stream}
+	responseWriter := &responseCaptureWriter{commitTrackingWriter: &commitTrackingWriter{w: stream}}
 
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		slog.Info("[YunwuHypervisor] Executing upstream request",
@@ -348,6 +410,9 @@ func (yh *YunwuHypervisor) HandleRequest(
 		)
 		return nil, execErr
 	}
+	if operation := operationNameFromResponse(responseWriter.buf.Bytes()); operation != "" {
+		_ = yh.store.Redis().Set(ctx, yunwuOperationNodeKey(operation), selectedNode.NodeID, 7*24*time.Hour).Err()
+	}
 
 	latencyMs := time.Since(execStart).Milliseconds()
 
@@ -366,6 +431,9 @@ func (yh *YunwuHypervisor) HandleRequest(
 		}
 		_ = json.Unmarshal(reqPayload, &parsedReq)
 		modelName := parsedReq.Model
+		if modelName == "" {
+			modelName = requestedModel
+		}
 
 		inputPrice, outputPrice, fallback := yh.resolvePrice(ctx, selectedNode.NodeID, modelName)
 		if fallback {
@@ -374,7 +442,16 @@ func (yh *YunwuHypervisor) HandleRequest(
 
 		totalTokens := meta.InputTokens + meta.OutputTokens
 		costUnits := totalTokens
-		if totalTokens > 0 {
+		if media.Kind != "" {
+			_, _ = yh.sw.ReconcileReservation(ctx, reservationNodeID, requestID, estimatedMicroUSD)
+			reservationOpen = false
+			if estimatedMicroUSD > 0 {
+				_ = yh.qm.ConsumeMicroUSD(ctx, ownerID, estimatedMicroUSD)
+				_, _ = yh.store.RecordUsageDetails(ctx, ownerID, &sess.ID, &selectedNode.NodeID, 0, 0, media.Units, "yunwu", "yunwu", modelName, media.Kind, estimatedMicroUSD)
+				observability.Default.AddUsage(media.Units)
+				_, _ = yh.store.LogEvent(ctx, ownerID, &sess.ID, &selectedNode.NodeID, "UsageRecorded", map[string]any{"usage_unit": media.Kind, "units": media.Units, "billed_micro_usd": estimatedMicroUSD, "pool_type": "yunwu"})
+			}
+		} else if totalTokens > 0 {
 			billedMicroUSD := CalculateBilledMicroUSD(meta.InputTokens, meta.OutputTokens, inputPrice, outputPrice)
 			_, _ = yh.sw.ReconcileReservation(ctx, reservationNodeID, requestID, billedMicroUSD)
 			reservationOpen = false
@@ -392,6 +469,13 @@ func (yh *YunwuHypervisor) HandleRequest(
 				"output_tokens", meta.OutputTokens,
 				"cost_units", costUnits,
 			)
+		} else {
+			// A successful token-priced request without usage metadata must not
+			// become free: settle the conservative reservation estimate.
+			_, _ = yh.sw.ReconcileReservation(ctx, reservationNodeID, requestID, estimatedMicroUSD)
+			reservationOpen = false
+			_ = yh.qm.ConsumeMicroUSD(ctx, ownerID, estimatedMicroUSD)
+			_, _ = yh.store.RecordUsageDetails(ctx, ownerID, &sess.ID, &selectedNode.NodeID, 0, 0, 0, "yunwu", "yunwu", modelName, "estimated_micro_usd", estimatedMicroUSD)
 		}
 	}
 
@@ -430,6 +514,158 @@ func estimateRequestMicroUSD(payload []byte, inputPriceUSDPer1K, outputPriceUSDP
 		}
 	}
 	return CalculateBilledMicroUSD(inputTokens, outputTokens, inputPriceUSDPer1K, outputPriceUSDPer1K)
+}
+
+type mediaRequest struct {
+	Kind  string
+	Units int64
+}
+
+func classifyMediaRequest(ctx context.Context, model string, payload []byte) mediaRequest {
+	req, ok := runtime.UpstreamRequestFromContext(ctx)
+	if !ok {
+		return mediaRequest{}
+	}
+	method, path := strings.ToUpper(req.Method), strings.ToLower(req.Path)
+	if method != http.MethodPost || strings.Contains(path, "/files") || strings.Contains(path, "/operations/") {
+		return mediaRequest{Kind: "media_control", Units: 0}
+	}
+	kind := ""
+	switch {
+	case strings.Contains(path, "/images/") || strings.HasPrefix(strings.ToLower(model), "imagen-"):
+		kind = "images"
+	case strings.Contains(path, "/audio/speech") || strings.HasPrefix(strings.ToLower(model), "chirp-") || strings.HasPrefix(strings.ToLower(model), "lyria-"):
+		kind = "audio"
+	case strings.Contains(path, "/audio/transcriptions"), strings.Contains(path, "/audio/translations"):
+		kind = "audio_input"
+	case strings.Contains(path, "/videos"), strings.Contains(path, "/video/"), strings.HasPrefix(strings.ToLower(model), "veo-"):
+		kind = "video"
+	case strings.Contains(path, ":predictlongrunning"):
+		kind = "media"
+	default:
+		return mediaRequest{}
+	}
+	units := int64(1)
+	var body struct {
+		N        int64 `json:"n"`
+		Duration int64 `json:"duration"`
+	}
+	if json.Unmarshal(payload, &body) == nil {
+		if body.N > 0 {
+			units = body.N
+		}
+		if kind == "video" && body.Duration > 0 {
+			units *= body.Duration
+		}
+	}
+	return mediaRequest{Kind: kind, Units: units}
+}
+
+// resolveMediaPrice returns a configured price per produced unit. Account
+// extra supports yunwu_media_prices_micro_usd as {model: price, kind: price,
+// default: price}; model wins over kind. Missing prices use the configurable
+// per-request fallback and are surfaced through the fallback-pricing metric.
+func (yh *YunwuHypervisor) resolveMediaPrice(ctx context.Context, nodeID, model string, media mediaRequest) (int64, bool) {
+	if media.Kind == "media_control" || media.Units <= 0 {
+		return 0, false
+	}
+	fallback := int64(math.Ceil(yh.cfg.YunwuDefaultOutputUSDPer1K * 1_000_000))
+	if fallback < 1 {
+		fallback = 1
+	}
+	if yh.store.DB() == nil {
+		return fallback * media.Units, true
+	}
+	id, err := strconv.ParseInt(nodeID, 10, 64)
+	if err != nil {
+		return fallback * media.Units, true
+	}
+	acc, err := yh.store.DB().Account.Get(ctx, id)
+	if err != nil || acc.Extra == nil {
+		return fallback * media.Units, true
+	}
+	prices, ok := acc.Extra["yunwu_media_prices_micro_usd"].(map[string]any)
+	if !ok {
+		return fallback * media.Units, true
+	}
+	for _, key := range []string{model, media.Kind, "default"} {
+		if price, ok := numericMicroUSD(prices[key]); ok && price >= 0 {
+			return price * media.Units, false
+		}
+	}
+	return fallback * media.Units, true
+}
+
+func numericMicroUSD(value any) (int64, bool) {
+	switch n := value.(type) {
+	case float64:
+		return int64(math.Ceil(n)), true
+	case int:
+		return int64(n), true
+	case int64:
+		return n, true
+	case json.Number:
+		v, err := strconv.ParseFloat(string(n), 64)
+		return int64(math.Ceil(v)), err == nil
+	case string:
+		v, err := strconv.ParseFloat(n, 64)
+		return int64(math.Ceil(v)), err == nil
+	default:
+		return 0, false
+	}
+}
+
+func operationNameFromRequest(ctx context.Context) string {
+	req, ok := runtime.UpstreamRequestFromContext(ctx)
+	if !ok {
+		return ""
+	}
+	path := req.Path
+	if i := strings.IndexByte(path, '?'); i >= 0 {
+		path = path[:i]
+	}
+	i := strings.Index(path, "/operations/")
+	if i < 0 {
+		return ""
+	}
+	return strings.TrimPrefix(path[i+1:], "/")
+}
+
+func modelNameFromRequest(ctx context.Context) string {
+	req, ok := runtime.UpstreamRequestFromContext(ctx)
+	if !ok {
+		return ""
+	}
+	path := req.Path
+	start := strings.Index(path, "/models/")
+	if start < 0 {
+		return ""
+	}
+	modelAction := path[start+len("/models/"):]
+	if end := strings.IndexAny(modelAction, ":?"); end >= 0 {
+		modelAction = modelAction[:end]
+	}
+	decoded, err := url.PathUnescape(modelAction)
+	if err != nil {
+		return ""
+	}
+	return decoded
+}
+
+func operationNameFromResponse(body []byte) string {
+	var payload map[string]any
+	if json.Unmarshal(body, &payload) != nil {
+		return ""
+	}
+	name, _ := payload["name"].(string)
+	if strings.HasPrefix(name, "operations/") {
+		return name
+	}
+	return ""
+}
+
+func yunwuOperationNodeKey(operation string) string {
+	return "ash:yunwu:operation_node:" + operation
 }
 
 func (yh *YunwuHypervisor) getAllYunwuNodes(ctx context.Context) ([]health.ExecutionNode, error) {

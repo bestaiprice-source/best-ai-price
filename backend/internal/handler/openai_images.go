@@ -5,6 +5,7 @@ import (
 	"errors"
 	"mime"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/server/gatewayctx"
 	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
+	hyperruntime "github.com/Wei-Shaw/sub2api/pkg/hypervisor/runtime"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
@@ -64,6 +66,32 @@ func (h *OpenAIGatewayHandler) ImagesGateway(c gatewayctx.GatewayContext) {
 	}
 	if len(body) == 0 {
 		h.errorResponseGateway(c, http.StatusBadRequest, "invalid_request_error", "Request body is empty")
+		return
+	}
+
+	if apiKey.Group != nil && apiKey.Group.Platform == service.PlatformYunwu {
+		if h.hypervisorEngine == nil || h.hypervisorEngine.YunwuEngine() == nil {
+			h.errorResponseGateway(c, http.StatusServiceUnavailable, "api_error", "Yunwu hypervisor is not initialized")
+			return
+		}
+		path := c.Path()
+		if path != "/v1/images/generations" && path != "/images/generations" && path != "/v1/images/edits" && path != "/images/edits" {
+			h.errorResponseGateway(c, http.StatusNotFound, "invalid_request_error", "unsupported Yunwu image endpoint")
+			return
+		}
+		if !strings.HasPrefix(path, "/v1/") {
+			path = "/v1" + path
+		}
+		contentType := c.HeaderValue("Content-Type")
+		if strings.TrimSpace(contentType) == "" {
+			contentType = "application/json"
+		}
+		requestCtx := hyperruntime.WithUpstreamRequest(c.Context(), http.MethodPost, path, contentType)
+		conversationID := c.HeaderValue("X-Conversation-ID")
+		_, forwardErr := h.hypervisorEngine.HandleRequest(requestCtx, strconv.FormatInt(subject.UserID, 10), conversationID, body, hypervisorGatewayWriter{ctx: c}, service.PlatformYunwu)
+		if forwardErr != nil {
+			h.errorResponseGateway(c, http.StatusBadGateway, "api_error", forwardErr.Error())
+		}
 		return
 	}
 
@@ -279,6 +307,58 @@ func (h *OpenAIGatewayHandler) ImagesGateway(c gatewayctx.GatewayContext) {
 			})
 		})
 		return
+	}
+}
+
+// YunwuMedia transparently proxies OpenAI-compatible audio and asynchronous
+// video APIs while retaining Yunwu balance scheduling and reservations.
+func (h *OpenAIGatewayHandler) YunwuMedia(c *gin.Context) {
+	h.YunwuMediaGateway(gatewayctx.FromGin(c))
+}
+
+func (h *OpenAIGatewayHandler) YunwuMediaGateway(c gatewayctx.GatewayContext) {
+	apiKey, ok := middleware2.GetAPIKeyFromGatewayContext(c)
+	if !ok || apiKey == nil || apiKey.Group == nil || apiKey.Group.Platform != service.PlatformYunwu {
+		h.errorResponseGateway(c, http.StatusBadRequest, "invalid_request_error", "A Yunwu group is required for this media endpoint")
+		return
+	}
+	subject, ok := middleware2.GetAuthSubjectFromGatewayContext(c)
+	if !ok {
+		h.errorResponseGateway(c, http.StatusUnauthorized, "authentication_error", "Invalid API key")
+		return
+	}
+	if h.hypervisorEngine == nil || h.hypervisorEngine.YunwuEngine() == nil {
+		h.errorResponseGateway(c, http.StatusServiceUnavailable, "api_error", "Yunwu hypervisor is not initialized")
+		return
+	}
+	path := c.Path()
+	allowed := strings.HasPrefix(path, "/v1/audio/") || strings.HasPrefix(path, "/v1/videos") || strings.HasPrefix(path, "/v1/video/")
+	if !allowed {
+		h.errorResponseGateway(c, http.StatusNotFound, "invalid_request_error", "Unsupported Yunwu media endpoint")
+		return
+	}
+	if rawQuery := c.Request().URL.RawQuery; rawQuery != "" {
+		path += "?" + rawQuery
+	}
+	body := []byte(`{}`)
+	if c.Method() == http.MethodPost {
+		requestBody, err := pkghttputil.ReadRequestBodyWithPrealloc(c.Request())
+		if err != nil {
+			h.errorResponseGateway(c, http.StatusBadRequest, "invalid_request_error", "Failed to read request body")
+			return
+		}
+		if len(requestBody) > 0 {
+			body = requestBody
+		}
+	}
+	contentType := c.HeaderValue("Content-Type")
+	if strings.TrimSpace(contentType) == "" {
+		contentType = "application/json"
+	}
+	requestCtx := hyperruntime.WithUpstreamRequest(c.Context(), c.Method(), path, contentType)
+	_, err := h.hypervisorEngine.HandleRequest(requestCtx, strconv.FormatInt(subject.UserID, 10), c.HeaderValue("X-Conversation-ID"), body, hypervisorGatewayWriter{ctx: c}, service.PlatformYunwu)
+	if err != nil {
+		h.errorResponseGateway(c, http.StatusBadGateway, "api_error", err.Error())
 	}
 }
 

@@ -70,8 +70,23 @@ Create active upstream accounts in the existing admin account UI:
 * Claude: `platform=anthropic`, with `access_token` or `api_key` and optional `base_url`.
 * OpenAI: `platform=openai`, with `api_key` and optional OpenAI-compatible `base_url`.
 * Yunwu: `platform=yunwu`, with `api_key` and `base_url`. Yunwu accounts are scheduled by the isolated Yunwu engine and are not mixed into the standard pool.
+  Account `extra.yunwu_protocol` may be `openai`, `responses`, `anthropic`, or `gemini`; when omitted, Gemini/Imagen/Veo/Lyria/Chirp and OpenAI model families use the OpenAI-compatible transport while Claude models use Anthropic Messages.
 
 Associate service API keys with a group for the intended platform. Yunwu groups can serve both Anthropic-compatible `/v1/messages` and OpenAI-compatible `/v1/chat/completions` or `/v1/responses`, depending on the requested model/payload.
+Yunwu groups can also call native Gemini `generateContent` and `streamGenerateContent` through `/v1beta/models/{model}:...`. Native request parts such as `inlineData`, `fileData`, images, audio, and video are forwarded without schema conversion, and upstream media response headers are preserved.
+
+Media-compatible Yunwu routes currently include:
+
+- `POST /v1/images/generations` and `/v1/images/edits`;
+- `POST /v1/audio/speech`, `/v1/audio/transcriptions`, and `/v1/audio/translations`;
+- `POST|GET|DELETE /v1/videos...` plus `POST /v1/video/generations`;
+- native Gemini `generateContent`, `streamGenerateContent`, and `predictLongRunning` model actions;
+- `GET|POST|DELETE /v1beta/operations/...` for long-running Veo/media jobs;
+- Gemini Files API under `/v1beta/files...` and `/upload/v1beta/files`.
+
+The exact model and endpoint availability is determined by the configured Yunwu vendor. Unsupported upstream operations are returned as vendor errors; the gateway does not fabricate media capabilities.
+
+Media generation is reserved and billed in micro-USD before the upstream call. Configure account `extra.yunwu_media_prices_micro_usd` as a map of prices per produced unit, for example `{"imagen-3": 40000, "images": 50000, "audio": 20000, "video": 120000, "default": 50000}`. An exact model key wins, then the media kind, then `default`. Image `n` and video `duration` multiply the unit price. File upload/list/get/delete and operation polling/cancellation are control-plane calls: they still require a fresh allocatable Yunwu balance but do not create another user charge. If no media price is configured, the Yunwu fallback price is used and the fallback-pricing metric is incremented.
 
 Service API keys are returned in cleartext only by the create-key response. The database stores a non-reversible SHA-256 lookup token; save the newly created key immediately because it cannot be recovered later.
 

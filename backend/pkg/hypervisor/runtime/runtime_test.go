@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -326,6 +327,97 @@ func TestYunwuRuntimeExecution(t *testing.T) {
 	assert.NotNil(t, resStream)
 	assert.Contains(t, streamBuf.String(), "response.output_text.delta")
 	assert.Contains(t, streamBuf.String(), "response.completed")
+}
+
+type headerBuffer struct {
+	bytes.Buffer
+	header http.Header
+	status int
+}
+
+func (w *headerBuffer) Header() http.Header    { return w.header }
+func (w *headerBuffer) WriteHeader(status int) { w.status = status }
+
+func TestYunwuGeminiUsesOpenAIProtocolAndPreservesMediaResponse(t *testing.T) {
+	store := newTestStorage(t)
+	ctx := context.Background()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/v1/chat/completions", r.URL.Path)
+		assert.Equal(t, "Bearer sk-yunwu-gemini", r.Header.Get("Authorization"))
+		var request map[string]any
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&request))
+		messages := request["messages"].([]any)
+		content := messages[0].(map[string]any)["content"].([]any)
+		assert.Equal(t, "image_url", content[1].(map[string]any)["type"])
+		w.Header().Set("Content-Type", "image/png")
+		w.Header().Set("Content-Disposition", `inline; filename="gemini.png"`)
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte("PNG"))
+	}))
+	defer server.Close()
+
+	account, err := store.DB().Account.Create().
+		SetName("yunwu-gemini").SetPlatform("yunwu").SetType("api_key").SetStatus("active").
+		SetCredentials(map[string]any{"api_key": "sk-yunwu-gemini", "base_url": server.URL}).Save(ctx)
+	require.NoError(t, err)
+
+	writer := &headerBuffer{header: make(http.Header)}
+	payload := []byte(`{"model":"gemini-2.5-flash-image","messages":[{"role":"user","content":[{"type":"text","text":"draw"},{"type":"image_url","image_url":{"url":"data:image/png;base64,AA=="}}]}]}`)
+	metadata, err := NewAnthropicRuntime(store).Execute(ctx, fmt.Sprint(account.ID), payload, writer)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusCreated, metadata.StatusCode)
+	assert.Equal(t, http.StatusCreated, writer.status)
+	assert.Equal(t, "image/png", writer.header.Get("Content-Type"))
+	assert.Equal(t, `inline; filename="gemini.png"`, writer.header.Get("Content-Disposition"))
+	assert.Equal(t, "PNG", writer.String())
+}
+
+func TestYunwuNativeGeminiEndpointPreservesInlineMedia(t *testing.T) {
+	store := newTestStorage(t)
+	ctx := context.Background()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/v1beta/models/gemini-2.5-flash:generateContent", r.URL.Path)
+		assert.Equal(t, "Bearer sk-yunwu-native", r.Header.Get("Authorization"))
+		body, err := io.ReadAll(r.Body)
+		require.NoError(t, err)
+		assert.Contains(t, string(body), `"inlineData"`)
+		assert.Contains(t, string(body), `"audio/wav"`)
+		assert.NotContains(t, string(body), `"messages"`)
+		assert.NotContains(t, string(body), `"max_tokens"`)
+		assert.Equal(t, "resumable", r.Header.Get("X-Goog-Upload-Protocol"))
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.Header().Set("X-Goog-Upload-URL", "https://upload.example/session")
+		_, _ = w.Write([]byte(`{"candidates":[{"content":{"parts":[{"inlineData":{"mimeType":"image/png","data":"UE5H"}}]}}]}`))
+	}))
+	defer server.Close()
+
+	account, err := store.DB().Account.Create().
+		SetName("yunwu-native-gemini").SetPlatform("yunwu").SetType("api_key").SetStatus("active").
+		SetCredentials(map[string]any{"api_key": "sk-yunwu-native", "base_url": server.URL + "/v1"}).Save(ctx)
+	require.NoError(t, err)
+
+	payload := []byte(`{"contents":[{"role":"user","parts":[{"text":"describe"},{"inlineData":{"mimeType":"audio/wav","data":"UklGRg=="}}]}]}`)
+	ctx = WithUpstreamRequest(ctx, http.MethodPost, "/v1beta/models/gemini-2.5-flash:generateContent", "application/json")
+	ctx = WithUpstreamRequestHeaders(ctx, http.Header{"X-Goog-Upload-Protocol": []string{"resumable"}, "Authorization": []string{"client-secret-must-not-pass"}})
+	writer := &headerBuffer{header: make(http.Header)}
+	metadata, err := NewAnthropicRuntime(store).Execute(ctx, fmt.Sprint(account.ID), payload, writer)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, metadata.StatusCode)
+	assert.Equal(t, "https://upload.example/session", writer.header.Get("X-Goog-Upload-URL"))
+	assert.Equal(t, "application/json; charset=utf-8", writer.header.Get("Content-Type"))
+	assert.Contains(t, writer.String(), `"mimeType":"image/png"`)
+}
+
+func TestYunwuUpstreamOverrideRejectsAbsoluteURL(t *testing.T) {
+	store := newTestStorage(t)
+	ctx := context.Background()
+	account, err := store.DB().Account.Create().
+		SetName("yunwu-safe-path").SetPlatform("yunwu").SetType("api_key").SetStatus("active").
+		SetCredentials(map[string]any{"api_key": "sk-test", "base_url": "https://yunwu.ai/v1"}).Save(ctx)
+	require.NoError(t, err)
+	ctx = WithUpstreamRequest(ctx, http.MethodPost, "https://attacker.invalid/steal", "application/json")
+	_, err = NewAnthropicRuntime(store).Execute(ctx, fmt.Sprint(account.ID), []byte(`{}`), &bytes.Buffer{})
+	require.ErrorContains(t, err, "invalid upstream relative path")
 }
 
 func TestResponsesSSETransformerDirect(t *testing.T) {
