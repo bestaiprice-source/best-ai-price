@@ -1,8 +1,10 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -13,11 +15,11 @@ import (
 )
 
 type rustSidecarIngressRuntime struct {
-	name      string
-	addr      string
-	manifest  RouteManifest
-	cfg       config.RustSidecarConfig
-	client    *rustsidecar.Client
+	name     string
+	addr     string
+	manifest RouteManifest
+	cfg      config.RustSidecarConfig
+	client   *rustsidecar.Client
 }
 
 func newRustSidecarIngressRuntime(cfg *config.Config, base *http.Server, manifest RouteManifest) *rustSidecarIngressRuntime {
@@ -127,6 +129,21 @@ func (r *rustSidecarIngressRuntime) proxyConn(downstream net.Conn) {
 	if err != nil {
 		_ = downstream.Close()
 		return
+	}
+	// The protocol mux consumes the HTTP/1 header or HTTP/2 client preface to
+	// classify the connection. Linux splice bypasses prefixedConn.Read, so flush
+	// that buffered prefix explicitly before switching to zero-copy relaying.
+	if prefixed, ok := downstream.(*prefixedConn); ok {
+		prefix := prefixed.takePrefix()
+		if len(prefix) > 0 {
+			_, writeErr := io.Copy(upstream, bytes.NewReader(prefix))
+			putClassifyPeekBuffer(prefix)
+			if writeErr != nil {
+				_ = downstream.Close()
+				_ = upstream.Close()
+				return
+			}
+		}
 	}
 
 	done := make(chan struct{}, 2)
