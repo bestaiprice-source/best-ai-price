@@ -309,7 +309,7 @@ func (r *AnthropicRuntime) Execute(ctx context.Context, nodeID string, reqPayloa
 			modelLower := strings.ToLower(modelStr)
 			protocol, _ := acc.Extra["yunwu_protocol"].(string)
 			protocol = strings.ToLower(strings.TrimSpace(protocol))
-			if protocol == "openai" || protocol == "responses" ||
+			if protocol == "openai" || protocol == "responses" || protocol == "gemini" ||
 				(protocol == "" && (strings.HasPrefix(modelLower, "gemini-") ||
 					strings.HasPrefix(modelLower, "imagen-") ||
 					strings.HasPrefix(modelLower, "veo-") ||

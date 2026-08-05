@@ -372,6 +372,24 @@ func TestYunwuGeminiUsesOpenAIProtocolAndPreservesMediaResponse(t *testing.T) {
 	assert.Equal(t, "PNG", writer.String())
 }
 
+func TestYunwuExplicitGeminiProtocolUsesOpenAIEndpoint(t *testing.T) {
+	store := newTestStorage(t)
+	ctx := context.Background()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/v1/chat/completions", r.URL.Path)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"ok"}}],"usage":{"prompt_tokens":1,"completion_tokens":1}}`))
+	}))
+	defer server.Close()
+	account, err := store.DB().Account.Create().
+		SetName("yunwu-explicit-gemini").SetPlatform("yunwu").SetType("api_key").SetStatus("active").
+		SetExtra(map[string]any{"yunwu_protocol": "gemini"}).
+		SetCredentials(map[string]any{"api_key": "sk-test", "base_url": server.URL}).Save(ctx)
+	require.NoError(t, err)
+	_, err = NewAnthropicRuntime(store).Execute(ctx, fmt.Sprint(account.ID), []byte(`{"model":"custom-model","messages":[{"role":"user","content":"hi"}]}`), io.Discard)
+	require.NoError(t, err)
+}
+
 func TestYunwuNativeGeminiEndpointPreservesInlineMedia(t *testing.T) {
 	store := newTestStorage(t)
 	ctx := context.Background()
