@@ -724,7 +724,16 @@ func (r *AnthropicRuntime) Execute(ctx context.Context, nodeID string, reqPayloa
 
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
 		bodyBytes, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("upstream error status %d: %s", resp.StatusCode, string(bodyBytes))
+		body := SafeResponseBody(bodyBytes)
+		if acc.Platform == "yunwu" {
+			slog.Warn("[Runtime] Yunwu upstream returned an error response",
+				"node_id", nodeID,
+				"status_code", resp.StatusCode,
+				"upstream_request_id", upstreamRequestID(resp.Header),
+				"response_body", body,
+			)
+		}
+		return nil, fmt.Errorf("upstream error status %d: %s", resp.StatusCode, body)
 	}
 
 	// Preserve media and async-operation response metadata. The gateway writer
@@ -801,6 +810,53 @@ func (r *AnthropicRuntime) Execute(ctx context.Context, nodeID string, reqPayloa
 		InputTokens:  input,
 		OutputTokens: output,
 	}, nil
+}
+
+// SafeResponseBody returns a bounded version of an upstream response suitable
+// for diagnostics. It removes common credential fields before the value is
+// written to logs or error events.
+func SafeResponseBody(body []byte) string {
+	const maxBytes = 8 * 1024
+	if len(body) > maxBytes {
+		body = body[:maxBytes]
+	}
+	var value any
+	if json.Unmarshal(body, &value) == nil {
+		redactResponseValue(value)
+		if encoded, err := json.Marshal(value); err == nil {
+			return string(encoded)
+		}
+	}
+	return string(body)
+}
+
+func redactResponseValue(value any) {
+	switch typed := value.(type) {
+	case map[string]any:
+		for key, child := range typed {
+			lower := strings.ToLower(key)
+			if strings.Contains(lower, "authorization") || strings.Contains(lower, "api_key") ||
+				strings.Contains(lower, "token") || strings.Contains(lower, "secret") ||
+				strings.Contains(lower, "password") || strings.Contains(lower, "credential") {
+				typed[key] = "[redacted]"
+				continue
+			}
+			redactResponseValue(child)
+		}
+	case []any:
+		for _, child := range typed {
+			redactResponseValue(child)
+		}
+	}
+}
+
+func upstreamRequestID(headers http.Header) string {
+	for _, name := range []string{"X-Request-ID", "Request-ID", "OpenAI-Request-ID"} {
+		if value := headers.Get(name); value != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 func upstreamOrigin(raw string) (string, error) {

@@ -14,6 +14,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/config"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/health"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/observability"
+	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/runtime"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/storage"
 	"github.com/redis/go-redis/v9"
 )
@@ -94,6 +95,7 @@ func (w *StatsWorker) Snapshot(ctx context.Context, nodeID string, staleAfter ti
 
 func reservedKey(nodeID string) string       { return "ash:yunwu:reserved:" + nodeID }
 func reservationKey(requestID string) string { return "ash:yunwu:reservation:" + requestID }
+
 var reserveScript = redis.NewScript(`
 local raw = redis.call('GET', KEYS[1])
 if not raw or redis.call('EXISTS', KEYS[3]) == 1 then return 0 end
@@ -203,9 +205,12 @@ func (w *StatsWorker) SyncNodeStats(ctx context.Context, node *health.ExecutionN
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
 		slog.Warn("[YunwuStatsWorker] Credit grants returned non-200, attempting user/self fallback",
 			"node_id", node.NodeID,
 			"status_code", resp.StatusCode,
+			"upstream_request_id", yunwuRequestID(resp.Header),
+			"response_body", runtime.SafeResponseBody(body),
 		)
 		return w.syncNodeStatsFallback(ctx, node, apiKey, origin)
 	}
@@ -288,7 +293,15 @@ func (w *StatsWorker) syncNodeStatsFallback(ctx context.Context, node *health.Ex
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("yunwu user/self API returned status %d", resp.StatusCode)
+		body, _ := io.ReadAll(resp.Body)
+		responseBody := runtime.SafeResponseBody(body)
+		slog.Warn("[YunwuStatsWorker] User/self returned non-200",
+			"node_id", node.NodeID,
+			"status_code", resp.StatusCode,
+			"upstream_request_id", yunwuRequestID(resp.Header),
+			"response_body", responseBody,
+		)
+		return nil, fmt.Errorf("yunwu user/self API returned status %d: %s", resp.StatusCode, responseBody)
 	}
 
 	body, err := io.ReadAll(resp.Body)
@@ -311,6 +324,15 @@ func (w *StatsWorker) syncNodeStatsFallback(ctx context.Context, node *health.Ex
 	_ = w.saveSnapshot(ctx, node, grants, "user_self")
 	observability.Default.YunwuBalanceSynced()
 	return grants, nil
+}
+
+func yunwuRequestID(headers http.Header) string {
+	for _, name := range []string{"X-Request-ID", "Request-ID", "OpenAI-Request-ID"} {
+		if value := headers.Get(name); value != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 // StartSyncLoop runs a background ticker synchronizing Yunwu node stats periodically

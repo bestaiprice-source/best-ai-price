@@ -558,6 +558,17 @@ func TestConstructMessagesFromResponsesPayload(t *testing.T) {
 	assert.Equal(t, "Что такое телеграм?", msgs[1]["content"])
 }
 
+func TestSafeResponseBodyRedactsCredentialsAndCapsLength(t *testing.T) {
+	body := []byte(`{"error":{"message":"bad key","api_key":"secret-value","nested":{"authorization":"Bearer secret"}}}`)
+	safe := SafeResponseBody(body)
+	assert.Contains(t, safe, `"api_key":"[redacted]"`)
+	assert.Contains(t, safe, `"authorization":"[redacted]"`)
+	assert.NotContains(t, safe, "secret-value")
+	assert.NotContains(t, safe, "Bearer secret")
+
+	assert.Len(t, SafeResponseBody(bytes.Repeat([]byte("x"), 9*1024)), 8*1024)
+}
+
 func TestExtractTokensSupportsGeminiAndInteractionsUsage(t *testing.T) {
 	input, output := extractTokens([]byte(`{"usageMetadata":{"promptTokenCount":258,"candidatesTokenCount":20,"thoughtsTokenCount":7}}`))
 	assert.Equal(t, int64(258), input)
