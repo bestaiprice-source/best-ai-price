@@ -286,6 +286,35 @@ func TestAnthropicRuntimeExecution(t *testing.T) {
 	assert.Contains(t, err.Error(), "empty api_key")
 }
 
+func TestAnthropicRuntimeAPIKeyTakesPrecedenceOverStaleAccessToken(t *testing.T) {
+	store := newTestStorage(t)
+	ctx := context.Background()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "active-api-key", r.Header.Get("x-api-key"))
+		assert.Equal(t, "Bearer active-api-key", r.Header.Get("Authorization"))
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"usage":{"input_tokens":1,"output_tokens":1}}`))
+	}))
+	defer server.Close()
+
+	account, err := store.DB().Account.Create().
+		SetName("anthropic-api-key-precedence").
+		SetPlatform("anthropic").
+		SetType("api_key").
+		SetStatus("active").
+		SetCredentials(map[string]any{
+			"api_key":      "active-api-key",
+			"access_token": "stale-access-token",
+			"base_url":     server.URL,
+		}).
+		Save(ctx)
+	require.NoError(t, err)
+
+	_, err = NewAnthropicRuntime(store).Execute(ctx, fmt.Sprintf("%d", account.ID), []byte(`{"model":"claude-test"}`), io.Discard)
+	require.NoError(t, err)
+}
+
 func TestResolveUpstreamAPIURL(t *testing.T) {
 	assert.Equal(t, "https://api.anthropic.com/v1/messages", resolveUpstreamAPIURL("", "anthropic", false))
 	assert.Equal(t, "https://api.openai.com/v1/chat/completions", resolveUpstreamAPIURL("", "openai", true))

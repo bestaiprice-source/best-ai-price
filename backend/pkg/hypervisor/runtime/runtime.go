@@ -396,9 +396,15 @@ func (r *AnthropicRuntime) Execute(ctx context.Context, nodeID string, reqPayloa
 		}
 	}
 
-	// Extract API Key / Token from Credentials
+	// Extract API Key / Token from Credentials.  API-key accounts occasionally
+	// retain an old access_token after being edited in the admin UI; that token
+	// must never shadow the configured api_key.  OAuth and setup-token accounts
+	// intentionally keep access_token first.
 	var apiKey string
-	keysToTry := []string{"access_token", "api_key", "token", "setup_token", "key", "session_key"}
+	keysToTry := []string{"api_key", "key", "token", "access_token", "setup_token", "session_key"}
+	if acc.Type == "oauth" || acc.Type == "setup-token" {
+		keysToTry = []string{"access_token", "setup_token", "api_key", "key", "token", "session_key"}
+	}
 	for _, k := range keysToTry {
 		if val, ok := accountCredentials[k].(string); ok && strings.TrimSpace(val) != "" {
 			apiKey = strings.TrimSpace(val)
