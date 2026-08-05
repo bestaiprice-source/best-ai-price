@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/ent"
@@ -655,6 +656,7 @@ func (qm *QuotaManager) GetDynamicLimitPerWeight(ctx context.Context, poolType s
 	if poolType == "yunwu" {
 		keys, _ := qm.store.Redis().Keys(ctx, "ash:yunwu:balance:*").Result()
 		var remaining int64
+		trackedHealthyNodes := make(map[string]struct{})
 		for _, key := range keys {
 			var snap struct {
 				AvailableMicroUSD          int64     `json:"available_micro_usd"`
@@ -673,11 +675,19 @@ func (qm *QuotaManager) GetDynamicLimitPerWeight(ctx context.Context, poolType s
 				}
 				if available > 0 {
 					remaining += available
+					trackedHealthyNodes[strings.TrimPrefix(key, "ash:yunwu:balance:")] = struct{}{}
 				}
 			}
 		}
 		localUsed, _ := qm.store.Redis().Get(ctx, fmt.Sprintf("ash:yunwu:pool_used_micro_usd:%s", monthKey())).Int64()
 		totalCapacityUnits = remaining + localUsed
+		if !qm.cfg.YunwuRequireFreshBalance {
+			for _, id := range nodeIDs {
+				if _, tracked := trackedHealthyNodes[strconv.FormatInt(id, 10)]; !tracked {
+					totalCapacityUnits += qm.cfg.YunwuFallbackCapacityMicroUSD
+				}
+			}
+		}
 	}
 
 	for _, id := range nodeIDs {

@@ -20,6 +20,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/account"
 	"github.com/Wei-Shaw/sub2api/ent/ashevent"
 	"github.com/Wei-Shaw/sub2api/ent/enttest"
+	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/config"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/storage"
 	_ "modernc.org/sqlite"
 )
@@ -77,6 +78,31 @@ func TestQuotaManagerGetUserAccessAndCheckQuota(t *testing.T) {
 	dynLimit, err := qm.GetDynamicLimitPerWeight(ctx, "standard")
 	require.NoError(t, err)
 	assert.Greater(t, dynLimit, int64(0))
+}
+
+func TestYunwuUsesFallbackCapacityWithoutBalanceSnapshot(t *testing.T) {
+	store := newTestStorage(t)
+	ctx := context.Background()
+	qm := NewQuotaManager(store, &config.HypervisorConfig{
+		EnableMockRuntime:             false,
+		YunwuRequireFreshBalance:      false,
+		YunwuFallbackCapacityMicroUSD: 50_000_000,
+		ActiveUserWindowSeconds:       86400,
+	})
+	_, err := store.DB().Account.Create().
+		SetPlatform("yunwu").
+		SetStatus("active").
+		SetSchedulable(true).
+		SetName("Yunwu without balance API").
+		SetType("api").
+		SetCredentials(map[string]interface{}{}).
+		Save(ctx)
+	require.NoError(t, err)
+	require.NoError(t, qm.RegisterActiveUser(ctx, "fallback-user", "yunwu", 1))
+
+	limit, err := qm.GetDynamicLimitPerWeight(ctx, "yunwu")
+	require.NoError(t, err)
+	assert.Equal(t, int64(50_000_000), limit)
 }
 
 func TestYunwuUserMoneyReservationsAreAtomicAndRecoverExpiredHolds(t *testing.T) {

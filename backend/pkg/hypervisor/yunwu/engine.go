@@ -113,7 +113,7 @@ func NewYunwuHypervisor(store *storage.Storage, rt runtime.Runtime, decryptors .
 		nm:        health.NewNodeManager(store),
 		ew:        events.NewEventWriter(store),
 		qm:        quota.NewQuotaManager(store, cfg),
-		sch:       NewYunwuScheduler(),
+		sch:       NewYunwuScheduler(cfg.YunwuRequireFreshBalance),
 		rt:        rt,
 		rm:        NewYunwuRebindingManager(store),
 		comp:      compiler.NewCompiler(),
@@ -310,15 +310,19 @@ func (yh *YunwuHypervisor) HandleRequest(
 			_ = yh.qm.ReleaseMicroUSDReservation(context.Background(), ownerID, requestID)
 		}
 	}()
-	reserved, reserveErr := yh.sw.Reserve(ctx, selectedNode.NodeID, requestID, reservationEstimate, 10*time.Minute)
-	if reserveErr != nil {
-		return nil, reserveErr
-	}
-	if !reserved {
-		return nil, quota.ErrQuotaExceeded
+	reserved := false
+	if yh.cfg.YunwuRequireFreshBalance {
+		var reserveErr error
+		reserved, reserveErr = yh.sw.Reserve(ctx, selectedNode.NodeID, requestID, reservationEstimate, 10*time.Minute)
+		if reserveErr != nil {
+			return nil, reserveErr
+		}
+		if !reserved {
+			return nil, quota.ErrQuotaExceeded
+		}
 	}
 	reservationNodeID := selectedNode.NodeID
-	reservationOpen := true
+	reservationOpen := reserved
 	defer func() {
 		if reservationOpen {
 			_, _ = yh.sw.ReleaseReservation(context.Background(), reservationNodeID, requestID)
@@ -616,14 +620,17 @@ func (yh *YunwuHypervisor) handleLive(ctx context.Context, ownerID, conversation
 			_ = yh.qm.ReleaseMicroUSDReservation(context.Background(), ownerID, requestID)
 		}
 	}()
-	reserved, err := yh.sw.Reserve(ctx, selected.NodeID, requestID, max64(1, estimated), time.Duration(maxMinutes+2)*time.Minute)
-	if err != nil {
-		return err
+	reserved := false
+	if yh.cfg.YunwuRequireFreshBalance {
+		reserved, err = yh.sw.Reserve(ctx, selected.NodeID, requestID, max64(1, estimated), time.Duration(maxMinutes+2)*time.Minute)
+		if err != nil {
+			return err
+		}
+		if !reserved {
+			return quota.ErrQuotaExceeded
+		}
 	}
-	if !reserved {
-		return quota.ErrQuotaExceeded
-	}
-	reservationOpen := true
+	reservationOpen := reserved
 	defer func() {
 		if reservationOpen {
 			_, _ = yh.sw.ReleaseReservation(context.Background(), selected.NodeID, requestID)

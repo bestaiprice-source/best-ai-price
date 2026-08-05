@@ -26,6 +26,8 @@ Configure ASH by setting these variables in your `.env` or system environment:
 * `ASH_YUNWU_BALANCE_SYNC_SECONDS=300`: Yunwu API balance refresh interval.
 * `ASH_YUNWU_BALANCE_STALE_SECONDS=1800`: Maximum snapshot age before a node is excluded.
 * `ASH_YUNWU_BALANCE_RESERVE_PERCENT=10`: Balance kept as an operational reserve.
+* `ASH_YUNWU_REQUIRE_FRESH_BALANCE=false`: When `false`, balance sync failures do not disable Yunwu nodes; fair-share uses the fallback capacity below. Set `true` to require a fresh vendor balance.
+* `ASH_YUNWU_FALLBACK_CAPACITY_MICRO_USD=1000000000`: Internal fair-share capacity per Yunwu node ($1000) when a fresh positive balance is unavailable.
 * `ASH_YUNWU_DEFAULT_INPUT_USD_PER_1K=0.002` and `ASH_YUNWU_DEFAULT_OUTPUT_USD_PER_1K=0.002`: fallback model prices.
 
 Standard tariff usage is shared, while dynamic capacity is calculated independently for `standard:anthropic` and `standard:openai`. Active weights are the sum of priorities for users seen in the last 24 hours.

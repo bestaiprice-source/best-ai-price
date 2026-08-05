@@ -223,6 +223,14 @@ func TestYunwuSchedulerScoringAndSelection(t *testing.T) {
 	require.ErrorIs(t, err, ErrNoYunwuNodesAvailable)
 }
 
+func TestYunwuSchedulerAllowsMissingBalanceInOptionalMode(t *testing.T) {
+	sch := NewYunwuScheduler(false)
+	winning, err := sch.SelectNode(context.Background(), []health.ExecutionNode{{NodeID: "yw-optional", State: "healthy"}}, nil, nil, 1, "", "NORMAL")
+	require.NoError(t, err)
+	require.NotNil(t, winning)
+	assert.Equal(t, "yw-optional", winning.NodeID)
+}
+
 func TestClassifyMediaRequest(t *testing.T) {
 	tests := []struct {
 		name, method, path, model, body, kind string

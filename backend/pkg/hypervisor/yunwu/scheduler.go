@@ -18,10 +18,14 @@ const (
 	PriorityBonusMultiplier = 5.0
 )
 
-type YunwuScheduler struct{}
+type YunwuScheduler struct{ requireFreshBalance bool }
 
-func NewYunwuScheduler() *YunwuScheduler {
-	return &YunwuScheduler{}
+func NewYunwuScheduler(requireFreshBalance ...bool) *YunwuScheduler {
+	requireFresh := true
+	if len(requireFreshBalance) > 0 {
+		requireFresh = requireFreshBalance[0]
+	}
+	return &YunwuScheduler{requireFreshBalance: requireFresh}
 }
 
 // SelectNode selects the best Yunwu execution node for a session based on Yunwu credit balance and health stats
@@ -46,9 +50,12 @@ func (s *YunwuScheduler) SelectNode(
 
 		// Check credit balance (if tracked)
 		credit, tracked := credits[node.NodeID]
-		if !tracked || credit <= 0 {
+		if s.requireFreshBalance && (!tracked || credit <= 0) {
 			slog.Warn("[YunwuScheduler] Excluding exhausted credit Yunwu node", "node_id", node.NodeID, "available_credit", credit)
 			continue
+		}
+		if !s.requireFreshBalance && (!tracked || credit <= 0) {
+			slog.Info("[YunwuScheduler] Scheduling Yunwu node without a usable balance snapshot", "node_id", node.NodeID)
 		}
 
 		// Check if in cooldown
