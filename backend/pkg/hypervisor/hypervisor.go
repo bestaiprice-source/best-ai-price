@@ -160,20 +160,30 @@ func (h *Hypervisor) handleRequest(ctx context.Context, ownerID string, conversa
 	}
 	_ = h.qm.RegisterActiveUser(ctx, ownerID, "standard", userPriority)
 
-	// 1. Check the shared standard tariff and provider-specific capacity.
-	allowed := true
-	var err error
+	// 1. Check the shared standard tariff and provider-specific capacity with atomic token reservation.
+	var reservationOpen bool
+	scope := "standard:" + platform
 	if h.cfg.EnableQuotaManager {
-		allowed, err = h.qm.CheckQuotaScope(ctx, ownerID, "standard:"+platform)
-	}
-	if err != nil {
-		slog.Error("[Hypervisor] Quota check failed with error", "owner_id", ownerID, "error", err)
-		return nil, err
-	}
-	if !allowed {
-		slog.Warn("[Hypervisor] User quota exceeded", "owner_id", ownerID)
-		_ = h.logEvent(ctx, ownerID, nil, nil, "QuotaExceeded", map[string]any{"reason": "quota limit reached"})
-		return nil, quota.ErrQuotaExceeded
+		estimatedTokens := estimateRequestTokens(reqPayload)
+		if requestID == "" {
+			requestID = fmt.Sprintf("req-std-%d", time.Now().UnixNano())
+		}
+		reserved, resErr := h.qm.ReserveQuotaTokens(ctx, ownerID, requestID, scope, estimatedTokens, 120*time.Second)
+		if resErr != nil {
+			slog.Error("[Hypervisor] Quota reservation failed with error", "owner_id", ownerID, "error", resErr)
+			return nil, resErr
+		}
+		if !reserved {
+			slog.Warn("[Hypervisor] User quota exceeded", "owner_id", ownerID)
+			_ = h.logEvent(ctx, ownerID, nil, nil, "QuotaExceeded", map[string]any{"reason": "quota limit reached"})
+			return nil, quota.ErrQuotaExceeded
+		}
+		reservationOpen = true
+		defer func() {
+			if reservationOpen {
+				_ = h.qm.ReleaseQuotaTokens(context.Background(), ownerID, requestID, scope)
+			}
+		}()
 	}
 
 	// 1.5. Check Concurrent Slot
@@ -408,11 +418,15 @@ func (h *Hypervisor) handleRequest(ctx context.Context, ownerID string, conversa
 	if res != nil {
 		totalTokens := res.InputTokens + res.OutputTokens
 		costUnits := totalTokens
-		if totalTokens > 0 {
-			if h.cfg.EnableQuotaManager {
-				_ = h.qm.ConsumeQuota(ctx, ownerID, "standard", totalTokens)
-				_ = h.qm.ConsumeQuota(ctx, ownerID, "standard:"+platform, totalTokens)
+		if h.cfg.EnableQuotaManager {
+			if recErr := h.qm.ReconcileQuotaTokens(ctx, ownerID, requestID, scope, totalTokens); recErr == nil {
+				reservationOpen = false
+			} else {
+				slog.Error("[Hypervisor] ReconcileQuotaTokens failed", "owner_id", ownerID, "request_id", requestID, "error", recErr)
+				_ = h.logEvent(ctx, ownerID, &sess.ID, &selectedNode.NodeID, "ReconcileFailed", map[string]any{"error": recErr.Error()})
 			}
+		}
+		if totalTokens > 0 {
 			if h.cfg.EnableUsageRecorder {
 				_, _ = h.store.RecordUsage(ctx, ownerID, &sess.ID, &selectedNode.NodeID, res.InputTokens, res.OutputTokens, costUnits)
 			}
@@ -616,4 +630,34 @@ func (h *Hypervisor) logEvent(ctx context.Context, ownerID string, sessID *strin
 	}
 	_, err := h.ew.LogEvent(ctx, ownerID, sessID, nodeID, eventType, payload)
 	return err
+}
+
+type tokenEstimatePayload struct {
+	MaxTokens       int64 `json:"max_tokens"`
+	MaxOutputTokens int64 `json:"max_output_tokens"`
+}
+
+func estimateRequestTokens(payload []byte) int64 {
+	inputEst := int64(len(payload) / 4)
+	if inputEst < 256 {
+		inputEst = 256
+	}
+
+	outputEst := int64(4096)
+	if len(payload) > 0 {
+		var p tokenEstimatePayload
+		if err := json.Unmarshal(payload, &p); err == nil {
+			reqMax := p.MaxTokens
+			if p.MaxOutputTokens > reqMax {
+				reqMax = p.MaxOutputTokens
+			}
+			if reqMax > 0 {
+				if reqMax > 128000 {
+					reqMax = 128000
+				}
+				outputEst = reqMax
+			}
+		}
+	}
+	return inputEst + outputEst
 }

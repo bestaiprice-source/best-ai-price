@@ -314,11 +314,21 @@ func (w *StatsWorker) syncNodeStatsFallback(ctx context.Context, node *health.Ex
 		return nil, err
 	}
 
+	availableUSD := userSelf.Data.Balance
+	if availableUSD == 0 && userSelf.Data.Quota > 0 {
+		if userSelf.Data.Quota > 1000 {
+			// New API / One API standard: 500,000 units = $1 USD
+			availableUSD = userSelf.Data.Quota / 500000.0
+		} else {
+			availableUSD = userSelf.Data.Quota
+		}
+	}
+
 	grants := &YunwuCreditGrantsResponse{
 		Object:         "credit_grants",
 		TotalGranted:   userSelf.Data.Quota,
 		TotalUsed:      userSelf.Data.UsedQuota,
-		TotalAvailable: userSelf.Data.Balance,
+		TotalAvailable: availableUSD,
 	}
 
 	_ = w.saveSnapshot(ctx, node, grants, "user_self")

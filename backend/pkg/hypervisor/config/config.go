@@ -27,6 +27,8 @@ type HypervisorConfig struct {
 	YunwuRequireFreshBalance      bool
 	YunwuFallbackCapacityMicroUSD int64
 	ActiveUserWindowSeconds       int
+	PoolReservePercent            int
+	MaxOwnerPoolSharePercent      int
 }
 
 // LoadFromEnv loads Hypervisor config from environment variables as overrides/fallbacks.
@@ -50,9 +52,11 @@ func LoadFromEnv() *HypervisorConfig {
 		YunwuBalanceSyncSeconds:       getEnvInt("ASH_YUNWU_BALANCE_SYNC_SECONDS", 300),
 		YunwuBalanceStaleSeconds:      getEnvInt("ASH_YUNWU_BALANCE_STALE_SECONDS", 1800),
 		YunwuBalanceReservePercent:    getEnvInt("ASH_YUNWU_BALANCE_RESERVE_PERCENT", 10),
-		YunwuRequireFreshBalance:      getEnvBool("ASH_YUNWU_REQUIRE_FRESH_BALANCE", false),
+		YunwuRequireFreshBalance:      getEnvBool("ASH_YUNWU_REQUIRE_FRESH_BALANCE", true),
 		YunwuFallbackCapacityMicroUSD: getEnvInt64("ASH_YUNWU_FALLBACK_CAPACITY_MICRO_USD", 1_000_000_000),
 		ActiveUserWindowSeconds:       getEnvInt("ASH_ACTIVE_USER_WINDOW_SECONDS", 86400),
+		PoolReservePercent:            getEnvInt("ASH_POOL_RESERVE_PERCENT", 20),
+		MaxOwnerPoolSharePercent:      getEnvInt("ASH_MAX_OWNER_POOL_SHARE_PERCENT", 50),
 	}
 	// Retrying more than once is unsafe for non-idempotent upstream requests.
 	if cfg.MaxRetry < 0 {
@@ -80,6 +84,12 @@ func LoadFromEnv() *HypervisorConfig {
 	}
 	if cfg.ActiveUserWindowSeconds <= 0 {
 		cfg.ActiveUserWindowSeconds = 86400
+	}
+	if cfg.PoolReservePercent < 0 || cfg.PoolReservePercent >= 100 {
+		cfg.PoolReservePercent = 20
+	}
+	if cfg.MaxOwnerPoolSharePercent <= 0 || cfg.MaxOwnerPoolSharePercent > 100 {
+		cfg.MaxOwnerPoolSharePercent = 50
 	}
 	return cfg
 }

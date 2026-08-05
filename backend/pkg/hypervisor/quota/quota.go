@@ -20,9 +20,10 @@ import (
 )
 
 var (
-	ErrQuotaExceeded      = errors.New("user quota exceeded")
-	ErrUserInactive       = errors.New("user is inactive")
-	ErrDailyBurstExceeded = errors.New("daily burst limit exceeded")
+	ErrQuotaExceeded           = errors.New("user quota exceeded")
+	ErrUserInactive            = errors.New("user is inactive")
+	ErrDailyBurstExceeded      = errors.New("daily burst limit exceeded")
+	ErrConcurrentLimitExceeded = errors.New("concurrent request limit exceeded (max 5)")
 )
 
 const (
@@ -81,7 +82,19 @@ func moneyReservationExpiryKey(ownerID string) string {
 	return fmt.Sprintf("ash:quota_reservation_expiry_micro_usd:%s", ownerID)
 }
 
-// ReserveMicroUSD atomically checks monthly and daily monetary limits while
+func tokenReservedKey(ownerID, scope string) string {
+	return fmt.Sprintf("ash:quota_reserved:%s:%s:%s", ownerID, scope, monthKey())
+}
+
+func tokenReservationsKey(ownerID, scope string) string {
+	return fmt.Sprintf("ash:quota_token_reservations:%s:%s", ownerID, scope)
+}
+
+func tokenReservationExpiryKey(ownerID, scope string) string {
+	return fmt.Sprintf("ash:quota_token_reservation_expiry:%s:%s", ownerID, scope)
+}
+
+// ReserveMicroUSD atomically checks monthly, daily, and dynamic monetary limits while
 // accounting for all in-flight requests from the same user.
 func (qm *QuotaManager) ReserveMicroUSD(ctx context.Context, ownerID, requestID string, amount int64, ttl time.Duration) (bool, error) {
 	if amount <= 0 {
@@ -94,6 +107,9 @@ func (qm *QuotaManager) ReserveMicroUSD(ctx context.Context, ownerID, requestID 
 	today := time.Now().UTC().Format("2006-01-02")
 	dailyUsedKey := fmt.Sprintf("ash:daily_usage_micro_usd:%s:%s", ownerID, today)
 	dailyReservedKey := fmt.Sprintf("ash:daily_reserved_micro_usd:%s:%s", ownerID, today)
+
+	dynLimitMicroUSD, _ := qm.GetEffectiveDynamicLimit(ctx, "yunwu", access.Priority)
+
 	const script = `
 local expired = redis.call('ZRANGEBYSCORE', KEYS[6], '-inf', ARGV[5])
 for _, request_id in ipairs(expired) do
@@ -102,13 +118,14 @@ for _, request_id in ipairs(expired) do
   local expired_month = redis.call('HGET', KEYS[5], request_id .. ':month')
   if expired_amount > 0 then
     if expired_month then
-      local monthly_key = ARGV[9] .. expired_month
+      local monthly_key = ARGV[9] .. ':' .. expired_month
       local monthly = redis.call('DECRBY', monthly_key, expired_amount)
       if monthly < 0 then redis.call('SET', monthly_key, 0) end
     end
     if expired_date then
-      local daily = redis.call('DECRBY', ARGV[8] .. expired_date, expired_amount)
-      if daily < 0 then redis.call('SET', ARGV[8] .. expired_date, 0) end
+      local d_key = ARGV[8] .. ':' .. expired_date
+      local daily = redis.call('DECRBY', d_key, expired_amount)
+      if daily < 0 then redis.call('SET', d_key, 0) end
     end
   end
   redis.call('HDEL', KEYS[5], request_id, request_id .. ':date', request_id .. ':month')
@@ -122,8 +139,10 @@ local daily_reserved = tonumber(redis.call('GET', KEYS[4]) or '0')
 local amount = tonumber(ARGV[1])
 local monthly_limit = tonumber(ARGV[2])
 local daily_limit = tonumber(ARGV[3])
+local dynamic_limit = tonumber(ARGV[11])
 if monthly_limit > 0 and used + reserved + amount > monthly_limit then return 0 end
 if daily_limit > 0 and daily_used + daily_reserved + amount > daily_limit then return 0 end
+if dynamic_limit > 0 and used + reserved + amount > dynamic_limit then return 0 end
 redis.call('HSET', KEYS[5], ARGV[6], amount, ARGV[6] .. ':date', ARGV[7], ARGV[6] .. ':month', ARGV[10])
 redis.call('ZADD', KEYS[6], ARGV[4], ARGV[6])
 redis.call('INCRBY', KEYS[2], amount)
@@ -132,7 +151,7 @@ redis.call('EXPIRE', KEYS[2], 2678400)
 redis.call('EXPIRE', KEYS[4], 172800)
 return 1`
 	expiresAt := time.Now().Add(ttl).UnixMilli()
-	result, err := qm.store.Redis().Eval(ctx, script, []string{moneyUsageKey(ownerID), moneyReservedKey(ownerID), dailyUsedKey, dailyReservedKey, moneyReservationsKey(ownerID), moneyReservationExpiryKey(ownerID)}, amount, access.MonthlyLimitMicroUSD, access.DailyBurstMicroUSD, expiresAt, time.Now().UnixMilli(), requestID, today, fmt.Sprintf("ash:daily_reserved_micro_usd:%s:", ownerID), fmt.Sprintf("ash:quota_reserved_micro_usd:%s:yunwu:", ownerID), monthKey()).Int()
+	result, err := qm.store.Redis().Eval(ctx, script, []string{moneyUsageKey(ownerID), moneyReservedKey(ownerID), dailyUsedKey, dailyReservedKey, moneyReservationsKey(ownerID), moneyReservationExpiryKey(ownerID)}, amount, access.MonthlyLimitMicroUSD, access.DailyBurstMicroUSD, expiresAt, time.Now().UnixMilli(), requestID, today, fmt.Sprintf("ash:daily_reserved_micro_usd:%s", ownerID), fmt.Sprintf("ash:quota_reserved_micro_usd:%s:yunwu", ownerID), monthKey(), dynLimitMicroUSD).Int()
 	return result == 1, err
 }
 
@@ -144,14 +163,14 @@ local date = redis.call('HGET', KEYS[1], ARGV[1] .. ':date')
 local month = redis.call('HGET', KEYS[1], ARGV[1] .. ':month')
 redis.call('HDEL', KEYS[1], ARGV[1], ARGV[1] .. ':date', ARGV[1] .. ':month')
 redis.call('ZREM', KEYS[2], ARGV[1])
-local monthly_key = ARGV[3] .. month
+local monthly_key = ARGV[3] .. ':' .. month
 local monthly = redis.call('DECRBY', monthly_key, amount)
-local daily_key = ARGV[2] .. date
+local daily_key = ARGV[2] .. ':' .. date
 local daily = redis.call('DECRBY', daily_key, amount)
 if monthly < 0 then redis.call('SET', monthly_key, 0) end
 if daily < 0 then redis.call('SET', daily_key, 0) end
 return amount`
-	return qm.store.Redis().Eval(ctx, script, []string{moneyReservationsKey(ownerID), moneyReservationExpiryKey(ownerID)}, requestID, fmt.Sprintf("ash:daily_reserved_micro_usd:%s:", ownerID), fmt.Sprintf("ash:quota_reserved_micro_usd:%s:yunwu:", ownerID)).Err()
+	return qm.store.Redis().Eval(ctx, script, []string{moneyReservationsKey(ownerID), moneyReservationExpiryKey(ownerID)}, requestID, fmt.Sprintf("ash:daily_reserved_micro_usd:%s", ownerID), fmt.Sprintf("ash:quota_reserved_micro_usd:%s:yunwu", ownerID)).Err()
 }
 
 // ReconcileMicroUSDReservation atomically converts an in-flight hold into
@@ -167,26 +186,218 @@ local date = redis.call('HGET', KEYS[1], ARGV[2] .. ':date')
 local month = redis.call('HGET', KEYS[1], ARGV[2] .. ':month')
 redis.call('HDEL', KEYS[1], ARGV[2], ARGV[2] .. ':date', ARGV[2] .. ':month')
 redis.call('ZREM', KEYS[2], ARGV[2])
-local monthly_reserved_key = ARGV[5] .. month
+local monthly_reserved_key = ARGV[5] .. ':' .. month
 local monthly_reserved = redis.call('DECRBY', monthly_reserved_key, estimate)
-local daily_reserved_key = ARGV[3] .. date
+local daily_reserved_key = ARGV[3] .. ':' .. date
 local daily_reserved = redis.call('DECRBY', daily_reserved_key, estimate)
 if monthly_reserved < 0 then redis.call('SET', monthly_reserved_key, 0) end
 if daily_reserved < 0 then redis.call('SET', daily_reserved_key, 0) end
 local billed = tonumber(ARGV[1])
 redis.call('INCRBY', KEYS[4], billed)
-redis.call('INCRBY', ARGV[4] .. date, billed)
+local daily_usage_key = ARGV[4] .. ':' .. date
+redis.call('INCRBY', daily_usage_key, billed)
 redis.call('INCRBY', KEYS[6], billed)
-redis.call('EXPIRE', ARGV[4] .. date, 4233600)
+redis.call('EXPIRE', daily_usage_key, 4233600)
 return billed`
 	result, err := qm.store.Redis().Eval(ctx, script, []string{
 		moneyReservationsKey(ownerID), moneyReservationExpiryKey(ownerID), "unused", moneyUsageKey(ownerID), "unused", fmt.Sprintf("ash:yunwu:pool_used_micro_usd:%s", monthKey()),
-	}, billed, requestID, fmt.Sprintf("ash:daily_reserved_micro_usd:%s:", ownerID), fmt.Sprintf("ash:daily_usage_micro_usd:%s:", ownerID), fmt.Sprintf("ash:quota_reserved_micro_usd:%s:yunwu:", ownerID)).Int64()
+	}, billed, requestID, fmt.Sprintf("ash:daily_reserved_micro_usd:%s", ownerID), fmt.Sprintf("ash:daily_usage_micro_usd:%s", ownerID), fmt.Sprintf("ash:quota_reserved_micro_usd:%s:yunwu", ownerID)).Int64()
 	if err != nil {
 		return err
 	}
 	if result < 0 {
 		return fmt.Errorf("micro-USD reservation not found")
+	}
+	return nil
+}
+
+// ReserveQuotaTokens atomically checks monthly, daily, and dynamic token limits
+// while accounting for all in-flight requests from the same user.
+func (qm *QuotaManager) ReserveQuotaTokens(ctx context.Context, ownerID, requestID, scope string, amount int64, ttl time.Duration) (bool, error) {
+	if amount <= 0 {
+		amount = 4096
+	}
+	poolType := scope
+	if len(scope) > len("standard:") && scope[:len("standard:")] == "standard:" {
+		poolType = "standard"
+	}
+	ua, err := qm.GetUserAccess(ctx, ownerID, poolType)
+	if err != nil {
+		return false, err
+	}
+	if !ua.IsActive {
+		return false, ErrUserInactive
+	}
+
+	dynLimit, err := qm.GetEffectiveDynamicLimit(ctx, scope, ua.Priority)
+	if err != nil {
+		return false, err
+	}
+
+	today := time.Now().UTC().Format("2006-01-02")
+	dailyUsedKey := fmt.Sprintf("ash:daily_usage:%s:%s:%s", ownerID, poolType, today)
+	dailyReservedKey := fmt.Sprintf("ash:daily_reserved:%s:%s:%s", ownerID, poolType, today)
+
+	sharedUsageKey := usageKey(ownerID, poolType)
+	sharedReservedKey := tokenReservedKey(ownerID, poolType)
+	providerUsageKey := usageKey(ownerID, scope)
+	providerReservedKey := tokenReservedKey(ownerID, scope)
+
+	const script = `
+local expired = redis.call('ZRANGEBYSCORE', KEYS[6], '-inf', ARGV[5])
+for _, req_id in ipairs(expired) do
+  local exp_amt = tonumber(redis.call('HGET', KEYS[5], req_id) or '0')
+  local exp_date = redis.call('HGET', KEYS[5], req_id .. ':date')
+  local exp_month = redis.call('HGET', KEYS[5], req_id .. ':month')
+  if exp_amt > 0 then
+    if exp_month then
+      local m_key = ARGV[9] .. exp_month
+      local m_val = redis.call('DECRBY', m_key, exp_amt)
+      if m_val < 0 then redis.call('SET', m_key, 0) end
+      if KEYS[8] ~= KEYS[2] then
+        local sm_key = ARGV[12] .. exp_month
+        local sm_val = redis.call('DECRBY', sm_key, exp_amt)
+        if sm_val < 0 then redis.call('SET', sm_key, 0) end
+      end
+    end
+    if exp_date then
+      local d_key = ARGV[8] .. exp_date
+      local d_val = redis.call('DECRBY', d_key, exp_amt)
+      if d_val < 0 then redis.call('SET', d_key, 0) end
+    end
+  end
+  redis.call('HDEL', KEYS[5], req_id, req_id .. ':date', req_id .. ':month')
+  redis.call('ZREM', KEYS[6], req_id)
+end
+if redis.call('HEXISTS', KEYS[5], ARGV[6]) == 1 then return 0 end
+
+local used = tonumber(redis.call('GET', KEYS[1]) or '0')
+local reserved = tonumber(redis.call('GET', KEYS[2]) or '0')
+local daily_used = tonumber(redis.call('GET', KEYS[3]) or '0')
+local daily_reserved = tonumber(redis.call('GET', KEYS[4]) or '0')
+local shared_used = tonumber(redis.call('GET', KEYS[7]) or '0')
+local shared_reserved = tonumber(redis.call('GET', KEYS[8]) or '0')
+
+local amount = tonumber(ARGV[1])
+local monthly_limit = tonumber(ARGV[2])
+local daily_limit = tonumber(ARGV[3])
+local dynamic_limit = tonumber(ARGV[4])
+
+if monthly_limit > 0 and shared_used + shared_reserved + amount > monthly_limit then return 0 end
+if daily_limit > 0 and daily_used + daily_reserved + amount > daily_limit then return 0 end
+if dynamic_limit > 0 and used + reserved + amount > dynamic_limit then return 0 end
+if dynamic_limit > 0 and shared_used + shared_reserved + amount > dynamic_limit then return 0 end
+
+redis.call('HSET', KEYS[5], ARGV[6], amount, ARGV[6] .. ':date', ARGV[7], ARGV[6] .. ':month', ARGV[10])
+redis.call('ZADD', KEYS[6], ARGV[11], ARGV[6])
+redis.call('INCRBY', KEYS[2], amount)
+redis.call('INCRBY', KEYS[4], amount)
+if KEYS[8] ~= KEYS[2] then
+  redis.call('INCRBY', KEYS[8], amount)
+  redis.call('EXPIRE', KEYS[8], 2678400)
+end
+redis.call('EXPIRE', KEYS[2], 2678400)
+redis.call('EXPIRE', KEYS[4], 172800)
+return 1`
+
+	expiresAt := time.Now().Add(ttl).UnixMilli()
+	result, err := qm.store.Redis().Eval(ctx, script, []string{
+		providerUsageKey,
+		providerReservedKey,
+		dailyUsedKey,
+		dailyReservedKey,
+		tokenReservationsKey(ownerID, scope),
+		tokenReservationExpiryKey(ownerID, scope),
+		sharedUsageKey,
+		sharedReservedKey,
+	}, amount, ua.MonthlyLimit, ua.DailyBurst, dynLimit, time.Now().UnixMilli(), requestID, today, fmt.Sprintf("ash:daily_reserved:%s:%s:", ownerID, poolType), fmt.Sprintf("ash:quota_reserved:%s:%s:", ownerID, scope), monthKey(), expiresAt, fmt.Sprintf("ash:quota_reserved:%s:%s:", ownerID, poolType)).Int()
+
+	return result == 1, err
+}
+
+func (qm *QuotaManager) ReleaseQuotaTokens(ctx context.Context, ownerID, requestID, scope string) error {
+	poolType := scope
+	if len(scope) > len("standard:") && scope[:len("standard:")] == "standard:" {
+		poolType = "standard"
+	}
+	const script = `
+local amount = tonumber(redis.call('HGET', KEYS[1], ARGV[1]) or '0')
+if amount <= 0 then return 0 end
+local date = redis.call('HGET', KEYS[1], ARGV[1] .. ':date')
+local month = redis.call('HGET', KEYS[1], ARGV[1] .. ':month')
+redis.call('HDEL', KEYS[1], ARGV[1], ARGV[1] .. ':date', ARGV[1] .. ':month')
+redis.call('ZREM', KEYS[2], ARGV[1])
+local monthly_key = ARGV[3] .. month
+local monthly = redis.call('DECRBY', monthly_key, amount)
+if monthly < 0 then redis.call('SET', monthly_key, 0) end
+
+if ARGV[4] ~= ARGV[3] then
+  local smonthly_key = ARGV[4] .. month
+  local smonthly = redis.call('DECRBY', smonthly_key, amount)
+  if smonthly < 0 then redis.call('SET', smonthly_key, 0) end
+end
+
+local daily_key = ARGV[2] .. date
+local daily = redis.call('DECRBY', daily_key, amount)
+if daily < 0 then redis.call('SET', daily_key, 0) end
+return amount`
+	return qm.store.Redis().Eval(ctx, script, []string{
+		tokenReservationsKey(ownerID, scope),
+		tokenReservationExpiryKey(ownerID, scope),
+	}, requestID, fmt.Sprintf("ash:daily_reserved:%s:%s:", ownerID, poolType), fmt.Sprintf("ash:quota_reserved:%s:%s:", ownerID, scope), fmt.Sprintf("ash:quota_reserved:%s:%s:", ownerID, poolType)).Err()
+}
+
+func (qm *QuotaManager) ReconcileQuotaTokens(ctx context.Context, ownerID, requestID, scope string, billedUnits int64) error {
+	if billedUnits < 0 {
+		billedUnits = 0
+	}
+	poolType := scope
+	if len(scope) > len("standard:") && scope[:len("standard:")] == "standard:" {
+		poolType = "standard"
+	}
+	const script = `
+local estimate = tonumber(redis.call('HGET', KEYS[1], ARGV[2]) or '0')
+if estimate <= 0 then return -1 end
+local date = redis.call('HGET', KEYS[1], ARGV[2] .. ':date')
+local month = redis.call('HGET', KEYS[1], ARGV[2] .. ':month')
+redis.call('HDEL', KEYS[1], ARGV[2], ARGV[2] .. ':date', ARGV[2] .. ':month')
+redis.call('ZREM', KEYS[2], ARGV[2])
+
+local monthly_reserved_key = ARGV[5] .. month
+local monthly_reserved = redis.call('DECRBY', monthly_reserved_key, estimate)
+if monthly_reserved < 0 then redis.call('SET', monthly_reserved_key, 0) end
+
+if ARGV[6] ~= ARGV[5] then
+  local smonthly_reserved_key = ARGV[6] .. month
+  local smonthly_reserved = redis.call('DECRBY', smonthly_reserved_key, estimate)
+  if smonthly_reserved < 0 then redis.call('SET', smonthly_reserved_key, 0) end
+end
+
+local daily_reserved_key = ARGV[3] .. date
+local daily_reserved = redis.call('DECRBY', daily_reserved_key, estimate)
+if daily_reserved < 0 then redis.call('SET', daily_reserved_key, 0) end
+
+local billed = tonumber(ARGV[1])
+redis.call('INCRBY', KEYS[3], billed)
+if KEYS[4] ~= KEYS[3] then
+  redis.call('INCRBY', KEYS[4], billed)
+end
+redis.call('INCRBY', ARGV[4] .. date, billed)
+redis.call('EXPIRE', ARGV[4] .. date, 4233600)
+return billed`
+
+	result, err := qm.store.Redis().Eval(ctx, script, []string{
+		tokenReservationsKey(ownerID, scope),
+		tokenReservationExpiryKey(ownerID, scope),
+		usageKey(ownerID, scope),
+		usageKey(ownerID, poolType),
+	}, billedUnits, requestID, fmt.Sprintf("ash:daily_reserved:%s:%s:", ownerID, poolType), fmt.Sprintf("ash:daily_usage:%s:%s:", ownerID, poolType), fmt.Sprintf("ash:quota_reserved:%s:%s:", ownerID, scope), fmt.Sprintf("ash:quota_reserved:%s:%s:", ownerID, poolType)).Int64()
+
+	if err != nil {
+		return err
+	}
+	if result < 0 {
+		return fmt.Errorf("token reservation not found")
 	}
 	return nil
 }
@@ -404,19 +615,16 @@ func (qm *QuotaManager) CheckQuotaScope(ctx context.Context, ownerID string, sco
 		return false, ErrQuotaExceeded
 	}
 
-	dynLimitPerWeight, err := qm.GetDynamicLimitPerWeight(ctx, scope)
+	dynLimit, err := qm.GetEffectiveDynamicLimit(ctx, scope, ua.Priority)
 	if err != nil {
 		slog.Error("[QuotaManager] Failed to compute dynamic pool limit", "error", err)
 		return false, err
 	}
-
-	priority := ua.Priority
-	if priority <= 0 {
-		priority = 1
-	}
-
-	dynLimit := dynLimitPerWeight * int64(priority)
 	if dynLimit <= 0 {
+		priority := ua.Priority
+		if priority <= 0 {
+			priority = 1
+		}
 		dynLimit = NodeCapacity * int64(priority)
 	}
 
@@ -493,7 +701,7 @@ func (qm *QuotaManager) AcquireConcurrentSlot(ctx context.Context, ownerID strin
 	if count > 5 {
 		qm.store.Redis().Decr(ctx, key)
 		slog.Warn("[QuotaManager] Concurrent request limit exceeded", "owner_id", ownerID, "active", count)
-		return errors.New("concurrent request limit exceeded (max 5)")
+		return ErrConcurrentLimitExceeded
 	}
 
 	return nil
@@ -501,7 +709,11 @@ func (qm *QuotaManager) AcquireConcurrentSlot(ctx context.Context, ownerID strin
 
 func (qm *QuotaManager) ReleaseConcurrentSlot(ctx context.Context, ownerID string, poolType string) {
 	key := fmt.Sprintf("ash:concurrent_reqs:%s:%s", poolType, ownerID)
-	qm.store.Redis().Decr(ctx, key)
+	const script = `
+local val = redis.call('DECR', KEYS[1])
+if val < 0 then redis.call('SET', KEYS[1], 0) end
+return val`
+	_ = qm.store.Redis().Eval(ctx, script, []string{key}).Err()
 }
 
 func (qm *QuotaManager) ConsumeQuota(ctx context.Context, ownerID string, poolType string, units int64) error {
@@ -579,12 +791,16 @@ func (qm *QuotaManager) RegisterNode(ctx context.Context, nodeID string) error {
 	return qm.store.Redis().SAdd(ctx, "ash:nodes", nodeID).Err()
 }
 
-func (qm *QuotaManager) GetDynamicLimitPerWeight(ctx context.Context, poolType string) (int64, error) {
+func (qm *QuotaManager) GetDynamicLimitAndCapacity(ctx context.Context, poolType string) (int64, int64, error) {
 	cacheKey := fmt.Sprintf("ash:quota_limit_cache:%s", poolType)
+	cacheCapKey := fmt.Sprintf("ash:quota_cap_cache:%s", poolType)
 	cachedVal, err := qm.store.Redis().Get(ctx, cacheKey).Result()
-	if err == nil && cachedVal != "" {
-		if limit, parseErr := strconv.ParseInt(cachedVal, 10, 64); parseErr == nil {
-			return limit, nil
+	cachedCap, errCap := qm.store.Redis().Get(ctx, cacheCapKey).Result()
+	if err == nil && cachedVal != "" && errCap == nil && cachedCap != "" {
+		limit, parseErr := strconv.ParseInt(cachedVal, 10, 64)
+		allocCap, parseCapErr := strconv.ParseInt(cachedCap, 10, 64)
+		if parseErr == nil && parseCapErr == nil {
+			return limit, allocCap, nil
 		}
 	}
 
@@ -604,7 +820,7 @@ func (qm *QuotaManager) GetDynamicLimitPerWeight(ctx context.Context, poolType s
 	_, _ = pipe.Exec(ctx)
 	members, err := qm.store.Redis().ZRangeWithScores(ctx, activeUsersKey, 0, -1).Result()
 	if err != nil {
-		return 0, err
+		return 0, 0, err
 	}
 
 	var totalWeights float64 = 0
@@ -696,20 +912,71 @@ func (qm *QuotaManager) GetDynamicLimitPerWeight(ctx context.Context, poolType s
 		}
 		_ = id
 	}
-	if totalCapacityUnits == 0 {
-		if poolType == "standard" && qm.cfg.EnableMockRuntime {
-			totalCapacityUnits = NodeCapacity
-		} else {
-			return 0, fmt.Errorf("no healthy %s nodes", providerName(poolType))
+	if totalCapacityUnits == 0 || (len(nodeIDs) == 0 && qm.cfg.EnableMockRuntime) {
+		if qm.cfg.EnableMockRuntime {
+			if poolType == "yunwu" {
+				totalCapacityUnits = qm.cfg.YunwuFallbackCapacityMicroUSD
+			} else {
+				totalCapacityUnits = NodeCapacity
+			}
+		} else if totalCapacityUnits == 0 {
+			return 0, 0, fmt.Errorf("no healthy %s nodes", providerName(poolType))
 		}
 	}
 
-	limitPerWeight := totalCapacityUnits / int64(totalWeights)
+	reservePercent := qm.cfg.PoolReservePercent
+	if reservePercent < 0 || reservePercent >= 100 {
+		reservePercent = 20
+	}
+	allocatableCapacity := totalCapacityUnits * int64(100-reservePercent) / 100
+	if allocatableCapacity <= 0 {
+		allocatableCapacity = totalCapacityUnits
+	}
+
+	limitPerWeight := allocatableCapacity / int64(totalWeights)
 
 	// Cache the result
 	_ = qm.store.Redis().SetEx(ctx, cacheKey, limitPerWeight, 60*time.Second).Err()
+	_ = qm.store.Redis().SetEx(ctx, cacheCapKey, allocatableCapacity, 60*time.Second).Err()
 
+	return limitPerWeight, allocatableCapacity, nil
+}
+
+func (qm *QuotaManager) GetDynamicLimitPerWeight(ctx context.Context, poolType string) (int64, error) {
+	limitPerWeight, allocCap, err := qm.GetDynamicLimitAndCapacity(ctx, poolType)
+	if err != nil {
+		return 0, err
+	}
+	maxSharePercent := qm.cfg.MaxOwnerPoolSharePercent
+	if maxSharePercent <= 0 || maxSharePercent > 100 {
+		maxSharePercent = 50
+	}
+	maxUserCap := allocCap * int64(maxSharePercent) / 100
+	if limitPerWeight > maxUserCap && maxUserCap > 0 {
+		limitPerWeight = maxUserCap
+	}
 	return limitPerWeight, nil
+}
+
+func (qm *QuotaManager) GetEffectiveDynamicLimit(ctx context.Context, scope string, priority int) (int64, error) {
+	if priority <= 0 {
+		priority = 1
+	}
+	limitPerWeight, allocCap, err := qm.GetDynamicLimitAndCapacity(ctx, scope)
+	if err != nil {
+		return 0, err
+	}
+	dynLimit := limitPerWeight * int64(priority)
+
+	maxSharePercent := qm.cfg.MaxOwnerPoolSharePercent
+	if maxSharePercent <= 0 || maxSharePercent > 100 {
+		maxSharePercent = 50
+	}
+	maxUserCap := allocCap * int64(maxSharePercent) / 100
+	if maxUserCap > 0 && dynLimit > maxUserCap {
+		dynLimit = maxUserCap
+	}
+	return dynLimit, nil
 }
 
 func providerName(scope string) string {

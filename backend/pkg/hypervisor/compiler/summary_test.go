@@ -91,12 +91,18 @@ func TestSummaryWorkerGenerateAndTriggerAsync(t *testing.T) {
 	assert.Contains(t, summary, "22 total messages")
 
 	sw.TriggerAsyncSummary(context.Background(), "user-1", "sess-summary-1", execCtx)
+	var events []*dbent.AshEvent
 	require.Eventually(t, func() bool {
 		sess, err := sm.GetSession(context.Background(), "sess-summary-1")
-		return err == nil && sess != nil && sess.Context != nil && strings.Contains(sess.Context.Summary, "22 total messages")
-	}, time.Second, 10*time.Millisecond)
-	events, err := store.DB().AshEvent.Query().All(context.Background())
-	require.NoError(t, err)
-	require.NotEmpty(t, events)
+		if err != nil || sess == nil || sess.Context == nil || !strings.Contains(sess.Context.Summary, "22 total messages") {
+			return false
+		}
+		evs, err := store.DB().AshEvent.Query().All(context.Background())
+		if err != nil || len(evs) == 0 {
+			return false
+		}
+		events = evs
+		return true
+	}, 2*time.Second, 10*time.Millisecond)
 	assert.Equal(t, "SummaryUpdated", events[len(events)-1].EventType)
 }

@@ -88,6 +88,8 @@ func TestYunwuUsesFallbackCapacityWithoutBalanceSnapshot(t *testing.T) {
 		YunwuRequireFreshBalance:      false,
 		YunwuFallbackCapacityMicroUSD: 50_000_000,
 		ActiveUserWindowSeconds:       86400,
+		PoolReservePercent:            0,
+		MaxOwnerPoolSharePercent:      100,
 	})
 	_, err := store.DB().Account.Create().
 		SetPlatform("yunwu").
@@ -175,30 +177,26 @@ func TestQuotaManagerEmitsFairUseWarning(t *testing.T) {
 
 func TestQuotaManagerDynamicFairShareZeno(t *testing.T) {
 	store := newTestStorage(t)
-	qm := NewQuotaManager(store)
+	qm := NewQuotaManager(store, &config.HypervisorConfig{
+		EnableMockRuntime:        true,
+		YunwuRequireFreshBalance: false,
+		YunwuBalanceStaleSeconds: 1800,
+		PoolReservePercent:       0,
+		MaxOwnerPoolSharePercent: 100,
+		ActiveUserWindowSeconds:  86400,
+	})
 	ctx := context.Background()
 
 	// 1. Setup 1 Node and 4 Users
 	nodeID := "node-zeno-1"
 	err := qm.RegisterNode(ctx, nodeID)
 	require.NoError(t, err)
-	// We must register them in the DB to be counted by GetDynamicLimit!
-	// Wait, GetDynamicLimit counts from DB:
-	// db.User.Query().Where(user.Status("active")).Count()
-	// db.Account.Query().Where(account.PlatformIn("anthropic", "openai"), account.Status("active")).Select(account.FieldID).Scan()
-	// Since DB is empty, it falls back to Redis:
-	// redisUsers, _ := qm.store.Redis().SCard(ctx, "ash:active_users").Result()
-	// redisNodes, _ := qm.store.Redis().SCard(ctx, "ash:nodes").Result()
-	// But wait! If it falls back to Redis for node count, it DOES NOT get nodeIDs!
-	// So `nodeIDs` will be empty! And totalBalanceDollars will be 0!
-	// And it will fall back to `int64(len(nodeIDs)) * NodeCapacity` -> which is 0 * 1000000 = 0!
-	// And then it falls back to `totalCapacityUnits = NodeCapacity` (1,000,000).
-	// So to test the EXACT Zeno case with dollars, we must insert a real Account in the DB!
 
 	// Insert Account in DB
 	acc, err := store.DB().Account.Create().
-		SetPlatform("openai"). // matches platform IN ("anthropic", "openai")
+		SetPlatform("yunwu").
 		SetStatus("active").
+		SetSchedulable(true).
 		SetName("Test Zeno Account").
 		SetType("api").
 		SetCredentials(map[string]interface{}{}).
@@ -293,7 +291,7 @@ func TestQuotaManagerDynamicFairShareZeno(t *testing.T) {
 
 func TestQuotaManagerPriorityWeights(t *testing.T) {
 	store := newTestStorage(t)
-	qm := NewQuotaManager(store)
+	qm := NewQuotaManager(store, &config.HypervisorConfig{EnableMockRuntime: true, PoolReservePercent: 0, MaxOwnerPoolSharePercent: 100, ActiveUserWindowSeconds: 86400})
 	ctx := context.Background()
 
 	// Setup node
@@ -376,7 +374,7 @@ func TestQuotaManagerInactive(t *testing.T) {
 
 func TestWeightedActiveWindowAndProviderIsolation(t *testing.T) {
 	store := newTestStorage(t)
-	qm := NewQuotaManager(store)
+	qm := NewQuotaManager(store, &config.HypervisorConfig{PoolReservePercent: 0, MaxOwnerPoolSharePercent: 100, ActiveUserWindowSeconds: 86400})
 	ctx := context.Background()
 	for _, p := range []string{"anthropic", "openai"} {
 		_, err := store.DB().Account.Create().SetName(p).SetPlatform(p).SetType("api").SetStatus("active").SetCredentials(map[string]any{}).Save(ctx)
@@ -401,4 +399,54 @@ func TestWeightedActiveWindowAndProviderIsolation(t *testing.T) {
 	store.Redis().Del(ctx, "ash:quota_limit_cache:standard:openai")
 	_, err = qm.GetDynamicLimitPerWeight(ctx, "standard:openai")
 	require.ErrorContains(t, err, "no healthy openai nodes")
+}
+
+func TestQuotaManagerAntiDrainSingleUserPoolReserve(t *testing.T) {
+	store := newTestStorage(t)
+	qm := NewQuotaManager(store, &config.HypervisorConfig{
+		EnableMockRuntime:        true,
+		PoolReservePercent:       20,
+		MaxOwnerPoolSharePercent: 50,
+		ActiveUserWindowSeconds:  86400,
+	})
+	ctx := context.Background()
+
+	require.NoError(t, qm.RegisterNode(ctx, "node-1"))
+	require.NoError(t, qm.RegisterActiveUser(ctx, "sole-user", "standard", 1))
+	_ = qm.SaveUserAccess(ctx, &UserAccess{OwnerID: "sole-user", Priority: 1, IsActive: true}, "standard")
+
+	limitWeight, err := qm.GetDynamicLimitPerWeight(ctx, "standard")
+	require.NoError(t, err)
+
+	// Node capacity is 1,000,000. Reserve 20% -> 800,000 allocatable.
+	// Single active user gets capped at MaxOwnerPoolSharePercent (50%) of 800,000 = 400,000.
+	assert.Equal(t, int64(400000), limitWeight)
+}
+
+func TestQuotaManagerStandardTokenReservations(t *testing.T) {
+	store := newTestStorage(t)
+	qm := NewQuotaManager(store, &config.HypervisorConfig{
+		EnableMockRuntime:        true,
+		PoolReservePercent:       0,
+		MaxOwnerPoolSharePercent: 100,
+		ActiveUserWindowSeconds:  86400,
+	})
+	ctx := context.Background()
+	ownerID := "res-user"
+
+	require.NoError(t, qm.RegisterNode(ctx, "node-1"))
+	require.NoError(t, qm.SaveUserAccess(ctx, &UserAccess{OwnerID: ownerID, MonthlyLimit: 10000, IsActive: true}, "standard"))
+
+	ok, err := qm.ReserveQuotaTokens(ctx, ownerID, "req-1", "standard", 6000, time.Minute)
+	require.NoError(t, err)
+	require.True(t, ok)
+
+	ok, err = qm.ReserveQuotaTokens(ctx, ownerID, "req-2", "standard", 5000, time.Minute)
+	require.NoError(t, err)
+	require.False(t, ok, "combined reservation must exceed monthly limit of 10000")
+
+	require.NoError(t, qm.ReconcileQuotaTokens(ctx, ownerID, "req-1", "standard", 4000))
+	used, err := qm.store.Redis().Get(ctx, usageKey(ownerID, "standard")).Int64()
+	require.NoError(t, err)
+	assert.Equal(t, int64(4000), used)
 }

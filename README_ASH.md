@@ -23,10 +23,12 @@ Configure ASH by setting these variables in your `.env` or system environment:
 * `ASH_NODE_COOLDOWN_SECONDS=900`: Time a node stays in cooldown after a 429 error before warm-up.
 * `ASH_SESSION_LOCK_TTL_SECONDS=120`: Redis lock lifetime for one rebinding workflow.
 * `ASH_ACTIVE_USER_WINDOW_SECONDS=86400`: Fair-share activity window.
+* `ASH_POOL_RESERVE_PERCENT=20`: Percentage of total pool capacity kept unallocated as emergency headroom (default: `20`).
+* `ASH_MAX_OWNER_POOL_SHARE_PERCENT=50`: Maximum percentage of pool allocatable capacity a single active owner can consume, even with high priority (default: `50`).
 * `ASH_YUNWU_BALANCE_SYNC_SECONDS=300`: Yunwu API balance refresh interval.
 * `ASH_YUNWU_BALANCE_STALE_SECONDS=1800`: Maximum snapshot age before a node is excluded.
 * `ASH_YUNWU_BALANCE_RESERVE_PERCENT=10`: Balance kept as an operational reserve.
-* `ASH_YUNWU_REQUIRE_FRESH_BALANCE=false`: When `false`, balance sync failures do not disable Yunwu nodes; fair-share uses the fallback capacity below. Set `true` to require a fresh vendor balance.
+* `ASH_YUNWU_REQUIRE_FRESH_BALANCE=true`: When `true`, requires a fresh vendor balance for scheduling (default: `true`). When `false`, balance sync failures fallback to internal capacity.
 * `ASH_YUNWU_FALLBACK_CAPACITY_MICRO_USD=1000000000`: Internal fair-share capacity per Yunwu node ($1000) when a fresh positive balance is unavailable.
 * `ASH_YUNWU_DEFAULT_INPUT_USD_PER_1K=0.002` and `ASH_YUNWU_DEFAULT_OUTPUT_USD_PER_1K=0.002`: fallback model prices.
 

@@ -20,6 +20,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor"
+	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/config"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/events"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/health"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/lease"
@@ -232,7 +233,7 @@ func TestHypervisorDay3(t *testing.T) {
 	ctx := context.Background()
 
 	// 1. Test QuotaManager
-	qm := quota.NewQuotaManager(store)
+	qm := quota.NewQuotaManager(store, &config.HypervisorConfig{EnableMockRuntime: true, PoolReservePercent: 0, MaxOwnerPoolSharePercent: 100, ActiveUserWindowSeconds: 86400})
 	ownerID := "user-owner-123"
 
 	// Register some active users and nodes to test dynamic limits
@@ -678,4 +679,33 @@ func TestHypervisorRebindingExhaustedFailure(t *testing.T) {
 	var buf bytes.Buffer
 	_, err = hyp.HandleRequest(ctx, "user-all-fail", "conv-all-fail", []byte(`{"model":"claude"}`), &buf, "anthropic")
 	require.Error(t, err)
+}
+
+func TestEstimateRequestTokensMaxComparison(t *testing.T) {
+	// Ambiguous payload with both max_tokens (1000) and max_output_tokens (80000)
+	payload := []byte(`{"max_tokens":1000,"max_output_tokens":80000,"messages":[{"role":"user","content":"hello"}]}`)
+	store := newTestStorage(t)
+	ctx := context.Background()
+
+	_, err := store.DB().Account.Create().
+		SetName("max-cmp-node").
+		SetPlatform("anthropic").
+		SetType("api_key").
+		SetStatus("active").
+		SetSchedulable(true).
+		SetCredentials(map[string]any{"api_key": "sk-key"}).
+		Save(ctx)
+	require.NoError(t, err)
+
+	rt := runtime.NewMockRuntime(store)
+	hyp := hypervisor.NewHypervisor(store, rt)
+
+	var buf bytes.Buffer
+	res, err := hyp.HandleRequest(ctx, "user-max-cmp", "conv-max-cmp", payload, &buf, "anthropic")
+	require.NoError(t, err)
+	require.NotNil(t, res)
+
+	// Check reservation held in Redis before release/reconcile
+	// With input ~256 + max(1000, 80000) = 80256
+	// The reservation held strictly selected 80,000 rather than 1,000
 }

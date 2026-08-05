@@ -104,6 +104,8 @@ type MockRuntime struct {
 	ForceBrokenSSE       bool
 	ForceToolUse         bool
 	ForceInvalidResponse bool
+	CustomInputTokens    int64
+	CustomOutputTokens   int64
 }
 
 func NewMockRuntime(store *storage.Storage) *MockRuntime {
@@ -192,6 +194,15 @@ func (m *MockRuntime) Execute(ctx context.Context, nodeID string, reqPayload []b
 		return m.writeMockEvents(ctx, stream, events)
 	}
 
+	inTokens := int64(15)
+	if m.CustomInputTokens > 0 {
+		inTokens = m.CustomInputTokens
+	}
+	outTokens := int64(10)
+	if m.CustomOutputTokens > 0 {
+		outTokens = m.CustomOutputTokens
+	}
+
 	// Simulating standard Anthropic SSE stream
 	events := []string{
 		"event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_mock\",\"role\":\"assistant\",\"content\":[]}}\n\n",
@@ -200,7 +211,7 @@ func (m *MockRuntime) Execute(ctx context.Context, nodeID string, reqPayload []b
 		"event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"from \"}}\n\n",
 		"event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"Mock!\"}}\n\n",
 		"event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\n",
-		"event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"},\"usage\":{\"input_tokens\":15,\"output_tokens\":10}}\n\n",
+		fmt.Sprintf("event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"},\"usage\":{\"input_tokens\":%d,\"output_tokens\":%d}}\n\n", inTokens, outTokens),
 		"event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n",
 	}
 
@@ -595,7 +606,7 @@ func (r *AnthropicRuntime) Execute(ctx context.Context, nodeID string, reqPayloa
 		return nil, err
 	}
 
-	if isChatCompletions || acc.Platform == "openai" {
+	if isChatCompletions || acc.Platform == "openai" || acc.Platform == "yunwu" {
 		req.Header.Set("Authorization", "Bearer "+apiKey)
 		req.Header.Set("Content-Type", requestContentType)
 		if isOAuth && acc.Platform == "openai" {

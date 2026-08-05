@@ -53,6 +53,7 @@ Welcome to **sub2api** and the **AI Session Hypervisor (ASH / Yunwu Engine)** re
 - **Dedicated Subsystems**:
   - `YunwuScheduler`: Tailored node selection for Yunwu execution nodes based on node health, weight, and rate limits.
   - `YunwuRebindingManager`: Handles failover and node cooldown transitions specifically for Yunwu provider clusters.
+  - Runtime credentials: `AnthropicRuntime.Execute` attaches `Authorization: Bearer <api_key>` headers for Yunwu platform accounts (including native Gemini overrides).
   - Administration endpoints under `/api/v1/ash/admin/yunwu/*`.
 
 ### 2.4 Sora Engine
@@ -69,9 +70,10 @@ Welcome to **sub2api** and the **AI Session Hypervisor (ASH / Yunwu Engine)** re
 - **Traffic Spread**: Forces traffic away from recently heavily-used nodes toward idle nodes, ensuring organic load distribution even across nodes with identical latencies.
 
 ### 3.2 Dynamic Fair Share Quota Manager (`pkg/hypervisor/quota`)
-- **Dynamic Limits**: Uses Redis-based dynamic limit calculation (`GetDynamicLimitPerWeight`) relative to total pool capacity and active user weight.
-- **Concurrent Request Slots**: Enforces concurrent slot limits (`AcquireConcurrentSlot`, max 5 parallel requests per user) via Redis counters.
-- **Preventing Pool Exhaustion**: Prevents a single user from consuming the entire pool capacity, automatically queuing or prioritizing requests based on user tier.
+- **Dynamic Limits & Anti-Drain Reserves**: Uses Redis-based dynamic limit calculation (`GetDynamicLimitPerWeight`) relative to total pool capacity and active user weight. Applies `PoolReservePercent` (default: 20%) to keep emergency capacity unallocated, and caps individual active user shares at `MaxOwnerPoolSharePercent` (default: 50%) to prevent pool draining by a single user.
+- **Pre-Request Token Reservations**: `ReserveQuotaTokens` atomically checks limits and reserves estimated tokens in Redis Lua before request execution; `estimateRequestTokens` parses `max_tokens` and `max_output_tokens` taking `max(max_tokens, max_output_tokens)` (defaulting to 4096 output tokens if omitted, capped at 128,000 max). `ReconcileQuotaTokens` reconciles reservations against actual consumption upon completion.
+- **Concurrent Request Slots**: Enforces concurrent slot limits (`AcquireConcurrentSlot`, max 5 parallel requests per user) via Redis Lua scripts bounded to prevent negative counter underflow (`ReleaseConcurrentSlot`).
+- **Preventing Pool Exhaustion**: Prevents heavy users from exhausting pool capacity, automatically queuing or prioritizing requests based on user tier.
 
 ---
 
@@ -181,7 +183,16 @@ sub2api/
 | `ash:lock:session:{session_id}` | Rebinding distributed lock (`SETNX`) | 120 seconds |
 | `ash:affinity:{owner_id}` | User node sticky assignment | 1-4 hours |
 | `ash:quota_used:{owner_id}:{pool}` | Atomic persistent counter for user used tokens | 31 days |
-| `ash:daily_usage:{owner_id}:{pool}:{date}` | Per-day usage counter for DailyBurst limit enforcement | 25 hours |
+| `ash:daily_usage:{owner_id}:{pool}:{date}` | Per-day usage counter for DailyBurst limit enforcement (`ash:daily_usage:<owner>:<pool>:<date>`) | 49 hours |
+| `ash:daily_reserved:{owner_id}:{pool}:{date}` | Atomic in-flight daily reservation hold for token limits | 48 hours |
+| `ash:quota_reserved:{owner_id}:{scope}` | Atomic in-flight monthly reservation hold for provider/shared token limits | 31 days |
+| `ash:quota_token_reservations:{owner_id}:{scope}` | Hash storing per-request token reservation holds | TTL per request |
+| `ash:quota_token_reservation_expiry:{owner_id}:{scope}` | Sorted set tracking expiring token reservation holds | TTL per request |
+| `ash:daily_usage_micro_usd:{owner_id}:{date}` | Per-day monetary usage counter for Yunwu burst enforcement | 49 hours |
+| `ash:daily_reserved_micro_usd:{owner_id}:{date}` | Atomic in-flight daily monetary reservation hold for Yunwu | 48 hours |
+| `ash:quota_reserved_micro_usd:{owner_id}:yunwu:{month}` | Atomic in-flight monthly monetary reservation hold for Yunwu | 31 days |
+| `ash:quota_reservations_micro_usd:{owner_id}` | Hash storing per-request Yunwu monetary reservation holds | TTL per request |
+| `ash:quota_reservation_expiry_micro_usd:{owner_id}` | Sorted set tracking expiring Yunwu monetary reservation holds | TTL per request |
 | `ash:system:recovery_until:{platform}` | Recovery degradation state timer | 5 minutes |
 | `quota:concurrent:{user_id}` | Active concurrent request counter | Transient (Max 5) |
 
