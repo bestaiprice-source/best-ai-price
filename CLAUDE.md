@@ -1,267 +1,233 @@
-# CLAUDE.md - AI Agent Context & Repository Guide
+# CLAUDE.md - AI Agent Master Technical Guide & Repository Context
 
-Welcome to **sub2api** and the **AI Session Hypervisor (ASH / Yunwu Engine)** repository. This document serves as the master technical guide for AI assistants, agents, and human developers working on this codebase.
+Welcome to **sub2api** and the **AI Session Hypervisor (ASH / Yunwu Engine)** repository. This document serves as the authoritative, comprehensive technical guide for AI assistants, agents, and developers working on this codebase.
+
+> ⚠️ **MANDATORY RULE FOR ALL AI AGENTS (PRE-PUSH REQUIREMENT)**:
+> Before executing any `git push`, you MUST inspect all architectural changes, new endpoints, bug fixes, or schema modifications made during the task and update this document (`CLAUDE.md`). This document MUST ALWAYS contain complete, up-to-date information so that all AI agents possess full context.
 
 ---
 
 ## 🚀 1. Overview & Business Model
 
-**sub2api** is an enterprise-grade AI Gateway and Hypervisor system managing a pool of physical AI accounts (Claude Max 20x, OpenAI, and Yunwu accounts) and distributing capacity across users through unified API keys and endpoints.
+**sub2api** is an enterprise-grade AI Gateway and Hypervisor system managing pools of physical AI accounts (Claude Max 20x, OpenAI / Codex, Yunwu, and Sora) and distributing capacity across users through unified API keys, dynamic fair-share quotas, and resilient proxies.
 
 ### Key Value Proposition
-- **Pooled Capacity Model**: Users get high-throughput Claude Max / OpenAI access cheaper than buying dedicated subscriptions, leveraging unused capacity across pooled accounts.
-- **Virtual Sessions**: Users are decoupled from physical accounts. The system maintains continuous conversation state while transparently switching underlying physical nodes on failure.
-- **Automatic Rebinding**: When an upstream node encounters `429 Too Many Requests`, timeouts, or disconnection, the Hypervisor locks the session, selects a healthy alternative node, recompiles context, and retries the request seamlessly.
+- **Pooled Capacity Model**: Users obtain high-throughput access to Claude, OpenAI, Yunwu, and Sora at lower costs by leveraging shared physical account pools.
+- **Virtual Sessions**: Decouples client software (Claude Code CLI, VS Code extensions, Codex, OpenAI clients) from physical accounts. The system maintains conversation state while transparently switching underlying physical execution nodes on failure.
+- **Automatic Rebinding**: When an upstream node encounters `429 Too Many Requests`, rate limits, or timeouts, the Hypervisor locks the session, selects a healthy node, recompiles prompt context, and retries the request seamlessly.
+- **Fair-Share Load Balancing**: Ensures heavy users do not exhaust capacity, distributing requests via dynamic quota limits and organic token load balancing.
 
 ```text
-+--------+     +---------------+     +----------------+     +-----------+     +-------------------+
-| Client | --> | Service Key / | --> | VirtualSession | --> | Scheduler | --> | Physical Node     |
-| (CLI)  |     | Gateway API   |     | (State & Context)|   | & Lease   |     | (Claude / Yunwu)  |
-+--------+     +---------------+     +----------------+     +-----------+     +-------------------+
++--------+     +---------------+     +----------------+     +-----------+     +-------------------------------+
+| Client | --> | Service Key / | --> | VirtualSession | --> | Scheduler | --> | Physical Execution Node       |
+| (CLI)  |     | Gateway API   |     | (State/Context)|     | & Lease   |     | (Claude / OpenAI / Yunwu)     |
++--------+     +---------------+     +----------------+     +-----------+     +-------------------------------+
 ```
 
 ---
 
-## 🔍 2. Deep Dive: What We Built & How It Works Under the Hood
+## 🔍 2. Deep Dive: Upstream Provider Engines & Integrations
 
-### 2.1 The Core Transformation
-Sub2API was expanded from a simple single-account proxy into an **AI Session Hypervisor (ASH)** architecture. Instead of hardcoding a user to a physical account (`User -> Account`), we decoupled execution into virtual entities:
+### 2.1 Claude (Anthropic) Engine
+- **Target**: Claude Max 20x accounts, Anthropic `/v1/messages` endpoints.
+- **Virtual Sessions & Rebinding**: Maintains `VirtualSession` state in Redis and PostgreSQL. Rebinds transparently to a new Claude node on `429` or timeout.
+- **Context Compiler**: Reconstructs prompt blocks (`SystemPrompt`, `Summary`, `PinnedFacts`, `TerminalState`, `ToolState`, `ProjectState`, `RecentMessages`, `CurrentUserPrompt`) when migrating sessions between physical accounts.
 
-```text
-User -> Service API Key -> VirtualSession -> Lease -> ExecutionNode (Claude / Yunwu Account)
-```
-
-- **`VirtualSession`** maintains the perpetual user conversation state, prompt history, summary, and metadata.
-- **`Lease`** provides a short-lived binding to a specific physical account (`ExecutionNode`).
-- **`Scheduler`** dynamically routes each request to the best available physical node.
-- **`Rebinding`** transparently migrates a session to a new physical account if the current node fails (`429`, timeout, disconnect).
-
----
-
-### 2.2 Detailed Subsystem Breakdown
-
-#### 1. Virtual Session Management (`pkg/hypervisor/session`)
-- **State Machine**: Tracks session state: `new` → `active` → `rebinding` → `queued` → `closed`.
-- **Storage**: Caches hot session state in Redis (`ash:session:{session_id}`) with atomic versioning and persists metadata in PostgreSQL (`ash_sessions`).
-- **Concurrency**: Prevents race conditions during state transitions.
-
-#### 2. Lease Allocation & Binding (`pkg/hypervisor/lease`)
-- Manages temporary leases connecting a `VirtualSession` to an `ExecutionNode`.
-- Handles automatic lease granting, renewal, and release.
-- Ensures a session does not stay bound to a node that has entered a limited or cooldown state.
-
-#### 3. Behavioral Node Scheduler (`pkg/hypervisor/scheduler` & `pkg/hypervisor/yunwu`)
-- Evaluates node health dynamically without relying on opaque upstream quota counters.
-- **Scoring Equation**:
-
-$$\text{score} = \text{success\_rate} \times 100 + \text{affinity\_bonus} + \text{priority\_bonus} - (\text{queue\_depth} \times 5) - \frac{\text{avg\_latency\_ms}}{100} - (\text{recent\_429} \times 30) - (\text{recent\_timeout} \times 20)$$
-
-- **Node Filtering Rules**:
-  - `unavailable` nodes are strictly excluded.
-  - `cooldown` nodes are excluded until their cooldown timer expires.
-  - `limited` nodes are used only if no `healthy` nodes are available.
-  - Affinity provides a preference bonus but will never route to an unhealthy node.
-
-#### 4. Distributed Rebinding Workflow (`pkg/hypervisor/rebinding`)
-- **Distributed Redis Locking**: Uses `SETNX` on `ash:lock:session:{session_id}` (TTL: 120s) to guarantee only one rebinding operation occurs per session at a time.
-- **Failover Sequence**:
-  1. Lock session.
-  2. Degrade failing node state to `limited` or `cooldown`.
-  3. Emit `RebindingStarted` event.
-  4. Invoke `Scheduler` to select a new healthy execution node.
-  5. Run `ContextCompiler` to reconstruct prompt context.
-  6. Grant a new `Lease` bound to the selected node.
-  7. Execute a single upstream retry request.
-  8. Emit `RebindingSucceeded` (or `RebindingFailed`) and release lock.
-
-#### 5. Context Compiler (`pkg/hypervisor/compiler`)
-- Reconstructs portable conversation context in a deterministic block order when migrating between physical accounts:
-  1. `SystemPrompt`
-  2. `Summary`
-  3. `PinnedFacts`
-  4. `TerminalState`
-  5. `ToolState`
-  6. `ProjectState`
-  7. `RecentMessages`
-  8. `CurrentUserPrompt`
-- Guarantees full dialogue context continuity across physical node switches without prompt cache dependence.
-
-#### 6. Responses API Normalization (`pkg/hypervisor/runtime`)
-- Solves structured message array issues in Codex CLI Responses API (`/responses`).
-- Includes `constructMessagesFromResponsesPayload`, which recursively inspects incoming `input` objects:
+### 2.2 OpenAI & Codex Engine
+- **Target**: OpenAI `/v1/chat/completions` and Codex `/responses` endpoints.
+- **Payload Normalization**: Includes `constructMessagesFromResponsesPayload` in `pkg/hypervisor/runtime` to handle structured message arrays from Codex CLI:
   ```json
   "input": [
     {
       "type": "message",
       "role": "user",
-      "content": [
-        {"type": "input_text", "text": "What is Telegram?"}
-      ]
+      "content": [{"type": "input_text", "text": "Hello"}]
     }
   ]
   ```
-- Extracts `input_text` elements into clean `messages` arrays (`"role": "user", "content": "What is Telegram?"`), ensuring prompts are never lost or ignored by upstream providers.
+  Extracts `input_text` into clean message arrays (`role: "user", content: "Hello"`), avoiding lost or unparsed prompts.
+- **SSE Transformer Bypass**: Direct `/responses` API calls bypass `responsesSSETransformer` to prevent truncated or empty responses when streaming native OpenAI/Codex format.
 
-#### 7. Health Controller & System Degradation (`pkg/hypervisor/health`)
-- Runs a background reconciliation loop every 10 seconds.
-- Recalculates node metrics (success rates, latencies, recent 429s).
-- Manages node state lifecycle: `healthy` → `busy` → `limited` → `unavailable` → `cooldown` → `healthy`.
-- Automatically applies cooldowns (default 15 minutes) after 429 errors.
-- Manages global degradation modes:
-  - `NORMAL`: Full capacity, rebinding enabled.
-  - `WARNING`: High latency/429 rates, penalized node scores.
-  - `DEGRADED`: Node shortages, background tasks disabled, request queueing.
-  - `SURVIVAL`: Critical shortage, high-priority requests only, short timeouts.
-  - `RECOVERY`: Nodes returning from cooldown, gradual traffic ramp-up.
+### 2.3 Yunwu Engine (`pkg/hypervisor/yunwu`)
+- **Target**: Yunwu multi-channel provider API accounts.
+- **Dedicated Subsystems**:
+  - `YunwuScheduler`: Tailored node selection for Yunwu execution nodes based on node health, weight, and rate limits.
+  - `YunwuRebindingManager`: Handles failover and node cooldown transitions specifically for Yunwu provider clusters.
+  - Administration endpoints under `/api/v1/ash/admin/yunwu/*`.
 
-#### 8. Fair Use Quotas & Audit Logging (`pkg/hypervisor/quota`, `events`, `storage`)
-- **Quota Manager**: Enforces `UserAccess` monthly limits, daily burst allowances, and priority queueing.
-- **Event Store**: Writes append-only audit logs to `ash_events` table for full system traceability.
-- **Usage Recorder**: Records detailed token consumption (`input_tokens`, `output_tokens`, `cost_units`) in `ash_usage` table.
-
-#### 9. Fault Injection Testing (`pkg/hypervisor/runtime/mock.go`)
-- Includes `MockRuntime` for simulating 429 rate limits, timeouts, slow SSE streams, malformed payloads, and disconnections without hitting live provider accounts.
-
-#### 10. Backup & Recovery (`pkg/hypervisor/backup`)
-- Handles session snapshots, git state, terminal snapshots, and project restoration.
+### 2.4 Sora Engine
+- **Target**: Sora image and video generation endpoints.
+- **Normalizer & Pricing**: Normalizes base URLs for Sora accounts and calculates request pricing based on resolution and mode (`sora_image_price`, `sora_video_price_per_request`).
 
 ---
 
-## 📁 3. Repository Structure
+## ⚡ 3. Load Balancing & Traffic Capacity Management
+
+### 3.1 Organic Token Load Balancer
+- **State Tracking**: `NodeRuntimeState` tracks `UsedTokens` (total tokens consumed by the node).
+- **Dynamic Penalty**: Incremented upon request completion and factored into `Scheduler` node scoring as a penalty.
+- **Traffic Spread**: Forces traffic away from recently heavily-used nodes toward idle nodes, ensuring organic load distribution even across nodes with identical latencies.
+
+### 3.2 Dynamic Fair Share Quota Manager (`pkg/hypervisor/quota`)
+- **Dynamic Limits**: Uses Redis-based dynamic limit calculation (`GetDynamicLimitPerWeight`) relative to total pool capacity and active user weight.
+- **Concurrent Request Slots**: Enforces concurrent slot limits (`AcquireConcurrentSlot`, max 5 parallel requests per user) via Redis counters.
+- **Preventing Pool Exhaustion**: Prevents a single user from consuming the entire pool capacity, automatically queuing or prioritizing requests based on user tier.
+
+---
+
+## 🔐 4. Admin API Key & System Management
+
+Administrators can view, copy, edit, and delete all API keys across all users in the system.
+
+### Backend Admin API Keys Endpoints (`internal/handler/admin/apikey_handler.go`)
+- `GET /api/v1/admin/api-keys`: Returns paginated list of all API keys across all users. Accepts `search`, `status`, `group_id`, and `user_id` filters.
+- `PUT /api/v1/admin/api-keys/:id`: Updates any user's API key (name, group bindings, status, quota, expiration, rate limits, IP whitelists/blacklists).
+- `DELETE /api/v1/admin/api-keys/:id`: Deletes any user's API key and invalidates auth cache.
+
+### Frontend Integration (`frontend/src/views/user/KeysView.vue`)
+- **Admin Detection**: Automatically calls `listAdmin`, `updateAdmin`, and `removeAdmin` when `isAdmin` is true.
+- **Owner Column**: Displays the owner's username, email, and User ID in the table for admins.
+- **User Filter**: Adds a user selection dropdown for filtering keys by owner.
+
+---
+
+## 🛠 5. Hypervisor Subsystems Breakdown (`backend/pkg/hypervisor`)
+
+| Package | Purpose & Functionality |
+| :--- | :--- |
+| `config` | Environment variables (`ASH_ENABLED`, `ASH_ENABLE_REBINDING`, etc.) and default settings. |
+| `session` | `VirtualSession` state machine (`new` → `active` → `rebinding` → `queued` → `closed`), Redis TTL, versioning. |
+| `lease` | Grants, renews, and releases temporary bindings (`Lease`) between a session and an `ExecutionNode`. |
+| `scheduler` | Dynamic node selection score algorithm (success rate, latency, queue depth, 429s, token usage penalty, affinity). |
+| `runtime` | Upstream HTTP streaming (`/v1/messages`, `/v1/chat/completions`, `/responses`), SSE transformers, `MockRuntime`. |
+| `yunwu` | Dedicated execution engine, `YunwuScheduler`, and `YunwuRebindingManager` for Yunwu provider nodes. |
+| `compiler` | Compiles execution contexts into stable prompt blocks across failovers. |
+| `storage` | Provides Redis hot-state caching and PostgreSQL persistent storage helpers. |
+| `events` | Append-only event writer logging system operations (`SessionCreated`, `RebindingStarted`, etc.). |
+| `health` | Periodically reconciles node health states and manages degradation modes (`NORMAL`, `WARNING`, `DEGRADED`, `SURVIVAL`, `RECOVERY`). |
+| `rebinding` | Executes session failover workflow with Redis distributed locking (`SETNX`) and single retry. |
+| `quota` | Enforces plan limits, monthly usage units, daily burst budgets, concurrent slots, and fair use priorities. |
+| `stats` | Aggregates analytics for user usage and administrator monitoring dashboards. |
+| `backup` | Manages project snapshots and session state recovery. |
+
+---
+
+## 📊 6. Scoring Equation & Node States
+
+### Node Scoring Equation (`pkg/hypervisor/scheduler`)
+$$\text{score} = \text{success\_rate} \times 100 + \text{affinity\_bonus} + \text{priority\_bonus} - (\text{queue\_depth} \times 5) - \frac{\text{avg\_latency\_ms}}{100} - (\text{recent\_429} \times 30) - (\text{recent\_timeout} \times 20) - (\text{used\_tokens\_penalty})$$
+
+### Node Health Lifecycle
+- `healthy`: Ready for traffic.
+- `busy`: Near max concurrency capacity.
+- `limited`: Rate limited or elevated errors; used only if no healthy nodes exist.
+- `cooldown`: Temporarily disabled (default 15 mins) after encountering `429`.
+- `unavailable`: Disabled or offline.
+
+---
+
+## 📁 7. Repository Structure Map
 
 ```text
 sub2api/
-├── .agents/                    # Agent customization rules (AGENTS.md)
+├── .agents/                    # Agent workspace rules (AGENTS.md)
 ├── CLAUDE.md                   # Master agent guide (This document)
-├── ASH-Ideal-Project-TZ.md     # Original ASH Technical Specification
-├── Claude-Pool-Master-TZ.md    # Master Specification for Claude Pool Hypervisor
+├── ASH-Ideal-Project-TZ.md     # Technical Specification
+├── Claude-Pool-Master-TZ.md    # Claude Pool Master Specification
 ├── deploy/                     # Docker Compose deployment manifests
 │   ├── Dockerfile
 │   └── docker-compose.yml
+├── frontend/                   # Vue 3 / Vite Frontend Application
+│   └── src/
+│       ├── api/                # API clients (keys.ts, admin.ts, etc.)
+│       ├── views/              # Pages (user/KeysView.vue, admin/*)
+│       └── stores/             # Pinia stores (auth.ts, app.ts)
 └── backend/
     ├── cmd/server/             # Application entrypoint
     ├── internal/
-    │   ├── handler/            # HTTP Handlers (gateway_handler.go, openai_gateway_handler.go, ash.go)
-    │   ├── server/             # Router, Middleware, Routes configuration
-    │   └── service/            # Core business services (pricing, auth, email, etc.)
-    ├── migrations/             # SQL Migrations (135_add_ash_hypervisor_tables.sql)
+    │   ├── handler/            # HTTP Handlers (admin/, api_key_handler.go, gateway_handler.go)
+    │   ├── server/             # Router, Middleware, Routes configuration (routes/admin.go, ash.go)
+    │   ├── service/            # Core services (admin_service.go, api_key_service.go, etc.)
+    │   └── repository/         # Data access repositories (api_key_repo.go, etc.)
+    ├── migrations/             # SQL Migrations
     └── pkg/hypervisor/         # ASH Core Package
-        ├── backup/             # Session & project snapshot backup/recovery
-        ├── compiler/           # Portable context block compilation
-        ├── config/             # Environment flags & runtime parameters
-        ├── events/             # Append-only audit & operation event logging
-        ├── health/             # Background health reconciliation & degradation policy
-        ├── lease/              # Session-to-node lease management
-        ├── quota/              # Fair Use & quota enforcement
-        ├── rebinding/          # Distributed Redis-locked session rebinding workflow
-        ├── runtime/            # Anthropic, OpenAI, & Mock runtime execution engines
-        ├── scheduler/          # Behavioral scoring & node selection algorithm
-        ├── session/            # VirtualSession state machine & Redis lifecycle
-        ├── stats/              # User & Admin statistics aggregation APIs
-        ├── storage/            # Redis & PostgreSQL persistence layer
-        ├── yunwu/              # Dedicated Yunwu Hypervisor Engine & Scheduler
-        ├── hypervisor.go       # Core Hypervisor coordinator facade
-        └── hypervisor_test.go  # End-to-end hypervisor suite
+        ├── backup/             # Session & project backup/recovery
+        ├── compiler/           # Context compiler
+        ├── config/             # Runtime configurations & flags
+        ├── events/             # Audit event store
+        ├── health/             # Health controller & reconciliation
+        ├── lease/              # Lease management
+        ├── quota/              # Quota manager & concurrent slot limits
+        ├── rebinding/          # Failover & rebinding engine
+        ├── runtime/            # Provider runtime engines (Claude, OpenAI, Mock)
+        ├── scheduler/          # Behavioral node scheduler
+        ├── session/            # VirtualSession state machine
+        ├── stats/              # Analytics & metrics aggregation
+        ├── storage/            # Redis & PostgreSQL storage
+        └── yunwu/              # Yunwu provider engine & scheduler
 ```
 
 ---
 
-## 🛠 4. Hypervisor Package Architecture (`backend/pkg/hypervisor`)
+## 🗄 8. Redis Keys & Database Reference
 
-| Package | Purpose & Functionality | Test Coverage |
-| :--- | :--- | :---: |
-| `config` | Environment variables (`ASH_ENABLED`, `ASH_ENABLE_REBINDING`, etc.) and default settings. | **87.5%** |
-| `session` | `VirtualSession` state machine (`new` → `active` → `rebinding` → `queued` → `closed`), Redis TTL, versioning. | **87.5%** |
-| `lease` | Grants, renews, and releases temporary bindings (`Lease`) between a session and an `ExecutionNode`. | **90.5%** |
-| `scheduler` | Dynamic node selection score algorithm (success rate, latency, queue depth, 429s, affinity). | **92.5%** |
-| `runtime` | Upstream HTTP streaming (`/v1/messages`, `/v1/chat/completions`), SSE transformers, `MockRuntime`. | **83.8%** |
-| `yunwu` | Dedicated execution engine, `YunwuScheduler`, and `YunwuRebindingManager` for Yunwu provider nodes. | **80.4%** |
-| `compiler` | Compiles execution contexts into stable prompt blocks. | **92.0%** |
-| `storage` | Provides Redis hot-state caching and PostgreSQL persistent storage helpers. | **92.3%** |
-| `events` | Append-only event writer logging system operations (`SessionCreated`, `RebindingStarted`, etc.). | **100.0%** |
-| `health` | Periodically reconciles node health states and manages degradation modes. | **82.5%** |
-| `rebinding` | Executes session failover workflow with Redis distributed locking (`SETNX`) and single retry. | **80.4%** |
-| `quota` | Enforces plan limits, monthly usage units, daily burst budgets, and fair use priorities. | **86.1%** |
-| `stats` | Aggregates and serves analytics for user usage and administrator monitoring dashboards. | **81.6%** |
-| `backup` | Manages project snapshots and session state recovery. | **86.1%** |
-
----
-
-## 📊 5. Data Layer & Storage Schemas
-
-### Redis Hot State Keys
-
-| Key Pattern | Purpose | TTL / Scope |
+### Redis Key Patterns
+| Key Pattern | Purpose | Scope / TTL |
 | :--- | :--- | :--- |
 | `ash:session:{session_id}` | Serialized `VirtualSession` state | Active session lifetime |
 | `ash:lease:{session_id}` | Active `Lease` binding | Lease duration |
-| `ash:node:{node_id}` | Live `NodeRuntimeState` metrics | Persistent / Updated per request |
-| `ash:lock:session:{session_id}` | Rebinding distributed lock | 120 seconds |
-| `ash:affinity:{owner_id}` | Preferred node assignment | 1-4 hours |
-| `ash:queue:{priority}` | High-priority request queue | Transient |
+| `ash:node:{node_id}` | `NodeRuntimeState` metrics (`UsedTokens`, latencies, errors) | Persistent / Request updated |
+| `ash:lock:session:{session_id}` | Rebinding distributed lock (`SETNX`) | 120 seconds |
+| `ash:affinity:{owner_id}` | User node sticky assignment | 1-4 hours |
+| `quota:concurrent:{user_id}` | Active concurrent request counter | Transient (Max 5) |
 
-### PostgreSQL Tables (`migrations/135_add_ash_hypervisor_tables.sql`)
-
-- `ash_events`: Append-only system audit log (`id`, `owner_id`, `session_id`, `node_id`, `event_type`, `payload`, `created_at`).
-- `ash_usage`: Detailed token & unit consumption log (`id`, `owner_id`, `session_id`, `node_id`, `input_tokens`, `output_tokens`, `cost_units`, `created_at`).
-- `ash_sessions`: Session metadata persistence (`id`, `owner_id`, `conversation_id`, `state`, `summary`, `metadata`, timestamps).
-- `ash_deposits`: User deposit tracking (`id`, `owner_id`, `amount_cents`, `currency`, `state`, `notice_days`, timestamps).
-- `ash_nodes`: Execution node pool registry (`id`, `account_name`, `provider`, `state`, `capabilities`, `priority`, timestamps).
-
----
-
-## ⚙️ 6. Environment Variables & Feature Flags
-
-| Variable | Default | Description |
-| :--- | :--- | :--- |
-| `ASH_ENABLED` | `true` | Master toggle for AI Session Hypervisor routing |
-| `ASH_ENABLE_REBINDING` | `true` | Enables automatic session failover on 429/timeout |
-| `ASH_ENABLE_AFFINITY` | `true` | Enables user-to-node sticky session preference |
-| `ASH_ENABLE_SUMMARY` | `true` | Enables background conversation summarization |
-| `ASH_ENABLE_HEALTH_CONTROLLER` | `true` | Runs background health reconciliation loop |
-| `ASH_ENABLE_QUOTA_MANAGER` | `true` | Enforces fair use quota limits |
-| `ASH_ENABLE_MOCK_RUNTIME` | `false` | Enables mock fault injection for testing |
-| `ASH_MAX_RETRY` | `1` | Maximum automated retries per user request |
-| `ASH_NODE_COOLDOWN_SECONDS` | `900` | Cooldown period (15m) for nodes hitting 429 |
-| `ASH_SESSION_LOCK_TTL_SECONDS` | `120` | Distributed lock TTL for rebinding operations |
+### Key PostgreSQL Tables
+- `api_keys`: User API keys with group bindings, rate limits (5h/1d/7d), quotas, and IP rules.
+- `ash_sessions`: Session metadata persistence.
+- `ash_events`: System event audit logs.
+- `ash_usage`: Token and request usage consumption records.
+- `ash_nodes`: Execution node pool registry.
 
 ---
 
-## 🌐 7. Main API Endpoints
+## 🌐 9. API Endpoints Quick Reference
 
-### Client Gateway APIs
-- `POST /v1/messages`: Anthropic Messages API (Claude Code CLI, VS Code extension).
-- `GET /v1/models`: Returns list of available models.
-- `POST /responses`: OpenAI / Codex Responses API gateway.
+### Client Gateways
+- `POST /v1/messages`: Anthropic Messages API (Claude Code CLI / VS Code).
+- `POST /v1/chat/completions`: OpenAI Chat Completions API.
+- `POST /responses`: Codex / OpenAI Responses API gateway.
+- `GET /v1/models`: Available model catalog.
 
-### ASH Monitoring & Stats APIs
-- `GET /api/v1/ash/health`: System health and current degradation mode.
-- `GET /api/v1/ash/stats`: Global usage, session, and rebinding statistics.
-- `GET /api/v1/ash/stats/nodes`: Real-time node runtime metrics and health states.
-- `GET /api/v1/ash/stats/analytics`: Historical usage trends and performance charts.
-- `GET /api/v1/ash/admin/yunwu/nodes`: List active Yunwu execution nodes.
-- `GET /api/v1/ash/admin/yunwu/health`: Health state of Yunwu provider cluster.
+### Admin APIs (`/api/v1/admin/*`)
+- `GET /api/v1/admin/api-keys`: Search and list all users' API keys.
+- `PUT /api/v1/admin/api-keys/:id`: Edit any user's API key.
+- `DELETE /api/v1/admin/api-keys/:id`: Delete any user's API key.
+- `GET /api/v1/admin/users`: User account management.
+- `GET /api/v1/admin/groups`: Group & channel management.
+
+### ASH Diagnostics (`/api/v1/ash/*`)
+- `GET /api/v1/ash/health`: Hypervisor health state and degradation mode.
+- `GET /api/v1/ash/stats/nodes`: Real-time node runtime metrics.
+- `GET /api/v1/ash/admin/yunwu/health`: Health status of Yunwu provider cluster.
 
 ---
 
-## 🧪 8. Testing & Development Rules
+## 🧪 10. Testing & Development Rules
 
-### Mandatory Workspace Rules (`AGENTS.md`)
-1. **80% Unit Test Coverage Rule**: All modules and packages inside `pkg/hypervisor/...` MUST maintain at least **80% unit test coverage**.
-2. **Clean Passing Tests**: All unit tests must pass before any code is pushed (`git push`).
+### Workspace Rules (`.agents/AGENTS.md`)
+1. **80% Unit Test Coverage Rule**: Modules in `pkg/hypervisor/...` MUST maintain at least 80% unit test coverage.
+2. **Clean Test Suite**: All unit tests must pass before pushing (`git push`).
+3. **Pre-Push Documentation Rule**: You MUST update `CLAUDE.md` with any architectural changes, endpoints, or fixes before pushing.
 
-### Running Tests
-To run all hypervisor unit tests and verify coverage:
-
+### Running Backend Tests & Build Verification
 ```bash
 cd backend
 go test -cover ./pkg/hypervisor/...
+go build ./...
 ```
 
-### Deployment & Verification
-To rebuild and restart the Docker container stack:
-
+### Running Frontend Verification
 ```bash
-cd deploy
-docker compose up -d --force-recreate --build
+cd frontend
+npm run lint
 ```
