@@ -56,6 +56,7 @@
                 {{ maskKey(value) }}
               </code>
               <button
+                v-if="!isStoredKeyHash(value)"
                 @click="copyToClipboard(value, row.id)"
                 class="rounded-lg p-1 transition-colors hover:bg-gray-100 dark:hover:bg-dark-700"
                 :class="
@@ -73,6 +74,13 @@
                 />
                 <Icon v-else name="clipboard" size="sm" />
               </button>
+              <span
+                v-else
+                class="text-xs text-gray-400 dark:text-dark-500"
+                :title="t('keys.keyNotRecoverable')"
+              >
+                {{ t('keys.keyNotRecoverable') }}
+              </span>
             </div>
           </template>
 
@@ -321,8 +329,11 @@
             <div class="flex items-center gap-1">
               <!-- Use Key Button -->
               <button
+                :disabled="isStoredKeyHash(row.key)"
                 @click="openUseKeyModal(row)"
                 class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-green-50 hover:text-green-600 dark:hover:bg-green-900/20 dark:hover:text-green-400"
+                :class="{ 'cursor-not-allowed opacity-40 hover:bg-transparent hover:text-gray-500': isStoredKeyHash(row.key) }"
+                :title="isStoredKeyHash(row.key) ? t('keys.keyNotRecoverable') : undefined"
               >
                 <Icon name="terminal" size="sm" />
                 <span class="text-xs">{{ t('keys.useKey') }}</span>
@@ -330,8 +341,11 @@
               <!-- Import to CC Switch Button -->
               <button
                 v-if="!publicSettings?.hide_ccs_import_button"
+                :disabled="isStoredKeyHash(row.key)"
                 @click="importToCcswitch(row)"
                 class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-900/20 dark:hover:text-blue-400"
+                :class="{ 'cursor-not-allowed opacity-40 hover:bg-transparent hover:text-gray-500': isStoredKeyHash(row.key) }"
+                :title="isStoredKeyHash(row.key) ? t('keys.keyNotRecoverable') : undefined"
               >
                 <Icon name="upload" size="sm" />
                 <span class="text-xs">{{ t('keys.importToCcSwitch') }}</span>
@@ -951,6 +965,31 @@
       </template>
     </BaseDialog>
 
+    <BaseDialog
+      :show="createdKey !== null"
+      :title="t('keys.keyCreatedTitle')"
+      width="normal"
+      @close="closeCreatedKeyDialog"
+    >
+      <p class="text-sm text-gray-600 dark:text-dark-300">{{ t('keys.keyCreatedWarning') }}</p>
+      <div class="mt-4 flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 dark:border-amber-700 dark:bg-amber-900/20">
+        <code class="min-w-0 flex-1 break-all text-sm text-gray-900 dark:text-white">{{ createdKey }}</code>
+        <button
+          type="button"
+          class="btn btn-secondary shrink-0"
+          @click="copyCreatedKey"
+        >
+          <Icon name="clipboard" size="sm" class="mr-1" />
+          {{ t('keys.copyKey') }}
+        </button>
+      </div>
+      <template #footer>
+        <button type="button" class="btn btn-primary" @click="closeCreatedKeyDialog">
+          {{ t('common.close') }}
+        </button>
+      </template>
+    </BaseDialog>
+
     <!-- Delete Confirmation Dialog -->
     <ConfirmDialog
       :show="showDeleteDialog"
@@ -1203,6 +1242,7 @@ const showResetQuotaDialog = ref(false)
 const showResetRateLimitDialog = ref(false)
 const showUseKeyModal = ref(false)
 const showCcsClientSelect = ref(false)
+const createdKey = ref<string | null>(null)
 const pendingCcsRow = ref<ApiKey | null>(null)
 const selectedKey = ref<ApiKey | null>(null)
 const copiedKeyId = ref<number | null>(null)
@@ -1391,6 +1431,8 @@ const maskKey = (key: string): string => {
   return `${key.slice(0, 8)}...${key.slice(-4)}`
 }
 
+const isStoredKeyHash = (key: string): boolean => key.startsWith('sha256:')
+
 const copyToClipboard = async (text: string, keyId: number) => {
   const success = await clipboardCopy(text, t('keys.copied'))
   if (success) {
@@ -1399,6 +1441,16 @@ const copyToClipboard = async (text: string, keyId: number) => {
       copiedKeyId.value = null
     }, 800)
   }
+}
+
+const copyCreatedKey = async () => {
+  if (createdKey.value) {
+    await clipboardCopy(createdKey.value, t('keys.copied'))
+  }
+}
+
+const closeCreatedKeyDialog = () => {
+  createdKey.value = null
 }
 
 const isAbortError = (error: unknown) => {
@@ -1654,7 +1706,7 @@ const handleSubmit = async () => {
       appStore.showSuccess(t('keys.keyUpdatedSuccess'))
     } else {
       const customKey = formData.value.use_custom_key ? formData.value.custom_key : undefined
-      await keysAPI.create(
+      const newKey = await keysAPI.create(
         formData.value.name,
         formData.value.group_ids[0] ?? null,
         formData.value.group_ids,
@@ -1667,6 +1719,7 @@ const handleSubmit = async () => {
         rateLimitData,
         formData.value.user_id ?? undefined
       )
+      createdKey.value = newKey.key
       appStore.showSuccess(t('keys.keyCreatedSuccess'))
       // Only advance tour if active, on submit step, and creation succeeded
       if (onboardingStore.isCurrentStep('[data-tour="key-form-submit"]')) {
