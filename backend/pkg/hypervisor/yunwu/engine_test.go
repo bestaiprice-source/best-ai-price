@@ -142,6 +142,33 @@ func TestYunwuLiveUsesIsolatedFreshBalanceAndReconcilesReservation(t *testing.T)
 	}
 }
 
+func TestYunwuEphemeralLiveUsesOpaqueSingleUseTokenAndIssuingNode(t *testing.T) {
+	t.Setenv("ASH_YUNWU_TEST_MODE", "true")
+	store := setupTestYunwuStore(t)
+	rt := &mockYunwuLiveRuntime{}
+	yh := NewYunwuHypervisor(store, rt)
+	nm := health.NewNodeManager(store)
+	for _, nodeID := range []string{"issuer-node", "other-node"} {
+		require.NoError(t, nm.SaveNode(context.Background(), &health.ExecutionNode{NodeID: nodeID, AccountName: nodeID, Provider: "yunwu", State: "healthy"}))
+		require.NoError(t, store.Redis().SAdd(context.Background(), "ash:yunwu:nodes", nodeID).Err())
+		setTestBalance(t, store, nodeID, 50_000_000)
+	}
+	require.NoError(t, yh.qm.SaveUserAccess(context.Background(), &quota.UserAccess{OwnerID: "ephemeral-owner", MonthlyLimitMicroUSD: 50_000_000, Priority: 1, IsActive: true}, "yunwu"))
+	upstream := "auth_tokens/vendor-secret"
+	require.NoError(t, store.Redis().Set(context.Background(), yunwuUpstreamTokenNodeKey(upstream), "issuer-node", time.Hour).Err())
+	gatewayToken, err := yh.ExchangeEphemeralToken(context.Background(), "ephemeral-owner", upstream, time.Minute, 1)
+	require.NoError(t, err)
+	assert.NotContains(t, gatewayToken, "vendor-secret")
+
+	err = yh.HandleEphemeralLive(context.Background(), gatewayToken, "session", "/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained", nil, nil)
+	require.NoError(t, err)
+	assert.Equal(t, "issuer-node", rt.nodeID)
+	assert.Contains(t, rt.path, "access_token=auth_tokens%2Fvendor-secret")
+
+	err = yh.HandleEphemeralLive(context.Background(), gatewayToken, "session-2", "/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained", nil, nil)
+	require.ErrorContains(t, err, "invalid or expired ephemeral token")
+}
+
 func TestYunwuRebindingOnFailure(t *testing.T) {
 	store := setupTestYunwuStore(t)
 	nm := health.NewNodeManager(store)

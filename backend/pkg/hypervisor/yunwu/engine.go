@@ -3,6 +3,8 @@ package yunwu
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -239,6 +241,12 @@ func (yh *YunwuHypervisor) HandleRequest(
 			operationNodeID = nodeID
 		}
 	}
+	if resourceName := statefulResourceNameFromRequest(ctx); resourceName != "" {
+		if nodeID, lookupErr := yh.store.Redis().Get(ctx, yunwuResourceNodeKey(resourceName)).Result(); lookupErr == nil && nodeID != "" {
+			activeLeaseNodeID = nodeID
+			operationNodeID = nodeID
+		}
+	}
 
 	// 4. Load Yunwu nodes and runtime credits
 	nodes, err := yh.getAllYunwuNodes(ctx)
@@ -289,6 +297,19 @@ func (yh *YunwuHypervisor) HandleRequest(
 		reservationEstimate = 1
 	}
 	requestID := fmt.Sprintf("%s-%d", sess.ID, time.Now().UnixNano())
+	userReserved, userReserveErr := yh.qm.ReserveMicroUSD(ctx, ownerID, requestID, reservationEstimate, 10*time.Minute)
+	if userReserveErr != nil {
+		return nil, userReserveErr
+	}
+	if !userReserved {
+		return nil, quota.ErrQuotaExceeded
+	}
+	userReservationOpen := true
+	defer func() {
+		if userReservationOpen {
+			_ = yh.qm.ReleaseMicroUSDReservation(context.Background(), ownerID, requestID)
+		}
+	}()
 	reserved, reserveErr := yh.sw.Reserve(ctx, selectedNode.NodeID, requestID, reservationEstimate, 10*time.Minute)
 	if reserveErr != nil {
 		return nil, reserveErr
@@ -422,6 +443,12 @@ func (yh *YunwuHypervisor) HandleRequest(
 	if interactionID := interactionIDFromResponse(ctx, responseWriter.buf.Bytes()); interactionID != "" {
 		_ = yh.store.Redis().Set(ctx, yunwuInteractionNodeKey(interactionID), selectedNode.NodeID, 7*24*time.Hour).Err()
 	}
+	if token := ephemeralTokenFromResponse(ctx, responseWriter.buf.Bytes()); token != "" {
+		_ = yh.store.Redis().Set(ctx, yunwuUpstreamTokenNodeKey(token), selectedNode.NodeID, 20*time.Hour).Err()
+	}
+	if resourceName := statefulResourceNameFromResponse(ctx, responseWriter.buf.Bytes()); resourceName != "" {
+		_ = yh.store.Redis().Set(ctx, yunwuResourceNodeKey(resourceName), selectedNode.NodeID, 30*24*time.Hour).Err()
+	}
 
 	latencyMs := time.Since(execStart).Milliseconds()
 
@@ -454,8 +481,10 @@ func (yh *YunwuHypervisor) HandleRequest(
 		if media.Kind != "" {
 			_, _ = yh.sw.ReconcileReservation(ctx, reservationNodeID, requestID, estimatedMicroUSD)
 			reservationOpen = false
+			if yh.qm.ReconcileMicroUSDReservation(ctx, ownerID, requestID, estimatedMicroUSD) == nil {
+				userReservationOpen = false
+			}
 			if estimatedMicroUSD > 0 {
-				_ = yh.qm.ConsumeMicroUSD(ctx, ownerID, estimatedMicroUSD)
 				_, _ = yh.store.RecordUsageDetails(ctx, ownerID, &sess.ID, &selectedNode.NodeID, 0, 0, media.Units, "yunwu", "yunwu", modelName, media.Kind, estimatedMicroUSD)
 				observability.Default.AddUsage(media.Units)
 				_, _ = yh.store.LogEvent(ctx, ownerID, &sess.ID, &selectedNode.NodeID, "UsageRecorded", map[string]any{"usage_unit": media.Kind, "units": media.Units, "billed_micro_usd": estimatedMicroUSD, "pool_type": "yunwu"})
@@ -465,7 +494,9 @@ func (yh *YunwuHypervisor) HandleRequest(
 			_, _ = yh.sw.ReconcileReservation(ctx, reservationNodeID, requestID, billedMicroUSD)
 			reservationOpen = false
 			_ = yh.qm.ConsumeQuota(ctx, ownerID, "yunwu", int64(costUnits))
-			_ = yh.qm.ConsumeMicroUSD(ctx, ownerID, billedMicroUSD)
+			if yh.qm.ReconcileMicroUSDReservation(ctx, ownerID, requestID, billedMicroUSD) == nil {
+				userReservationOpen = false
+			}
 			_, _ = yh.store.RecordUsageDetails(ctx, ownerID, &sess.ID, &selectedNode.NodeID, meta.InputTokens, meta.OutputTokens, int64(costUnits), "yunwu", "yunwu", modelName, "micro_usd", billedMicroUSD)
 			observability.Default.AddUsage(int64(costUnits))
 			_, _ = yh.store.LogEvent(ctx, ownerID, &sess.ID, &selectedNode.NodeID, "UsageRecorded", map[string]any{"input_tokens": meta.InputTokens, "output_tokens": meta.OutputTokens, "cost_units": costUnits, "pool_type": "yunwu"})
@@ -483,7 +514,9 @@ func (yh *YunwuHypervisor) HandleRequest(
 			// become free: settle the conservative reservation estimate.
 			_, _ = yh.sw.ReconcileReservation(ctx, reservationNodeID, requestID, estimatedMicroUSD)
 			reservationOpen = false
-			_ = yh.qm.ConsumeMicroUSD(ctx, ownerID, estimatedMicroUSD)
+			if yh.qm.ReconcileMicroUSDReservation(ctx, ownerID, requestID, estimatedMicroUSD) == nil {
+				userReservationOpen = false
+			}
 			_, _ = yh.store.RecordUsageDetails(ctx, ownerID, &sess.ID, &selectedNode.NodeID, 0, 0, 0, "yunwu", "yunwu", modelName, "estimated_micro_usd", estimatedMicroUSD)
 		}
 	}
@@ -507,6 +540,28 @@ func (yh *YunwuHypervisor) HandleRequest(
 // Yunwu pool. A bounded maximum duration makes node and user cost reservable
 // before any realtime media is sent upstream.
 func (yh *YunwuHypervisor) HandleLive(ctx context.Context, ownerID, conversationID, path string, headers http.Header, peer runtime.WebSocketPeer) error {
+	return yh.handleLive(ctx, ownerID, conversationID, path, headers, peer, "")
+}
+
+// HandleEphemeralLive consumes a gateway-issued, short-lived token and proxies
+// a constrained Live session with the corresponding vendor token on the exact
+// Yunwu node that issued it.
+func (yh *YunwuHypervisor) HandleEphemeralLive(ctx context.Context, gatewayToken, conversationID, path string, headers http.Header, peer runtime.WebSocketPeer) error {
+	ownerID, upstreamToken, nodeID, err := yh.consumeEphemeralToken(ctx, gatewayToken)
+	if err != nil {
+		return err
+	}
+	u, err := url.Parse(path)
+	if err != nil {
+		return fmt.Errorf("invalid constrained Live path")
+	}
+	query := u.Query()
+	query.Set("access_token", upstreamToken)
+	u.RawQuery = query.Encode()
+	return yh.handleLive(ctx, ownerID, conversationID, u.String(), headers, peer, nodeID)
+}
+
+func (yh *YunwuHypervisor) handleLive(ctx context.Context, ownerID, conversationID, path string, headers http.Header, peer runtime.WebSocketPeer, forcedNodeID string) error {
 	userPriority := 1
 	if access, err := yh.qm.GetUserAccess(ctx, ownerID, "yunwu"); err == nil && access != nil {
 		userPriority = access.Priority
@@ -530,9 +585,12 @@ func (yh *YunwuHypervisor) HandleLive(ctx context.Context, ownerID, conversation
 	}
 	states := yh.getAllYunwuNodeStates(ctx, nodes)
 	credits := yh.getAllYunwuNodeCredits(ctx, nodes)
-	selected, err := yh.sch.SelectNode(ctx, nodes, states, credits, userPriority, "", yh.hc.GetSystemState(ctx))
+	selected, err := yh.sch.SelectNode(ctx, nodes, states, credits, userPriority, forcedNodeID, yh.hc.GetSystemState(ctx))
 	if err != nil {
 		return err
+	}
+	if forcedNodeID != "" && selected.NodeID != forcedNodeID {
+		return fmt.Errorf("ephemeral token node is unavailable")
 	}
 	maxMinutes := yh.liveMaxMinutes(ctx, selected.NodeID)
 	liveModel, usageUnit := "gemini-live", "live_audio_minute"
@@ -545,6 +603,19 @@ func (yh *YunwuHypervisor) HandleLive(ctx context.Context, ownerID, conversation
 	}
 	estimated := pricePerMinute * maxMinutes
 	requestID := fmt.Sprintf("live-%s-%d", ownerID, time.Now().UnixNano())
+	userReserved, err := yh.qm.ReserveMicroUSD(ctx, ownerID, requestID, max64(1, estimated), time.Duration(maxMinutes+2)*time.Minute)
+	if err != nil {
+		return err
+	}
+	if !userReserved {
+		return quota.ErrQuotaExceeded
+	}
+	userReservationOpen := true
+	defer func() {
+		if userReservationOpen {
+			_ = yh.qm.ReleaseMicroUSDReservation(context.Background(), ownerID, requestID)
+		}
+	}()
 	reserved, err := yh.sw.Reserve(ctx, selected.NodeID, requestID, max64(1, estimated), time.Duration(maxMinutes+2)*time.Minute)
 	if err != nil {
 		return err
@@ -581,13 +652,73 @@ func (yh *YunwuHypervisor) HandleLive(ctx context.Context, ownerID, conversation
 	if duration >= time.Second || err == nil {
 		_, _ = yh.sw.ReconcileReservation(context.Background(), selected.NodeID, requestID, billed)
 		reservationOpen = false
+		if yh.qm.ReconcileMicroUSDReservation(context.Background(), ownerID, requestID, billed) == nil {
+			userReservationOpen = false
+		}
 		if billed > 0 {
-			_ = yh.qm.ConsumeMicroUSD(context.Background(), ownerID, billed)
 			_, _ = yh.store.RecordUsageDetails(context.Background(), ownerID, nil, &selected.NodeID, 0, 0, minutes, "yunwu", "yunwu", liveModel, usageUnit, billed)
 			_, _ = yh.store.LogEvent(context.Background(), ownerID, nil, &selected.NodeID, "UsageRecorded", map[string]any{"usage_unit": usageUnit, "units": minutes, "billed_micro_usd": billed, "pool_type": "yunwu"})
 		}
 	}
 	return err
+}
+
+type ephemeralTokenRecord struct {
+	OwnerID       string `json:"owner_id"`
+	UpstreamToken string `json:"upstream_token"`
+	NodeID        string `json:"node_id"`
+}
+
+// ExchangeEphemeralToken replaces a vendor credential with an opaque token
+// valid only at this gateway. The vendor credential never reaches the client.
+func (yh *YunwuHypervisor) ExchangeEphemeralToken(ctx context.Context, ownerID, upstreamToken string, ttl time.Duration, uses int64) (string, error) {
+	if ownerID == "" || upstreamToken == "" {
+		return "", fmt.Errorf("invalid ephemeral token exchange")
+	}
+	if ttl <= 0 || ttl > 20*time.Hour {
+		ttl = 30 * time.Minute
+	}
+	if uses < 1 || uses > 100 {
+		uses = 1
+	}
+	nodeID, err := yh.store.Redis().Get(ctx, yunwuUpstreamTokenNodeKey(upstreamToken)).Result()
+	if err != nil || nodeID == "" {
+		return "", fmt.Errorf("ephemeral token node affinity unavailable")
+	}
+	random := make([]byte, 32)
+	if _, err := rand.Read(random); err != nil {
+		return "", fmt.Errorf("generate ephemeral token: %w", err)
+	}
+	gatewayToken := fmt.Sprintf("ash_ephemeral_%x", random)
+	record, _ := json.Marshal(ephemeralTokenRecord{OwnerID: ownerID, UpstreamToken: upstreamToken, NodeID: nodeID})
+	key := yunwuGatewayTokenKey(gatewayToken)
+	pipe := yh.store.Redis().TxPipeline()
+	pipe.HSet(ctx, key, "record", record, "uses", uses)
+	pipe.Expire(ctx, key, ttl)
+	_, err = pipe.Exec(ctx)
+	return gatewayToken, err
+}
+
+func (yh *YunwuHypervisor) consumeEphemeralToken(ctx context.Context, token string) (string, string, string, error) {
+	if token == "" {
+		return "", "", "", fmt.Errorf("missing ephemeral token")
+	}
+	const script = `
+local uses = tonumber(redis.call('HGET', KEYS[1], 'uses'))
+if not uses or uses <= 0 then return nil end
+local record = redis.call('HGET', KEYS[1], 'record')
+if not record then return nil end
+if uses == 1 then redis.call('DEL', KEYS[1]) else redis.call('HINCRBY', KEYS[1], 'uses', -1) end
+return record`
+	value, err := yh.store.Redis().Eval(ctx, script, []string{yunwuGatewayTokenKey(token)}).Text()
+	if err != nil || value == "" {
+		return "", "", "", fmt.Errorf("invalid or expired ephemeral token")
+	}
+	var record ephemeralTokenRecord
+	if json.Unmarshal([]byte(value), &record) != nil || record.OwnerID == "" || record.UpstreamToken == "" || record.NodeID == "" {
+		return "", "", "", fmt.Errorf("invalid ephemeral token record")
+	}
+	return record.OwnerID, record.UpstreamToken, record.NodeID, nil
 }
 
 func (yh *YunwuHypervisor) liveMaxMinutes(ctx context.Context, nodeID string) int64 {
@@ -643,7 +774,7 @@ func classifyMediaRequest(ctx context.Context, model string, payload []byte) med
 		return mediaRequest{}
 	}
 	method, path := strings.ToUpper(req.Method), strings.ToLower(req.Path)
-	if method != http.MethodPost || strings.Contains(path, "/files") || strings.Contains(path, "/operations/") || strings.Contains(path, ":counttokens") || strings.HasSuffix(strings.Split(path, "?")[0], "/cancel") {
+	if method != http.MethodPost || isGeminiControlResource(path) || strings.Contains(path, "/files") || strings.Contains(path, "/operations/") || strings.Contains(path, ":counttokens") || strings.HasSuffix(strings.Split(path, "?")[0], "/cancel") {
 		return mediaRequest{Kind: "media_control", Units: 0}
 	}
 	kind := ""
@@ -675,6 +806,15 @@ func classifyMediaRequest(ctx context.Context, model string, payload []byte) med
 		}
 	}
 	return mediaRequest{Kind: kind, Units: units}
+}
+
+func isGeminiControlResource(path string) bool {
+	for _, marker := range []string{"/auth_tokens", "/batches", "/cachedcontents", "/generatedfiles", "/filesearchstores", "/corpora", "/tunedmodels", "/dynamic"} {
+		if strings.Contains(path, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 // resolveMediaPrice returns a configured price per produced unit. Account
@@ -820,6 +960,70 @@ func interactionIDFromResponse(ctx context.Context, body []byte) string {
 
 func yunwuInteractionNodeKey(id string) string {
 	return "ash:yunwu:interaction_node:" + id
+}
+
+func ephemeralTokenFromResponse(ctx context.Context, body []byte) string {
+	req, ok := runtime.UpstreamRequestFromContext(ctx)
+	if !ok || !strings.Contains(req.Path, "/auth_tokens") {
+		return ""
+	}
+	var payload struct {
+		Name string `json:"name"`
+	}
+	if json.Unmarshal(body, &payload) != nil || !strings.HasPrefix(payload.Name, "auth_tokens/") {
+		return ""
+	}
+	return payload.Name
+}
+
+func yunwuUpstreamTokenNodeKey(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return fmt.Sprintf("ash:yunwu:upstream_token_node:%x", sum[:])
+}
+
+func yunwuGatewayTokenKey(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return fmt.Sprintf("ash:yunwu:gateway_ephemeral:%x", sum[:])
+}
+
+func statefulResourceNameFromRequest(ctx context.Context) string {
+	req, ok := runtime.UpstreamRequestFromContext(ctx)
+	if !ok {
+		return ""
+	}
+	path := strings.SplitN(req.Path, "?", 2)[0]
+	path = strings.TrimPrefix(path, "/v1beta/")
+	for _, root := range []string{"batches", "cachedContents", "generatedFiles", "fileSearchStores", "corpora", "tunedModels", "dynamic"} {
+		if strings.HasPrefix(path, root+"/") {
+			name := strings.SplitN(path, ":", 2)[0]
+			return name
+		}
+	}
+	return ""
+}
+
+func statefulResourceNameFromResponse(ctx context.Context, body []byte) string {
+	req, ok := runtime.UpstreamRequestFromContext(ctx)
+	if !ok || !strings.Contains(req.Path, "/v1beta/") {
+		return ""
+	}
+	var payload struct {
+		Name string `json:"name"`
+	}
+	if json.Unmarshal(body, &payload) != nil {
+		return ""
+	}
+	for _, root := range []string{"batches/", "cachedContents/", "generatedFiles/", "fileSearchStores/", "corpora/", "tunedModels/", "dynamic/"} {
+		if strings.HasPrefix(payload.Name, root) {
+			return payload.Name
+		}
+	}
+	return ""
+}
+
+func yunwuResourceNodeKey(name string) string {
+	sum := sha256.Sum256([]byte(name))
+	return fmt.Sprintf("ash:yunwu:resource_node:%x", sum[:])
 }
 
 func (yh *YunwuHypervisor) getAllYunwuNodes(ctx context.Context) ([]health.ExecutionNode, error) {

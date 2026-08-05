@@ -96,15 +96,24 @@ func RegisterGatewayRoutes(
 		gemini.POST("/files", h.Gateway.GeminiV1BetaFile)
 		gemini.GET("/files/*filePath", h.Gateway.GeminiV1BetaFile)
 		gemini.DELETE("/files/*filePath", h.Gateway.GeminiV1BetaFile)
+		gemini.POST("/auth_tokens", h.Gateway.GeminiAuthToken)
 		gemini.POST("/interactions", h.Gateway.GeminiInteraction)
 		gemini.GET("/interactions/*interactionPath", h.Gateway.GeminiInteraction)
 		gemini.POST("/interactions/*interactionPath", h.Gateway.GeminiInteraction)
 		gemini.DELETE("/interactions/*interactionPath", h.Gateway.GeminiInteraction)
+		for _, root := range []string{"batches", "cachedContents", "generatedFiles", "fileSearchStores", "corpora", "tunedModels", "dynamic"} {
+			for _, method := range []string{http.MethodGet, http.MethodPost, http.MethodDelete, http.MethodPatch, http.MethodPut} {
+				gemini.Handle(method, "/"+root, h.Gateway.GeminiV1BetaResource)
+				gemini.Handle(method, "/"+root+"/*resourcePath", h.Gateway.GeminiV1BetaResource)
+			}
+		}
 	}
 	r.POST("/upload/v1beta/files", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, middleware.APIKeyAuthWithSubscriptionGoogle(apiKeyService, subscriptionService, cfg), requireGroupGoogle, strictGoogle, h.Gateway.GeminiV1BetaFile)
+	r.POST("/upload/v1beta/fileSearchStores/*resourcePath", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, middleware.APIKeyAuthWithSubscriptionGoogle(apiKeyService, subscriptionService, cfg), requireGroupGoogle, strictGoogle, h.Gateway.GeminiV1BetaResource)
 	r.GET("/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent", clientRequestID, opsErrorLogger, middleware.APIKeyAuthWithSubscriptionGoogle(apiKeyService, subscriptionService, cfg), requireGroupGoogle, strictGoogle, h.Gateway.GeminiLive)
 	r.GET("/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent", clientRequestID, opsErrorLogger, middleware.APIKeyAuthWithSubscriptionGoogle(apiKeyService, subscriptionService, cfg), requireGroupGoogle, strictGoogle, h.Gateway.GeminiLive)
 	r.GET("/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateMusic", clientRequestID, opsErrorLogger, middleware.APIKeyAuthWithSubscriptionGoogle(apiKeyService, subscriptionService, cfg), requireGroupGoogle, strictGoogle, h.Gateway.GeminiLive)
+	r.GET("/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained", clientRequestID, opsErrorLogger, h.Gateway.GeminiEphemeralLive)
 	for _, method := range []string{http.MethodPost, http.MethodGet, http.MethodDelete} {
 		r.Handle(method, "/v1/interactions", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, middleware.APIKeyAuthWithSubscriptionGoogle(apiKeyService, subscriptionService, cfg), requireGroupGoogle, strictGoogle, h.Gateway.GeminiInteraction)
 		r.Handle(method, "/v1/interactions/*interactionPath", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, middleware.APIKeyAuthWithSubscriptionGoogle(apiKeyService, subscriptionService, cfg), requireGroupGoogle, strictGoogle, h.Gateway.GeminiInteraction)
@@ -638,6 +647,10 @@ func yunwuExecutableMediaRoutes(h *handler.Handlers) []gatewayctx.RouteDef {
 	} {
 		routes = append(routes, gatewayctx.RouteDef{Method: http.MethodGet, Path: path, Handler: h.Gateway.GeminiLiveGateway, Middleware: append([]string(nil), googleMiddleware...)})
 	}
+	routes = append(routes,
+		gatewayctx.RouteDef{Method: http.MethodPost, Path: "/v1beta/auth_tokens", Handler: h.Gateway.GeminiAuthTokenGateway, Middleware: append([]string(nil), googleMiddleware...)},
+		gatewayctx.RouteDef{Method: http.MethodGet, Path: "/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained", Handler: h.Gateway.GeminiEphemeralLiveGateway, Middleware: []string{"request_logger", "cors", "security_headers", "client_request_id"}},
+	)
 	for _, version := range []string{"v1beta", "v1"} {
 		for _, route := range []struct{ method, suffix string }{
 			{http.MethodPost, "/interactions"},
@@ -648,6 +661,14 @@ func yunwuExecutableMediaRoutes(h *handler.Handlers) []gatewayctx.RouteDef {
 			routes = append(routes, gatewayctx.RouteDef{Method: route.method, Path: "/" + version + route.suffix, Handler: h.Gateway.GeminiInteractionGateway, Middleware: append([]string(nil), googleMiddleware...)})
 		}
 	}
+	for _, root := range []string{"batches", "cachedContents", "generatedFiles", "fileSearchStores", "corpora", "tunedModels", "dynamic"} {
+		for _, method := range []string{http.MethodGet, http.MethodPost, http.MethodDelete, http.MethodPatch, http.MethodPut} {
+			for _, suffix := range []string{"", "/*resourcePath"} {
+				routes = append(routes, gatewayctx.RouteDef{Method: method, Path: "/v1beta/" + root + suffix, Handler: h.Gateway.GeminiV1BetaResourceGateway, Middleware: append([]string(nil), googleMiddleware...)})
+			}
+		}
+	}
+	routes = append(routes, gatewayctx.RouteDef{Method: http.MethodPost, Path: "/upload/v1beta/fileSearchStores/*resourcePath", Handler: h.Gateway.GeminiV1BetaResourceGateway, Middleware: append([]string(nil), googleMiddleware...)})
 	return routes
 }
 

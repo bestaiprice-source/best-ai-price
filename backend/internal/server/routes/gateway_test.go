@@ -112,9 +112,14 @@ func TestExecutableGatewayRoutesYunwuMultimediaAreRegistered(t *testing.T) {
 		"GET /v1/videos/*videoPath":         false,
 		"GET /v1beta/operations/*operation": false,
 		"POST /upload/v1beta/files":         false,
-		"GET /ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent": false,
-		"GET /ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateMusic":  false,
-		"POST /v1beta/interactions": false,
+		"GET /ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent":            false,
+		"GET /ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateMusic":             false,
+		"GET /ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained": false,
+		"POST /v1beta/interactions":                          false,
+		"POST /v1beta/auth_tokens":                           false,
+		"POST /v1beta/cachedContents":                        false,
+		"GET /v1beta/generatedFiles/*resourcePath":           false,
+		"POST /upload/v1beta/fileSearchStores/*resourcePath": false,
 	}
 	for _, route := range routes {
 		key := route.Method + " " + route.Path

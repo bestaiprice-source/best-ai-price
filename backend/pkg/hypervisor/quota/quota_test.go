@@ -79,6 +79,34 @@ func TestQuotaManagerGetUserAccessAndCheckQuota(t *testing.T) {
 	assert.Greater(t, dynLimit, int64(0))
 }
 
+func TestYunwuUserMoneyReservationsAreAtomicAndRecoverExpiredHolds(t *testing.T) {
+	store := newTestStorage(t)
+	qm := NewQuotaManager(store)
+	ctx := context.Background()
+	ownerID := "money-owner"
+	require.NoError(t, qm.SaveUserAccess(ctx, &UserAccess{OwnerID: ownerID, MonthlyLimitMicroUSD: 100, DailyBurstMicroUSD: 100, Priority: 1, IsActive: true}, "yunwu"))
+
+	ok, err := qm.ReserveMicroUSD(ctx, ownerID, "request-a", 70, time.Minute)
+	require.NoError(t, err)
+	require.True(t, ok)
+	ok, err = qm.ReserveMicroUSD(ctx, ownerID, "request-b", 40, time.Minute)
+	require.NoError(t, err)
+	require.False(t, ok, "the same user balance must not be reserved twice")
+	require.NoError(t, qm.ReconcileMicroUSDReservation(ctx, ownerID, "request-a", 60))
+	used, err := store.Redis().Get(ctx, moneyUsageKey(ownerID)).Int64()
+	require.NoError(t, err)
+	require.Equal(t, int64(60), used)
+
+	ok, err = qm.ReserveMicroUSD(ctx, ownerID, "expired", 40, time.Millisecond)
+	require.NoError(t, err)
+	require.True(t, ok)
+	time.Sleep(2 * time.Millisecond)
+	ok, err = qm.ReserveMicroUSD(ctx, ownerID, "after-expiry", 40, time.Minute)
+	require.NoError(t, err)
+	require.True(t, ok, "expired reservations must release their aggregate hold")
+	require.NoError(t, qm.ReleaseMicroUSDReservation(ctx, ownerID, "after-expiry"))
+}
+
 func TestQuotaManagerExceeded(t *testing.T) {
 	store := newTestStorage(t)
 	qm := NewQuotaManager(store)

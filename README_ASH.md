@@ -86,6 +86,8 @@ Media-compatible Yunwu routes currently include:
 - Gemini Live bidirectional WebSocket under `/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent` (the `v1alpha` alias is also accepted), including realtime text, PCM audio, images, and video frames.
 - Lyria RealTime Live Music under `/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateMusic`, including prompt/control messages and streamed audio chunks.
 - the current Gemini Interactions API under `/v1beta/interactions...` and `/v1/interactions...`, including multimodal, stored/background, cancellation, retrieval, deletion, and SSE interactions.
+- browser-safe ephemeral Live tokens through `POST /v1beta/auth_tokens` and `BidiGenerateContentConstrained`; vendor tokens are replaced with opaque, short-lived gateway tokens and pinned to their issuing Yunwu node.
+- native batch, cached content, generated file, File Search, corpus, tuned-model, and dynamic resource endpoints with stateful Yunwu node affinity.
 
 The exact model and endpoint availability is determined by the configured Yunwu vendor. Unsupported upstream operations are returned as vendor errors; the gateway does not fabricate media capabilities.
 

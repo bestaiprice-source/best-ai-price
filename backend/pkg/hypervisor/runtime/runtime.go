@@ -293,7 +293,11 @@ func (r *AnthropicRuntime) ProxyWebSocket(ctx context.Context, nodeID, path stri
 	}
 	dialHeaders := make(http.Header)
 	liveAuth, _ := acc.Extra["yunwu_live_auth"].(string)
-	if strings.EqualFold(strings.TrimSpace(liveAuth), "query") {
+	// Constrained Live sessions authenticate with the short-lived token in the
+	// URL. Never add the long-lived node credential to those requests.
+	if u.Query().Get("access_token") != "" {
+		// Ephemeral token already present.
+	} else if strings.EqualFold(strings.TrimSpace(liveAuth), "query") {
 		query := u.Query()
 		query.Set("key", apiKey)
 		u.RawQuery = query.Encode()

@@ -488,6 +488,26 @@ func TestYunwuGeminiLiveWebSocketRelay(t *testing.T) {
 	}
 }
 
+func TestYunwuConstrainedLiveUsesOnlyEphemeralCredential(t *testing.T) {
+	store := newTestStorage(t)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "auth_tokens/short-lived", r.URL.Query().Get("access_token"))
+		assert.Empty(t, r.Header.Get("Authorization"))
+		conn, err := coderws.Accept(w, r, nil)
+		require.NoError(t, err)
+		_, _, err = conn.Read(r.Context())
+		require.NoError(t, err)
+		_ = conn.Close(coderws.StatusNormalClosure, "done")
+	}))
+	defer server.Close()
+	account, err := store.DB().Account.Create().
+		SetName("yunwu-constrained-live").SetPlatform("yunwu").SetType("api_key").SetStatus("active").
+		SetCredentials(map[string]any{"api_key": "long-lived-must-not-pass", "base_url": server.URL}).Save(context.Background())
+	require.NoError(t, err)
+	err = NewAnthropicRuntime(store).ProxyWebSocket(context.Background(), fmt.Sprint(account.ID), "/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained?access_token=auth_tokens%2Fshort-lived", nil, &testLivePeer{first: []byte(`{"setup":{}}`)})
+	require.NoError(t, err)
+}
+
 func TestYunwuGeminiLiveQueryCredentialIsRedactedFromDialError(t *testing.T) {
 	store := newTestStorage(t)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { http.Error(w, "no websocket", http.StatusBadGateway) }))
