@@ -194,6 +194,7 @@ func TestAnthropicRuntimeExecution(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "Bearer sk-ant-oat-test-token", r.Header.Get("Authorization"))
 		assert.Equal(t, "2023-06-01", r.Header.Get("anthropic-version"))
+		assert.Equal(t, "claude-cli/2.1.88 (external, cli)", r.Header.Get("User-Agent"))
 
 		body, _ := io.ReadAll(r.Body)
 		assert.Contains(t, string(body), `"max_tokens":4096`)
@@ -292,7 +293,7 @@ func TestAnthropicRuntimeAPIKeyTakesPrecedenceOverStaleAccessToken(t *testing.T)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "active-api-key", r.Header.Get("x-api-key"))
-		assert.Equal(t, "Bearer active-api-key", r.Header.Get("Authorization"))
+		assert.Empty(t, r.Header.Get("Authorization"))
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"usage":{"input_tokens":1,"output_tokens":1}}`))
 	}))

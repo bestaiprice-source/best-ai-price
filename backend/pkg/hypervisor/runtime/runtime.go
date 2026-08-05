@@ -17,6 +17,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent"
 	dbaccount "github.com/Wei-Shaw/sub2api/ent/account"
 	"github.com/Wei-Shaw/sub2api/internal/credentials"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/claude"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/storage"
 	coderws "github.com/coder/websocket"
 )
@@ -608,14 +609,18 @@ func (r *AnthropicRuntime) Execute(ctx context.Context, nodeID string, reqPayloa
 		}
 	} else {
 		isOAuthOrSetupToken := acc.Type == "oauth" || acc.Type == "setup-token" || strings.HasPrefix(apiKey, "sk-ant-oat") || strings.HasPrefix(apiKey, "sk-oat")
+		// Use the exact Claude Code headers used by the admin account test.
+		// Keeping these paths aligned is important for OAuth/setup-token accounts,
+		// whose upstream policy can depend on the declared client protocol.
+		for name, value := range claude.DefaultHeaders {
+			req.Header.Set(name, value)
+		}
 		if isOAuthOrSetupToken {
 			req.Header.Set("Authorization", "Bearer "+apiKey)
-			req.Header.Set("User-Agent", "Claude-Code/0.2.29")
-			req.Header.Set("anthropic-beta", "claude-code-20250219,oauth-2025-04-20,prompt-caching-2024-07-31")
+			req.Header.Set("anthropic-beta", claude.DefaultBetaHeader)
 		} else {
 			req.Header.Set("x-api-key", apiKey)
-			req.Header.Set("Authorization", "Bearer "+apiKey)
-			req.Header.Set("User-Agent", "Claude-Code/0.2.29")
+			req.Header.Set("anthropic-beta", claude.APIKeyBetaHeader)
 		}
 		req.Header.Set("anthropic-version", "2023-06-01")
 		req.Header.Set("content-type", requestContentType)
