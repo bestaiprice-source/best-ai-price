@@ -446,6 +446,9 @@ func (r *AnthropicRuntime) Execute(ctx context.Context, nodeID string, reqPayloa
 					strings.HasPrefix(modelLower, "veo-") ||
 					strings.HasPrefix(modelLower, "lyria-") ||
 					strings.HasPrefix(modelLower, "chirp-") ||
+					strings.HasPrefix(modelLower, "glm-") ||
+					strings.HasPrefix(modelLower, "deepseek-") ||
+					strings.HasPrefix(modelLower, "qwen-") ||
 					strings.HasPrefix(modelLower, "gpt-") ||
 					strings.HasPrefix(modelLower, "o1-") ||
 					strings.HasPrefix(modelLower, "o3-") ||

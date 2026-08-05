@@ -411,6 +411,27 @@ func TestYunwuExplicitGeminiProtocolUsesOpenAIEndpoint(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestYunwuGLMAndDeepSeekUseOpenAIEndpoint(t *testing.T) {
+	for _, model := range []string{"glm-4.5", "deepseek-r1"} {
+		t.Run(model, func(t *testing.T) {
+			store := newTestStorage(t)
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				assert.Equal(t, "/v1/chat/completions", r.URL.Path)
+				assert.Equal(t, "Bearer sk-test", r.Header.Get("Authorization"))
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"ok"}}],"usage":{"prompt_tokens":1,"completion_tokens":1}}`))
+			}))
+			defer server.Close()
+			account, err := store.DB().Account.Create().
+				SetName("yunwu-" + model).SetPlatform("yunwu").SetType("api_key").SetStatus("active").
+				SetCredentials(map[string]any{"api_key": "sk-test", "base_url": server.URL}).Save(context.Background())
+			require.NoError(t, err)
+			_, err = NewAnthropicRuntime(store).Execute(context.Background(), fmt.Sprint(account.ID), []byte(`{"model":"`+model+`","messages":[{"role":"user","content":"hi"}]}`), io.Discard)
+			require.NoError(t, err)
+		})
+	}
+}
+
 func TestYunwuNativeGeminiEndpointPreservesInlineMedia(t *testing.T) {
 	store := newTestStorage(t)
 	ctx := context.Background()
