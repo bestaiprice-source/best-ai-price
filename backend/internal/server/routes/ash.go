@@ -904,7 +904,7 @@ func RegisterAshRoutes(
 					if ua, err := qm.GetUserAccess(c.Request.Context(), ownerID, poolType); err == nil && ua != nil {
 						ua.DepositState = "released"
 						data, _ := json.Marshal(ua)
-						_ = engine.Storage().Redis().Set(c.Request.Context(), fmt.Sprintf("ash:user_access:%s:%s", poolType, ownerID), data, 0).Err()
+						_ = engine.Storage().Redis().Set(c.Request.Context(), fmt.Sprintf("ash:user_access:%s:%s", ownerID, poolType), data, 0).Err()
 					}
 				}
 

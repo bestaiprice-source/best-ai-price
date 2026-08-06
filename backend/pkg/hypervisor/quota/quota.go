@@ -428,6 +428,35 @@ func (qm *QuotaManager) GetUserAccess(ctx context.Context, ownerID string, poolT
 					ua.UsedMicroUSD = monetary
 				}
 			}
+			// If cached user access is not unlimited, re-check DB fallback for unlimited status
+			if (ua.MonthlyLimit >= 0 || ua.MonthlyLimitMicroUSD >= 0) && ua.PlanID != "unlimited" && qm.store.DB() != nil {
+				var id int64
+				if _, parseErr := fmt.Sscanf(ownerID, "%d", &id); parseErr == nil {
+					if apiKey, keyErr := qm.store.DB().APIKey.Get(ctx, id); keyErr == nil && apiKey != nil {
+						if apiKey.Quota <= 0 {
+							ua.MonthlyLimit = -1
+							ua.MonthlyLimitMicroUSD = -1
+							ua.PlanID = "unlimited"
+							_ = qm.SaveUserAccess(ctx, &ua, poolType)
+						}
+					} else if u, uErr := qm.store.DB().User.Get(ctx, id); uErr == nil && u != nil {
+						keys, _ := qm.store.DB().APIKey.Query().Where(apikey.UserID(u.ID)).All(ctx)
+						hasLimitedKey := false
+						for _, k := range keys {
+							if k.Quota > 0 {
+								hasLimitedKey = true
+								break
+							}
+						}
+						if len(keys) > 0 && !hasLimitedKey {
+							ua.MonthlyLimit = -1
+							ua.MonthlyLimitMicroUSD = -1
+							ua.PlanID = "unlimited"
+							_ = qm.SaveUserAccess(ctx, &ua, poolType)
+						}
+					}
+				}
+			}
 			return &ua, nil
 		}
 	}
@@ -571,6 +600,20 @@ func (qm *QuotaManager) SaveUserAccess(ctx context.Context, ua *UserAccess, pool
 		})
 	}
 	return nil
+}
+
+func (qm *QuotaManager) InvalidateUserAccessCache(ctx context.Context, ownerID string) {
+	if qm == nil || qm.store == nil || qm.store.Redis() == nil || ownerID == "" {
+		return
+	}
+	_ = qm.store.Redis().Del(ctx,
+		UserAccessKey(ownerID, "standard"),
+		UserAccessKey(ownerID, "yunwu"),
+		fmt.Sprintf("ash:user_access:%s:standard", ownerID),
+		fmt.Sprintf("ash:user_access:%s:yunwu", ownerID),
+		fmt.Sprintf("ash:user_access:standard:%s", ownerID),
+		fmt.Sprintf("ash:user_access:yunwu:%s", ownerID),
+	).Err()
 }
 
 func (qm *QuotaManager) GetDailyUsage(ctx context.Context, ownerID string, poolType string) (int64, error) {
