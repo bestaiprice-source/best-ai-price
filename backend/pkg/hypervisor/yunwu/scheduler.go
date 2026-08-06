@@ -21,7 +21,7 @@ const (
 type YunwuScheduler struct{ requireFreshBalance bool }
 
 func NewYunwuScheduler(requireFreshBalance ...bool) *YunwuScheduler {
-	requireFresh := true
+	requireFresh := false
 	if len(requireFreshBalance) > 0 {
 		requireFresh = requireFreshBalance[0]
 	}
