@@ -52,7 +52,7 @@ func LoadFromEnv() *HypervisorConfig {
 		YunwuBalanceSyncSeconds:       getEnvInt("ASH_YUNWU_BALANCE_SYNC_SECONDS", 300),
 		YunwuBalanceStaleSeconds:      getEnvInt("ASH_YUNWU_BALANCE_STALE_SECONDS", 1800),
 		YunwuBalanceReservePercent:    getEnvInt("ASH_YUNWU_BALANCE_RESERVE_PERCENT", 10),
-		YunwuRequireFreshBalance:      getEnvBool("ASH_YUNWU_REQUIRE_FRESH_BALANCE", true),
+		YunwuRequireFreshBalance:      getEnvBool("ASH_YUNWU_REQUIRE_FRESH_BALANCE", false),
 		YunwuFallbackCapacityMicroUSD: getEnvInt64("ASH_YUNWU_FALLBACK_CAPACITY_MICRO_USD", 1_000_000_000),
 		ActiveUserWindowSeconds:       getEnvInt("ASH_ACTIVE_USER_WINDOW_SECONDS", 86400),
 		PoolReservePercent:            getEnvInt("ASH_POOL_RESERVE_PERCENT", 20),

@@ -142,6 +142,15 @@ func (s *YunwuScheduler) SelectNode(
 		// - Queue depth
 		score -= float64(queueDepth) * 5.0
 
+		// - Used tokens organic penalty for fair distribution (max 25 points)
+		if exists && state.UsedTokens > 0 {
+			tokenPenalty := float64(state.UsedTokens) / 100000.0
+			if tokenPenalty > 25.0 {
+				tokenPenalty = 25.0
+			}
+			score -= tokenPenalty
+		}
+
 		// - Latency
 		latencyDivider := 100.0
 		if systemState == "WARNING" {

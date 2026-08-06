@@ -18,7 +18,7 @@ func TestConfigLoadFromEnvDefaults(t *testing.T) {
 	assert.True(t, cfg.EnableAffinity)
 	assert.Equal(t, 1, cfg.MaxRetry)
 	assert.Equal(t, 900, cfg.NodeCooldownSeconds)
-	assert.True(t, cfg.YunwuRequireFreshBalance)
+	assert.False(t, cfg.YunwuRequireFreshBalance)
 	assert.Equal(t, int64(1_000_000_000), cfg.YunwuFallbackCapacityMicroUSD)
 	assert.Equal(t, 20, cfg.PoolReservePercent)
 	assert.Equal(t, 50, cfg.MaxOwnerPoolSharePercent)

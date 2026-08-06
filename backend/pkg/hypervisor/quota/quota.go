@@ -638,8 +638,8 @@ func (qm *QuotaManager) CheckQuotaScope(ctx context.Context, ownerID string, sco
 			return false, ErrDailyBurstExceeded
 		}
 	}
-	if (poolType == "standard" && (ua.MonthlyLimit <= 0 || ua.PlanID == "unlimited")) ||
-		(poolType == "yunwu" && (ua.MonthlyLimitMicroUSD <= 0 || ua.PlanID == "unlimited")) {
+	if (poolType == "standard" && (ua.MonthlyLimit < 0 || ua.PlanID == "unlimited")) ||
+		(poolType == "yunwu" && (ua.MonthlyLimitMicroUSD < 0 || ua.PlanID == "unlimited")) {
 		return true, nil
 	}
 	if poolType == "standard" && ua.MonthlyLimit > 0 && ua.UsedUnits >= ua.MonthlyLimit {
