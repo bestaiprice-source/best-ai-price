@@ -12,6 +12,7 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/account"
+	"github.com/Wei-Shaw/sub2api/ent/apikey"
 	"github.com/Wei-Shaw/sub2api/ent/ashusage"
 	"github.com/Wei-Shaw/sub2api/ent/ashuserpolicy"
 	hyperconfig "github.com/Wei-Shaw/sub2api/pkg/hypervisor/config"
@@ -228,8 +229,8 @@ func (qm *QuotaManager) ReserveQuotaTokens(ctx context.Context, ownerID, request
 	if !ua.IsActive {
 		return false, ErrUserInactive
 	}
-	if (poolType == "standard" && (ua.MonthlyLimit < 0 || ua.PlanID == "unlimited")) ||
-		(poolType == "yunwu" && (ua.MonthlyLimitMicroUSD < 0 || ua.PlanID == "unlimited")) {
+	if (poolType == "standard" && (ua.MonthlyLimit <= 0 || ua.PlanID == "unlimited")) ||
+		(poolType == "yunwu" && (ua.MonthlyLimitMicroUSD <= 0 || ua.PlanID == "unlimited")) {
 		return true, nil
 	}
 
@@ -497,6 +498,21 @@ func (qm *QuotaManager) GetUserAccess(ctx context.Context, ownerID string, poolT
 			if apiKey, keyErr := qm.store.DB().APIKey.Get(ctx, id); keyErr == nil && apiKey != nil {
 				if apiKey.Quota <= 0 {
 					ua.MonthlyLimit = -1
+					ua.MonthlyLimitMicroUSD = -1
+					ua.PlanID = "unlimited"
+				}
+			} else if u, uErr := qm.store.DB().User.Get(ctx, id); uErr == nil && u != nil {
+				keys, _ := qm.store.DB().APIKey.Query().Where(apikey.UserID(u.ID)).All(ctx)
+				hasLimitedKey := false
+				for _, k := range keys {
+					if k.Quota > 0 {
+						hasLimitedKey = true
+						break
+					}
+				}
+				if len(keys) > 0 && !hasLimitedKey {
+					ua.MonthlyLimit = -1
+					ua.MonthlyLimitMicroUSD = -1
 					ua.PlanID = "unlimited"
 				}
 			}
@@ -622,8 +638,8 @@ func (qm *QuotaManager) CheckQuotaScope(ctx context.Context, ownerID string, sco
 			return false, ErrDailyBurstExceeded
 		}
 	}
-	if (poolType == "standard" && (ua.MonthlyLimit < 0 || ua.PlanID == "unlimited")) ||
-		(poolType == "yunwu" && (ua.MonthlyLimitMicroUSD < 0 || ua.PlanID == "unlimited")) {
+	if (poolType == "standard" && (ua.MonthlyLimit <= 0 || ua.PlanID == "unlimited")) ||
+		(poolType == "yunwu" && (ua.MonthlyLimitMicroUSD <= 0 || ua.PlanID == "unlimited")) {
 		return true, nil
 	}
 	if poolType == "standard" && ua.MonthlyLimit > 0 && ua.UsedUnits >= ua.MonthlyLimit {
