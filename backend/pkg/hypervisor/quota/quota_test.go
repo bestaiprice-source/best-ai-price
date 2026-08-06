@@ -450,3 +450,21 @@ func TestQuotaManagerStandardTokenReservations(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, int64(4000), used)
 }
+
+func TestQuotaManagerUnlimitedPolicy(t *testing.T) {
+	store := newTestStorage(t)
+	qm := NewQuotaManager(store, &config.HypervisorConfig{
+		EnableMockRuntime:        true,
+		PoolReservePercent:       20,
+		MaxOwnerPoolSharePercent: 50,
+	})
+	ctx := context.Background()
+	ownerID := "unlimited-user"
+
+	require.NoError(t, qm.RegisterNode(ctx, "node-1"))
+	require.NoError(t, qm.SaveUserAccess(ctx, &UserAccess{OwnerID: ownerID, MonthlyLimit: 0, PlanID: "unlimited", IsActive: true}, "standard"))
+
+	ok, err := qm.ReserveQuotaTokens(ctx, ownerID, "req-1", "standard", 1000000, time.Minute)
+	require.NoError(t, err)
+	require.True(t, ok, "unlimited policy should never be blocked by quota reservation")
+}

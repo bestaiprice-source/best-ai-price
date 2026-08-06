@@ -228,6 +228,10 @@ func (qm *QuotaManager) ReserveQuotaTokens(ctx context.Context, ownerID, request
 	if !ua.IsActive {
 		return false, ErrUserInactive
 	}
+	if (poolType == "standard" && (ua.MonthlyLimit < 0 || ua.PlanID == "unlimited")) ||
+		(poolType == "yunwu" && (ua.MonthlyLimitMicroUSD < 0 || ua.PlanID == "unlimited")) {
+		return true, nil
+	}
 
 	dynLimit, err := qm.GetEffectiveDynamicLimit(ctx, scope, ua.Priority)
 	if err != nil {
@@ -487,6 +491,16 @@ func (qm *QuotaManager) GetUserAccess(ctx context.Context, ownerID string, poolT
 		ua.Priority = policy.Priority
 		ua.DepositState = policy.DepositState
 		ua.IsActive = policy.IsActive
+	} else if qm.store.DB() != nil {
+		var id int64
+		if _, parseErr := fmt.Sscanf(ownerID, "%d", &id); parseErr == nil {
+			if apiKey, keyErr := qm.store.DB().APIKey.Get(ctx, id); keyErr == nil && apiKey != nil {
+				if apiKey.Quota <= 0 {
+					ua.MonthlyLimit = -1
+					ua.PlanID = "unlimited"
+				}
+			}
+		}
 	}
 	if poolType == "yunwu" && qm.store.DB() != nil {
 		var money []struct {
@@ -607,6 +621,10 @@ func (qm *QuotaManager) CheckQuotaScope(ctx context.Context, ownerID string, sco
 		if used >= ua.DailyBurstMicroUSD {
 			return false, ErrDailyBurstExceeded
 		}
+	}
+	if (poolType == "standard" && (ua.MonthlyLimit < 0 || ua.PlanID == "unlimited")) ||
+		(poolType == "yunwu" && (ua.MonthlyLimitMicroUSD < 0 || ua.PlanID == "unlimited")) {
+		return true, nil
 	}
 	if poolType == "standard" && ua.MonthlyLimit > 0 && ua.UsedUnits >= ua.MonthlyLimit {
 		return false, ErrQuotaExceeded

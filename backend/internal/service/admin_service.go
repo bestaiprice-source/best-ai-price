@@ -1409,9 +1409,15 @@ func (s *adminServiceImpl) AdminUpdateAPIKey(ctx context.Context, keyID int64, r
 	// Quota
 	if req.Quota != nil {
 		apiKey.Quota = *req.Quota
+		if apiKey.Status == StatusAPIKeyQuotaExhausted && (*req.Quota <= 0 || *req.Quota > apiKey.QuotaUsed) {
+			apiKey.Status = StatusActive
+		}
 	}
 	if req.ResetQuota != nil && *req.ResetQuota {
 		apiKey.QuotaUsed = 0
+		if apiKey.Status == StatusAPIKeyQuotaExhausted {
+			apiKey.Status = StatusActive
+		}
 	}
 
 	// Expiration time
