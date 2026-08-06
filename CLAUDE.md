@@ -41,7 +41,7 @@ Welcome to **sub2api** and the **AI Session Hypervisor (ASH / Yunwu Engine)** re
 ### 2.3 Yunwu Engine (`pkg/hypervisor/yunwu`)
 - **Target**: Yunwu multi-channel provider API accounts.
 - **Dedicated Subsystems**:
-  - `YunwuScheduler`: Tailored node selection for Yunwu execution nodes based on node health, weight, and rate limits. Strictly enforces `YunwuRequireFreshBalance` config during normal scheduling and failover rebinding.
+  - `YunwuScheduler`: Tailored node selection for Yunwu execution nodes based on node health, queue depth, latency, and `UsedTokens` organic load balancing penalty (ensuring fair traffic distribution across active channels even when balance APIs are untracked). `YunwuRequireFreshBalance` defaults to `false` so nodes without balance API endpoints are not excluded.
   - `YunwuRebindingManager`: Handles failover and node cooldown transitions specifically for Yunwu provider clusters, enforcing Redis session-scoped distributed lock (`SETNX`) and running `YunwuScheduler` with user priority, credits, and system state during rebinding.
   - Runtime credentials: `AnthropicRuntime.Execute` attaches `Authorization: Bearer <api_key>` headers for Yunwu platform accounts.
   - Administration endpoints under `/api/v1/ash/admin/yunwu/*`.
