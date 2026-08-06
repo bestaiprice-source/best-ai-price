@@ -74,6 +74,25 @@ func (s *YunwuScheduler) SelectNode(
 		candidates = append(candidates, node)
 	}
 
+	if len(candidates) == 0 && s.requireFreshBalance {
+		slog.Warn("[YunwuScheduler] All candidate Yunwu nodes were excluded due to fresh balance requirements; falling back to non-unavailable nodes", "total_nodes", len(nodes))
+		for _, node := range nodes {
+			if node.State == "unavailable" {
+				continue
+			}
+			isCooldown := node.State == "cooldown"
+			if state, exists := states[node.NodeID]; exists && state.CooldownUntil != nil {
+				if now.Before(*state.CooldownUntil) {
+					isCooldown = true
+				}
+			}
+			if isCooldown && len(nodes) > 1 {
+				continue
+			}
+			candidates = append(candidates, node)
+		}
+	}
+
 	if len(candidates) == 0 {
 		slog.Error("[YunwuScheduler] No candidate Yunwu nodes available", "total_nodes", len(nodes))
 		return nil, ErrNoYunwuNodesAvailable
