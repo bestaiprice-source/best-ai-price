@@ -115,7 +115,7 @@ func NewYunwuHypervisor(store *storage.Storage, rt runtime.Runtime, decryptors .
 		qm:        quota.NewQuotaManager(store, cfg),
 		sch:       NewYunwuScheduler(cfg.YunwuRequireFreshBalance),
 		rt:        rt,
-		rm:        NewYunwuRebindingManager(store),
+		rm:        NewYunwuRebindingManager(store, cfg),
 		comp:      compiler.NewCompiler(),
 		summary:   compiler.NewSummaryWorker(store),
 		bm:        backup.NewBackupManager(store),
@@ -405,7 +405,7 @@ func (yh *YunwuHypervisor) HandleRequest(
 		}
 		_, _ = yh.store.LogEvent(ctx, ownerID, &sess.ID, &selectedNode.NodeID, "RebindingStarted", map[string]any{"reason": execErr.Error(), "pool_type": "yunwu"})
 		observability.Default.Rebinding()
-		reboundNode, rebindErr := yh.rm.HandleYunwuFailure(ctx, selectedNode.NodeID, execErr, nodes)
+		reboundNode, rebindErr := yh.rm.HandleYunwuFailure(ctx, sess.ID, selectedNode.NodeID, execErr, nodes, userPriority, credits, systemState)
 		if rebindErr == nil && reboundNode != nil {
 			slog.Info("[YunwuHypervisor] Rebinding succeeded, retrying",
 				"session_id", sess.ID,

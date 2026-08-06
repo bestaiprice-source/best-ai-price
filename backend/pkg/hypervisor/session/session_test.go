@@ -79,3 +79,42 @@ func TestSessionManager(t *testing.T) {
 	_, err = sm.GetSession(ctx, sessID)
 	require.Error(t, err)
 }
+
+func TestSessionManager_DBFallback_RestoresFullState(t *testing.T) {
+	store := newTestStorage(t)
+	ctx := context.Background()
+
+	sm := session.NewSessionManager(store)
+	sessID := "session-fallback-123"
+	sess := &session.VirtualSession{
+		ID:             sessID,
+		OwnerID:        "owner-fallback",
+		ConversationID: "conv-fallback",
+		State:          "active",
+		Version:        42,
+		Context: &session.ExecutionContext{
+			SystemPrompt: "You are a helpful AI assistant",
+			Summary:      "User asked about architecture",
+			PinnedFacts:  []string{"Fact A", "Fact B"},
+		},
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+
+	err := sm.SaveSession(ctx, sess)
+	require.NoError(t, err)
+
+	// Flush Redis to simulate Redis failure / restart
+	err = store.Redis().FlushDB(ctx).Err()
+	require.NoError(t, err)
+
+	// Fetch from DB fallback
+	fallbackSess, err := sm.GetSession(ctx, sessID)
+	require.NoError(t, err)
+	require.Equal(t, "owner-fallback", fallbackSess.OwnerID)
+	require.Equal(t, 42, fallbackSess.Version)
+	require.NotNil(t, fallbackSess.Context)
+	require.Equal(t, "User asked about architecture", fallbackSess.Context.Summary)
+	require.Equal(t, "You are a helpful AI assistant", fallbackSess.Context.SystemPrompt)
+	require.Equal(t, []string{"Fact A", "Fact B"}, fallbackSess.Context.PinnedFacts)
+}

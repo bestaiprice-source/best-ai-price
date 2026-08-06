@@ -124,23 +124,26 @@ func (s *Scheduler) SelectNode(ctx context.Context, nodes []health.ExecutionNode
 		// + priority_bonus
 		score += float64(userPriority) * PriorityBonusMultiplier
 
-		// - queue_depth * 5
-		score -= float64(queueDepth) * 5.0
+		// - queue_depth penalty (scaled higher for high priority users to steer them to idle nodes)
+		queueMultiplier := 5.0 + float64(userPriority-1)*3.0
+		score -= float64(queueDepth) * queueMultiplier
 
-		// - used_tokens penalty for fair distribution
-		// 10k tokens = 1 point penalty. This organically distributes load across nodes
-		// without overriding health signals like success rate and latency.
-		score -= float64(usedTokens) / 10000.0
+		// - used_tokens penalty for fair distribution (capped at 25 points so long-lived stats don't permanently penalize nodes)
+		usedTokensPenalty := float64(usedTokens) / 10000.0
+		if usedTokensPenalty > 25.0 {
+			usedTokensPenalty = 25.0
+		}
+		score -= usedTokensPenalty
 
-		// Penalize more heavily based on degradation state
+		// Penalize more heavily based on degradation state and user priority
 		multiplier429 := 30.0
 		multiplierTimeout := 20.0
-		latencyDivider := 100.0
+		latencyDivider := 100.0 / float64(userPriority)
 
 		if systemState == "WARNING" {
 			multiplier429 = 60.0
 			multiplierTimeout = 40.0
-			latencyDivider = 50.0
+			latencyDivider = 50.0 / float64(userPriority)
 		}
 
 		// - avg_latency_ms / latencyDivider

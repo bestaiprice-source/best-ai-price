@@ -1,6 +1,7 @@
 package compiler
 
 import (
+	"encoding/json"
 	"fmt"
 	"log/slog"
 )
@@ -94,4 +95,40 @@ func (c *Compiler) Compile(ctx ExecutionContext) (string, error) {
 	)
 
 	return prompt, nil
+}
+
+func InjectCompiledContext(reqPayload []byte, platform string, compiledContext string) ([]byte, error) {
+	if len(compiledContext) == 0 {
+		return reqPayload, nil
+	}
+	var payload map[string]interface{}
+	if err := json.Unmarshal(reqPayload, &payload); err != nil {
+		return reqPayload, err
+	}
+
+	if platform == "openai" {
+		messages, ok := payload["messages"].([]interface{})
+		if !ok {
+			messages = []interface{}{}
+		}
+		systemMsg := map[string]interface{}{
+			"role":    "system",
+			"content": compiledContext,
+		}
+		if len(messages) > 0 {
+			if first, ok := messages[0].(map[string]interface{}); ok && first["role"] == "system" {
+				messages[0] = systemMsg
+			} else {
+				messages = append([]interface{}{systemMsg}, messages...)
+			}
+		} else {
+			messages = []interface{}{systemMsg}
+		}
+		payload["messages"] = messages
+	} else {
+		// Anthropic / default: inject into system field
+		payload["system"] = compiledContext
+	}
+
+	return json.Marshal(payload)
 }

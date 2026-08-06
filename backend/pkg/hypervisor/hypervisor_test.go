@@ -709,3 +709,115 @@ func TestEstimateRequestTokensMaxComparison(t *testing.T) {
 	// With input ~256 + max(1000, 80000) = 80256
 	// The reservation held strictly selected 80,000 rather than 1,000
 }
+
+type capturingRuntime struct {
+	attempts [][]byte
+}
+
+func (c *capturingRuntime) Execute(ctx context.Context, nodeID string, reqPayload []byte, stream io.Writer) (*runtime.ResponseMetadata, error) {
+	c.attempts = append(c.attempts, append([]byte(nil), reqPayload...))
+	if len(c.attempts) == 1 {
+		return nil, errors.New("upstream error status 429")
+	}
+	_, _ = stream.Write([]byte("OK"))
+	return &runtime.ResponseMetadata{InputTokens: 10, OutputTokens: 20}, nil
+}
+
+func TestHypervisor_RebindingModifiesPayload(t *testing.T) {
+	store := newTestStorage(t)
+	ctx := context.Background()
+
+	_, err := store.DB().Account.Create().SetName("node-1").SetPlatform("anthropic").SetType("api_key").SetStatus("active").SetCredentials(map[string]any{"api_key": "sk-1"}).Save(ctx)
+	require.NoError(t, err)
+	_, err = store.DB().Account.Create().SetName("node-2").SetPlatform("anthropic").SetType("api_key").SetStatus("active").SetCredentials(map[string]any{"api_key": "sk-2"}).Save(ctx)
+	require.NoError(t, err)
+
+	sm := session.NewSessionManager(store)
+	sessID := "session-user-rebind-conv-rebind"
+	sess := &session.VirtualSession{
+		ID:             sessID,
+		OwnerID:        "user-rebind",
+		ConversationID: "conv-rebind",
+		State:          "active",
+		Version:        1,
+		Context: &session.ExecutionContext{
+			SystemPrompt: "System compiled instruction",
+			Summary:      "Previous chat summary",
+		},
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+	require.NoError(t, sm.SaveSession(ctx, sess))
+
+	rt := &capturingRuntime{}
+	hyp := hypervisor.NewHypervisor(store, rt)
+
+	var buf bytes.Buffer
+	initialPayload := []byte(`{"model":"claude-3-5-sonnet-20241022","messages":[{"role":"user","content":"hello"}]}`)
+	res, err := hyp.HandleRequest(ctx, "user-rebind", "conv-rebind", initialPayload, &buf, "anthropic")
+	require.NoError(t, err)
+	require.NotNil(t, res)
+	require.Len(t, rt.attempts, 2)
+
+	secondPayload := string(rt.attempts[1])
+	require.Contains(t, secondPayload, "System compiled instruction")
+	require.Contains(t, secondPayload, "Previous chat summary")
+}
+
+func TestHypervisor_StandardUsageDetails(t *testing.T) {
+	store := newTestStorage(t)
+	ctx := context.Background()
+
+	_, err := store.DB().Account.Create().
+		SetName("std-usage-node").
+		SetPlatform("anthropic").
+		SetType("api_key").
+		SetStatus("active").
+		SetCredentials(map[string]any{"api_key": "sk-key"}).
+		Save(ctx)
+	require.NoError(t, err)
+
+	rt := runtime.NewMockRuntime(store)
+	hyp := hypervisor.NewHypervisor(store, rt)
+
+	var buf bytes.Buffer
+	payload := []byte(`{"model":"claude-3-5-sonnet-20241022","messages":[{"role":"user","content":"test usage"}]}`)
+	res, err := hyp.HandleRequest(ctx, "user-std-usage", "conv-std-usage", payload, &buf, "anthropic")
+	require.NoError(t, err)
+	require.NotNil(t, res)
+
+	usages, err := store.DB().AshUsage.Query().All(ctx)
+	require.NoError(t, err)
+	require.NotEmpty(t, usages)
+
+	u := usages[0]
+	require.Equal(t, "standard", u.PoolType)
+	require.Equal(t, "anthropic", u.Provider)
+	require.Equal(t, "claude-3-5-sonnet-20241022", u.Model)
+}
+
+func TestHypervisor_DegradedFIFOQueue(t *testing.T) {
+	store := newTestStorage(t)
+	ctx := context.Background()
+
+	_, err := store.DB().Account.Create().
+		SetName("deg-node").
+		SetPlatform("anthropic").
+		SetType("api_key").
+		SetStatus("active").
+		SetCredentials(map[string]any{"api_key": "sk-key"}).
+		Save(ctx)
+	require.NoError(t, err)
+
+	require.NoError(t, store.Redis().Set(ctx, "ash:system:state:anthropic", "DEGRADED", 0).Err())
+
+	rt := runtime.NewMockRuntime(store)
+	hyp := hypervisor.NewHypervisor(store, rt)
+
+	var buf bytes.Buffer
+	payload := []byte(`{"model":"claude-3-5-sonnet-20241022","messages":[{"role":"user","content":"test degraded"}]}`)
+
+	res, err := hyp.HandleRequest(ctx, "user-deg-low", "conv-deg", payload, &buf, "anthropic")
+	require.NoError(t, err)
+	require.NotNil(t, res)
+}

@@ -224,10 +224,12 @@ func (h *Hypervisor) handleRequest(ctx context.Context, ownerID string, conversa
 
 	// 3. Resolve active lease if any
 	var activeLeaseNodeID string
-	currentLease, err := h.lm.GetLease(ctx, sess.ID)
-	if err == nil && currentLease != nil {
-		activeLeaseNodeID = currentLease.NodeID
-		slog.Debug("[Hypervisor] Resolved active lease", "session_id", sess.ID, "lease_node_id", activeLeaseNodeID)
+	if h.cfg.EnableAffinity {
+		currentLease, err := h.lm.GetLease(ctx, sess.ID)
+		if err == nil && currentLease != nil {
+			activeLeaseNodeID = currentLease.NodeID
+			slog.Debug("[Hypervisor] Resolved active lease", "session_id", sess.ID, "lease_node_id", activeLeaseNodeID)
+		}
 	}
 
 	// 4. Load pool nodes and states
@@ -252,6 +254,16 @@ func (h *Hypervisor) handleRequest(ctx context.Context, ownerID string, conversa
 	)
 
 	// Enforce degradation policies
+	if systemState == "DEGRADED" {
+		if userPriority < 2 {
+			if qErr := h.waitForPriorityQueueSlot(ctx, userPriority, requestID, 3*time.Second); qErr != nil {
+				slog.Warn("[Hypervisor] DEGRADED priority queue wait failed", "owner_id", ownerID, "error", qErr)
+				_ = h.logEvent(ctx, ownerID, &sess.ID, nil, "QuotaExceeded", map[string]any{"reason": qErr.Error()})
+				return nil, qErr
+			}
+		}
+	}
+
 	if systemState == "SURVIVAL" && !h.cfg.DisableSurvivalMode {
 		if userPriority < 2 {
 			slog.Warn("[Hypervisor] Request rejected due to SURVIVAL mode", "owner_id", ownerID, "priority", userPriority)
@@ -412,6 +424,17 @@ func (h *Hypervisor) handleRequest(ctx context.Context, ownerID string, conversa
 		)
 		_ = h.logEvent(ctx, ownerID, &sess.ID, &newSelectedNode.NodeID, "RebindingSucceeded", nil)
 		selectedNode = newSelectedNode
+
+		// Compile portable context before retrying execution on the new node
+		if sess.Context != nil {
+			if compiledContext, compErr := h.comp.Compile(compilerContextFromSession(sess.Context)); compErr == nil && len(compiledContext) > 0 {
+				slog.Info("[Hypervisor] Compiled portable context for rebound retry", "session_id", sess.ID, "compiled_len", len(compiledContext))
+				if updatedPayload, injErr := compiler.InjectCompiledContext(reqPayload, platform, compiledContext); injErr == nil {
+					reqPayload = updatedPayload
+					slog.Info("[Hypervisor] Injected compiled context into reqPayload for rebound retry", "session_id", sess.ID, "new_payload_len", len(reqPayload))
+				}
+			}
+		}
 	}
 
 	// 9. Consume Quota on Success & Record Usage in Database
@@ -428,7 +451,11 @@ func (h *Hypervisor) handleRequest(ctx context.Context, ownerID string, conversa
 		}
 		if totalTokens > 0 {
 			if h.cfg.EnableUsageRecorder {
-				_, _ = h.store.RecordUsage(ctx, ownerID, &sess.ID, &selectedNode.NodeID, res.InputTokens, res.OutputTokens, costUnits)
+				usageProvider := platform
+				if usageProvider == "" {
+					usageProvider = "standard"
+				}
+				_, _ = h.store.RecordUsageDetails(ctx, ownerID, &sess.ID, &selectedNode.NodeID, res.InputTokens, res.OutputTokens, costUnits, "standard", usageProvider, requestedModel, "tokens", 0)
 			}
 			observability.Default.AddUsage(costUnits)
 
@@ -529,11 +556,67 @@ func (h *Hypervisor) extractAndStoreContext(sess *session.VirtualSession, payloa
 }
 
 func compilerContextFromSession(ctx *session.ExecutionContext) compiler.ExecutionContext {
-	result := compiler.ExecutionContext{SystemPrompt: ctx.SystemPrompt, Summary: ctx.Summary, PinnedFacts: ctx.PinnedFacts, TerminalState: ctx.TerminalState}
+	result := compiler.ExecutionContext{
+		SystemPrompt:  ctx.SystemPrompt,
+		Summary:       ctx.Summary,
+		PinnedFacts:   ctx.PinnedFacts,
+		TerminalState: ctx.TerminalState,
+	}
 	for _, message := range ctx.RecentMessages {
 		result.RecentMessages = append(result.RecentMessages, compiler.Message{Role: message.Role, Content: message.Content})
 	}
+	if len(ctx.ToolState) > 0 {
+		if toolBytes, err := json.Marshal(ctx.ToolState); err == nil {
+			result.ToolState = string(toolBytes)
+		}
+	}
+	if ctx.ProjectState != nil {
+		result.ProjectState = &compiler.ProjectSnapshot{
+			WorkspaceID: ctx.ProjectState.WorkspaceID,
+			GitBranch:   ctx.ProjectState.GitBranch,
+			GitCommit:   ctx.ProjectState.GitCommit,
+			DirtyFiles:  ctx.ProjectState.DirtyFiles,
+			OpenFiles:   ctx.ProjectState.OpenFiles,
+			LastCommand: ctx.ProjectState.LastCommand,
+			SnapshotRef: ctx.ProjectState.SnapshotRef,
+		}
+	}
 	return result
+}
+
+func (h *Hypervisor) waitForPriorityQueueSlot(ctx context.Context, priority int, requestID string, maxWait time.Duration) error {
+	queueKey := storage.QueueKey(priority)
+	if err := h.store.Redis().RPush(ctx, queueKey, requestID).Err(); err != nil {
+		return err
+	}
+	defer func() {
+		_ = h.store.Redis().LRem(context.Background(), queueKey, 1, requestID)
+	}()
+
+	slog.Info("[Hypervisor] Enqueued request in DEGRADED priority queue",
+		"request_id", requestID,
+		"priority", priority,
+		"queue_key", queueKey,
+	)
+
+	deadline := time.Now().Add(maxWait)
+	ticker := time.NewTicker(50 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+			headItem, err := h.store.Redis().LIndex(ctx, queueKey, 0).Result()
+			if err == nil && headItem == requestID {
+				return nil
+			}
+			if time.Now().After(deadline) {
+				return fmt.Errorf("system in degraded mode: priority queue wait timeout exceeded (%v)", maxWait)
+			}
+		}
+	}
 }
 
 func snapshotFromSession(sess *session.VirtualSession) *backup.ProjectSnapshot {

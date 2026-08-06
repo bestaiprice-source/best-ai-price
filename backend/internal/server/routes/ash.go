@@ -494,6 +494,10 @@ func RegisterAshRoutes(
 					c.JSON(http.StatusNotFound, gin.H{"error": "node not found"})
 					return
 				}
+				if strings.EqualFold(node.Provider, "yunwu") && !strings.EqualFold(c.Query("pool"), "yunwu") {
+					c.JSON(http.StatusBadRequest, gin.H{"error": "node belongs to yunwu pool; pass pool=yunwu query parameter to modify yunwu nodes"})
+					return
+				}
 
 				cooldownUntil := time.Now().Add(10 * time.Minute)
 				node.State = "cooldown"
@@ -530,6 +534,10 @@ func RegisterAshRoutes(
 					c.JSON(http.StatusNotFound, gin.H{"error": "node not found"})
 					return
 				}
+				if strings.EqualFold(node.Provider, "yunwu") && !strings.EqualFold(c.Query("pool"), "yunwu") {
+					c.JSON(http.StatusBadRequest, gin.H{"error": "node belongs to yunwu pool; pass pool=yunwu query parameter to modify yunwu nodes"})
+					return
+				}
 
 				node.State = "unavailable"
 				_ = nm.SaveNode(c.Request.Context(), node)
@@ -555,6 +563,10 @@ func RegisterAshRoutes(
 				node, err := nm.GetNode(c.Request.Context(), nodeID)
 				if err != nil || node == nil {
 					c.JSON(http.StatusNotFound, gin.H{"error": "node not found"})
+					return
+				}
+				if strings.EqualFold(node.Provider, "yunwu") && !strings.EqualFold(c.Query("pool"), "yunwu") {
+					c.JSON(http.StatusBadRequest, gin.H{"error": "node belongs to yunwu pool; pass pool=yunwu query parameter to modify yunwu nodes"})
 					return
 				}
 

@@ -180,7 +180,7 @@ func TestYunwuRebindingOnFailure(t *testing.T) {
 	_ = nm.SaveNode(context.Background(), &node2)
 
 	rm := NewYunwuRebindingManager(store)
-	reboundNode, err := rm.HandleYunwuFailure(context.Background(), "yw-1", assert.AnError, []health.ExecutionNode{node1, node2})
+	reboundNode, err := rm.HandleYunwuFailure(context.Background(), "session-yw-test", "yw-1", assert.AnError, []health.ExecutionNode{node1, node2}, 1, map[string]float64{"yw-2": 10.0}, "NORMAL")
 
 	require.NoError(t, err)
 	assert.NotNil(t, reboundNode)
@@ -369,7 +369,7 @@ func TestYunwuRebindingExhausted(t *testing.T) {
 	node1 := health.ExecutionNode{NodeID: "yw-e1", State: "healthy"}
 	node2 := health.ExecutionNode{NodeID: "yw-e2", State: "unavailable"}
 
-	_, err := rm.HandleYunwuFailure(ctx, "yw-e1", assert.AnError, []health.ExecutionNode{node1, node2})
+	_, err := rm.HandleYunwuFailure(ctx, "session-exhausted", "yw-e1", assert.AnError, []health.ExecutionNode{node1, node2}, 1, nil, "NORMAL")
 	require.ErrorIs(t, err, ErrYunwuRebindingExhausted)
 }
 

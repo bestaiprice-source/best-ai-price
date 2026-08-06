@@ -23,6 +23,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/handler"
 	servermiddleware "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor"
+	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/health"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/runtime"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/session"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/storage"
@@ -239,4 +240,39 @@ func TestAshSessionSnapshotAndRestoreAcceptance(t *testing.T) {
 	}
 	assert.True(t, created)
 	assert.True(t, restoredEvent)
+}
+
+func TestAshAdmin_YunwuIsolation(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	store := newTestStorage(t)
+	engine := hypervisor.NewHypervisor(store, runtime.NewMockRuntime(store))
+	gatewayHandler := &handler.GatewayHandler{}
+	gatewayHandler.SetHypervisorEngine(engine)
+
+	ctx := context.Background()
+	nm := health.NewNodeManager(store)
+	ywNode := &health.ExecutionNode{
+		NodeID:      "yw-admin-1",
+		AccountName: "Yunwu Channel 1",
+		Provider:    "yunwu",
+		State:       "healthy",
+	}
+	require.NoError(t, nm.SaveNode(ctx, ywNode))
+
+	pass := func(c *gin.Context) { c.Next() }
+	r := gin.New()
+	RegisterAshRoutes(r, &handler.Handlers{Gateway: gatewayHandler}, pass, pass)
+
+	// Attempt standard admin disable without pool=yunwu -> should fail with 400 Bad Request
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/ash/admin/nodes/yw-admin-1/disable", nil)
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "belongs to yunwu pool")
+
+	// Attempt admin disable with pool=yunwu -> should succeed with 200 OK
+	wPool := httptest.NewRecorder()
+	reqPool, _ := http.NewRequest("POST", "/ash/admin/nodes/yw-admin-1/disable?pool=yunwu", nil)
+	r.ServeHTTP(wPool, reqPool)
+	assert.Equal(t, http.StatusOK, wPool.Code)
 }

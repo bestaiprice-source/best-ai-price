@@ -3,6 +3,7 @@ package session
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/ent/ashsession"
@@ -86,7 +87,26 @@ func (sm *SessionManager) GetSession(ctx context.Context, sessionID string) (*Vi
 				UpdatedAt:      dbSess.UpdatedAt,
 			}
 			if dbSess.Metadata != nil {
-				// We don't restore Version and Lease from DB right now since they are transient, but we could.
+				if v, ok := dbSess.Metadata["version"].(float64); ok {
+					sess.Version = int(v)
+				}
+				if ctxData, ok := dbSess.Metadata["context"]; ok {
+					ctxBytes, _ := json.Marshal(ctxData)
+					var execCtx ExecutionContext
+					if err := json.Unmarshal(ctxBytes, &execCtx); err == nil {
+						sess.Context = &execCtx
+					}
+				}
+				if leaseData, ok := dbSess.Metadata["lease"]; ok {
+					leaseBytes, _ := json.Marshal(leaseData)
+					var l lease.Lease
+					if err := json.Unmarshal(leaseBytes, &l); err == nil {
+						sess.Lease = &l
+					}
+				}
+			}
+			if sess.Context == nil && dbSess.Summary != "" {
+				sess.Context = &ExecutionContext{Summary: dbSess.Summary}
 			}
 			// Write back to Redis for hot cache
 			_ = sm.SaveSession(ctx, sess)
@@ -103,28 +123,44 @@ func (sm *SessionManager) SaveSession(ctx context.Context, sess *VirtualSession)
 	if err != nil {
 		return err
 	}
-	
+
 	// Write to Redis (hot state)
 	redisErr := sm.store.Redis().Set(ctx, key, data, 24*time.Hour).Err()
-	
+
 	// Write to PostgreSQL
 	if sm.store.DB() != nil {
-		dbErr := sm.store.DB().AshSession.Create().
+		metaMap := make(map[string]interface{})
+		metaMap["version"] = sess.Version
+		if sess.Context != nil {
+			metaMap["context"] = sess.Context
+		}
+		if sess.Lease != nil {
+			metaMap["lease"] = sess.Lease
+		}
+
+		builder := sm.store.DB().AshSession.Create().
 			SetID(sess.ID).
 			SetOwnerID(sess.OwnerID).
 			SetConversationID(sess.ConversationID).
 			SetState(sess.State).
+			SetMetadata(metaMap).
 			SetCreatedAt(sess.CreatedAt).
-			SetUpdatedAt(sess.UpdatedAt).
+			SetUpdatedAt(sess.UpdatedAt)
+
+		if sess.Context != nil && sess.Context.Summary != "" {
+			builder.SetSummary(sess.Context.Summary)
+		}
+
+		dbErr := builder.
 			OnConflictColumns(ashsession.FieldID).
 			UpdateNewValues().
 			Exec(ctx)
-			
+
 		if dbErr != nil {
-			// Ignore DB error for MVP if Redis succeeded, but we should log it
+			slog.Error("[SessionManager] Failed to persist session to PostgreSQL", "session_id", sess.ID, "error", dbErr)
 		}
 	}
-	
+
 	return redisErr
 }
 

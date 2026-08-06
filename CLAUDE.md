@@ -31,45 +31,36 @@ Welcome to **sub2api** and the **AI Session Hypervisor (ASH / Yunwu Engine)** re
 ### 2.1 Claude (Anthropic) Engine
 - **Target**: Claude Max 20x accounts, Anthropic `/v1/messages` endpoints.
 - **Virtual Sessions & Rebinding**: Maintains `VirtualSession` state in Redis and PostgreSQL. Rebinds transparently to a new Claude node on `429` or timeout.
-- **Context Compiler**: Reconstructs prompt blocks (`SystemPrompt`, `Summary`, `PinnedFacts`, `TerminalState`, `ToolState`, `ProjectState`, `RecentMessages`, `CurrentUserPrompt`) when migrating sessions between physical accounts.
+- **Context Compiler**: Reconstructs prompt blocks (`SystemPrompt`, `Summary`, `PinnedFacts`, `TerminalState`, `ToolState`, `ProjectState`, `RecentMessages`) when migrating sessions between physical accounts. Compiled automatically prior to rebinding retries.
 
 ### 2.2 OpenAI & Codex Engine
 - **Target**: OpenAI `/v1/chat/completions` and Codex `/responses` endpoints.
-- **Payload Normalization**: Includes `constructMessagesFromResponsesPayload` in `pkg/hypervisor/runtime` to handle structured message arrays from Codex CLI:
-  ```json
-  "input": [
-    {
-      "type": "message",
-      "role": "user",
-      "content": [{"type": "input_text", "text": "Hello"}]
-    }
-  ]
-  ```
-  Extracts `input_text` into clean message arrays (`role: "user", content: "Hello"`), avoiding lost or unparsed prompts.
+- **Payload Normalization**: Includes `constructMessagesFromResponsesPayload` in `pkg/hypervisor/runtime` to handle structured message arrays from Codex CLI.
 - **SSE Transformer Bypass**: Direct `/responses` API calls bypass `responsesSSETransformer` to prevent truncated or empty responses when streaming native OpenAI/Codex format.
 
 ### 2.3 Yunwu Engine (`pkg/hypervisor/yunwu`)
 - **Target**: Yunwu multi-channel provider API accounts.
 - **Dedicated Subsystems**:
-  - `YunwuScheduler`: Tailored node selection for Yunwu execution nodes based on node health, weight, and rate limits.
-  - `YunwuRebindingManager`: Handles failover and node cooldown transitions specifically for Yunwu provider clusters.
-  - Runtime credentials: `AnthropicRuntime.Execute` attaches `Authorization: Bearer <api_key>` headers for Yunwu platform accounts (including native Gemini overrides).
+  - `YunwuScheduler`: Tailored node selection for Yunwu execution nodes based on node health, weight, and rate limits. Strictly enforces `YunwuRequireFreshBalance` config during normal scheduling and failover rebinding.
+  - `YunwuRebindingManager`: Handles failover and node cooldown transitions specifically for Yunwu provider clusters, enforcing Redis session-scoped distributed lock (`SETNX`) and running `YunwuScheduler` with user priority, credits, and system state during rebinding.
+  - Runtime credentials: `AnthropicRuntime.Execute` attaches `Authorization: Bearer <api_key>` headers for Yunwu platform accounts.
   - Administration endpoints under `/api/v1/ash/admin/yunwu/*`.
 
 ### 2.4 Sora Engine
 - **Target**: Sora image and video generation endpoints.
-- **Normalizer & Pricing**: Normalizes base URLs for Sora accounts and calculates request pricing based on resolution and mode (`sora_image_price`, `sora_video_price_per_request`).
+- **Normalizer & Pricing**: Normalizes base URLs for Sora accounts and calculates request pricing based on resolution and mode.
 
 ---
 
 ## ⚡ 3. Load Balancing & Traffic Capacity Management
 
-### 3.1 Organic Token Load Balancer
+### 3.1 Organic Token Load Balancer & UsedTokens Decay
 - **State Tracking**: `NodeRuntimeState` tracks `UsedTokens` (total tokens consumed by the node).
-- **Dynamic Penalty**: Incremented upon request completion and factored into `Scheduler` node scoring as a penalty.
-- **Traffic Spread**: Forces traffic away from recently heavily-used nodes toward idle nodes, ensuring organic load distribution even across nodes with identical latencies.
+- **Dynamic Penalty**: Incremented upon request completion and factored into `Scheduler` node scoring. Capped at 25 points maximum so long-lived node usage statistics do not permanently penalize active nodes.
+- **Priority-Scaled Sensitivity**: Higher user priority scales queue depth and latency penalties, ensuring premium traffic is automatically routed to idle and lower-latency nodes.
 
-### 3.2 Dynamic Fair Share Quota Manager (`pkg/hypervisor/quota`)
+### 3.2 Dynamic Fair Share Quota Manager & Degradation FIFO Queue (`pkg/hypervisor/quota`)
+- **DEGRADED Mode FIFO Priority Queue**: When system state transitions to `DEGRADED`, low-priority requests (`userPriority < 2`) enter a real Redis FIFO priority queue `ash:queue:{priority}` via `waitForPriorityQueueSlot`, polling until they reach the head of the queue or until a 3-second max queue timeout occurs.
 - **Dynamic Limits & Anti-Drain Reserves**: Uses Redis-based dynamic limit calculation (`GetDynamicLimitPerWeight`) relative to total pool capacity and active user weight. Applies `PoolReservePercent` (default: 20%) to keep emergency capacity unallocated, and caps individual active user shares at `MaxOwnerPoolSharePercent` (default: 50%) to prevent pool draining by a single user.
 - **Pre-Request Token Reservations**: `ReserveQuotaTokens` atomically checks limits and reserves estimated tokens in Redis Lua before request execution; `estimateRequestTokens` parses `max_tokens` and `max_output_tokens` taking `max(max_tokens, max_output_tokens)` (defaulting to 4096 output tokens if omitted, capped at 128,000 max). `ReconcileQuotaTokens` reconciles reservations against actual consumption upon completion.
 - **Concurrent Request Slots**: Enforces concurrent slot limits (`AcquireConcurrentSlot`, max 5 parallel requests per user) via Redis Lua scripts bounded to prevent negative counter underflow (`ReleaseConcurrentSlot`).

@@ -29,7 +29,7 @@ func (s *Storage) LogEvent(ctx context.Context, ownerID string, sessionID, nodeI
 
 // RecordUsage writes usage details to the ash_usages table
 func (s *Storage) RecordUsage(ctx context.Context, ownerID string, sessionID, nodeID *string, inputTokens, outputTokens, costUnits int64) (*ent.AshUsage, error) {
-	return s.RecordUsageDetails(ctx, ownerID, sessionID, nodeID, inputTokens, outputTokens, costUnits, "legacy", "legacy", "", "tokens", 0)
+	return s.RecordUsageDetails(ctx, ownerID, sessionID, nodeID, inputTokens, outputTokens, costUnits, "standard", "standard", "", "tokens", 0)
 }
 
 func (s *Storage) RecordUsageDetails(ctx context.Context, ownerID string, sessionID, nodeID *string, inputTokens, outputTokens, costUnits int64, poolType, provider, model, usageUnit string, billedMicroUSD int64) (*ent.AshUsage, error) {
