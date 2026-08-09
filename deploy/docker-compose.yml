@@ -255,7 +255,7 @@ services:
       - caddy_data:/data
       - caddy_config:/config
       - ./logs/caddy:/var/log/caddy
-      - /root/bestai_prices_parser/public/data:/srv/parser-data:ro
+      - /root/bestai_prices_parser/public/data:/srv/parser-data/data:ro
     depends_on:
       - sub2api
     networks:
