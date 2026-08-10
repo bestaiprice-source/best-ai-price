@@ -45,6 +45,7 @@ func TestConcurrentHandleRequestTokenReservations(t *testing.T) {
 		SetPoolType("standard").
 		SetPlanID("pro").
 		SetPriority(3).
+		SetMonthlyLimit(1000000).
 		SetIsActive(true).
 		Exec(ctx)
 

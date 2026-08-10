@@ -35,7 +35,7 @@ services:
         soft: 100000
         hard: 100000
     ports:
-      - "127.0.0.1:8080:8080"
+      - "8080:8080"
     volumes:
       # Local directory mapping for easy migration
       - ./data:/app/data

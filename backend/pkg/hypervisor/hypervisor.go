@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/ent/account"
@@ -31,21 +32,22 @@ import (
 )
 
 type Hypervisor struct {
-	store *storage.Storage
-	sm    *session.SessionManager
-	lm    *lease.LeaseManager
-	nm    *health.NodeManager
-	ew    *events.EventWriter
-	qm    *quota.QuotaManager
-	sch   *scheduler.Scheduler
-	rt    runtime.Runtime
-	rm    *rebinding.RebindingManager
-	comp  *compiler.Compiler
-	sw    *compiler.SummaryWorker
-	hc    *health.HealthController
-	yh    *yunwu.YunwuHypervisor
-	cfg   *config.HypervisorConfig
-	bm    *backup.BackupManager
+	store  *storage.Storage
+	sm     *session.SessionManager
+	lm     *lease.LeaseManager
+	nm     *health.NodeManager
+	ew     *events.EventWriter
+	qm     *quota.QuotaManager
+	sch    *scheduler.Scheduler
+	rt     runtime.Runtime
+	rm     *rebinding.RebindingManager
+	comp   *compiler.Compiler
+	sw     *compiler.SummaryWorker
+	hc     *health.HealthController
+	yh     *yunwu.YunwuHypervisor
+	cfg    *config.HypervisorConfig
+	bm     *backup.BackupManager
+	reqSeq uint64
 }
 
 // commitTrackingWriter records whether any response bytes have reached the
@@ -166,7 +168,7 @@ func (h *Hypervisor) handleRequest(ctx context.Context, ownerID string, conversa
 	if h.cfg.EnableQuotaManager {
 		estimatedTokens := estimateRequestTokens(reqPayload)
 		if requestID == "" {
-			requestID = fmt.Sprintf("req-std-%d", time.Now().UnixNano())
+			requestID = fmt.Sprintf("req-std-%d-%d", time.Now().UnixNano(), atomic.AddUint64(&h.reqSeq, 1))
 		}
 		reserved, resErr := h.qm.ReserveQuotaTokens(ctx, ownerID, requestID, scope, estimatedTokens, 120*time.Second)
 		if resErr != nil {
