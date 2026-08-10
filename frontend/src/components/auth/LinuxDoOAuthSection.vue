@@ -50,10 +50,11 @@ defineProps<{
 const route = useRoute()
 const { t } = useI18n()
 
+import { getApiBaseUrl } from '@/utils/url'
+
 function startLogin(): void {
   const redirectTo = (route.query.redirect as string) || '/dashboard'
-  const apiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined) || '/api/v1'
-  const normalized = apiBase.replace(/\/$/, '')
+  const normalized = getApiBaseUrl().replace(/\/$/, '')
   const startURL = `${normalized}/auth/oauth/linuxdo/start?redirect=${encodeURIComponent(redirectTo)}`
   window.location.href = startURL
 }

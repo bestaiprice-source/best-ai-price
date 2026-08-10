@@ -485,13 +485,15 @@ async function handleRestart() {
   }, 1000)
 }
 
+import { getBasePath } from '@/utils/url'
+
 async function checkServiceAndReload() {
   const maxRetries = 5
   const retryDelay = 1000
 
   for (let i = 0; i < maxRetries; i++) {
     try {
-      const response = await fetch('/health', {
+      const response = await fetch(`${getBasePath()}health`.replace(/\/+/g, '/'), {
         method: 'GET',
         cache: 'no-cache'
       })

@@ -42,7 +42,7 @@
         <!-- Logo -->
         <div class="flex items-center">
           <div class="h-10 w-10 overflow-hidden rounded-xl shadow-md">
-            <img :src="siteLogo || '/logo.png'" alt="Logo" class="h-full w-full object-contain" />
+            <img :src="resolveAssetUrl(siteLogo)" alt="Logo" class="h-full w-full object-contain" />
           </div>
         </div>
 
@@ -411,7 +411,7 @@ import { useAuthStore, useAppStore } from '@/stores'
 import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { renderRichContent } from '@/utils/sanitize'
-import { sanitizeUrl } from '@/utils/url'
+import { sanitizeUrl, resolveAssetUrl } from '@/utils/url'
 
 const { t } = useI18n()
 

@@ -108,14 +108,17 @@ func (s *FrontendServer) Middleware() gin.HandlerFunc {
 
 		// Skip API routes
 		if shouldBypassEmbeddedFrontend(path) {
+			if strings.HasPrefix(path, "/") {
+				parts := strings.SplitN(path[1:], "/", 2)
+				if len(parts) == 2 && isAPIOrSetupPrefix("/"+parts[1]) {
+					c.Request.URL.Path = "/" + parts[1]
+				}
+			}
 			c.Next()
 			return
 		}
 
-		cleanPath := strings.TrimPrefix(path, "/")
-		if cleanPath == "" {
-			cleanPath = "index.html"
-		}
+		cleanPath := s.resolveDistPath(path)
 
 		// For index.html or SPA routes, serve with injected settings
 		if cleanPath == "index.html" || !s.fileExists(cleanPath) {
@@ -124,6 +127,9 @@ func (s *FrontendServer) Middleware() gin.HandlerFunc {
 		}
 
 		// Serve static files normally
+		if cleanPath != strings.TrimPrefix(path, "/") {
+			c.Request.URL.Path = "/" + cleanPath
+		}
 		s.fileServer.ServeHTTP(c.Writer, c.Request)
 		c.Abort()
 	}
@@ -139,10 +145,7 @@ func (s *FrontendServer) HandleGateway(c gatewayctx.GatewayContext) {
 		return
 	}
 
-	cleanPath := strings.TrimPrefix(path, "/")
-	if cleanPath == "" {
-		cleanPath = "index.html"
-	}
+	cleanPath := s.resolveDistPath(path)
 
 	if cleanPath == "index.html" || !s.fileExists(cleanPath) {
 		s.serveIndexHTMLGateway(c)
@@ -152,6 +155,21 @@ func (s *FrontendServer) HandleGateway(c gatewayctx.GatewayContext) {
 	if err := s.serveStaticFileGateway(c, cleanPath); err != nil {
 		c.WriteJSON(http.StatusNotFound, map[string]any{"error": "Frontend asset not found"})
 	}
+}
+
+func (s *FrontendServer) resolveDistPath(path string) string {
+	cleanPath := strings.TrimPrefix(path, "/")
+	if cleanPath == "" {
+		return "index.html"
+	}
+	if s.fileExists(cleanPath) {
+		return cleanPath
+	}
+	parts := strings.SplitN(cleanPath, "/", 2)
+	if len(parts) == 2 && s.fileExists(parts[1]) {
+		return parts[1]
+	}
+	return cleanPath
 }
 
 func (s *FrontendServer) fileExists(path string) bool {
@@ -344,40 +362,85 @@ func ServeEmbeddedFrontend() gin.HandlerFunc {
 		path := c.Request.URL.Path
 
 		if shouldBypassEmbeddedFrontend(path) {
+			if strings.HasPrefix(path, "/") {
+				parts := strings.SplitN(path[1:], "/", 2)
+				if len(parts) == 2 && isAPIOrSetupPrefix("/"+parts[1]) {
+					c.Request.URL.Path = "/" + parts[1]
+				}
+			}
 			c.Next()
 			return
 		}
 
-		cleanPath := strings.TrimPrefix(path, "/")
-		if cleanPath == "" {
-			cleanPath = "index.html"
-		}
+		cleanPath := resolveDistPathFromFS(distFS, path)
 
-		if file, err := distFS.Open(cleanPath); err == nil {
-			_ = file.Close()
-			fileServer.ServeHTTP(c.Writer, c.Request)
-			c.Abort()
-			return
+		if cleanPath != "index.html" {
+			if file, err := distFS.Open(cleanPath); err == nil {
+				_ = file.Close()
+				if cleanPath != strings.TrimPrefix(path, "/") {
+					c.Request.URL.Path = "/" + cleanPath
+				}
+				fileServer.ServeHTTP(c.Writer, c.Request)
+				c.Abort()
+				return
+			}
 		}
 
 		serveIndexHTML(c, distFS)
 	}
 }
 
+func resolveDistPathFromFS(fsys fs.FS, path string) string {
+	cleanPath := strings.TrimPrefix(path, "/")
+	if cleanPath == "" {
+		return "index.html"
+	}
+	if fileExistsInFS(fsys, cleanPath) {
+		return cleanPath
+	}
+	parts := strings.SplitN(cleanPath, "/", 2)
+	if len(parts) == 2 && fileExistsInFS(fsys, parts[1]) {
+		return parts[1]
+	}
+	return cleanPath
+}
+
+func fileExistsInFS(fsys fs.FS, path string) bool {
+	file, err := fsys.Open(path)
+	if err != nil {
+		return false
+	}
+	_ = file.Close()
+	return true
+}
+
 func shouldBypassEmbeddedFrontend(path string) bool {
 	trimmed := strings.TrimSpace(path)
-	return strings.HasPrefix(trimmed, "/api/") ||
-		strings.HasPrefix(trimmed, "/v1/") ||
-		strings.HasPrefix(trimmed, "/v1beta/") ||
-		strings.HasPrefix(trimmed, "/sora/") ||
-		strings.HasPrefix(trimmed, "/antigravity/") ||
-		strings.HasPrefix(trimmed, "/ash/") ||
-		trimmed == "/ash" ||
-		strings.HasPrefix(trimmed, "/setup/") ||
-		strings.HasPrefix(trimmed, "/data/") ||
-		trimmed == "/health" ||
-		trimmed == "/responses" ||
-		strings.HasPrefix(trimmed, "/responses/")
+	if isAPIOrSetupPrefix(trimmed) {
+		return true
+	}
+	if strings.HasPrefix(trimmed, "/") {
+		parts := strings.SplitN(trimmed[1:], "/", 2)
+		if len(parts) == 2 && isAPIOrSetupPrefix("/"+parts[1]) {
+			return true
+		}
+	}
+	return false
+}
+
+func isAPIOrSetupPrefix(p string) bool {
+	return strings.HasPrefix(p, "/api/") ||
+		strings.HasPrefix(p, "/v1/") ||
+		strings.HasPrefix(p, "/v1beta/") ||
+		strings.HasPrefix(p, "/sora/") ||
+		strings.HasPrefix(p, "/antigravity/") ||
+		strings.HasPrefix(p, "/ash/") ||
+		p == "/ash" ||
+		strings.HasPrefix(p, "/setup/") ||
+		strings.HasPrefix(p, "/data/") ||
+		p == "/health" ||
+		p == "/responses" ||
+		strings.HasPrefix(p, "/responses/")
 }
 
 func serveIndexHTML(c *gin.Context, fsys fs.FS) {

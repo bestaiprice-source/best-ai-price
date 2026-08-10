@@ -147,12 +147,14 @@ async function initStripe(clientSecret: string, publishableKey: string) {
   }
 }
 
+import { getApiBaseUrl } from '@/utils/url'
+
 function startPolling() {
   pollTimer = setInterval(async () => {
     try {
       const token = document.cookie.split('; ').find(c => c.startsWith('token='))?.split('=')[1]
         || localStorage.getItem('token') || ''
-      const res = await fetch('/api/v1/payment/orders/' + orderId, {
+      const res = await fetch(`${getApiBaseUrl()}/payment/orders/${orderId}`.replace(/\/+/g, '/'), {
         headers: token ? { Authorization: 'Bearer ' + token } : {},
         credentials: 'include',
       })

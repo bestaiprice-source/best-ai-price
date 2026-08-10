@@ -112,6 +112,26 @@ export default defineConfig(({ mode }) => {
       host: '0.0.0.0',
       port: devPort,
       proxy: {
+        '/gateway/api': {
+          target: backendUrl,
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/gateway/, '')
+        },
+        '/gateway/v1': {
+          target: backendUrl,
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/gateway/, '')
+        },
+        '/gateway/setup': {
+          target: backendUrl,
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/gateway/, '')
+        },
+        '/gateway/health': {
+          target: backendUrl,
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/gateway/, '')
+        },
         '/api': {
           target: backendUrl,
           changeOrigin: true
@@ -121,6 +141,10 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true
         },
         '/setup': {
+          target: backendUrl,
+          changeOrigin: true
+        },
+        '/health': {
           target: backendUrl,
           changeOrigin: true
         }

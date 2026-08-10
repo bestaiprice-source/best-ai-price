@@ -2374,12 +2374,14 @@ function handleRegistrationEmailSuffixWhitelistPaste(event: ClipboardEvent) {
   }
 }
 
+import { getApiBaseUrl } from '@/utils/url'
+
 // LinuxDo OAuth redirect URL suggestion
 const linuxdoRedirectUrlSuggestion = computed(() => {
   if (typeof window === 'undefined') return ''
   const origin =
     window.location.origin || `${window.location.protocol}//${window.location.host}`
-  return `${origin}/api/v1/auth/oauth/linuxdo/callback`
+  return `${origin}${getApiBaseUrl()}/auth/oauth/linuxdo/callback`.replace(/\/+/g, '/').replace(':/', '://')
 })
 
 async function setAndCopyLinuxdoRedirectUrl() {

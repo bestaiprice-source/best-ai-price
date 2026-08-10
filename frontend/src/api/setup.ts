@@ -2,10 +2,11 @@
  * Setup API endpoints
  */
 import axios from 'axios'
+import { getSetupBaseUrl } from '@/utils/url'
 
-// Create a separate client for setup endpoints (not under /api/v1)
+// Create a separate client for setup endpoints
 const setupClient = axios.create({
-  baseURL: '',
+  baseURL: getSetupBaseUrl(),
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json'
@@ -61,7 +62,7 @@ export interface InstallResponse {
  * Get setup status
  */
 export async function getSetupStatus(): Promise<SetupStatus> {
-  const response = await setupClient.get('/setup/status')
+  const response = await setupClient.get('/status')
   return response.data.data
 }
 
@@ -69,20 +70,20 @@ export async function getSetupStatus(): Promise<SetupStatus> {
  * Test database connection
  */
 export async function testDatabase(config: DatabaseConfig): Promise<void> {
-  await setupClient.post('/setup/test-db', config)
+  await setupClient.post('/test-db', config)
 }
 
 /**
  * Test Redis connection
  */
 export async function testRedis(config: RedisConfig): Promise<void> {
-  await setupClient.post('/setup/test-redis', config)
+  await setupClient.post('/test-redis', config)
 }
 
 /**
  * Perform installation
  */
 export async function install(config: InstallRequest): Promise<InstallResponse> {
-  const response = await setupClient.post('/setup/install', config)
+  const response = await setupClient.post('/install', config)
   return response.data.data
 }
