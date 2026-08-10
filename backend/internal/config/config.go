@@ -1283,7 +1283,7 @@ func setDefaults() {
 	viper.SetDefault("run_mode", RunModeStandard)
 
 	// Server
-	viper.SetDefault("server.host", "0.0.0.0")
+	viper.SetDefault("server.host", "127.0.0.1")
 	viper.SetDefault("server.port", 8080)
 	viper.SetDefault("server.mode", "release")
 	viper.SetDefault("server.runtime_mode", ServerRuntimeModeNetHTTP)
@@ -2740,7 +2740,7 @@ func GetServerAddress() string {
 	// Support SERVER_HOST and SERVER_PORT environment variables
 	v.AutomaticEnv()
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
-	v.SetDefault("server.host", "0.0.0.0")
+	v.SetDefault("server.host", "127.0.0.1")
 	v.SetDefault("server.port", 8080)
 
 	// Try to read config file (ignore errors if not found)

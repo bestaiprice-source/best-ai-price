@@ -356,7 +356,7 @@ func install(c gatewayctx.GatewayContext) {
 		return
 	}
 	if req.Server.Host == "" {
-		req.Server.Host = "0.0.0.0"
+		req.Server.Host = "127.0.0.1"
 	}
 	if req.Server.Port == 0 {
 		req.Server.Port = 8080

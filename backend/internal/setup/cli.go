@@ -57,7 +57,7 @@ func RunCLI() error {
 
 	cfg := &SetupConfig{
 		Server: ServerConfig{
-			Host: "0.0.0.0",
+			Host: "127.0.0.1",
 			Port: 8080,
 			Mode: "release",
 		},

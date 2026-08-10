@@ -217,6 +217,9 @@ sub2api/
 - `GET /api/v1/ash/stats/nodes`: Real-time node runtime metrics.
 - `GET /api/v1/ash/admin/yunwu/health`: Health status of Yunwu provider cluster.
 
+### Server Binding & Security Defaults
+- **Localhost Binding**: By default, `server.host` and `BIND_HOST` default to `127.0.0.1` across `config.go`, setup wizards, systemd service, and Docker compose configurations (`docker-compose.yml`, `docker-compose.local.yml`, `docker-compose.standalone.yml`) to restrict host access exclusively to localhost.
+
 ---
 
 ## 🧪 10. Testing & Development Rules

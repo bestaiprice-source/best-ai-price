@@ -565,7 +565,7 @@ func AutoSetupFromEnv() error {
 			Password: getEnvOrDefault("ADMIN_PASSWORD", ""),
 		},
 		Server: ServerConfig{
-			Host: getEnvOrDefault("SERVER_HOST", "0.0.0.0"),
+			Host: getEnvOrDefault("SERVER_HOST", "127.0.0.1"),
 			Port: getEnvIntOrDefault("SERVER_PORT", 8080),
 			Mode: getEnvOrDefault("SERVER_MODE", "release"),
 		},
