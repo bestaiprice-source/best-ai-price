@@ -2,6 +2,7 @@ package routes
 
 import (
 	"net/http"
+	"os"
 
 	"github.com/Wei-Shaw/sub2api/internal/server/gatewayctx"
 	"github.com/gin-gonic/gin"
@@ -24,6 +25,9 @@ func RegisterCommonRoutes(r gin.IRoutes) {
 	// Setup status endpoint (always returns needs_setup: false in normal mode)
 	// This is used by the frontend to detect when the service has restarted after setup
 	r.GET("/setup/status", gatewayctx.AdaptGinHandler(commonSetupStatus))
+
+	// Parser providers.json static endpoint
+	r.GET("/data/providers.json", gatewayctx.AdaptGinHandler(commonProvidersJSON))
 }
 
 func ExecutableCommonRoutes() []gatewayctx.RouteDef {
@@ -46,6 +50,12 @@ func ExecutableCommonRoutes() []gatewayctx.RouteDef {
 			Handler:    commonSetupStatus,
 			Middleware: []string{middlewareRequestLogger, middlewareCORS, middlewareSecurity},
 		},
+		{
+			Method:     http.MethodGet,
+			Path:       "/data/providers.json",
+			Handler:    commonProvidersJSON,
+			Middleware: []string{middlewareRequestLogger, middlewareCORS, middlewareSecurity},
+		},
 	}
 }
 
@@ -66,3 +76,24 @@ func commonSetupStatus(c gatewayctx.GatewayContext) {
 		},
 	})
 }
+
+func commonProvidersJSON(c gatewayctx.GatewayContext) {
+	paths := []string{
+		"/app/data/parser/providers.json",
+		"/app/data/providers.json",
+		"./data/providers.json",
+		"/srv/parser-data/data/providers.json",
+		"/root/bestai_prices_parser/public/data/providers.json",
+	}
+	for _, p := range paths {
+		if _, err := os.Stat(p); err == nil {
+			c.SetHeader("Cache-Control", "public, max-age=300")
+			c.SetHeader("Access-Control-Allow-Origin", "*")
+			if err := c.ServeFile(p); err == nil {
+				return
+			}
+		}
+	}
+	c.WriteJSON(http.StatusNotFound, map[string]any{"error": "providers.json not found"})
+}
+
