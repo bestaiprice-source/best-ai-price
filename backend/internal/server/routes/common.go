@@ -26,8 +26,10 @@ func RegisterCommonRoutes(r gin.IRoutes) {
 	// This is used by the frontend to detect when the service has restarted after setup
 	r.GET("/setup/status", gatewayctx.AdaptGinHandler(commonSetupStatus))
 
-	// Parser providers.json static endpoint
+	// Parser providers.json static endpoint (supports /data/providers.json, /api/data/providers.json, and /api/v1/data/providers.json)
 	r.GET("/data/providers.json", gatewayctx.AdaptGinHandler(commonProvidersJSON))
+	r.GET("/api/data/providers.json", gatewayctx.AdaptGinHandler(commonProvidersJSON))
+	r.GET("/api/v1/data/providers.json", gatewayctx.AdaptGinHandler(commonProvidersJSON))
 }
 
 func ExecutableCommonRoutes() []gatewayctx.RouteDef {
@@ -53,6 +55,18 @@ func ExecutableCommonRoutes() []gatewayctx.RouteDef {
 		{
 			Method:     http.MethodGet,
 			Path:       "/data/providers.json",
+			Handler:    commonProvidersJSON,
+			Middleware: []string{middlewareRequestLogger, middlewareCORS, middlewareSecurity},
+		},
+		{
+			Method:     http.MethodGet,
+			Path:       "/api/data/providers.json",
+			Handler:    commonProvidersJSON,
+			Middleware: []string{middlewareRequestLogger, middlewareCORS, middlewareSecurity},
+		},
+		{
+			Method:     http.MethodGet,
+			Path:       "/api/v1/data/providers.json",
 			Handler:    commonProvidersJSON,
 			Middleware: []string{middlewareRequestLogger, middlewareCORS, middlewareSecurity},
 		},

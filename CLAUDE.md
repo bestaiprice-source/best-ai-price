@@ -204,7 +204,7 @@ sub2api/
 - `POST /v1/chat/completions`: OpenAI Chat Completions API.
 - `POST /responses`: Codex / OpenAI Responses API gateway.
 - `GET /v1/models`: Available model catalog.
-- `GET /data/providers.json`: Parser providers pricing JSON endpoint.
+- `GET /api/v1/data/providers.json`: Parser providers pricing JSON endpoint (also `/api/data/providers.json`, `/data/providers.json`).
 
 ### Admin APIs (`/api/v1/admin/*`)
 - `GET /api/v1/admin/api-keys`: Search and list all users' API keys.
