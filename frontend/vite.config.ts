@@ -41,6 +41,7 @@ export default defineConfig(({ mode }) => {
   const devPort = Number(env.VITE_DEV_PORT || 3000)
 
   return {
+    base: '/gateway/',
     plugins: [
       vue(),
       checker({
