@@ -18,6 +18,7 @@
 
 	@providers_json {
 		path /data/providers.json
+		path /data/models.json
 	}
 
 	# =========================================================================

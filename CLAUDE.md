@@ -205,6 +205,7 @@ sub2api/
 - `POST /responses`: Codex / OpenAI Responses API gateway.
 - `GET /v1/models`: Available model catalog.
 - `GET /api/v1/data/providers.json`: Parser providers pricing JSON endpoint (also `/api/data/providers.json`, `/data/providers.json`).
+- `GET /api/v1/data/models.json`: Parser models JSON endpoint (also `/api/data/models.json`, `/data/models.json`).
 
 ### Admin APIs (`/api/v1/admin/*`)
 - `GET /api/v1/admin/api-keys`: Search and list all users' API keys.

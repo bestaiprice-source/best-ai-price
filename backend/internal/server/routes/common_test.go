@@ -40,4 +40,13 @@ func TestRegisterCommonRoutes(t *testing.T) {
 		require.Equal(t, http.StatusOK, rec.Code)
 		require.JSONEq(t, `{"code":0,"data":{"needs_setup":false,"step":"completed"}}`, rec.Body.String())
 	})
+
+	t.Run("models json not found default", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/data/models.json", nil)
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		require.Equal(t, http.StatusNotFound, rec.Code)
+		require.JSONEq(t, `{"error":"models.json not found"}`, rec.Body.String())
+	})
 }
