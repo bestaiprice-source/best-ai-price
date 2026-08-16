@@ -14,6 +14,9 @@ const (
 	BetaFastMode                 = "fast-mode-2026-02-01"
 )
 
+// ClaudeCodeSystemPrompt is the default system prompt required for Claude Code OAuth and setup-token upstream accounts.
+const ClaudeCodeSystemPrompt = "You are Claude Code, Anthropic's official CLI for Claude."
+
 // DroppedBetas 是转发时需要从 anthropic-beta header 中移除的 beta token 列表。
 // 这些 token 是客户端特有的，不应透传给上游 API。
 var DroppedBetas = []string{}

@@ -628,3 +628,190 @@ func TestExtractTokensSupportsGeminiAndInteractionsUsage(t *testing.T) {
 	assert.Equal(t, int64(50), input)
 	assert.Equal(t, int64(32), output)
 }
+
+func TestEnsureClaudeCodeSystemPrompt(t *testing.T) {
+	t.Run("nil system injects prompt", func(t *testing.T) {
+		body := map[string]any{
+			"model": "claude-sonnet-4-5-20250929",
+		}
+		modified := ensureClaudeCodeSystemPrompt(body)
+		assert.True(t, modified)
+		sys, ok := body["system"].([]map[string]any)
+		require.True(t, ok)
+		require.Len(t, sys, 1)
+		assert.Equal(t, "You are Claude Code, Anthropic's official CLI for Claude.", sys[0]["text"])
+	})
+
+	t.Run("existing custom string system prefixes prompt", func(t *testing.T) {
+		body := map[string]any{
+			"model":  "claude-sonnet-4-5-20250929",
+			"system": "Translate to French",
+		}
+		modified := ensureClaudeCodeSystemPrompt(body)
+		assert.True(t, modified)
+		sys, ok := body["system"].([]map[string]any)
+		require.True(t, ok)
+		require.Len(t, sys, 2)
+		assert.Equal(t, "You are Claude Code, Anthropic's official CLI for Claude.", sys[0]["text"])
+		assert.Equal(t, "Translate to French", sys[1]["text"])
+	})
+
+	t.Run("already has claude code prompt no-op", func(t *testing.T) {
+		body := map[string]any{
+			"model":  "claude-sonnet-4-5-20250929",
+			"system": "You are Claude Code, Anthropic's official CLI for Claude.",
+		}
+		modified := ensureClaudeCodeSystemPrompt(body)
+		assert.False(t, modified)
+	})
+
+	t.Run("array system without prompt prepends", func(t *testing.T) {
+		body := map[string]any{
+			"model": "claude-sonnet-4-5-20250929",
+			"system": []any{
+				map[string]any{"type": "text", "text": "Custom instruction"},
+			},
+		}
+		modified := ensureClaudeCodeSystemPrompt(body)
+		assert.True(t, modified)
+		sys, ok := body["system"].([]any)
+		require.True(t, ok)
+		require.Len(t, sys, 2)
+		first, ok := sys[0].(map[string]any)
+		require.True(t, ok)
+		assert.Equal(t, "You are Claude Code, Anthropic's official CLI for Claude.", first["text"])
+	})
+}
+
+func TestEnsureClaudeCodeMetadata(t *testing.T) {
+	t.Run("missing metadata creates user_id", func(t *testing.T) {
+		body := map[string]any{"model": "claude-sonnet-4-5-20250929"}
+		modified := ensureClaudeCodeMetadata(body)
+		assert.True(t, modified)
+		meta, ok := body["metadata"].(map[string]any)
+		require.True(t, ok)
+		uid, ok := meta["user_id"].(string)
+		require.True(t, ok)
+		assert.True(t, strings.HasPrefix(uid, "user_"))
+		assert.Contains(t, uid, "_session_")
+	})
+
+	t.Run("existing user_id preserved", func(t *testing.T) {
+		body := map[string]any{
+			"metadata": map[string]any{
+				"user_id": "custom-user-123",
+			},
+		}
+		modified := ensureClaudeCodeMetadata(body)
+		assert.False(t, modified)
+	})
+}
+
+func TestAnthropicRuntime_SetupTokenAndOAuthClaudeCodeMimicry(t *testing.T) {
+	store := newTestStorage(t)
+	ctx := context.Background()
+
+	var receivedPath string
+	var receivedBody map[string]any
+	var receivedHeaders http.Header
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedPath = r.URL.String()
+		receivedHeaders = r.Header.Clone()
+		bodyBytes, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(bodyBytes, &receivedBody)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"usage":{"input_tokens":10,"output_tokens":20}}`))
+	}))
+	defer server.Close()
+
+	acc, err := store.DB().Account.Create().
+		SetName("setup-token-account").
+		SetPlatform("anthropic").
+		SetType("setup-token").
+		SetStatus("active").
+		SetCredentials(map[string]any{
+			"api_key":  "sk-ant-oat-test-token",
+			"base_url": server.URL,
+		}).
+		Save(ctx)
+	require.NoError(t, err)
+
+	_, err = NewAnthropicRuntime(store, runtimeTestCipher{}).Execute(
+		ctx,
+		fmt.Sprintf("%d", acc.ID),
+		[]byte(`{"model":"claude-sonnet-4-5-20250929","messages":[{"role":"user","content":"hi"}]}`),
+		&bytes.Buffer{},
+	)
+	require.NoError(t, err)
+
+	assert.Contains(t, receivedPath, "beta=true")
+	assert.Equal(t, "Bearer sk-ant-oat-test-token", receivedHeaders.Get("Authorization"))
+	assert.Contains(t, receivedHeaders.Get("anthropic-beta"), "claude-code")
+
+	sys, ok := receivedBody["system"].([]any)
+	require.True(t, ok)
+	require.NotEmpty(t, sys)
+	firstBlock, ok := sys[0].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "You are Claude Code, Anthropic's official CLI for Claude.", firstBlock["text"])
+
+	meta, ok := receivedBody["metadata"].(map[string]any)
+	require.True(t, ok)
+	assert.NotEmpty(t, meta["user_id"])
+}
+
+func TestUpstreamRequestFromContext(t *testing.T) {
+	ctx := context.Background()
+	_, ok := UpstreamRequestFromContext(ctx)
+	assert.False(t, ok)
+
+	ctxWithReq := WithUpstreamRequest(ctx, "POST", "/v1/messages", "application/json")
+	got, ok := UpstreamRequestFromContext(ctxWithReq)
+	assert.True(t, ok)
+	assert.Equal(t, "/v1/messages", got.Path)
+
+	headers := http.Header{"X-Custom": []string{"val"}}
+	ctxWithHeaders := WithUpstreamRequestHeaders(ctxWithReq, headers)
+	gotHeaders, ok := UpstreamRequestFromContext(ctxWithHeaders)
+	assert.True(t, ok)
+	assert.Equal(t, "val", gotHeaders.Headers.Get("X-Custom"))
+
+	// ctx without request override returns unchanged when WithUpstreamRequestHeaders called
+	emptyHeadersCtx := WithUpstreamRequestHeaders(ctx, headers)
+	assert.Equal(t, ctx, emptyHeadersCtx)
+}
+
+func TestConstructInputFromMessagesPayload(t *testing.T) {
+	payload := map[string]any{
+		"messages": []any{
+			map[string]any{
+				"role":    "user",
+				"content": "Hello world",
+			},
+			map[string]any{
+				"role": "assistant",
+			},
+		},
+	}
+	input := constructInputFromMessagesPayload(payload)
+	require.Len(t, input, 1)
+	assert.Equal(t, "user", input[0]["role"])
+
+	empty := constructInputFromMessagesPayload(map[string]any{})
+	assert.Nil(t, empty)
+}
+
+func TestUpstreamRequestID(t *testing.T) {
+	h := http.Header{}
+	h.Set("x-request-id", "req-123")
+	assert.Equal(t, "req-123", upstreamRequestID(h))
+
+	h2 := http.Header{}
+	h2.Set("request-id", "req-456")
+	assert.Equal(t, "req-456", upstreamRequestID(h2))
+
+	assert.Equal(t, "", upstreamRequestID(http.Header{}))
+}
+
+

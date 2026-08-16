@@ -3,6 +3,8 @@ package runtime
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -20,6 +22,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/claude"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/storage"
 	coderws "github.com/coder/websocket"
+	"github.com/google/uuid"
 )
 
 type ResponseMetadata struct {
@@ -502,8 +505,17 @@ func (r *AnthropicRuntime) Execute(ctx context.Context, nodeID string, reqPayloa
 	}
 
 	isOAuth := acc.Type == "oauth"
+	isOAuthOrSetupToken := acc.Type == "oauth" || acc.Type == "setup-token" || strings.HasPrefix(apiKey, "sk-ant-oat") || strings.HasPrefix(apiKey, "sk-oat")
 	if isOAuth && acc.Platform == "openai" && customURL == "" {
 		apiURL = "https://chatgpt.com/backend-api/codex/responses"
+	} else if acc.Platform == "anthropic" && isOAuthOrSetupToken {
+		if !strings.Contains(apiURL, "beta=true") {
+			if strings.Contains(apiURL, "?") {
+				apiURL += "&beta=true"
+			} else {
+				apiURL += "?beta=true"
+			}
+		}
 	}
 
 	var payloadMap struct {
@@ -588,6 +600,15 @@ func (r *AnthropicRuntime) Execute(ctx context.Context, nodeID string, reqPayloa
 					}
 				}
 			}
+
+			if acc.Platform == "anthropic" && isOAuthOrSetupToken {
+				if ensureClaudeCodeSystemPrompt(bodyMap) {
+					modified = true
+				}
+				if ensureClaudeCodeMetadata(bodyMap) {
+					modified = true
+				}
+			}
 		}
 
 		if modified {
@@ -619,7 +640,6 @@ func (r *AnthropicRuntime) Execute(ctx context.Context, nodeID string, reqPayloa
 			}
 		}
 	} else {
-		isOAuthOrSetupToken := acc.Type == "oauth" || acc.Type == "setup-token" || strings.HasPrefix(apiKey, "sk-ant-oat") || strings.HasPrefix(apiKey, "sk-oat")
 		// Use the exact Claude Code headers used by the admin account test.
 		// Keeping these paths aligned is important for OAuth/setup-token accounts,
 		// whose upstream policy can depend on the declared client protocol.
@@ -1222,3 +1242,83 @@ func constructMessagesFromResponsesPayload(bodyMap map[string]any) []map[string]
 
 	return msgs
 }
+
+func ensureClaudeCodeSystemPrompt(bodyMap map[string]any) bool {
+	systemVal, hasSystem := bodyMap["system"]
+	if !hasSystem || systemVal == nil {
+		bodyMap["system"] = []map[string]any{
+			{
+				"type": "text",
+				"text": claude.ClaudeCodeSystemPrompt,
+			},
+		}
+		return true
+	}
+	switch s := systemVal.(type) {
+	case string:
+		if strings.TrimSpace(s) == "" {
+			bodyMap["system"] = []map[string]any{
+				{
+					"type": "text",
+					"text": claude.ClaudeCodeSystemPrompt,
+				},
+			}
+			return true
+		}
+		if !strings.Contains(s, "You are Claude Code") {
+			bodyMap["system"] = []map[string]any{
+				{
+					"type": "text",
+					"text": claude.ClaudeCodeSystemPrompt,
+				},
+				{
+					"type": "text",
+					"text": s,
+				},
+			}
+			return true
+		}
+	case []any:
+		hasClaudeCode := false
+		for _, item := range s {
+			if m, ok := item.(map[string]any); ok {
+				if t, ok := m["text"].(string); ok && strings.Contains(t, "You are Claude Code") {
+					hasClaudeCode = true
+					break
+				}
+			}
+		}
+		if !hasClaudeCode {
+			newSystem := make([]any, 0, len(s)+1)
+			newSystem = append(newSystem, map[string]any{
+				"type": "text",
+				"text": claude.ClaudeCodeSystemPrompt,
+			})
+			newSystem = append(newSystem, s...)
+			bodyMap["system"] = newSystem
+			return true
+		}
+	}
+	return false
+}
+
+func ensureClaudeCodeMetadata(bodyMap map[string]any) bool {
+	if metaVal, ok := bodyMap["metadata"]; ok && metaVal != nil {
+		if metaMap, ok := metaVal.(map[string]any); ok {
+			if uid, ok := metaMap["user_id"].(string); !ok || strings.TrimSpace(uid) == "" {
+				b := make([]byte, 32)
+				_, _ = rand.Read(b)
+				metaMap["user_id"] = "user_" + hex.EncodeToString(b) + "_session_" + uuid.New().String()
+				return true
+			}
+			return false
+		}
+	}
+	b := make([]byte, 32)
+	_, _ = rand.Read(b)
+	bodyMap["metadata"] = map[string]any{
+		"user_id": "user_" + hex.EncodeToString(b) + "_session_" + uuid.New().String(),
+	}
+	return true
+}
+
