@@ -14,7 +14,6 @@ import (
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/config"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/health"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/observability"
-	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/runtime"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/storage"
 	"github.com/redis/go-redis/v9"
 )
@@ -184,47 +183,249 @@ func (w *StatsWorker) SyncNodeStats(ctx context.Context, node *health.ExecutionN
 	if err != nil {
 		return nil, err
 	}
-	billingURL := origin + apiPrefix + "/dashboard/billing/credit_grants"
 
-	req, err := http.NewRequestWithContext(ctx, "GET", billingURL, nil)
+	// Strategy 1: OpenAI-compatible credit_grants endpoint
+	grants, errGrants := w.syncCreditGrants(ctx, origin, apiPrefix, apiKey)
+	if errGrants == nil && grants != nil && (grants.TotalAvailable > 0 || grants.TotalGranted > 0) {
+		w.recordSyncedSnapshot(ctx, node, grants, "credit_grants")
+		return grants, nil
+	}
+
+	// Strategy 2: Subscription + Usage endpoints (One API / New API / OpenAI format)
+	subGrants, errSub := w.syncSubscriptionUsage(ctx, origin, apiPrefix, apiKey)
+	if errSub == nil && subGrants != nil && (subGrants.TotalAvailable > 0 || subGrants.TotalGranted > 0) {
+		w.recordSyncedSnapshot(ctx, node, subGrants, "subscription")
+		return subGrants, nil
+	}
+
+	// Strategy 3: User self profile endpoint (One API / New API user quota)
+	userGrants, errUser := w.syncNodeStatsFallback(ctx, node, apiKey, origin)
+	if errUser == nil && userGrants != nil && (userGrants.TotalAvailable > 0 || userGrants.TotalGranted > 0) {
+		w.recordSyncedSnapshot(ctx, node, userGrants, "user_self")
+		return userGrants, nil
+	}
+
+	// If we got a valid response from credit_grants (even if 0 balance) and no better source
+	if grants != nil {
+		w.recordSyncedSnapshot(ctx, node, grants, "credit_grants_zero")
+		return grants, nil
+	}
+	if subGrants != nil {
+		w.recordSyncedSnapshot(ctx, node, subGrants, "subscription_zero")
+		return subGrants, nil
+	}
+	if userGrants != nil {
+		w.recordSyncedSnapshot(ctx, node, userGrants, "user_self_zero")
+		return userGrants, nil
+	}
+
+	slog.Warn("[YunwuStatsWorker] All balance sync strategies failed",
+		"node_id", node.NodeID,
+		"err_grants", errGrants,
+		"err_sub", errSub,
+		"err_user", errUser,
+	)
+
+	return nil, fmt.Errorf("failed to sync Yunwu balance across all endpoints (credit_grants: %v, subscription: %v, user/self: %v)", errGrants, errSub, errUser)
+}
+
+func (w *StatsWorker) syncCreditGrants(ctx context.Context, origin, apiPrefix, apiKey string) (*YunwuCreditGrantsResponse, error) {
+	urls := []string{
+		origin + apiPrefix + "/dashboard/billing/credit_grants",
+		origin + "/v1/dashboard/billing/credit_grants",
+		origin + "/dashboard/billing/credit_grants",
+	}
+
+	var lastErr error
+	for _, billingURL := range urls {
+		req, err := http.NewRequestWithContext(ctx, "GET", billingURL, nil)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		req.Header.Set("Authorization", "Bearer "+apiKey)
+		req.Header.Set("Accept", "application/json")
+
+		resp, err := w.httpClient.Do(req)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		if resp.StatusCode != http.StatusOK {
+			resp.Body.Close()
+			lastErr = fmt.Errorf("HTTP %d from %s", resp.StatusCode, billingURL)
+			continue
+		}
+
+		body, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil {
+			lastErr = err
+			continue
+		}
+
+		var grants struct {
+			Object         string  `json:"object"`
+			TotalGranted   float64 `json:"total_granted"`
+			TotalUsed      float64 `json:"total_used"`
+			TotalAvailable float64 `json:"total_available"`
+			Grants         struct {
+				Data []struct {
+					GrantAmount float64 `json:"grant_amount"`
+					UsedAmount  float64 `json:"used_amount"`
+				} `json:"data"`
+			} `json:"grants"`
+		}
+		if err := json.Unmarshal(body, &grants); err != nil {
+			lastErr = err
+			continue
+		}
+
+		totalAvail := grants.TotalAvailable
+		if totalAvail == 0 && len(grants.Grants.Data) > 0 {
+			for _, g := range grants.Grants.Data {
+				rem := g.GrantAmount - g.UsedAmount
+				if rem > 0 {
+					totalAvail += rem
+				}
+			}
+		}
+
+		return &YunwuCreditGrantsResponse{
+			Object:         grants.Object,
+			TotalGranted:   grants.TotalGranted,
+			TotalUsed:      grants.TotalUsed,
+			TotalAvailable: totalAvail,
+		}, nil
+	}
+	return nil, lastErr
+}
+
+func (w *StatsWorker) syncSubscriptionUsage(ctx context.Context, origin, apiPrefix, apiKey string) (*YunwuCreditGrantsResponse, error) {
+	urls := []string{
+		origin + apiPrefix + "/dashboard/billing/subscription",
+		origin + "/v1/dashboard/billing/subscription",
+		origin + "/dashboard/billing/subscription",
+	}
+
+	var subResp *http.Response
+	var subURLUsed string
+	var lastErr error
+
+	for _, u := range urls {
+		req, err := http.NewRequestWithContext(ctx, "GET", u, nil)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		req.Header.Set("Authorization", "Bearer "+apiKey)
+		req.Header.Set("Accept", "application/json")
+
+		resp, err := w.httpClient.Do(req)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		if resp.StatusCode == http.StatusOK {
+			subResp = resp
+			subURLUsed = u
+			break
+		}
+		resp.Body.Close()
+		lastErr = fmt.Errorf("HTTP %d from %s", resp.StatusCode, u)
+	}
+
+	if subResp == nil {
+		return nil, lastErr
+	}
+	defer subResp.Body.Close()
+
+	body, err := io.ReadAll(subResp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("create request failed: %w", err)
+		return nil, err
 	}
 
-	req.Header.Set("Authorization", "Bearer "+apiKey)
-	req.Header.Set("Accept", "application/json")
-
-	resp, err := w.httpClient.Do(req)
-	if err != nil {
-		slog.Warn("[YunwuStatsWorker] Failed to query credit_grants endpoint, trying user/self fallback",
-			"node_id", node.NodeID,
-			"error", err,
-		)
-		return w.syncNodeStatsFallback(ctx, node, apiKey, origin)
+	var sub struct {
+		HardLimitUSD    float64 `json:"hard_limit_usd"`
+		SystemHardLimit float64 `json:"system_hard_limit_usd"`
+		HardLimit       float64 `json:"hard_limit"`
+		TotalGranted    float64 `json:"total_granted"`
+		TotalAvailable  float64 `json:"total_available"`
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		slog.Warn("[YunwuStatsWorker] Credit grants returned non-200, attempting user/self fallback",
-			"node_id", node.NodeID,
-			"status_code", resp.StatusCode,
-			"upstream_request_id", yunwuRequestID(resp.Header),
-			"response_body", runtime.SafeResponseBody(body),
-		)
-		return w.syncNodeStatsFallback(ctx, node, apiKey, origin)
+	if err := json.Unmarshal(body, &sub); err != nil {
+		return nil, err
 	}
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read response body failed: %w", err)
+	hardLimit := sub.HardLimitUSD
+	if hardLimit == 0 && sub.SystemHardLimit > 0 {
+		hardLimit = sub.SystemHardLimit
+	}
+	if hardLimit == 0 && sub.HardLimit > 0 {
+		hardLimit = sub.HardLimit
+	}
+	if hardLimit == 0 && sub.TotalGranted > 0 {
+		hardLimit = sub.TotalGranted
 	}
 
-	var grants YunwuCreditGrantsResponse
-	if err := json.Unmarshal(body, &grants); err != nil {
-		return w.syncNodeStatsFallback(ctx, node, apiKey, origin)
+	// If the subscription endpoint already provides total_available directly
+	if sub.TotalAvailable > 0 {
+		return &YunwuCreditGrantsResponse{
+			Object:         "subscription",
+			TotalGranted:   hardLimit,
+			TotalUsed:      maxFloat64(0, hardLimit-sub.TotalAvailable),
+			TotalAvailable: sub.TotalAvailable,
+		}, nil
 	}
 
+	if hardLimit <= 0 {
+		return nil, fmt.Errorf("subscription hard limit is 0 from %s", subURLUsed)
+	}
+
+	// Fetch usage to calculate remaining available USD
+	now := time.Now()
+	startDate := now.AddDate(0, -1, 0).Format("2006-01-02")
+	endDate := now.AddDate(0, 0, 1).Format("2006-01-02")
+
+	usageBase := strings.TrimSuffix(subURLUsed, "/subscription")
+	usageURL := fmt.Sprintf("%s/usage?start_date=%s&end_date=%s", usageBase, startDate, endDate)
+
+	totalUsageUSD := 0.0
+	if reqUsage, err := http.NewRequestWithContext(ctx, "GET", usageURL, nil); err == nil {
+		reqUsage.Header.Set("Authorization", "Bearer "+apiKey)
+		reqUsage.Header.Set("Accept", "application/json")
+		if respUsage, err := w.httpClient.Do(reqUsage); err == nil {
+			defer respUsage.Body.Close()
+			if respUsage.StatusCode == http.StatusOK {
+				if usageBody, err := io.ReadAll(respUsage.Body); err == nil {
+					var u struct {
+						TotalUsage float64 `json:"total_usage"` // Cents
+					}
+					if json.Unmarshal(usageBody, &u) == nil && u.TotalUsage > 0 {
+						totalUsageUSD = u.TotalUsage / 100.0
+					}
+				}
+			}
+		}
+	}
+
+	availableUSD := maxFloat64(0, hardLimit-totalUsageUSD)
+
+	return &YunwuCreditGrantsResponse{
+		Object:         "subscription",
+		TotalGranted:   hardLimit,
+		TotalUsed:      totalUsageUSD,
+		TotalAvailable: availableUSD,
+	}, nil
+}
+
+func maxFloat64(a, b float64) float64 {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func (w *StatsWorker) recordSyncedSnapshot(ctx context.Context, node *health.ExecutionNode, grants *YunwuCreditGrantsResponse, source string) {
 	// Update node runtime state in Redis
 	state, _ := w.nm.GetNodeRuntimeState(ctx, node.NodeID)
 	if state == nil {
@@ -235,18 +436,17 @@ func (w *StatsWorker) SyncNodeStats(ctx context.Context, node *health.ExecutionN
 	}
 	_ = w.nm.SaveNodeRuntimeState(ctx, state)
 
-	// Save the authoritative API balance snapshot; no compatibility key is written.
-	_ = w.saveSnapshot(ctx, node, &grants, "credit_grants")
+	// Save the authoritative API balance snapshot
+	_ = w.saveSnapshot(ctx, node, grants, source)
 	observability.Default.YunwuBalanceSynced()
 
 	slog.Info("[YunwuStatsWorker] Synced Yunwu node credit balance",
 		"node_id", node.NodeID,
 		"account_name", node.AccountName,
+		"source", source,
 		"total_available_usd", grants.TotalAvailable,
 		"total_used_usd", grants.TotalUsed,
 	)
-
-	return &grants, nil
 }
 
 func normalizeBillingBaseURL(raw string) (string, string, error) {
@@ -277,63 +477,112 @@ func (w *StatsWorker) syncNodeStatsFallback(ctx context.Context, node *health.Ex
 	if baseURL == "" {
 		baseURL = "https://yunwu.ai"
 	}
-	url := fmt.Sprintf("%s/api/user/self", baseURL)
 
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Authorization", "Bearer "+apiKey)
-	req.Header.Set("Accept", "application/json")
-
-	resp, err := w.httpClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		responseBody := runtime.SafeResponseBody(body)
-		slog.Warn("[YunwuStatsWorker] User/self returned non-200",
-			"node_id", node.NodeID,
-			"status_code", resp.StatusCode,
-			"upstream_request_id", yunwuRequestID(resp.Header),
-			"response_body", responseBody,
-		)
-		return nil, fmt.Errorf("yunwu user/self API returned status %d: %s", resp.StatusCode, responseBody)
+	urls := []string{
+		baseURL + "/api/user/self",
+		baseURL + "/v1/user/self",
+		baseURL + "/user/self",
+		baseURL + "/api/token/",
 	}
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
+	var lastErr error
+	for _, u := range urls {
+		req, err := http.NewRequestWithContext(ctx, "GET", u, nil)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		req.Header.Set("Authorization", "Bearer "+apiKey)
+		req.Header.Set("Accept", "application/json")
 
-	var userSelf YunwuUserSelfResponse
-	if err := json.Unmarshal(body, &userSelf); err != nil {
-		return nil, err
-	}
+		resp, err := w.httpClient.Do(req)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		if resp.StatusCode != http.StatusOK {
+			resp.Body.Close()
+			lastErr = fmt.Errorf("HTTP %d from %s", resp.StatusCode, u)
+			continue
+		}
 
-	availableUSD := userSelf.Data.Balance
-	if availableUSD == 0 && userSelf.Data.Quota > 0 {
-		if userSelf.Data.Quota > 1000 {
-			// New API / One API standard: 500,000 units = $1 USD
-			availableUSD = userSelf.Data.Quota / 500000.0
-		} else {
-			availableUSD = userSelf.Data.Quota
+		body, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil {
+			lastErr = err
+			continue
+		}
+
+		// Try user profile format
+		var userSelf struct {
+			Success bool `json:"success"`
+			Data    struct {
+				Quota       float64 `json:"quota"`
+				UsedQuota   float64 `json:"used_quota"`
+				Balance     float64 `json:"balance"`
+				RemainQuota float64 `json:"remain_quota"`
+				TotalQuota  float64 `json:"total_quota"`
+			} `json:"data"`
+		}
+		if json.Unmarshal(body, &userSelf) == nil && (userSelf.Success || userSelf.Data.Quota > 0 || userSelf.Data.Balance > 0 || userSelf.Data.RemainQuota > 0) {
+			availableUSD := userSelf.Data.Balance
+			if availableUSD == 0 && userSelf.Data.RemainQuota > 0 {
+				if userSelf.Data.RemainQuota > 1000 {
+					availableUSD = userSelf.Data.RemainQuota / 500000.0
+				} else {
+					availableUSD = userSelf.Data.RemainQuota
+				}
+			} else if availableUSD == 0 && userSelf.Data.Quota > 0 {
+				quotaRemaining := userSelf.Data.Quota - userSelf.Data.UsedQuota
+				if quotaRemaining < 0 {
+					quotaRemaining = userSelf.Data.Quota
+				}
+				if quotaRemaining > 1000 {
+					// New API / One API standard: 500,000 units = $1 USD
+					availableUSD = quotaRemaining / 500000.0
+				} else {
+					availableUSD = quotaRemaining
+				}
+			}
+
+			return &YunwuCreditGrantsResponse{
+				Object:         "user_self",
+				TotalGranted:   userSelf.Data.Quota,
+				TotalUsed:      userSelf.Data.UsedQuota,
+				TotalAvailable: availableUSD,
+			}, nil
+		}
+
+		// Try token list/detail format: {"data": [{"remain_quota": 50000000, ...}]}
+		var tokenList struct {
+			Success bool `json:"success"`
+			Data    []struct {
+				RemainQuota float64 `json:"remain_quota"`
+				UsedQuota   float64 `json:"used_quota"`
+				Unlimited   bool    `json:"unlimited_quota"`
+			} `json:"data"`
+		}
+		if json.Unmarshal(body, &tokenList) == nil && len(tokenList.Data) > 0 {
+			totalRemain := 0.0
+			for _, item := range tokenList.Data {
+				if item.RemainQuota > 0 {
+					totalRemain += item.RemainQuota
+				}
+			}
+			avail := totalRemain
+			if avail > 1000 {
+				avail = totalRemain / 500000.0
+			}
+			return &YunwuCreditGrantsResponse{
+				Object:         "token_quota",
+				TotalGranted:   avail,
+				TotalUsed:      0,
+				TotalAvailable: avail,
+			}, nil
 		}
 	}
 
-	grants := &YunwuCreditGrantsResponse{
-		Object:         "credit_grants",
-		TotalGranted:   userSelf.Data.Quota,
-		TotalUsed:      userSelf.Data.UsedQuota,
-		TotalAvailable: availableUSD,
-	}
-
-	_ = w.saveSnapshot(ctx, node, grants, "user_self")
-	observability.Default.YunwuBalanceSynced()
-	return grants, nil
+	return nil, lastErr
 }
 
 func yunwuRequestID(headers http.Header) string {
