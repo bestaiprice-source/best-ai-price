@@ -21,14 +21,14 @@
               class="px-3 py-1.5 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5"
               :class="activeEngine === 'yunwu' ? 'bg-purple-600 text-white shadow-sm' : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'"
             >
-              <Icon name="dollar" size="xs" />
+              <Icon name="bolt" size="xs" />
               <span>Yunwu Hypervisor Engine</span>
               <span
                 v-if="yunwuTotalAvailable > 0"
                 class="rounded-full px-1.5 py-0.5 text-[10px] font-mono font-semibold"
                 :class="activeEngine === 'yunwu' ? 'bg-purple-800 text-purple-100' : 'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300'"
               >
-                ${{ formatCost(yunwuTotalAvailable) }}
+                ⚡ {{ formatYunwuCredits(yunwuTotalAvailable) }}
               </span>
             </button>
           </div>
@@ -156,15 +156,16 @@
     <!-- ========================================================================= -->
     <div v-else class="grid grid-cols-2 gap-4 lg:grid-cols-5">
       <!-- Total Available Yunwu Balance -->
-      <div class="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4 dark:border-emerald-900/50 dark:bg-emerald-950/20">
+      <div class="rounded-xl border border-amber-200 bg-amber-50/40 p-4 dark:border-amber-900/40 dark:bg-amber-950/20">
         <div class="flex items-center justify-between">
-          <span class="text-xs font-medium text-emerald-800 dark:text-emerald-300">Total Yunwu Balance</span>
-          <Icon name="dollar" size="sm" class="text-emerald-600 dark:text-emerald-400" />
+          <span class="text-xs font-medium text-amber-800 dark:text-amber-300">Total Yunwu Balance</span>
+          <Icon name="bolt" size="sm" class="text-amber-600 dark:text-amber-400" />
         </div>
-        <p class="mt-2 text-2xl font-black text-emerald-700 dark:text-emerald-300 font-mono">
-          ${{ formatBalanceUSD(yunwuTotalAvailable) }}
+        <p class="mt-2 text-2xl font-black text-amber-700 dark:text-amber-300 font-mono flex items-center gap-1">
+          <span class="text-amber-500 font-bold">⚡</span>
+          <span>{{ formatYunwuCredits(yunwuTotalAvailable) }}</span>
         </p>
-        <p class="mt-1 text-xs text-emerald-600 dark:text-emerald-400">
+        <p class="mt-1 text-xs text-amber-700/80 dark:text-amber-400/80">
           {{ yunwuNodes.length }} Active {{ yunwuNodes.length === 1 ? 'Channel' : 'Channels' }}
         </p>
       </div>
@@ -175,8 +176,9 @@
           <span class="text-xs font-medium text-indigo-800 dark:text-indigo-300">Allocatable Balance</span>
           <Icon name="cube" size="sm" class="text-indigo-600 dark:text-indigo-400" />
         </div>
-        <p class="mt-2 text-2xl font-black text-indigo-700 dark:text-indigo-300 font-mono">
-          ${{ formatBalanceUSD(yunwuTotalAllocatable) }}
+        <p class="mt-2 text-2xl font-black text-indigo-700 dark:text-indigo-300 font-mono flex items-center gap-1">
+          <span class="text-indigo-500 font-bold">⚡</span>
+          <span>{{ formatYunwuCredits(yunwuTotalAllocatable) }}</span>
         </p>
         <p class="mt-1 text-xs text-indigo-600 dark:text-indigo-400">
           After Safety Reserve Hold
@@ -378,8 +380,8 @@
           <thead class="bg-gray-100/70 text-xs font-semibold uppercase tracking-wider text-gray-700 dark:bg-gray-800/60 dark:text-gray-300">
             <tr>
               <th class="px-4 py-3">Node / Account</th>
-              <th class="px-4 py-3">Available Balance</th>
-              <th class="px-4 py-3">Allocatable Balance</th>
+              <th class="px-4 py-3">Available Balance (⚡)</th>
+              <th class="px-4 py-3">Allocatable Balance (⚡)</th>
               <th class="px-4 py-3">Reserve %</th>
               <th class="px-4 py-3">Node State</th>
               <th class="px-4 py-3">Last Sync</th>
@@ -413,8 +415,9 @@
               <!-- Available Balance -->
               <td class="px-4 py-3 font-mono font-bold text-gray-900 dark:text-white">
                 <div class="flex items-center gap-2">
-                  <span class="text-sm text-emerald-600 dark:text-emerald-400">
-                    ${{ formatBalanceUSD(node.total_available_usd) }}
+                  <span class="text-sm text-amber-600 dark:text-amber-400 flex items-center gap-0.5">
+                    <span class="text-amber-500 font-bold">⚡</span>
+                    <span>{{ formatYunwuCredits(node.total_available_usd) }}</span>
                   </span>
                   <span
                     class="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider"
@@ -427,7 +430,10 @@
 
               <!-- Allocatable Balance -->
               <td class="px-4 py-3 font-mono font-semibold text-indigo-600 dark:text-indigo-400">
-                ${{ formatBalanceUSD(node.allocatable_usd !== undefined ? node.allocatable_usd : node.total_available_usd * (1 - (node.reserve_percent || 0)/100)) }}
+                <span class="flex items-center gap-0.5">
+                  <span class="text-indigo-500 font-bold">⚡</span>
+                  <span>{{ formatYunwuCredits(node.allocatable_usd !== undefined ? node.allocatable_usd : node.total_available_usd * (1 - (node.reserve_percent || 0)/100)) }}</span>
+                </span>
               </td>
 
               <!-- Reserve % -->
@@ -593,22 +599,9 @@ const formatTokens = (val: number) => {
   return val.toString()
 }
 
-const formatCost = (val: number) => {
-  if (!val) return '0.00'
-  if (val >= 1000) return (val / 1000).toFixed(2) + 'K'
-  return val.toFixed(2)
-}
-
-const formatBalanceUSD = (val: number | undefined) => {
+const formatYunwuCredits = (val: number | undefined) => {
   if (val === undefined || val === null) return '0.00'
-  if (val >= 1000) {
-    return val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-  } else if (val >= 1) {
-    return val.toFixed(2)
-  } else if (val > 0) {
-    return val.toFixed(4)
-  }
-  return '0.00'
+  return Number(val).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
 const formatDate = (dateStr?: string) => {

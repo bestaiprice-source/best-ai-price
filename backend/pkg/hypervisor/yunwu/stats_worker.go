@@ -184,49 +184,49 @@ func (w *StatsWorker) SyncNodeStats(ctx context.Context, node *health.ExecutionN
 		return nil, err
 	}
 
-	// Strategy 1: OpenAI-compatible credit_grants endpoint
-	grants, errGrants := w.syncCreditGrants(ctx, origin, apiPrefix, apiKey)
-	if errGrants == nil && grants != nil && (grants.TotalAvailable > 0 || grants.TotalGranted > 0) {
-		w.recordSyncedSnapshot(ctx, node, grants, "credit_grants")
-		return grants, nil
-	}
-
-	// Strategy 2: Subscription + Usage endpoints (One API / New API / OpenAI format)
-	subGrants, errSub := w.syncSubscriptionUsage(ctx, origin, apiPrefix, apiKey)
-	if errSub == nil && subGrants != nil && (subGrants.TotalAvailable > 0 || subGrants.TotalGranted > 0) {
-		w.recordSyncedSnapshot(ctx, node, subGrants, "subscription")
-		return subGrants, nil
-	}
-
-	// Strategy 3: User self profile endpoint (One API / New API user quota)
+	// Strategy 1: User self profile endpoint (Yunwu / One API / New API native balance ⚡)
 	userGrants, errUser := w.syncNodeStatsFallback(ctx, node, apiKey, origin)
 	if errUser == nil && userGrants != nil && (userGrants.TotalAvailable > 0 || userGrants.TotalGranted > 0) {
 		w.recordSyncedSnapshot(ctx, node, userGrants, "user_self")
 		return userGrants, nil
 	}
 
-	// If we got a valid response from credit_grants (even if 0 balance) and no better source
-	if grants != nil {
-		w.recordSyncedSnapshot(ctx, node, grants, "credit_grants_zero")
+	// Strategy 2: Subscription + Usage endpoints (One API / New API format)
+	subGrants, errSub := w.syncSubscriptionUsage(ctx, origin, apiPrefix, apiKey)
+	if errSub == nil && subGrants != nil && (subGrants.TotalAvailable > 0 || subGrants.TotalGranted > 0) {
+		w.recordSyncedSnapshot(ctx, node, subGrants, "subscription")
+		return subGrants, nil
+	}
+
+	// Strategy 3: OpenAI-compatible credit_grants endpoint
+	grants, errGrants := w.syncCreditGrants(ctx, origin, apiPrefix, apiKey)
+	if errGrants == nil && grants != nil && (grants.TotalAvailable > 0 || grants.TotalGranted > 0) {
+		w.recordSyncedSnapshot(ctx, node, grants, "credit_grants")
 		return grants, nil
+	}
+
+	// If we got a valid response from user/self even if 0
+	if userGrants != nil {
+		w.recordSyncedSnapshot(ctx, node, userGrants, "user_self_zero")
+		return userGrants, nil
 	}
 	if subGrants != nil {
 		w.recordSyncedSnapshot(ctx, node, subGrants, "subscription_zero")
 		return subGrants, nil
 	}
-	if userGrants != nil {
-		w.recordSyncedSnapshot(ctx, node, userGrants, "user_self_zero")
-		return userGrants, nil
+	if grants != nil {
+		w.recordSyncedSnapshot(ctx, node, grants, "credit_grants_zero")
+		return grants, nil
 	}
 
 	slog.Warn("[YunwuStatsWorker] All balance sync strategies failed",
 		"node_id", node.NodeID,
-		"err_grants", errGrants,
-		"err_sub", errSub,
 		"err_user", errUser,
+		"err_sub", errSub,
+		"err_grants", errGrants,
 	)
 
-	return nil, fmt.Errorf("failed to sync Yunwu balance across all endpoints (credit_grants: %v, subscription: %v, user/self: %v)", errGrants, errSub, errUser)
+	return nil, fmt.Errorf("failed to sync Yunwu balance across all endpoints (user/self: %v, subscription: %v, credit_grants: %v)", errUser, errSub, errGrants)
 }
 
 func normalizeQuotaToUSD(val float64) float64 {
