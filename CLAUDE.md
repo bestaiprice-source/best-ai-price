@@ -221,6 +221,8 @@ sub2api/
 - `GET /api/v1/ash/health`: Hypervisor health state and degradation mode.
 - `GET /api/v1/ash/stats/nodes`: Real-time node runtime metrics.
 - `GET /api/v1/ash/admin/yunwu/health`: Health status of Yunwu provider cluster.
+- `GET /api/v1/ash/admin/yunwu/nodes`: List Yunwu nodes with credit balances and allocatable capacity.
+- `POST /api/v1/ash/admin/yunwu/nodes/:id/sync`: Trigger manual credit balance synchronization for a Yunwu node.
 
 ### Server Binding & Security Defaults
 - **Localhost Binding**: By default, `server.host` and `BIND_HOST` default to `127.0.0.1` across `config.go`, setup wizards, and systemd service. Docker compose configurations (`docker-compose.yml`, `docker-compose.local.yml`) expose port 8080 directly (`8080:8080`).

@@ -1205,6 +1205,8 @@ func (yh *YunwuHypervisor) GetHealthStatus(ctx context.Context) map[string]any {
 	systemState := yh.hc.GetSystemState(ctx)
 	healthy := 0
 	cooldown := 0
+	totalAvailableUSD := 0.0
+	totalAllocatableUSD := 0.0
 
 	for _, n := range nodes {
 		if n.State == "healthy" {
@@ -1212,18 +1214,27 @@ func (yh *YunwuHypervisor) GetHealthStatus(ctx context.Context) map[string]any {
 		} else if n.State == "cooldown" {
 			cooldown++
 		}
+		if yh.sw != nil {
+			if snap, err := yh.sw.Snapshot(ctx, n.NodeID, 100*365*24*time.Hour); err == nil && snap != nil {
+				totalAvailableUSD += snap.AvailableUSD
+				allocatable := max64(0, snap.EstimatedAvailableMicroUSD-snap.ReserveMicroUSD)
+				totalAllocatableUSD += float64(allocatable) / 1_000_000
+			}
+		}
 	}
 
 	rebinding24h, _ := yh.store.Redis().ZCard(ctx, "ash:yunwu:rebinding:24h").Result()
 
 	return map[string]any{
-		"status":            "ok",
-		"system_state":      systemState,
-		"platform":          "yunwu",
-		"total_nodes":       len(nodes),
-		"healthy_nodes":     healthy,
-		"cooldown_nodes":    cooldown,
-		"rebinding_24h_cnt": rebinding24h,
+		"status":                "ok",
+		"system_state":          systemState,
+		"platform":              "yunwu",
+		"total_nodes":           len(nodes),
+		"healthy_nodes":         healthy,
+		"cooldown_nodes":        cooldown,
+		"rebinding_24h_cnt":     rebinding24h,
+		"total_available_usd":   totalAvailableUSD,
+		"total_allocatable_usd": totalAllocatableUSD,
 	}
 }
 

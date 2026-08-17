@@ -10,26 +10,47 @@
           <div class="flex items-center gap-2">
             <button
               @click="activeEngine = 'standard'"
-              class="px-3 py-1 text-xs font-bold rounded-lg transition-colors"
-              :class="activeEngine === 'standard' ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'"
+              class="px-3 py-1.5 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5"
+              :class="activeEngine === 'standard' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'"
             >
-              Standard ASH Engine
+              <Icon name="server" size="xs" />
+              <span>Standard ASH Engine</span>
             </button>
             <button
               @click="activeEngine = 'yunwu'"
-              class="px-3 py-1 text-xs font-bold rounded-lg transition-colors"
-              :class="activeEngine === 'yunwu' ? 'bg-purple-600 text-white' : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'"
+              class="px-3 py-1.5 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5"
+              :class="activeEngine === 'yunwu' ? 'bg-purple-600 text-white shadow-sm' : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'"
             >
-              Yunwu Hypervisor Engine
+              <Icon name="dollar" size="xs" />
+              <span>Yunwu Hypervisor Engine</span>
+              <span
+                v-if="yunwuTotalAvailable > 0"
+                class="rounded-full px-1.5 py-0.5 text-[10px] font-mono font-semibold"
+                :class="activeEngine === 'yunwu' ? 'bg-purple-800 text-purple-100' : 'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300'"
+              >
+                ${{ formatCost(yunwuTotalAvailable) }}
+              </span>
             </button>
           </div>
           <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-            {{ activeEngine === 'standard' ? 'Real-time session hypervisor, load balancer & pool health controller' : 'Dedicated Yunwu API channels hypervisor & credit balance sync' }}
+            {{ activeEngine === 'standard' ? 'Real-time session hypervisor, load balancer & pool health controller' : 'Dedicated Yunwu API channels hypervisor & real-time credit balance tracker' }}
           </p>
         </div>
       </div>
 
-      <div class="flex items-center gap-3">
+      <div class="flex flex-wrap items-center gap-3">
+        <!-- Sync All Yunwu Balances Button -->
+        <button
+          v-if="activeEngine === 'yunwu'"
+          @click="handleSyncAllYunwu"
+          class="btn btn-secondary text-xs flex items-center gap-1.5 bg-purple-50 text-purple-700 hover:bg-purple-100 dark:bg-purple-950/40 dark:text-purple-300 dark:hover:bg-purple-900/50 border-purple-200 dark:border-purple-800"
+          :disabled="syncingAll || loading"
+          title="Query credit grants from upstream Yunwu for all nodes"
+        >
+          <Icon name="sync" size="sm" :class="{ 'animate-spin': syncingAll }" />
+          <span>{{ syncingAll ? 'Syncing Balances...' : 'Sync All Balances' }}</span>
+        </button>
+
         <!-- Refresh Button -->
         <button
           @click="loadAshData"
@@ -37,7 +58,7 @@
           :disabled="loading"
         >
           <Icon name="refresh" size="sm" :class="{ 'animate-spin': loading }" />
-          Refresh Stats
+          <span>Refresh Stats</span>
         </button>
 
         <!-- System State Badge -->
@@ -53,8 +74,10 @@
       </div>
     </div>
 
-    <!-- Core Metrics Cards -->
-    <div class="grid grid-cols-2 gap-4 lg:grid-cols-5">
+    <!-- ========================================================================= -->
+    <!-- STANDARD ENGINE METRICS CARDS -->
+    <!-- ========================================================================= -->
+    <div v-if="activeEngine === 'standard'" class="grid grid-cols-2 gap-4 lg:grid-cols-5">
       <!-- Total Nodes -->
       <div class="rounded-xl border border-gray-200 bg-gray-50/50 p-4 dark:border-gray-700 dark:bg-gray-800/40">
         <div class="flex items-center justify-between">
@@ -128,8 +151,90 @@
       </div>
     </div>
 
-    <!-- Node Metrics Table -->
-    <div class="space-y-3">
+    <!-- ========================================================================= -->
+    <!-- YUNWU HYPERVISOR ENGINE METRICS CARDS (BALANCE & NODES) -->
+    <!-- ========================================================================= -->
+    <div v-else class="grid grid-cols-2 gap-4 lg:grid-cols-5">
+      <!-- Total Available Yunwu Balance -->
+      <div class="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4 dark:border-emerald-900/50 dark:bg-emerald-950/20">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-medium text-emerald-800 dark:text-emerald-300">Total Yunwu Balance</span>
+          <Icon name="dollar" size="sm" class="text-emerald-600 dark:text-emerald-400" />
+        </div>
+        <p class="mt-2 text-2xl font-black text-emerald-700 dark:text-emerald-300 font-mono">
+          ${{ formatBalanceUSD(yunwuTotalAvailable) }}
+        </p>
+        <p class="mt-1 text-xs text-emerald-600 dark:text-emerald-400">
+          {{ yunwuNodes.length }} Active {{ yunwuNodes.length === 1 ? 'Channel' : 'Channels' }}
+        </p>
+      </div>
+
+      <!-- Allocatable Balance (After Safety Reserve) -->
+      <div class="rounded-xl border border-indigo-200 bg-indigo-50/50 p-4 dark:border-indigo-900/50 dark:bg-indigo-950/20">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-medium text-indigo-800 dark:text-indigo-300">Allocatable Balance</span>
+          <Icon name="cube" size="sm" class="text-indigo-600 dark:text-indigo-400" />
+        </div>
+        <p class="mt-2 text-2xl font-black text-indigo-700 dark:text-indigo-300 font-mono">
+          ${{ formatBalanceUSD(yunwuTotalAllocatable) }}
+        </p>
+        <p class="mt-1 text-xs text-indigo-600 dark:text-indigo-400">
+          After Safety Reserve Hold
+        </p>
+      </div>
+
+      <!-- Yunwu Nodes Pool -->
+      <div class="rounded-xl border border-gray-200 bg-gray-50/50 p-4 dark:border-gray-700 dark:bg-gray-800/40">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-medium text-gray-500 dark:text-gray-400">Yunwu Nodes</span>
+          <span class="rounded bg-purple-100 px-1.5 py-0.5 text-[10px] font-bold text-purple-700 dark:bg-purple-900/50 dark:text-purple-300">
+            {{ healthData?.healthy_nodes || yunwuNodes.filter(n => n.state === 'healthy').length }} Healthy
+          </span>
+        </div>
+        <p class="mt-2 text-2xl font-black text-gray-900 dark:text-white">
+          {{ healthData?.total_nodes || yunwuNodes.length }}
+        </p>
+        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+          Cooldown: {{ healthData?.cooldown_nodes || yunwuNodes.filter(n => n.state === 'cooldown').length }}
+        </p>
+      </div>
+
+      <!-- 24h Rebindings -->
+      <div class="rounded-xl border border-gray-200 bg-gray-50/50 p-4 dark:border-gray-700 dark:bg-gray-800/40">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-medium text-gray-500 dark:text-gray-400">24h Failovers</span>
+          <Icon name="sync" size="sm" class="text-violet-500" />
+        </div>
+        <p class="mt-2 text-2xl font-black text-violet-600 dark:text-violet-400">
+          {{ healthData?.rebinding_24h_cnt || 0 }}
+        </p>
+        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+          Zero-Downtime Rebindings
+        </p>
+      </div>
+
+      <!-- Sync Freshness -->
+      <div class="rounded-xl border border-gray-200 bg-gray-50/50 p-4 dark:border-gray-700 dark:bg-gray-800/40">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-medium text-gray-500 dark:text-gray-400">Balance Health</span>
+          <Icon name="clock" size="sm" class="text-amber-500" />
+        </div>
+        <div class="mt-2 flex items-baseline gap-1">
+          <span class="text-2xl font-black text-gray-900 dark:text-white">
+            {{ yunwuFreshCount }}
+          </span>
+          <span class="text-sm font-semibold text-gray-400">/ {{ yunwuNodes.length }} Fresh</span>
+        </div>
+        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+          Background Auto-Sync: 1m
+        </p>
+      </div>
+    </div>
+
+    <!-- ========================================================================= -->
+    <!-- STANDARD NODE METRICS TABLE -->
+    <!-- ========================================================================= -->
+    <div v-if="activeEngine === 'standard'" class="space-y-3">
       <div class="flex items-center justify-between">
         <h4 class="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
           <span>Execution Node Health & Load Balancing</span>
@@ -254,22 +359,188 @@
         </table>
       </div>
     </div>
+
+    <!-- ========================================================================= -->
+    <!-- YUNWU NODE BALANCE & HEALTH TABLE -->
+    <!-- ========================================================================= -->
+    <div v-else class="space-y-3">
+      <div class="flex items-center justify-between">
+        <h4 class="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
+          <span>Yunwu API Channel Balances & Node Health</span>
+          <span class="rounded bg-purple-100 px-2 py-0.5 text-xs font-semibold text-purple-700 dark:bg-purple-900/50 dark:text-purple-300">
+            {{ yunwuNodes.length }} channels
+          </span>
+        </h4>
+      </div>
+
+      <div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+        <table class="w-full text-left text-xs text-gray-600 dark:text-gray-300">
+          <thead class="bg-gray-100/70 text-xs font-semibold uppercase tracking-wider text-gray-700 dark:bg-gray-800/60 dark:text-gray-300">
+            <tr>
+              <th class="px-4 py-3">Node / Account</th>
+              <th class="px-4 py-3">Available Balance</th>
+              <th class="px-4 py-3">Allocatable Balance</th>
+              <th class="px-4 py-3">Reserve %</th>
+              <th class="px-4 py-3">Node State</th>
+              <th class="px-4 py-3">Last Sync</th>
+              <th class="px-4 py-3 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+            <tr v-if="yunwuNodes.length === 0">
+              <td colspan="7" class="py-8 text-center text-gray-500 dark:text-gray-400">
+                No Yunwu API channel accounts found in registry.
+              </td>
+            </tr>
+            <tr
+              v-for="node in yunwuNodes"
+              :key="node.node_id"
+              class="hover:bg-gray-50/80 dark:hover:bg-gray-800/50 transition-colors"
+            >
+              <!-- Node Name / Account -->
+              <td class="px-4 py-3 font-semibold text-gray-900 dark:text-white">
+                <div class="flex items-center gap-1.5">
+                  <span>{{ node.account_name || ('Yunwu Node #' + node.node_id) }}</span>
+                  <span class="rounded bg-purple-100 px-1.5 py-0.2 text-[10px] font-mono text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">
+                    {{ node.type || 'api_key' }}
+                  </span>
+                </div>
+                <div class="text-[10px] font-mono text-gray-400">
+                  ID: {{ node.node_id }} <span v-if="node.base_url">| {{ node.base_url }}</span>
+                </div>
+              </td>
+
+              <!-- Available Balance -->
+              <td class="px-4 py-3 font-mono font-bold text-gray-900 dark:text-white">
+                <div class="flex items-center gap-2">
+                  <span class="text-sm text-emerald-600 dark:text-emerald-400">
+                    ${{ formatBalanceUSD(node.total_available_usd) }}
+                  </span>
+                  <span
+                    class="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider"
+                    :class="getBalanceStatusClass(node.balance_status)"
+                  >
+                    {{ node.balance_status || 'unknown' }}
+                  </span>
+                </div>
+              </td>
+
+              <!-- Allocatable Balance -->
+              <td class="px-4 py-3 font-mono font-semibold text-indigo-600 dark:text-indigo-400">
+                ${{ formatBalanceUSD(node.allocatable_usd !== undefined ? node.allocatable_usd : node.total_available_usd * (1 - (node.reserve_percent || 0)/100)) }}
+              </td>
+
+              <!-- Reserve % -->
+              <td class="px-4 py-3 font-mono">
+                <span class="rounded bg-gray-100 px-1.5 py-0.5 text-[11px] font-medium text-gray-700 dark:bg-gray-800 dark:text-gray-300">
+                  {{ node.reserve_percent || 0 }}%
+                </span>
+              </td>
+
+              <!-- Node State Badge -->
+              <td class="px-4 py-3">
+                <span
+                  class="inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold"
+                  :class="getNodeStateClass(node.state)"
+                >
+                  {{ node.state || 'healthy' }}
+                </span>
+              </td>
+
+              <!-- Last Synchronized -->
+              <td class="px-4 py-3 font-mono text-xs">
+                <div v-if="node.balance_synchronized_at" :title="'Source: ' + (node.balance_source || 'unknown') + '\nExact: ' + node.balance_synchronized_at">
+                  <div class="text-gray-700 dark:text-gray-300">{{ formatRelativeTime(node.balance_synchronized_at) }}</div>
+                  <div class="text-[10px] text-gray-400">{{ formatDate(node.balance_synchronized_at) }}</div>
+                </div>
+                <span v-else class="text-gray-400">Never</span>
+              </td>
+
+              <!-- Actions -->
+              <td class="px-4 py-3 text-right">
+                <div class="flex items-center justify-end gap-1.5">
+                  <!-- Sync Balance Button -->
+                  <button
+                    @click="handleSyncNodeBalance(node.node_id)"
+                    class="rounded px-2.5 py-1 text-[11px] font-medium bg-purple-50 text-purple-700 hover:bg-purple-100 dark:bg-purple-900/30 dark:text-purple-300 dark:hover:bg-purple-900/50 flex items-center gap-1"
+                    :disabled="syncingNodes[node.node_id]"
+                    title="Sync balance from upstream Yunwu"
+                  >
+                    <Icon name="sync" size="xs" :class="{ 'animate-spin': syncingNodes[node.node_id] }" />
+                    <span>{{ syncingNodes[node.node_id] ? 'Syncing...' : 'Sync' }}</span>
+                  </button>
+
+                  <button
+                    @click="handleCooldown(node.node_id)"
+                    class="rounded px-2 py-1 text-[11px] font-medium bg-amber-50 text-amber-700 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-300 dark:hover:bg-amber-900/50"
+                    title="Put in 10-minute cooldown"
+                  >
+                    Cooldown
+                  </button>
+
+                  <button
+                    v-if="node.state === 'unavailable' || node.state === 'cooldown'"
+                    @click="handleEnable(node.node_id)"
+                    class="rounded px-2 py-1 text-[11px] font-medium bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-300 dark:hover:bg-emerald-900/50"
+                  >
+                    Enable
+                  </button>
+                  <button
+                    v-else
+                    @click="handleDisable(node.node_id)"
+                    class="rounded px-2 py-1 text-[11px] font-medium bg-rose-50 text-rose-700 hover:bg-rose-100 dark:bg-rose-900/30 dark:text-rose-300 dark:hover:bg-rose-900/50"
+                  >
+                    Disable
+                  </button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, reactive } from 'vue'
 import { adminAPI } from '@/api/admin'
-import type { AshHealthResponse, AshGlobalStats, AshNodeMetric, AshAnalytics } from '@/api/admin/ash'
+import type { AshHealthResponse, AshGlobalStats, AshNodeMetric, AshAnalytics, YunwuNodeItem } from '@/api/admin/ash'
 import Icon from '@/components/icons/Icon.vue'
 
 const activeEngine = ref<'standard' | 'yunwu'>('standard')
 const loading = ref(false)
+const syncingAll = ref(false)
+const syncingNodes = reactive<Record<string, boolean>>({})
+
 const healthData = ref<AshHealthResponse | null>(null)
 const globalStats = ref<AshGlobalStats | null>(null)
 const nodeMetrics = ref<AshNodeMetric[]>([])
+const yunwuNodes = ref<YunwuNodeItem[]>([])
 const analyticsData = ref<AshAnalytics | null>(null)
 let refreshTimer: ReturnType<typeof setInterval> | null = null
+
+// Aggregate totals for Yunwu Balance
+const yunwuTotalAvailable = computed(() => {
+  if (healthData.value?.total_available_usd !== undefined && healthData.value.total_available_usd > 0) {
+    return healthData.value.total_available_usd
+  }
+  return yunwuNodes.value.reduce((sum, n) => sum + (n.total_available_usd || 0), 0)
+})
+
+const yunwuTotalAllocatable = computed(() => {
+  if (healthData.value?.total_allocatable_usd !== undefined && healthData.value.total_allocatable_usd > 0) {
+    return healthData.value.total_allocatable_usd
+  }
+  return yunwuNodes.value.reduce((sum, n) => {
+    const alloc = n.allocatable_usd !== undefined ? n.allocatable_usd : (n.total_available_usd || 0) * (1 - (n.reserve_percent || 0)/100)
+    return sum + alloc
+  }, 0)
+})
+
+const yunwuFreshCount = computed(() => {
+  return yunwuNodes.value.filter(n => n.balance_status === 'fresh').length
+})
 
 const stateBadgeClass = computed(() => {
   const state = healthData.value?.system_state || 'NORMAL'
@@ -304,11 +575,40 @@ const getNodeStateClass = (state: string) => {
   }
 }
 
+const getBalanceStatusClass = (status?: string) => {
+  switch (status) {
+    case 'fresh':
+      return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+    case 'stale':
+      return 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
+    default:
+      return 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
+  }
+}
+
 const formatTokens = (val: number) => {
   if (!val) return '0'
   if (val >= 1000000) return (val / 1000000).toFixed(2) + 'M'
   if (val >= 1000) return (val / 1000).toFixed(1) + 'K'
   return val.toString()
+}
+
+const formatCost = (val: number) => {
+  if (!val) return '0.00'
+  if (val >= 1000) return (val / 1000).toFixed(2) + 'K'
+  return val.toFixed(2)
+}
+
+const formatBalanceUSD = (val: number | undefined) => {
+  if (val === undefined || val === null) return '0.00'
+  if (val >= 1000) {
+    return val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  } else if (val >= 1) {
+    return val.toFixed(2)
+  } else if (val > 0) {
+    return val.toFixed(4)
+  }
+  return '0.00'
 }
 
 const formatDate = (dateStr?: string) => {
@@ -321,37 +621,44 @@ const formatDate = (dateStr?: string) => {
   }
 }
 
+const formatRelativeTime = (dateStr?: string) => {
+  if (!dateStr) return '-'
+  try {
+    const d = new Date(dateStr)
+    const diffSeconds = Math.floor((Date.now() - d.getTime()) / 1000)
+    if (diffSeconds < 5) return 'Just now'
+    if (diffSeconds < 60) return `${diffSeconds}s ago`
+    if (diffSeconds < 3600) return `${Math.floor(diffSeconds / 60)}m ago`
+    if (diffSeconds < 86400) return `${Math.floor(diffSeconds / 3600)}h ago`
+    return `${Math.floor(diffSeconds / 86400)}d ago`
+  } catch {
+    return dateStr
+  }
+}
+
 const loadAshData = async () => {
   loading.value = true
   try {
     if (activeEngine.value === 'yunwu') {
-      const [healthRes, yunwuNodes] = await Promise.all([
+      const [healthRes, ywNodes] = await Promise.all([
         adminAPI.ash.getAshYunwuHealth().catch(() => null),
         adminAPI.ash.getAshYunwuNodes().catch(() => [])
       ])
       healthData.value = healthRes
-      nodeMetrics.value = (yunwuNodes || []).map((n) => ({
-        node_id: n.node_id,
-        account_name: n.account_name,
-        provider: 'yunwu',
-        state: n.state,
-        capabilities: ['anthropic', 'openai'],
-        success_rate: 1.0,
-        avg_latency_ms: 120,
-        recent_429: 0,
-        recent_timeouts: 0
-      }))
+      yunwuNodes.value = ywNodes || []
     } else {
-      const [healthRes, statsRes, nodesRes, analyticsRes] = await Promise.all([
+      const [healthRes, statsRes, nodesRes, analyticsRes, ywNodes] = await Promise.all([
         adminAPI.ash.getAshHealth().catch(() => null),
         adminAPI.ash.getAshGlobalStats().catch(() => null),
         adminAPI.ash.getAshNodeMetrics().catch(() => []),
-        adminAPI.ash.getAshAnalytics().catch(() => null)
+        adminAPI.ash.getAshAnalytics().catch(() => null),
+        adminAPI.ash.getAshYunwuNodes().catch(() => [])
       ])
       healthData.value = healthRes
       globalStats.value = statsRes
       nodeMetrics.value = (nodesRes || []).filter(n => n.provider !== 'yunwu')
       analyticsData.value = analyticsRes
+      yunwuNodes.value = ywNodes || []
     }
   } catch (err) {
     console.error('Failed to load ASH hypervisor stats:', err)
@@ -361,6 +668,31 @@ const loadAshData = async () => {
 }
 
 watch(activeEngine, loadAshData)
+
+const handleSyncNodeBalance = async (nodeID: string) => {
+  syncingNodes[nodeID] = true
+  try {
+    await adminAPI.ash.syncAshYunwuNode(nodeID)
+    await loadAshData()
+  } catch (err) {
+    console.error('Failed to sync node balance:', err)
+  } finally {
+    syncingNodes[nodeID] = false
+  }
+}
+
+const handleSyncAllYunwu = async () => {
+  syncingAll.value = true
+  try {
+    const promises = yunwuNodes.value.map(n => adminAPI.ash.syncAshYunwuNode(n.node_id).catch(() => null))
+    await Promise.all(promises)
+    await loadAshData()
+  } catch (err) {
+    console.error('Failed to sync all Yunwu nodes:', err)
+  } finally {
+    syncingAll.value = false
+  }
+}
 
 const handleCooldown = async (nodeID: string) => {
   try {
@@ -400,3 +732,6 @@ onUnmounted(() => {
   }
 })
 </script>
+
+<style scoped>
+</style>

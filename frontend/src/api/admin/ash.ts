@@ -12,6 +12,9 @@ export interface AshHealthResponse {
   total_nodes: number
   healthy_nodes: number
   cooldown_nodes: number
+  rebinding_24h_cnt?: number
+  total_available_usd?: number
+  total_allocatable_usd?: number
 }
 
 export interface AshGlobalStats {
@@ -110,6 +113,12 @@ export interface YunwuNodeItem {
   type: string
   state: string
   total_available_usd: number
+  allocatable_usd?: number
+  balance_status?: string
+  balance_source?: string
+  balance_synchronized_at?: string
+  balance_stale_at?: string
+  reserve_percent?: number
   base_url?: string
   status: string
 }
