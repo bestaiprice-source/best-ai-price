@@ -229,6 +229,18 @@ func (w *StatsWorker) SyncNodeStats(ctx context.Context, node *health.ExecutionN
 	return nil, fmt.Errorf("failed to sync Yunwu balance across all endpoints (credit_grants: %v, subscription: %v, user/self: %v)", errGrants, errSub, errUser)
 }
 
+func normalizeQuotaToUSD(val float64) float64 {
+	if val <= 0 {
+		return 0
+	}
+	// In One API / New API / Yunwu, quota units are integer-based where 500,000 units = $1.00 USD.
+	// If a returned quota/balance exceeds 1,000, it is in raw quota units and must be divided by 500,000.
+	if val > 1000 {
+		return val / 500000.0
+	}
+	return val
+}
+
 func (w *StatsWorker) syncCreditGrants(ctx context.Context, origin, apiPrefix, apiKey string) (*YunwuCreditGrantsResponse, error) {
 	urls := []string{
 		origin + apiPrefix + "/dashboard/billing/credit_grants",
@@ -281,20 +293,23 @@ func (w *StatsWorker) syncCreditGrants(ctx context.Context, origin, apiPrefix, a
 			continue
 		}
 
-		totalAvail := grants.TotalAvailable
+		totalAvail := normalizeQuotaToUSD(grants.TotalAvailable)
+		totalGranted := normalizeQuotaToUSD(grants.TotalGranted)
+		totalUsed := normalizeQuotaToUSD(grants.TotalUsed)
+
 		if totalAvail == 0 && len(grants.Grants.Data) > 0 {
 			for _, g := range grants.Grants.Data {
 				rem := g.GrantAmount - g.UsedAmount
 				if rem > 0 {
-					totalAvail += rem
+					totalAvail += normalizeQuotaToUSD(rem)
 				}
 			}
 		}
 
 		return &YunwuCreditGrantsResponse{
 			Object:         grants.Object,
-			TotalGranted:   grants.TotalGranted,
-			TotalUsed:      grants.TotalUsed,
+			TotalGranted:   totalGranted,
+			TotalUsed:      totalUsed,
 			TotalAvailable: totalAvail,
 		}, nil
 	}
@@ -367,17 +382,20 @@ func (w *StatsWorker) syncSubscriptionUsage(ctx context.Context, origin, apiPref
 		hardLimit = sub.TotalGranted
 	}
 
+	hardLimitUSD := normalizeQuotaToUSD(hardLimit)
+
 	// If the subscription endpoint already provides total_available directly
 	if sub.TotalAvailable > 0 {
+		totalAvailUSD := normalizeQuotaToUSD(sub.TotalAvailable)
 		return &YunwuCreditGrantsResponse{
 			Object:         "subscription",
-			TotalGranted:   hardLimit,
-			TotalUsed:      maxFloat64(0, hardLimit-sub.TotalAvailable),
-			TotalAvailable: sub.TotalAvailable,
+			TotalGranted:   hardLimitUSD,
+			TotalUsed:      maxFloat64(0, hardLimitUSD-totalAvailUSD),
+			TotalAvailable: totalAvailUSD,
 		}, nil
 	}
 
-	if hardLimit <= 0 {
+	if hardLimitUSD <= 0 {
 		return nil, fmt.Errorf("subscription hard limit is 0 from %s", subURLUsed)
 	}
 
@@ -398,21 +416,25 @@ func (w *StatsWorker) syncSubscriptionUsage(ctx context.Context, origin, apiPref
 			if respUsage.StatusCode == http.StatusOK {
 				if usageBody, err := io.ReadAll(respUsage.Body); err == nil {
 					var u struct {
-						TotalUsage float64 `json:"total_usage"` // Cents
+						TotalUsage float64 `json:"total_usage"` // Cents or Quota
 					}
 					if json.Unmarshal(usageBody, &u) == nil && u.TotalUsage > 0 {
-						totalUsageUSD = u.TotalUsage / 100.0
+						if u.TotalUsage > 100000 {
+							totalUsageUSD = u.TotalUsage / 500000.0
+						} else {
+							totalUsageUSD = u.TotalUsage / 100.0
+						}
 					}
 				}
 			}
 		}
 	}
 
-	availableUSD := maxFloat64(0, hardLimit-totalUsageUSD)
+	availableUSD := maxFloat64(0, hardLimitUSD-totalUsageUSD)
 
 	return &YunwuCreditGrantsResponse{
 		Object:         "subscription",
-		TotalGranted:   hardLimit,
+		TotalGranted:   hardLimitUSD,
 		TotalUsed:      totalUsageUSD,
 		TotalAvailable: availableUSD,
 	}, nil
@@ -525,30 +547,21 @@ func (w *StatsWorker) syncNodeStatsFallback(ctx context.Context, node *health.Ex
 			} `json:"data"`
 		}
 		if json.Unmarshal(body, &userSelf) == nil && (userSelf.Success || userSelf.Data.Quota > 0 || userSelf.Data.Balance > 0 || userSelf.Data.RemainQuota > 0) {
-			availableUSD := userSelf.Data.Balance
+			availableUSD := normalizeQuotaToUSD(userSelf.Data.Balance)
 			if availableUSD == 0 && userSelf.Data.RemainQuota > 0 {
-				if userSelf.Data.RemainQuota > 1000 {
-					availableUSD = userSelf.Data.RemainQuota / 500000.0
-				} else {
-					availableUSD = userSelf.Data.RemainQuota
-				}
+				availableUSD = normalizeQuotaToUSD(userSelf.Data.RemainQuota)
 			} else if availableUSD == 0 && userSelf.Data.Quota > 0 {
 				quotaRemaining := userSelf.Data.Quota - userSelf.Data.UsedQuota
 				if quotaRemaining < 0 {
 					quotaRemaining = userSelf.Data.Quota
 				}
-				if quotaRemaining > 1000 {
-					// New API / One API standard: 500,000 units = $1 USD
-					availableUSD = quotaRemaining / 500000.0
-				} else {
-					availableUSD = quotaRemaining
-				}
+				availableUSD = normalizeQuotaToUSD(quotaRemaining)
 			}
 
 			return &YunwuCreditGrantsResponse{
 				Object:         "user_self",
-				TotalGranted:   userSelf.Data.Quota,
-				TotalUsed:      userSelf.Data.UsedQuota,
+				TotalGranted:   normalizeQuotaToUSD(userSelf.Data.Quota),
+				TotalUsed:      normalizeQuotaToUSD(userSelf.Data.UsedQuota),
 				TotalAvailable: availableUSD,
 			}, nil
 		}
@@ -566,18 +579,14 @@ func (w *StatsWorker) syncNodeStatsFallback(ctx context.Context, node *health.Ex
 			totalRemain := 0.0
 			for _, item := range tokenList.Data {
 				if item.RemainQuota > 0 {
-					totalRemain += item.RemainQuota
+					totalRemain += normalizeQuotaToUSD(item.RemainQuota)
 				}
-			}
-			avail := totalRemain
-			if avail > 1000 {
-				avail = totalRemain / 500000.0
 			}
 			return &YunwuCreditGrantsResponse{
 				Object:         "token_quota",
-				TotalGranted:   avail,
+				TotalGranted:   totalRemain,
 				TotalUsed:      0,
-				TotalAvailable: avail,
+				TotalAvailable: totalRemain,
 			}, nil
 		}
 	}
