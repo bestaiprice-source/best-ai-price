@@ -207,6 +207,7 @@ sub2api/
 - `GET /v1/models`: Available model catalog.
 - `GET /api/v1/data/providers.json`: Parser providers pricing JSON endpoint (also `/api/data/providers.json`, `/data/providers.json`).
 - `GET /api/v1/data/models.json`: Parser models JSON endpoint (also `/api/data/models.json`, `/data/models.json`).
+- `GET /api/v1/data/api_descriptions.json`: Parser API descriptions JSON endpoint (also `/api/data/api_descriptions.json`, `/data/api_descriptions.json`).
 
 ### Admin APIs (`/api/v1/admin/*`)
 - `GET /api/v1/admin/api-keys`: Search and list all users' API keys.

@@ -41,6 +41,15 @@ func TestRegisterCommonRoutes(t *testing.T) {
 		require.JSONEq(t, `{"code":0,"data":{"needs_setup":false,"step":"completed"}}`, rec.Body.String())
 	})
 
+	t.Run("providers json not found default", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/data/providers.json", nil)
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		require.Equal(t, http.StatusNotFound, rec.Code)
+		require.JSONEq(t, `{"error":"providers.json not found"}`, rec.Body.String())
+	})
+
 	t.Run("models json not found default", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/data/models.json", nil)
 		rec := httptest.NewRecorder()
@@ -48,5 +57,30 @@ func TestRegisterCommonRoutes(t *testing.T) {
 
 		require.Equal(t, http.StatusNotFound, rec.Code)
 		require.JSONEq(t, `{"error":"models.json not found"}`, rec.Body.String())
+	})
+
+	t.Run("api descriptions json not found default", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/data/api_descriptions.json", nil)
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		require.Equal(t, http.StatusNotFound, rec.Code)
+		require.JSONEq(t, `{"error":"api_descriptions.json not found"}`, rec.Body.String())
+	})
+
+	t.Run("executable common routes completeness", func(t *testing.T) {
+		routes := ExecutableCommonRoutes()
+		require.NotEmpty(t, routes)
+		paths := make(map[string]bool)
+		for _, r := range routes {
+			paths[r.Path] = true
+		}
+		require.True(t, paths["/health"])
+		require.True(t, paths["/setup/status"])
+		require.True(t, paths["/data/providers.json"])
+		require.True(t, paths["/data/models.json"])
+		require.True(t, paths["/data/api_descriptions.json"])
+		require.True(t, paths["/api/data/api_descriptions.json"])
+		require.True(t, paths["/api/v1/data/api_descriptions.json"])
 	})
 }

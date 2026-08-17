@@ -35,6 +35,11 @@ func RegisterCommonRoutes(r gin.IRoutes) {
 	r.GET("/data/models.json", gatewayctx.AdaptGinHandler(commonModelsJSON))
 	r.GET("/api/data/models.json", gatewayctx.AdaptGinHandler(commonModelsJSON))
 	r.GET("/api/v1/data/models.json", gatewayctx.AdaptGinHandler(commonModelsJSON))
+
+	// Parser api_descriptions.json static endpoint (supports /data/api_descriptions.json, /api/data/api_descriptions.json, and /api/v1/data/api_descriptions.json)
+	r.GET("/data/api_descriptions.json", gatewayctx.AdaptGinHandler(commonApiDescriptionsJSON))
+	r.GET("/api/data/api_descriptions.json", gatewayctx.AdaptGinHandler(commonApiDescriptionsJSON))
+	r.GET("/api/v1/data/api_descriptions.json", gatewayctx.AdaptGinHandler(commonApiDescriptionsJSON))
 }
 
 func ExecutableCommonRoutes() []gatewayctx.RouteDef {
@@ -91,6 +96,24 @@ func ExecutableCommonRoutes() []gatewayctx.RouteDef {
 			Method:     http.MethodGet,
 			Path:       "/api/v1/data/models.json",
 			Handler:    commonModelsJSON,
+			Middleware: []string{middlewareRequestLogger, middlewareCORS, middlewareSecurity},
+		},
+		{
+			Method:     http.MethodGet,
+			Path:       "/data/api_descriptions.json",
+			Handler:    commonApiDescriptionsJSON,
+			Middleware: []string{middlewareRequestLogger, middlewareCORS, middlewareSecurity},
+		},
+		{
+			Method:     http.MethodGet,
+			Path:       "/api/data/api_descriptions.json",
+			Handler:    commonApiDescriptionsJSON,
+			Middleware: []string{middlewareRequestLogger, middlewareCORS, middlewareSecurity},
+		},
+		{
+			Method:     http.MethodGet,
+			Path:       "/api/v1/data/api_descriptions.json",
+			Handler:    commonApiDescriptionsJSON,
 			Middleware: []string{middlewareRequestLogger, middlewareCORS, middlewareSecurity},
 		},
 	}
@@ -152,5 +175,25 @@ func commonModelsJSON(c gatewayctx.GatewayContext) {
 		}
 	}
 	c.WriteJSON(http.StatusNotFound, map[string]any{"error": "models.json not found"})
+}
+
+func commonApiDescriptionsJSON(c gatewayctx.GatewayContext) {
+	paths := []string{
+		"/app/data/parser/api_descriptions.json",
+		"/app/data/api_descriptions.json",
+		"./data/api_descriptions.json",
+		"/srv/parser-data/data/api_descriptions.json",
+		"/root/bestai_prices_parser/public/data/api_descriptions.json",
+	}
+	for _, p := range paths {
+		if _, err := os.Stat(p); err == nil {
+			c.SetHeader("Cache-Control", "public, max-age=300")
+			c.SetHeader("Access-Control-Allow-Origin", "*")
+			if err := c.ServeFile(p); err == nil {
+				return
+			}
+		}
+	}
+	c.WriteJSON(http.StatusNotFound, map[string]any{"error": "api_descriptions.json not found"})
 }
 
