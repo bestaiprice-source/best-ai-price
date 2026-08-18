@@ -31,6 +31,8 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/pendingauthsession"
 	"github.com/Wei-Shaw/sub2api/ent/promocode"
 	"github.com/Wei-Shaw/sub2api/ent/promocodeusage"
+	"github.com/Wei-Shaw/sub2api/ent/providercomment"
+	"github.com/Wei-Shaw/sub2api/ent/providercommentvote"
 	"github.com/Wei-Shaw/sub2api/ent/proxy"
 	"github.com/Wei-Shaw/sub2api/ent/redeemcode"
 	"github.com/Wei-Shaw/sub2api/ent/schema"
@@ -1550,6 +1552,100 @@ func init() {
 	promocodeusageDescUsedAt := promocodeusageFields[3].Descriptor()
 	// promocodeusage.DefaultUsedAt holds the default value on creation for the used_at field.
 	promocodeusage.DefaultUsedAt = promocodeusageDescUsedAt.Default.(func() time.Time)
+	providercommentMixin := schema.ProviderComment{}.Mixin()
+	providercommentMixinFields0 := providercommentMixin[0].Fields()
+	_ = providercommentMixinFields0
+	providercommentFields := schema.ProviderComment{}.Fields()
+	_ = providercommentFields
+	// providercommentDescCreatedAt is the schema descriptor for created_at field.
+	providercommentDescCreatedAt := providercommentMixinFields0[0].Descriptor()
+	// providercomment.DefaultCreatedAt holds the default value on creation for the created_at field.
+	providercomment.DefaultCreatedAt = providercommentDescCreatedAt.Default.(func() time.Time)
+	// providercommentDescUpdatedAt is the schema descriptor for updated_at field.
+	providercommentDescUpdatedAt := providercommentMixinFields0[1].Descriptor()
+	// providercomment.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	providercomment.DefaultUpdatedAt = providercommentDescUpdatedAt.Default.(func() time.Time)
+	// providercomment.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	providercomment.UpdateDefaultUpdatedAt = providercommentDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// providercommentDescProvider is the schema descriptor for provider field.
+	providercommentDescProvider := providercommentFields[0].Descriptor()
+	// providercomment.ProviderValidator is a validator for the "provider" field. It is called by the builders before save.
+	providercomment.ProviderValidator = func() func(string) error {
+		validators := providercommentDescProvider.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(provider string) error {
+			for _, fn := range fns {
+				if err := fn(provider); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// providercommentDescContent is the schema descriptor for content field.
+	providercommentDescContent := providercommentFields[3].Descriptor()
+	// providercomment.ContentValidator is a validator for the "content" field. It is called by the builders before save.
+	providercomment.ContentValidator = providercommentDescContent.Validators[0].(func(string) error)
+	// providercommentDescSentiment is the schema descriptor for sentiment field.
+	providercommentDescSentiment := providercommentFields[4].Descriptor()
+	// providercomment.DefaultSentiment holds the default value on creation for the sentiment field.
+	providercomment.DefaultSentiment = providercommentDescSentiment.Default.(string)
+	// providercomment.SentimentValidator is a validator for the "sentiment" field. It is called by the builders before save.
+	providercomment.SentimentValidator = providercommentDescSentiment.Validators[0].(func(string) error)
+	// providercommentDescStatus is the schema descriptor for status field.
+	providercommentDescStatus := providercommentFields[5].Descriptor()
+	// providercomment.DefaultStatus holds the default value on creation for the status field.
+	providercomment.DefaultStatus = providercommentDescStatus.Default.(string)
+	// providercomment.StatusValidator is a validator for the "status" field. It is called by the builders before save.
+	providercomment.StatusValidator = providercommentDescStatus.Validators[0].(func(string) error)
+	// providercommentDescLikeCount is the schema descriptor for like_count field.
+	providercommentDescLikeCount := providercommentFields[6].Descriptor()
+	// providercomment.DefaultLikeCount holds the default value on creation for the like_count field.
+	providercomment.DefaultLikeCount = providercommentDescLikeCount.Default.(int)
+	// providercommentDescDislikeCount is the schema descriptor for dislike_count field.
+	providercommentDescDislikeCount := providercommentFields[7].Descriptor()
+	// providercomment.DefaultDislikeCount holds the default value on creation for the dislike_count field.
+	providercomment.DefaultDislikeCount = providercommentDescDislikeCount.Default.(int)
+	// providercommentDescReplyCount is the schema descriptor for reply_count field.
+	providercommentDescReplyCount := providercommentFields[8].Descriptor()
+	// providercomment.DefaultReplyCount holds the default value on creation for the reply_count field.
+	providercomment.DefaultReplyCount = providercommentDescReplyCount.Default.(int)
+	providercommentvoteMixin := schema.ProviderCommentVote{}.Mixin()
+	providercommentvoteMixinFields0 := providercommentvoteMixin[0].Fields()
+	_ = providercommentvoteMixinFields0
+	providercommentvoteFields := schema.ProviderCommentVote{}.Fields()
+	_ = providercommentvoteFields
+	// providercommentvoteDescCreatedAt is the schema descriptor for created_at field.
+	providercommentvoteDescCreatedAt := providercommentvoteMixinFields0[0].Descriptor()
+	// providercommentvote.DefaultCreatedAt holds the default value on creation for the created_at field.
+	providercommentvote.DefaultCreatedAt = providercommentvoteDescCreatedAt.Default.(func() time.Time)
+	// providercommentvoteDescUpdatedAt is the schema descriptor for updated_at field.
+	providercommentvoteDescUpdatedAt := providercommentvoteMixinFields0[1].Descriptor()
+	// providercommentvote.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	providercommentvote.DefaultUpdatedAt = providercommentvoteDescUpdatedAt.Default.(func() time.Time)
+	// providercommentvote.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	providercommentvote.UpdateDefaultUpdatedAt = providercommentvoteDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// providercommentvoteDescVoteType is the schema descriptor for vote_type field.
+	providercommentvoteDescVoteType := providercommentvoteFields[2].Descriptor()
+	// providercommentvote.VoteTypeValidator is a validator for the "vote_type" field. It is called by the builders before save.
+	providercommentvote.VoteTypeValidator = func() func(string) error {
+		validators := providercommentvoteDescVoteType.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(vote_type string) error {
+			for _, fn := range fns {
+				if err := fn(vote_type); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
 	proxyMixin := schema.Proxy{}.Mixin()
 	proxyMixinHooks1 := proxyMixin[1].Hooks()
 	proxy.Hooks[0] = proxyMixinHooks1[0]

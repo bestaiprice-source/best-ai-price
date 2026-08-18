@@ -1661,6 +1661,52 @@ func HasPromoCodeUsagesWith(preds ...predicate.PromoCodeUsage) predicate.User {
 	})
 }
 
+// HasProviderComments applies the HasEdge predicate on the "provider_comments" edge.
+func HasProviderComments() predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, ProviderCommentsTable, ProviderCommentsColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasProviderCommentsWith applies the HasEdge predicate on the "provider_comments" edge with a given conditions (other predicates).
+func HasProviderCommentsWith(preds ...predicate.ProviderComment) predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := newProviderCommentsStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasProviderCommentVotes applies the HasEdge predicate on the "provider_comment_votes" edge.
+func HasProviderCommentVotes() predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, ProviderCommentVotesTable, ProviderCommentVotesColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasProviderCommentVotesWith applies the HasEdge predicate on the "provider_comment_votes" edge with a given conditions (other predicates).
+func HasProviderCommentVotesWith(preds ...predicate.ProviderCommentVote) predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := newProviderCommentVotesStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
 // HasUserAllowedGroups applies the HasEdge predicate on the "user_allowed_groups" edge.
 func HasUserAllowedGroups() predicate.User {
 	return predicate.User(func(s *sql.Selector) {

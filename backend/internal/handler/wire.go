@@ -107,6 +107,7 @@ func ProvideHandlers(
 	paymentWebhookHandler *PaymentWebhookHandler,
 	availableChannelHandler *AvailableChannelHandler,
 	adminVendorHandler *AdminVendorHandler,
+	providerCommentHandler *ProviderCommentHandler,
 	_ *service.IdempotencyCoordinator,
 	_ *service.IdempotencyCleanupService,
 	_ *adminTaskStateCacheSetup,
@@ -134,6 +135,7 @@ func ProvideHandlers(
 		PaymentWebhook:   paymentWebhookHandler,
 		AvailableChannel: availableChannelHandler,
 		AdminVendor:      adminVendorHandler,
+		ProviderComment:  providerCommentHandler,
 	}
 }
 
@@ -154,6 +156,7 @@ var ProviderSet = wire.NewSet(
 	NewRedeemHandler,
 	NewSubscriptionHandler,
 	NewAnnouncementHandler,
+	NewProviderCommentHandler,
 	NewChannelMonitorUserHandler,
 	NewGatewayHandler,
 	NewOpenAIGatewayHandler,

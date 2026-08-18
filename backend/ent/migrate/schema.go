@@ -1190,6 +1190,104 @@ var (
 			},
 		},
 	}
+	// ProviderCommentsColumns holds the columns for the "provider_comments" table.
+	ProviderCommentsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "provider", Type: field.TypeString, Size: 100},
+		{Name: "content", Type: field.TypeString, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "sentiment", Type: field.TypeString, Size: 20, Default: "positive"},
+		{Name: "status", Type: field.TypeString, Size: 20, Default: "active"},
+		{Name: "like_count", Type: field.TypeInt, Default: 0},
+		{Name: "dislike_count", Type: field.TypeInt, Default: 0},
+		{Name: "reply_count", Type: field.TypeInt, Default: 0},
+		{Name: "parent_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "user_id", Type: field.TypeInt64},
+	}
+	// ProviderCommentsTable holds the schema information for the "provider_comments" table.
+	ProviderCommentsTable = &schema.Table{
+		Name:       "provider_comments",
+		Columns:    ProviderCommentsColumns,
+		PrimaryKey: []*schema.Column{ProviderCommentsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "provider_comments_provider_comments_replies",
+				Columns:    []*schema.Column{ProviderCommentsColumns[10]},
+				RefColumns: []*schema.Column{ProviderCommentsColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+			{
+				Symbol:     "provider_comments_users_provider_comments",
+				Columns:    []*schema.Column{ProviderCommentsColumns[11]},
+				RefColumns: []*schema.Column{UsersColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "providercomment_provider_status_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{ProviderCommentsColumns[3], ProviderCommentsColumns[6], ProviderCommentsColumns[1]},
+			},
+			{
+				Name:    "providercomment_provider_sentiment_status",
+				Unique:  false,
+				Columns: []*schema.Column{ProviderCommentsColumns[3], ProviderCommentsColumns[5], ProviderCommentsColumns[6]},
+			},
+			{
+				Name:    "providercomment_parent_id",
+				Unique:  false,
+				Columns: []*schema.Column{ProviderCommentsColumns[10]},
+			},
+			{
+				Name:    "providercomment_user_id",
+				Unique:  false,
+				Columns: []*schema.Column{ProviderCommentsColumns[11]},
+			},
+		},
+	}
+	// ProviderCommentVotesColumns holds the columns for the "provider_comment_votes" table.
+	ProviderCommentVotesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "vote_type", Type: field.TypeString, Size: 20},
+		{Name: "comment_id", Type: field.TypeInt64},
+		{Name: "user_id", Type: field.TypeInt64},
+	}
+	// ProviderCommentVotesTable holds the schema information for the "provider_comment_votes" table.
+	ProviderCommentVotesTable = &schema.Table{
+		Name:       "provider_comment_votes",
+		Columns:    ProviderCommentVotesColumns,
+		PrimaryKey: []*schema.Column{ProviderCommentVotesColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "provider_comment_votes_provider_comments_votes",
+				Columns:    []*schema.Column{ProviderCommentVotesColumns[4]},
+				RefColumns: []*schema.Column{ProviderCommentsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+			{
+				Symbol:     "provider_comment_votes_users_provider_comment_votes",
+				Columns:    []*schema.Column{ProviderCommentVotesColumns[5]},
+				RefColumns: []*schema.Column{UsersColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "providercommentvote_comment_id_user_id",
+				Unique:  true,
+				Columns: []*schema.Column{ProviderCommentVotesColumns[4], ProviderCommentVotesColumns[5]},
+			},
+			{
+				Name:    "providercommentvote_user_id",
+				Unique:  false,
+				Columns: []*schema.Column{ProviderCommentVotesColumns[5]},
+			},
+		},
+	}
 	// ProxiesColumns holds the columns for the "proxies" table.
 	ProxiesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
@@ -1817,6 +1915,8 @@ var (
 		PendingAuthSessionsTable,
 		PromoCodesTable,
 		PromoCodeUsagesTable,
+		ProviderCommentsTable,
+		ProviderCommentVotesTable,
 		ProxiesTable,
 		RedeemCodesTable,
 		SecuritySecretsTable,
@@ -1926,6 +2026,16 @@ func init() {
 	PromoCodeUsagesTable.ForeignKeys[1].RefTable = UsersTable
 	PromoCodeUsagesTable.Annotation = &entsql.Annotation{
 		Table: "promo_code_usages",
+	}
+	ProviderCommentsTable.ForeignKeys[0].RefTable = ProviderCommentsTable
+	ProviderCommentsTable.ForeignKeys[1].RefTable = UsersTable
+	ProviderCommentsTable.Annotation = &entsql.Annotation{
+		Table: "provider_comments",
+	}
+	ProviderCommentVotesTable.ForeignKeys[0].RefTable = ProviderCommentsTable
+	ProviderCommentVotesTable.ForeignKeys[1].RefTable = UsersTable
+	ProviderCommentVotesTable.Annotation = &entsql.Annotation{
+		Table: "provider_comment_votes",
 	}
 	ProxiesTable.Annotation = &entsql.Annotation{
 		Table: "proxies",

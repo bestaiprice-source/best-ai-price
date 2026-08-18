@@ -132,6 +132,8 @@ func (User) Edges() []ent.Edge {
 		edge.To("payment_orders", PaymentOrder.Type),
 		edge.To("attribute_values", UserAttributeValue.Type),
 		edge.To("promo_code_usages", PromoCodeUsage.Type),
+		edge.To("provider_comments", ProviderComment.Type),
+		edge.To("provider_comment_votes", ProviderCommentVote.Type),
 	}
 }
 

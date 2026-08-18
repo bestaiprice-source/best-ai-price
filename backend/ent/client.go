@@ -41,6 +41,8 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/pendingauthsession"
 	"github.com/Wei-Shaw/sub2api/ent/promocode"
 	"github.com/Wei-Shaw/sub2api/ent/promocodeusage"
+	"github.com/Wei-Shaw/sub2api/ent/providercomment"
+	"github.com/Wei-Shaw/sub2api/ent/providercommentvote"
 	"github.com/Wei-Shaw/sub2api/ent/proxy"
 	"github.com/Wei-Shaw/sub2api/ent/redeemcode"
 	"github.com/Wei-Shaw/sub2api/ent/securitysecret"
@@ -115,6 +117,10 @@ type Client struct {
 	PromoCode *PromoCodeClient
 	// PromoCodeUsage is the client for interacting with the PromoCodeUsage builders.
 	PromoCodeUsage *PromoCodeUsageClient
+	// ProviderComment is the client for interacting with the ProviderComment builders.
+	ProviderComment *ProviderCommentClient
+	// ProviderCommentVote is the client for interacting with the ProviderCommentVote builders.
+	ProviderCommentVote *ProviderCommentVoteClient
 	// Proxy is the client for interacting with the Proxy builders.
 	Proxy *ProxyClient
 	// RedeemCode is the client for interacting with the RedeemCode builders.
@@ -178,6 +184,8 @@ func (c *Client) init() {
 	c.PendingAuthSession = NewPendingAuthSessionClient(c.config)
 	c.PromoCode = NewPromoCodeClient(c.config)
 	c.PromoCodeUsage = NewPromoCodeUsageClient(c.config)
+	c.ProviderComment = NewProviderCommentClient(c.config)
+	c.ProviderCommentVote = NewProviderCommentVoteClient(c.config)
 	c.Proxy = NewProxyClient(c.config)
 	c.RedeemCode = NewRedeemCodeClient(c.config)
 	c.SecuritySecret = NewSecuritySecretClient(c.config)
@@ -309,6 +317,8 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		PendingAuthSession:            NewPendingAuthSessionClient(cfg),
 		PromoCode:                     NewPromoCodeClient(cfg),
 		PromoCodeUsage:                NewPromoCodeUsageClient(cfg),
+		ProviderComment:               NewProviderCommentClient(cfg),
+		ProviderCommentVote:           NewProviderCommentVoteClient(cfg),
 		Proxy:                         NewProxyClient(cfg),
 		RedeemCode:                    NewRedeemCodeClient(cfg),
 		SecuritySecret:                NewSecuritySecretClient(cfg),
@@ -367,6 +377,8 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		PendingAuthSession:            NewPendingAuthSessionClient(cfg),
 		PromoCode:                     NewPromoCodeClient(cfg),
 		PromoCodeUsage:                NewPromoCodeUsageClient(cfg),
+		ProviderComment:               NewProviderCommentClient(cfg),
+		ProviderCommentVote:           NewProviderCommentVoteClient(cfg),
 		Proxy:                         NewProxyClient(cfg),
 		RedeemCode:                    NewRedeemCodeClient(cfg),
 		SecuritySecret:                NewSecuritySecretClient(cfg),
@@ -416,9 +428,10 @@ func (c *Client) Use(hooks ...Hook) {
 		c.ChannelMonitorRequestTemplate, c.ErrorPassthroughRule, c.Group,
 		c.IdempotencyRecord, c.IdentityAdoptionDecision, c.PaymentAuditLog,
 		c.PaymentOrder, c.PaymentProviderInstance, c.PendingAuthSession, c.PromoCode,
-		c.PromoCodeUsage, c.Proxy, c.RedeemCode, c.SecuritySecret, c.Setting,
-		c.SubscriptionPlan, c.TLSFingerprintProfile, c.UsageCleanupTask, c.UsageLog,
-		c.User, c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
+		c.PromoCodeUsage, c.ProviderComment, c.ProviderCommentVote, c.Proxy,
+		c.RedeemCode, c.SecuritySecret, c.Setting, c.SubscriptionPlan,
+		c.TLSFingerprintProfile, c.UsageCleanupTask, c.UsageLog, c.User,
+		c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
 		c.UserSubscription,
 	} {
 		n.Use(hooks...)
@@ -436,9 +449,10 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.ChannelMonitorRequestTemplate, c.ErrorPassthroughRule, c.Group,
 		c.IdempotencyRecord, c.IdentityAdoptionDecision, c.PaymentAuditLog,
 		c.PaymentOrder, c.PaymentProviderInstance, c.PendingAuthSession, c.PromoCode,
-		c.PromoCodeUsage, c.Proxy, c.RedeemCode, c.SecuritySecret, c.Setting,
-		c.SubscriptionPlan, c.TLSFingerprintProfile, c.UsageCleanupTask, c.UsageLog,
-		c.User, c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
+		c.PromoCodeUsage, c.ProviderComment, c.ProviderCommentVote, c.Proxy,
+		c.RedeemCode, c.SecuritySecret, c.Setting, c.SubscriptionPlan,
+		c.TLSFingerprintProfile, c.UsageCleanupTask, c.UsageLog, c.User,
+		c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
 		c.UserSubscription,
 	} {
 		n.Intercept(interceptors...)
@@ -500,6 +514,10 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.PromoCode.mutate(ctx, m)
 	case *PromoCodeUsageMutation:
 		return c.PromoCodeUsage.mutate(ctx, m)
+	case *ProviderCommentMutation:
+		return c.ProviderComment.mutate(ctx, m)
+	case *ProviderCommentVoteMutation:
+		return c.ProviderCommentVote.mutate(ctx, m)
 	case *ProxyMutation:
 		return c.Proxy.mutate(ctx, m)
 	case *RedeemCodeMutation:
@@ -4554,6 +4572,368 @@ func (c *PromoCodeUsageClient) mutate(ctx context.Context, m *PromoCodeUsageMuta
 	}
 }
 
+// ProviderCommentClient is a client for the ProviderComment schema.
+type ProviderCommentClient struct {
+	config
+}
+
+// NewProviderCommentClient returns a client for the ProviderComment from the given config.
+func NewProviderCommentClient(c config) *ProviderCommentClient {
+	return &ProviderCommentClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `providercomment.Hooks(f(g(h())))`.
+func (c *ProviderCommentClient) Use(hooks ...Hook) {
+	c.hooks.ProviderComment = append(c.hooks.ProviderComment, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `providercomment.Intercept(f(g(h())))`.
+func (c *ProviderCommentClient) Intercept(interceptors ...Interceptor) {
+	c.inters.ProviderComment = append(c.inters.ProviderComment, interceptors...)
+}
+
+// Create returns a builder for creating a ProviderComment entity.
+func (c *ProviderCommentClient) Create() *ProviderCommentCreate {
+	mutation := newProviderCommentMutation(c.config, OpCreate)
+	return &ProviderCommentCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of ProviderComment entities.
+func (c *ProviderCommentClient) CreateBulk(builders ...*ProviderCommentCreate) *ProviderCommentCreateBulk {
+	return &ProviderCommentCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *ProviderCommentClient) MapCreateBulk(slice any, setFunc func(*ProviderCommentCreate, int)) *ProviderCommentCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &ProviderCommentCreateBulk{err: fmt.Errorf("calling to ProviderCommentClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*ProviderCommentCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &ProviderCommentCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for ProviderComment.
+func (c *ProviderCommentClient) Update() *ProviderCommentUpdate {
+	mutation := newProviderCommentMutation(c.config, OpUpdate)
+	return &ProviderCommentUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *ProviderCommentClient) UpdateOne(_m *ProviderComment) *ProviderCommentUpdateOne {
+	mutation := newProviderCommentMutation(c.config, OpUpdateOne, withProviderComment(_m))
+	return &ProviderCommentUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *ProviderCommentClient) UpdateOneID(id int64) *ProviderCommentUpdateOne {
+	mutation := newProviderCommentMutation(c.config, OpUpdateOne, withProviderCommentID(id))
+	return &ProviderCommentUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for ProviderComment.
+func (c *ProviderCommentClient) Delete() *ProviderCommentDelete {
+	mutation := newProviderCommentMutation(c.config, OpDelete)
+	return &ProviderCommentDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *ProviderCommentClient) DeleteOne(_m *ProviderComment) *ProviderCommentDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *ProviderCommentClient) DeleteOneID(id int64) *ProviderCommentDeleteOne {
+	builder := c.Delete().Where(providercomment.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &ProviderCommentDeleteOne{builder}
+}
+
+// Query returns a query builder for ProviderComment.
+func (c *ProviderCommentClient) Query() *ProviderCommentQuery {
+	return &ProviderCommentQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeProviderComment},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a ProviderComment entity by its id.
+func (c *ProviderCommentClient) Get(ctx context.Context, id int64) (*ProviderComment, error) {
+	return c.Query().Where(providercomment.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *ProviderCommentClient) GetX(ctx context.Context, id int64) *ProviderComment {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryUser queries the user edge of a ProviderComment.
+func (c *ProviderCommentClient) QueryUser(_m *ProviderComment) *UserQuery {
+	query := (&UserClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(providercomment.Table, providercomment.FieldID, id),
+			sqlgraph.To(user.Table, user.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, providercomment.UserTable, providercomment.UserColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryParent queries the parent edge of a ProviderComment.
+func (c *ProviderCommentClient) QueryParent(_m *ProviderComment) *ProviderCommentQuery {
+	query := (&ProviderCommentClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(providercomment.Table, providercomment.FieldID, id),
+			sqlgraph.To(providercomment.Table, providercomment.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, providercomment.ParentTable, providercomment.ParentColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryReplies queries the replies edge of a ProviderComment.
+func (c *ProviderCommentClient) QueryReplies(_m *ProviderComment) *ProviderCommentQuery {
+	query := (&ProviderCommentClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(providercomment.Table, providercomment.FieldID, id),
+			sqlgraph.To(providercomment.Table, providercomment.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, providercomment.RepliesTable, providercomment.RepliesColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryVotes queries the votes edge of a ProviderComment.
+func (c *ProviderCommentClient) QueryVotes(_m *ProviderComment) *ProviderCommentVoteQuery {
+	query := (&ProviderCommentVoteClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(providercomment.Table, providercomment.FieldID, id),
+			sqlgraph.To(providercommentvote.Table, providercommentvote.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, providercomment.VotesTable, providercomment.VotesColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *ProviderCommentClient) Hooks() []Hook {
+	return c.hooks.ProviderComment
+}
+
+// Interceptors returns the client interceptors.
+func (c *ProviderCommentClient) Interceptors() []Interceptor {
+	return c.inters.ProviderComment
+}
+
+func (c *ProviderCommentClient) mutate(ctx context.Context, m *ProviderCommentMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&ProviderCommentCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&ProviderCommentUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&ProviderCommentUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&ProviderCommentDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown ProviderComment mutation op: %q", m.Op())
+	}
+}
+
+// ProviderCommentVoteClient is a client for the ProviderCommentVote schema.
+type ProviderCommentVoteClient struct {
+	config
+}
+
+// NewProviderCommentVoteClient returns a client for the ProviderCommentVote from the given config.
+func NewProviderCommentVoteClient(c config) *ProviderCommentVoteClient {
+	return &ProviderCommentVoteClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `providercommentvote.Hooks(f(g(h())))`.
+func (c *ProviderCommentVoteClient) Use(hooks ...Hook) {
+	c.hooks.ProviderCommentVote = append(c.hooks.ProviderCommentVote, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `providercommentvote.Intercept(f(g(h())))`.
+func (c *ProviderCommentVoteClient) Intercept(interceptors ...Interceptor) {
+	c.inters.ProviderCommentVote = append(c.inters.ProviderCommentVote, interceptors...)
+}
+
+// Create returns a builder for creating a ProviderCommentVote entity.
+func (c *ProviderCommentVoteClient) Create() *ProviderCommentVoteCreate {
+	mutation := newProviderCommentVoteMutation(c.config, OpCreate)
+	return &ProviderCommentVoteCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of ProviderCommentVote entities.
+func (c *ProviderCommentVoteClient) CreateBulk(builders ...*ProviderCommentVoteCreate) *ProviderCommentVoteCreateBulk {
+	return &ProviderCommentVoteCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *ProviderCommentVoteClient) MapCreateBulk(slice any, setFunc func(*ProviderCommentVoteCreate, int)) *ProviderCommentVoteCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &ProviderCommentVoteCreateBulk{err: fmt.Errorf("calling to ProviderCommentVoteClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*ProviderCommentVoteCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &ProviderCommentVoteCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for ProviderCommentVote.
+func (c *ProviderCommentVoteClient) Update() *ProviderCommentVoteUpdate {
+	mutation := newProviderCommentVoteMutation(c.config, OpUpdate)
+	return &ProviderCommentVoteUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *ProviderCommentVoteClient) UpdateOne(_m *ProviderCommentVote) *ProviderCommentVoteUpdateOne {
+	mutation := newProviderCommentVoteMutation(c.config, OpUpdateOne, withProviderCommentVote(_m))
+	return &ProviderCommentVoteUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *ProviderCommentVoteClient) UpdateOneID(id int64) *ProviderCommentVoteUpdateOne {
+	mutation := newProviderCommentVoteMutation(c.config, OpUpdateOne, withProviderCommentVoteID(id))
+	return &ProviderCommentVoteUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for ProviderCommentVote.
+func (c *ProviderCommentVoteClient) Delete() *ProviderCommentVoteDelete {
+	mutation := newProviderCommentVoteMutation(c.config, OpDelete)
+	return &ProviderCommentVoteDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *ProviderCommentVoteClient) DeleteOne(_m *ProviderCommentVote) *ProviderCommentVoteDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *ProviderCommentVoteClient) DeleteOneID(id int64) *ProviderCommentVoteDeleteOne {
+	builder := c.Delete().Where(providercommentvote.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &ProviderCommentVoteDeleteOne{builder}
+}
+
+// Query returns a query builder for ProviderCommentVote.
+func (c *ProviderCommentVoteClient) Query() *ProviderCommentVoteQuery {
+	return &ProviderCommentVoteQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeProviderCommentVote},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a ProviderCommentVote entity by its id.
+func (c *ProviderCommentVoteClient) Get(ctx context.Context, id int64) (*ProviderCommentVote, error) {
+	return c.Query().Where(providercommentvote.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *ProviderCommentVoteClient) GetX(ctx context.Context, id int64) *ProviderCommentVote {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryComment queries the comment edge of a ProviderCommentVote.
+func (c *ProviderCommentVoteClient) QueryComment(_m *ProviderCommentVote) *ProviderCommentQuery {
+	query := (&ProviderCommentClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(providercommentvote.Table, providercommentvote.FieldID, id),
+			sqlgraph.To(providercomment.Table, providercomment.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, providercommentvote.CommentTable, providercommentvote.CommentColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryUser queries the user edge of a ProviderCommentVote.
+func (c *ProviderCommentVoteClient) QueryUser(_m *ProviderCommentVote) *UserQuery {
+	query := (&UserClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(providercommentvote.Table, providercommentvote.FieldID, id),
+			sqlgraph.To(user.Table, user.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, providercommentvote.UserTable, providercommentvote.UserColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *ProviderCommentVoteClient) Hooks() []Hook {
+	return c.hooks.ProviderCommentVote
+}
+
+// Interceptors returns the client interceptors.
+func (c *ProviderCommentVoteClient) Interceptors() []Interceptor {
+	return c.inters.ProviderCommentVote
+}
+
+func (c *ProviderCommentVoteClient) mutate(ctx context.Context, m *ProviderCommentVoteMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&ProviderCommentVoteCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&ProviderCommentVoteUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&ProviderCommentVoteUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&ProviderCommentVoteDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown ProviderCommentVote mutation op: %q", m.Op())
+	}
+}
+
 // ProxyClient is a client for the Proxy schema.
 type ProxyClient struct {
 	config
@@ -6048,6 +6428,38 @@ func (c *UserClient) QueryPromoCodeUsages(_m *User) *PromoCodeUsageQuery {
 	return query
 }
 
+// QueryProviderComments queries the provider_comments edge of a User.
+func (c *UserClient) QueryProviderComments(_m *User) *ProviderCommentQuery {
+	query := (&ProviderCommentClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, id),
+			sqlgraph.To(providercomment.Table, providercomment.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, user.ProviderCommentsTable, user.ProviderCommentsColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryProviderCommentVotes queries the provider_comment_votes edge of a User.
+func (c *UserClient) QueryProviderCommentVotes(_m *User) *ProviderCommentVoteQuery {
+	query := (&ProviderCommentVoteClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, id),
+			sqlgraph.To(providercommentvote.Table, providercommentvote.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, user.ProviderCommentVotesTable, user.ProviderCommentVotesColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // QueryUserAllowedGroups queries the user_allowed_groups edge of a User.
 func (c *UserClient) QueryUserAllowedGroups(_m *User) *UserAllowedGroupQuery {
 	query := (&UserAllowedGroupClient{config: c.config}).Query()
@@ -6731,9 +7143,10 @@ type (
 		ChannelMonitorHistory, ChannelMonitorRequestTemplate, ErrorPassthroughRule,
 		Group, IdempotencyRecord, IdentityAdoptionDecision, PaymentAuditLog,
 		PaymentOrder, PaymentProviderInstance, PendingAuthSession, PromoCode,
-		PromoCodeUsage, Proxy, RedeemCode, SecuritySecret, Setting, SubscriptionPlan,
-		TLSFingerprintProfile, UsageCleanupTask, UsageLog, User, UserAllowedGroup,
-		UserAttributeDefinition, UserAttributeValue, UserSubscription []ent.Hook
+		PromoCodeUsage, ProviderComment, ProviderCommentVote, Proxy, RedeemCode,
+		SecuritySecret, Setting, SubscriptionPlan, TLSFingerprintProfile,
+		UsageCleanupTask, UsageLog, User, UserAllowedGroup, UserAttributeDefinition,
+		UserAttributeValue, UserSubscription []ent.Hook
 	}
 	inters struct {
 		APIKey, Account, AccountGroup, Announcement, AnnouncementRead, AshDeposit,
@@ -6742,9 +7155,10 @@ type (
 		ChannelMonitorHistory, ChannelMonitorRequestTemplate, ErrorPassthroughRule,
 		Group, IdempotencyRecord, IdentityAdoptionDecision, PaymentAuditLog,
 		PaymentOrder, PaymentProviderInstance, PendingAuthSession, PromoCode,
-		PromoCodeUsage, Proxy, RedeemCode, SecuritySecret, Setting, SubscriptionPlan,
-		TLSFingerprintProfile, UsageCleanupTask, UsageLog, User, UserAllowedGroup,
-		UserAttributeDefinition, UserAttributeValue, UserSubscription []ent.Interceptor
+		PromoCodeUsage, ProviderComment, ProviderCommentVote, Proxy, RedeemCode,
+		SecuritySecret, Setting, SubscriptionPlan, TLSFingerprintProfile,
+		UsageCleanupTask, UsageLog, User, UserAllowedGroup, UserAttributeDefinition,
+		UserAttributeValue, UserSubscription []ent.Interceptor
 	}
 )
 

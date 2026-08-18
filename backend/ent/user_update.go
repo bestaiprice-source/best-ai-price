@@ -19,6 +19,8 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/pendingauthsession"
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
 	"github.com/Wei-Shaw/sub2api/ent/promocodeusage"
+	"github.com/Wei-Shaw/sub2api/ent/providercomment"
+	"github.com/Wei-Shaw/sub2api/ent/providercommentvote"
 	"github.com/Wei-Shaw/sub2api/ent/redeemcode"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
 	"github.com/Wei-Shaw/sub2api/ent/user"
@@ -611,6 +613,36 @@ func (_u *UserUpdate) AddPromoCodeUsages(v ...*PromoCodeUsage) *UserUpdate {
 	return _u.AddPromoCodeUsageIDs(ids...)
 }
 
+// AddProviderCommentIDs adds the "provider_comments" edge to the ProviderComment entity by IDs.
+func (_u *UserUpdate) AddProviderCommentIDs(ids ...int64) *UserUpdate {
+	_u.mutation.AddProviderCommentIDs(ids...)
+	return _u
+}
+
+// AddProviderComments adds the "provider_comments" edges to the ProviderComment entity.
+func (_u *UserUpdate) AddProviderComments(v ...*ProviderComment) *UserUpdate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddProviderCommentIDs(ids...)
+}
+
+// AddProviderCommentVoteIDs adds the "provider_comment_votes" edge to the ProviderCommentVote entity by IDs.
+func (_u *UserUpdate) AddProviderCommentVoteIDs(ids ...int64) *UserUpdate {
+	_u.mutation.AddProviderCommentVoteIDs(ids...)
+	return _u
+}
+
+// AddProviderCommentVotes adds the "provider_comment_votes" edges to the ProviderCommentVote entity.
+func (_u *UserUpdate) AddProviderCommentVotes(v ...*ProviderCommentVote) *UserUpdate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddProviderCommentVoteIDs(ids...)
+}
+
 // Mutation returns the UserMutation object of the builder.
 func (_u *UserUpdate) Mutation() *UserMutation {
 	return _u.mutation
@@ -866,6 +898,48 @@ func (_u *UserUpdate) RemovePromoCodeUsages(v ...*PromoCodeUsage) *UserUpdate {
 		ids[i] = v[i].ID
 	}
 	return _u.RemovePromoCodeUsageIDs(ids...)
+}
+
+// ClearProviderComments clears all "provider_comments" edges to the ProviderComment entity.
+func (_u *UserUpdate) ClearProviderComments() *UserUpdate {
+	_u.mutation.ClearProviderComments()
+	return _u
+}
+
+// RemoveProviderCommentIDs removes the "provider_comments" edge to ProviderComment entities by IDs.
+func (_u *UserUpdate) RemoveProviderCommentIDs(ids ...int64) *UserUpdate {
+	_u.mutation.RemoveProviderCommentIDs(ids...)
+	return _u
+}
+
+// RemoveProviderComments removes "provider_comments" edges to ProviderComment entities.
+func (_u *UserUpdate) RemoveProviderComments(v ...*ProviderComment) *UserUpdate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveProviderCommentIDs(ids...)
+}
+
+// ClearProviderCommentVotes clears all "provider_comment_votes" edges to the ProviderCommentVote entity.
+func (_u *UserUpdate) ClearProviderCommentVotes() *UserUpdate {
+	_u.mutation.ClearProviderCommentVotes()
+	return _u
+}
+
+// RemoveProviderCommentVoteIDs removes the "provider_comment_votes" edge to ProviderCommentVote entities by IDs.
+func (_u *UserUpdate) RemoveProviderCommentVoteIDs(ids ...int64) *UserUpdate {
+	_u.mutation.RemoveProviderCommentVoteIDs(ids...)
+	return _u
+}
+
+// RemoveProviderCommentVotes removes "provider_comment_votes" edges to ProviderCommentVote entities.
+func (_u *UserUpdate) RemoveProviderCommentVotes(v ...*ProviderCommentVote) *UserUpdate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveProviderCommentVoteIDs(ids...)
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -1614,6 +1688,96 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
+	if _u.mutation.ProviderCommentsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.ProviderCommentsTable,
+			Columns: []string{user.ProviderCommentsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(providercomment.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedProviderCommentsIDs(); len(nodes) > 0 && !_u.mutation.ProviderCommentsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.ProviderCommentsTable,
+			Columns: []string{user.ProviderCommentsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(providercomment.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.ProviderCommentsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.ProviderCommentsTable,
+			Columns: []string{user.ProviderCommentsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(providercomment.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.ProviderCommentVotesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.ProviderCommentVotesTable,
+			Columns: []string{user.ProviderCommentVotesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(providercommentvote.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedProviderCommentVotesIDs(); len(nodes) > 0 && !_u.mutation.ProviderCommentVotesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.ProviderCommentVotesTable,
+			Columns: []string{user.ProviderCommentVotesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(providercommentvote.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.ProviderCommentVotesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.ProviderCommentVotesTable,
+			Columns: []string{user.ProviderCommentVotesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(providercommentvote.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{user.Label}
@@ -2206,6 +2370,36 @@ func (_u *UserUpdateOne) AddPromoCodeUsages(v ...*PromoCodeUsage) *UserUpdateOne
 	return _u.AddPromoCodeUsageIDs(ids...)
 }
 
+// AddProviderCommentIDs adds the "provider_comments" edge to the ProviderComment entity by IDs.
+func (_u *UserUpdateOne) AddProviderCommentIDs(ids ...int64) *UserUpdateOne {
+	_u.mutation.AddProviderCommentIDs(ids...)
+	return _u
+}
+
+// AddProviderComments adds the "provider_comments" edges to the ProviderComment entity.
+func (_u *UserUpdateOne) AddProviderComments(v ...*ProviderComment) *UserUpdateOne {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddProviderCommentIDs(ids...)
+}
+
+// AddProviderCommentVoteIDs adds the "provider_comment_votes" edge to the ProviderCommentVote entity by IDs.
+func (_u *UserUpdateOne) AddProviderCommentVoteIDs(ids ...int64) *UserUpdateOne {
+	_u.mutation.AddProviderCommentVoteIDs(ids...)
+	return _u
+}
+
+// AddProviderCommentVotes adds the "provider_comment_votes" edges to the ProviderCommentVote entity.
+func (_u *UserUpdateOne) AddProviderCommentVotes(v ...*ProviderCommentVote) *UserUpdateOne {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddProviderCommentVoteIDs(ids...)
+}
+
 // Mutation returns the UserMutation object of the builder.
 func (_u *UserUpdateOne) Mutation() *UserMutation {
 	return _u.mutation
@@ -2461,6 +2655,48 @@ func (_u *UserUpdateOne) RemovePromoCodeUsages(v ...*PromoCodeUsage) *UserUpdate
 		ids[i] = v[i].ID
 	}
 	return _u.RemovePromoCodeUsageIDs(ids...)
+}
+
+// ClearProviderComments clears all "provider_comments" edges to the ProviderComment entity.
+func (_u *UserUpdateOne) ClearProviderComments() *UserUpdateOne {
+	_u.mutation.ClearProviderComments()
+	return _u
+}
+
+// RemoveProviderCommentIDs removes the "provider_comments" edge to ProviderComment entities by IDs.
+func (_u *UserUpdateOne) RemoveProviderCommentIDs(ids ...int64) *UserUpdateOne {
+	_u.mutation.RemoveProviderCommentIDs(ids...)
+	return _u
+}
+
+// RemoveProviderComments removes "provider_comments" edges to ProviderComment entities.
+func (_u *UserUpdateOne) RemoveProviderComments(v ...*ProviderComment) *UserUpdateOne {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveProviderCommentIDs(ids...)
+}
+
+// ClearProviderCommentVotes clears all "provider_comment_votes" edges to the ProviderCommentVote entity.
+func (_u *UserUpdateOne) ClearProviderCommentVotes() *UserUpdateOne {
+	_u.mutation.ClearProviderCommentVotes()
+	return _u
+}
+
+// RemoveProviderCommentVoteIDs removes the "provider_comment_votes" edge to ProviderCommentVote entities by IDs.
+func (_u *UserUpdateOne) RemoveProviderCommentVoteIDs(ids ...int64) *UserUpdateOne {
+	_u.mutation.RemoveProviderCommentVoteIDs(ids...)
+	return _u
+}
+
+// RemoveProviderCommentVotes removes "provider_comment_votes" edges to ProviderCommentVote entities.
+func (_u *UserUpdateOne) RemoveProviderCommentVotes(v ...*ProviderCommentVote) *UserUpdateOne {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveProviderCommentVoteIDs(ids...)
 }
 
 // Where appends a list predicates to the UserUpdate builder.
@@ -3232,6 +3468,96 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(promocodeusage.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.ProviderCommentsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.ProviderCommentsTable,
+			Columns: []string{user.ProviderCommentsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(providercomment.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedProviderCommentsIDs(); len(nodes) > 0 && !_u.mutation.ProviderCommentsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.ProviderCommentsTable,
+			Columns: []string{user.ProviderCommentsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(providercomment.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.ProviderCommentsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.ProviderCommentsTable,
+			Columns: []string{user.ProviderCommentsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(providercomment.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.ProviderCommentVotesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.ProviderCommentVotesTable,
+			Columns: []string{user.ProviderCommentVotesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(providercommentvote.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedProviderCommentVotesIDs(); len(nodes) > 0 && !_u.mutation.ProviderCommentVotesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.ProviderCommentVotesTable,
+			Columns: []string{user.ProviderCommentVotesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(providercommentvote.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.ProviderCommentVotesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.ProviderCommentVotesTable,
+			Columns: []string{user.ProviderCommentVotesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(providercommentvote.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {

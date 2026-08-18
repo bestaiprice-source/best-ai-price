@@ -18,6 +18,8 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
 	"github.com/Wei-Shaw/sub2api/ent/pendingauthsession"
 	"github.com/Wei-Shaw/sub2api/ent/promocodeusage"
+	"github.com/Wei-Shaw/sub2api/ent/providercomment"
+	"github.com/Wei-Shaw/sub2api/ent/providercommentvote"
 	"github.com/Wei-Shaw/sub2api/ent/redeemcode"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
 	"github.com/Wei-Shaw/sub2api/ent/user"
@@ -533,6 +535,36 @@ func (_c *UserCreate) AddPromoCodeUsages(v ...*PromoCodeUsage) *UserCreate {
 	return _c.AddPromoCodeUsageIDs(ids...)
 }
 
+// AddProviderCommentIDs adds the "provider_comments" edge to the ProviderComment entity by IDs.
+func (_c *UserCreate) AddProviderCommentIDs(ids ...int64) *UserCreate {
+	_c.mutation.AddProviderCommentIDs(ids...)
+	return _c
+}
+
+// AddProviderComments adds the "provider_comments" edges to the ProviderComment entity.
+func (_c *UserCreate) AddProviderComments(v ...*ProviderComment) *UserCreate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddProviderCommentIDs(ids...)
+}
+
+// AddProviderCommentVoteIDs adds the "provider_comment_votes" edge to the ProviderCommentVote entity by IDs.
+func (_c *UserCreate) AddProviderCommentVoteIDs(ids ...int64) *UserCreate {
+	_c.mutation.AddProviderCommentVoteIDs(ids...)
+	return _c
+}
+
+// AddProviderCommentVotes adds the "provider_comment_votes" edges to the ProviderCommentVote entity.
+func (_c *UserCreate) AddProviderCommentVotes(v ...*ProviderCommentVote) *UserCreate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddProviderCommentVoteIDs(ids...)
+}
+
 // Mutation returns the UserMutation object of the builder.
 func (_c *UserCreate) Mutation() *UserMutation {
 	return _c.mutation
@@ -1041,6 +1073,38 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(promocodeusage.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.ProviderCommentsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.ProviderCommentsTable,
+			Columns: []string{user.ProviderCommentsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(providercomment.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.ProviderCommentVotesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.ProviderCommentVotesTable,
+			Columns: []string{user.ProviderCommentVotesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(providercommentvote.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {

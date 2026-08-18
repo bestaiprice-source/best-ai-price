@@ -97,11 +97,15 @@ type UserEdges struct {
 	AttributeValues []*UserAttributeValue `json:"attribute_values,omitempty"`
 	// PromoCodeUsages holds the value of the promo_code_usages edge.
 	PromoCodeUsages []*PromoCodeUsage `json:"promo_code_usages,omitempty"`
+	// ProviderComments holds the value of the provider_comments edge.
+	ProviderComments []*ProviderComment `json:"provider_comments,omitempty"`
+	// ProviderCommentVotes holds the value of the provider_comment_votes edge.
+	ProviderCommentVotes []*ProviderCommentVote `json:"provider_comment_votes,omitempty"`
 	// UserAllowedGroups holds the value of the user_allowed_groups edge.
 	UserAllowedGroups []*UserAllowedGroup `json:"user_allowed_groups,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [13]bool
+	loadedTypes [15]bool
 }
 
 // APIKeysOrErr returns the APIKeys value or an error if the edge
@@ -212,10 +216,28 @@ func (e UserEdges) PromoCodeUsagesOrErr() ([]*PromoCodeUsage, error) {
 	return nil, &NotLoadedError{edge: "promo_code_usages"}
 }
 
+// ProviderCommentsOrErr returns the ProviderComments value or an error if the edge
+// was not loaded in eager-loading.
+func (e UserEdges) ProviderCommentsOrErr() ([]*ProviderComment, error) {
+	if e.loadedTypes[12] {
+		return e.ProviderComments, nil
+	}
+	return nil, &NotLoadedError{edge: "provider_comments"}
+}
+
+// ProviderCommentVotesOrErr returns the ProviderCommentVotes value or an error if the edge
+// was not loaded in eager-loading.
+func (e UserEdges) ProviderCommentVotesOrErr() ([]*ProviderCommentVote, error) {
+	if e.loadedTypes[13] {
+		return e.ProviderCommentVotes, nil
+	}
+	return nil, &NotLoadedError{edge: "provider_comment_votes"}
+}
+
 // UserAllowedGroupsOrErr returns the UserAllowedGroups value or an error if the edge
 // was not loaded in eager-loading.
 func (e UserEdges) UserAllowedGroupsOrErr() ([]*UserAllowedGroup, error) {
-	if e.loadedTypes[12] {
+	if e.loadedTypes[14] {
 		return e.UserAllowedGroups, nil
 	}
 	return nil, &NotLoadedError{edge: "user_allowed_groups"}
@@ -478,6 +500,16 @@ func (_m *User) QueryAttributeValues() *UserAttributeValueQuery {
 // QueryPromoCodeUsages queries the "promo_code_usages" edge of the User entity.
 func (_m *User) QueryPromoCodeUsages() *PromoCodeUsageQuery {
 	return NewUserClient(_m.config).QueryPromoCodeUsages(_m)
+}
+
+// QueryProviderComments queries the "provider_comments" edge of the User entity.
+func (_m *User) QueryProviderComments() *ProviderCommentQuery {
+	return NewUserClient(_m.config).QueryProviderComments(_m)
+}
+
+// QueryProviderCommentVotes queries the "provider_comment_votes" edge of the User entity.
+func (_m *User) QueryProviderCommentVotes() *ProviderCommentVoteQuery {
+	return NewUserClient(_m.config).QueryProviderCommentVotes(_m)
 }
 
 // QueryUserAllowedGroups queries the "user_allowed_groups" edge of the User entity.

@@ -87,6 +87,10 @@ const (
 	EdgeAttributeValues = "attribute_values"
 	// EdgePromoCodeUsages holds the string denoting the promo_code_usages edge name in mutations.
 	EdgePromoCodeUsages = "promo_code_usages"
+	// EdgeProviderComments holds the string denoting the provider_comments edge name in mutations.
+	EdgeProviderComments = "provider_comments"
+	// EdgeProviderCommentVotes holds the string denoting the provider_comment_votes edge name in mutations.
+	EdgeProviderCommentVotes = "provider_comment_votes"
 	// EdgeUserAllowedGroups holds the string denoting the user_allowed_groups edge name in mutations.
 	EdgeUserAllowedGroups = "user_allowed_groups"
 	// Table holds the table name of the user in the database.
@@ -173,6 +177,20 @@ const (
 	PromoCodeUsagesInverseTable = "promo_code_usages"
 	// PromoCodeUsagesColumn is the table column denoting the promo_code_usages relation/edge.
 	PromoCodeUsagesColumn = "user_id"
+	// ProviderCommentsTable is the table that holds the provider_comments relation/edge.
+	ProviderCommentsTable = "provider_comments"
+	// ProviderCommentsInverseTable is the table name for the ProviderComment entity.
+	// It exists in this package in order to avoid circular dependency with the "providercomment" package.
+	ProviderCommentsInverseTable = "provider_comments"
+	// ProviderCommentsColumn is the table column denoting the provider_comments relation/edge.
+	ProviderCommentsColumn = "user_id"
+	// ProviderCommentVotesTable is the table that holds the provider_comment_votes relation/edge.
+	ProviderCommentVotesTable = "provider_comment_votes"
+	// ProviderCommentVotesInverseTable is the table name for the ProviderCommentVote entity.
+	// It exists in this package in order to avoid circular dependency with the "providercommentvote" package.
+	ProviderCommentVotesInverseTable = "provider_comment_votes"
+	// ProviderCommentVotesColumn is the table column denoting the provider_comment_votes relation/edge.
+	ProviderCommentVotesColumn = "user_id"
 	// UserAllowedGroupsTable is the table that holds the user_allowed_groups relation/edge.
 	UserAllowedGroupsTable = "user_allowed_groups"
 	// UserAllowedGroupsInverseTable is the table name for the UserAllowedGroup entity.
@@ -579,6 +597,34 @@ func ByPromoCodeUsages(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 	}
 }
 
+// ByProviderCommentsCount orders the results by provider_comments count.
+func ByProviderCommentsCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newProviderCommentsStep(), opts...)
+	}
+}
+
+// ByProviderComments orders the results by provider_comments terms.
+func ByProviderComments(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newProviderCommentsStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
+// ByProviderCommentVotesCount orders the results by provider_comment_votes count.
+func ByProviderCommentVotesCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newProviderCommentVotesStep(), opts...)
+	}
+}
+
+// ByProviderCommentVotes orders the results by provider_comment_votes terms.
+func ByProviderCommentVotes(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newProviderCommentVotesStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
 // ByUserAllowedGroupsCount orders the results by user_allowed_groups count.
 func ByUserAllowedGroupsCount(opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
@@ -674,6 +720,20 @@ func newPromoCodeUsagesStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(PromoCodeUsagesInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2M, false, PromoCodeUsagesTable, PromoCodeUsagesColumn),
+	)
+}
+func newProviderCommentsStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(ProviderCommentsInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, ProviderCommentsTable, ProviderCommentsColumn),
+	)
+}
+func newProviderCommentVotesStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(ProviderCommentVotesInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, ProviderCommentVotesTable, ProviderCommentVotesColumn),
 	)
 }
 func newUserAllowedGroupsStep() *sqlgraph.Step {

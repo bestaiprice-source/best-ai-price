@@ -196,6 +196,8 @@ sub2api/
 - `ash_events`: System event audit logs.
 - `ash_usage`: Token and request usage consumption records.
 - `ash_nodes`: Execution node pool registry.
+- `provider_comments`: User provider feedback, sentiment (`positive` / `negative` / `neutral`), nested parent/child replies, and reaction counters (`like_count`, `dislike_count`, `reply_count`).
+- `provider_comment_votes`: 1:1 user reactions per comment (`like` / `dislike`), removable via vote cancellation (`vote_type: none`).
 
 ---
 
@@ -210,6 +212,16 @@ sub2api/
 - `GET /api/v1/data/models.json`: Parser models JSON endpoint (also `/api/data/models.json`, `/data/models.json`).
 - `GET /api/v1/data/api_descriptions.json`: Parser API descriptions JSON endpoint (also `/api/data/api_descriptions.json`, `/data/api_descriptions.json`).
 - `GET /api/v1/data/provider_descriptions.json`: Parser provider descriptions JSON endpoint (also `/api/data/provider_descriptions.json`, `/data/provider_descriptions.json`).
+
+### Provider Comments & Reactions APIs (`/api/v1/providers/:provider/comments`, `/api/v1/comments/*`)
+- `GET /api/v1/providers/:provider/comments`: Public (with optional auth). Lists root reviews for a provider with summary metrics (`positive_ratio`, `positive_count`, `negative_count`, `total_comments`), sentiment filters, and caller's `user_vote`.
+- `POST /api/v1/providers/:provider/comments`: Authenticated (JWT). Creates a root review with positive or negative sentiment (`{ content, sentiment }`).
+- `GET /api/v1/comments/:id/replies`: Public (with optional auth). Lists paginated replies for a specific comment thread.
+- `POST /api/v1/comments/:id/reply`: Authenticated (JWT). Posts a nested reply under a comment.
+- `POST /api/v1/comments/:id/vote`: Authenticated (JWT). Votes on a comment with `vote_type: "like" | "dislike" | "none"` (1 vote per user per comment).
+- `DELETE /api/v1/comments/:id`: Always returns 403 Forbidden (`ErrCannotDeleteComment`) since comments are immutable and only votes can be deleted/cancelled.
+- `GET /api/v1/admin/provider-comments`: Admin moderation list with provider, status, and sentiment filters.
+- `PUT /api/v1/admin/provider-comments/:id/status`: Admin status toggle (`active` / `hidden`).
 
 ### Admin APIs (`/api/v1/admin/*`)
 - `GET /api/v1/admin/api-keys`: Search and list all users' API keys.
