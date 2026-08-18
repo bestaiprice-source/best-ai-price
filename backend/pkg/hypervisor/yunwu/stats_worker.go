@@ -184,11 +184,11 @@ func (w *StatsWorker) SyncNodeStats(ctx context.Context, node *health.ExecutionN
 		return nil, err
 	}
 
-	// Strategy 1: User self profile endpoint (Yunwu / One API / New API native balance ⚡)
-	userGrants, errUser := w.syncNodeStatsFallback(ctx, node, apiKey, origin)
-	if errUser == nil && userGrants != nil && (userGrants.TotalAvailable > 0 || userGrants.TotalGranted > 0) {
-		w.recordSyncedSnapshot(ctx, node, userGrants, "user_self")
-		return userGrants, nil
+	// Strategy 1: Primary OpenAI / One API / New API credit_grants endpoint (native available balance ⚡)
+	grants, errGrants := w.syncCreditGrants(ctx, origin, apiPrefix, apiKey)
+	if errGrants == nil && grants != nil && (grants.TotalAvailable > 0 || grants.TotalGranted > 0) {
+		w.recordSyncedSnapshot(ctx, node, grants, "credit_grants")
+		return grants, nil
 	}
 
 	// Strategy 2: Subscription + Usage endpoints (One API / New API format)
@@ -198,11 +198,11 @@ func (w *StatsWorker) SyncNodeStats(ctx context.Context, node *health.ExecutionN
 		return subGrants, nil
 	}
 
-	// Strategy 3: OpenAI-compatible credit_grants endpoint
-	grants, errGrants := w.syncCreditGrants(ctx, origin, apiPrefix, apiKey)
-	if errGrants == nil && grants != nil && (grants.TotalAvailable > 0 || grants.TotalGranted > 0) {
-		w.recordSyncedSnapshot(ctx, node, grants, "credit_grants")
-		return grants, nil
+	// Strategy 3: User self profile / token endpoint fallback
+	userGrants, errUser := w.syncNodeStatsFallback(ctx, node, apiKey, origin)
+	if errUser == nil && userGrants != nil && (userGrants.TotalAvailable > 0 || userGrants.TotalGranted > 0) {
+		w.recordSyncedSnapshot(ctx, node, userGrants, "user_self")
+		return userGrants, nil
 	}
 
 	// If we got a valid response from user/self even if 0
@@ -430,11 +430,15 @@ func (w *StatsWorker) syncSubscriptionUsage(ctx context.Context, origin, apiPref
 		}
 	}
 
-	availableUSD := maxFloat64(0, hardLimitUSD-totalUsageUSD)
+	// In One API / New API / Yunwu, hard_limit_usd returned by /dashboard/billing/subscription
+	// is populated directly from user.Quota (the current available balance in credits/USD).
+	// Therefore hardLimitUSD is already the available balance, rather than the initial deposit.
+	availableUSD := hardLimitUSD
+	totalGrantedUSD := hardLimitUSD + totalUsageUSD
 
 	return &YunwuCreditGrantsResponse{
 		Object:         "subscription",
-		TotalGranted:   hardLimitUSD,
+		TotalGranted:   totalGrantedUSD,
 		TotalUsed:      totalUsageUSD,
 		TotalAvailable: availableUSD,
 	}, nil
