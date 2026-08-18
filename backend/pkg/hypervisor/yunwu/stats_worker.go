@@ -551,16 +551,17 @@ func (w *StatsWorker) syncNodeStatsFallback(ctx context.Context, node *health.Ex
 			if availableUSD == 0 && userSelf.Data.RemainQuota > 0 {
 				availableUSD = normalizeQuotaToUSD(userSelf.Data.RemainQuota)
 			} else if availableUSD == 0 && userSelf.Data.Quota > 0 {
-				quotaRemaining := userSelf.Data.Quota - userSelf.Data.UsedQuota
-				if quotaRemaining < 0 {
-					quotaRemaining = userSelf.Data.Quota
-				}
-				availableUSD = normalizeQuotaToUSD(quotaRemaining)
+				availableUSD = normalizeQuotaToUSD(userSelf.Data.Quota)
+			}
+
+			totalGranted := normalizeQuotaToUSD(userSelf.Data.TotalQuota)
+			if totalGranted == 0 {
+				totalGranted = availableUSD + normalizeQuotaToUSD(userSelf.Data.UsedQuota)
 			}
 
 			return &YunwuCreditGrantsResponse{
 				Object:         "user_self",
-				TotalGranted:   normalizeQuotaToUSD(userSelf.Data.Quota),
+				TotalGranted:   totalGranted,
 				TotalUsed:      normalizeQuotaToUSD(userSelf.Data.UsedQuota),
 				TotalAvailable: availableUSD,
 			}, nil
