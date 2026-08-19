@@ -74,24 +74,42 @@ func executableAdminFeatureRoutes(h *handler.Handlers) []gatewayctx.RouteDef {
 		)
 	}
 
+	if h.Admin.AuthProviders != nil {
+		out = append(out,
+			gatewayctx.RouteDef{Method: http.MethodGet, Path: "/api/v1/admin/auth-providers", Handler: h.Admin.AuthProviders.GetAuthProvidersGateway, Middleware: mw},
+			gatewayctx.RouteDef{Method: http.MethodPost, Path: "/api/v1/admin/auth-providers", Handler: h.Admin.AuthProviders.SaveAuthProvidersGateway, Middleware: mw},
+			gatewayctx.RouteDef{Method: http.MethodPut, Path: "/api/v1/admin/auth-providers", Handler: h.Admin.AuthProviders.SaveAuthProvidersGateway, Middleware: mw},
+			gatewayctx.RouteDef{Method: http.MethodGet, Path: "/api/v1/admin/data/auth-providers", Handler: h.Admin.AuthProviders.GetAuthProvidersGateway, Middleware: mw},
+			gatewayctx.RouteDef{Method: http.MethodPost, Path: "/api/v1/admin/data/auth-providers", Handler: h.Admin.AuthProviders.SaveAuthProvidersGateway, Middleware: mw},
+			gatewayctx.RouteDef{Method: http.MethodPut, Path: "/api/v1/admin/data/auth-providers", Handler: h.Admin.AuthProviders.SaveAuthProvidersGateway, Middleware: mw},
+			gatewayctx.RouteDef{Method: http.MethodGet, Path: "/api/v1/admin/data/auth_providers.json", Handler: h.Admin.AuthProviders.GetAuthProvidersGateway, Middleware: mw},
+			gatewayctx.RouteDef{Method: http.MethodPost, Path: "/api/v1/admin/data/auth_providers.json", Handler: h.Admin.AuthProviders.SaveAuthProvidersGateway, Middleware: mw},
+			gatewayctx.RouteDef{Method: http.MethodPut, Path: "/api/v1/admin/data/auth_providers.json", Handler: h.Admin.AuthProviders.SaveAuthProvidersGateway, Middleware: mw},
+			gatewayctx.RouteDef{Method: http.MethodPost, Path: "/data/auth_providers.json", Handler: h.Admin.AuthProviders.SaveAuthProvidersGateway, Middleware: mw},
+			gatewayctx.RouteDef{Method: http.MethodPut, Path: "/data/auth_providers.json", Handler: h.Admin.AuthProviders.SaveAuthProvidersGateway, Middleware: mw},
+			gatewayctx.RouteDef{Method: http.MethodPost, Path: "/api/data/auth_providers.json", Handler: h.Admin.AuthProviders.SaveAuthProvidersGateway, Middleware: mw},
+			gatewayctx.RouteDef{Method: http.MethodPut, Path: "/api/data/auth_providers.json", Handler: h.Admin.AuthProviders.SaveAuthProvidersGateway, Middleware: mw},
+			gatewayctx.RouteDef{Method: http.MethodPost, Path: "/api/v1/data/auth_providers.json", Handler: h.Admin.AuthProviders.SaveAuthProvidersGateway, Middleware: mw},
+			gatewayctx.RouteDef{Method: http.MethodPut, Path: "/api/v1/data/auth_providers.json", Handler: h.Admin.AuthProviders.SaveAuthProvidersGateway, Middleware: mw},
+		)
+	}
+
 	return out
 }
 
 func registerAdminFeatureRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
-	if admin == nil || h == nil || h.Admin == nil {
+	if h == nil || h.Admin == nil {
 		return
 	}
+
 	if h.Admin.Affiliate != nil {
 		affiliates := admin.Group("/affiliates")
 		{
-			users := affiliates.Group("/users")
-			{
-				users.GET("", h.Admin.Affiliate.ListUsers)
-				users.GET("/lookup", h.Admin.Affiliate.LookupUsers)
-				users.PUT("/:user_id", h.Admin.Affiliate.UpdateUserSettings)
-				users.DELETE("/:user_id", h.Admin.Affiliate.ClearUserSettings)
-				users.POST("/batch-rate", h.Admin.Affiliate.BatchSetRate)
-			}
+			affiliates.GET("/users", h.Admin.Affiliate.ListUsers)
+			affiliates.GET("/users/lookup", h.Admin.Affiliate.LookupUsers)
+			affiliates.PUT("/users/:user_id", h.Admin.Affiliate.UpdateUserSettings)
+			affiliates.DELETE("/users/:user_id", h.Admin.Affiliate.ClearUserSettings)
+			affiliates.POST("/users/batch-rate", h.Admin.Affiliate.BatchSetRate)
 		}
 	}
 	if h.Admin.TLSFingerprintProfile != nil {
@@ -138,5 +156,16 @@ func registerAdminFeatureRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 			templates.POST("/:id/apply", h.Admin.ChannelMonitorTemplate.Apply)
 			templates.GET("/:id/monitors", h.Admin.ChannelMonitorTemplate.AssociatedMonitors)
 		}
+	}
+	if h.Admin.AuthProviders != nil {
+		admin.GET("/auth-providers", h.Admin.AuthProviders.GetAuthProviders)
+		admin.POST("/auth-providers", h.Admin.AuthProviders.SaveAuthProviders)
+		admin.PUT("/auth-providers", h.Admin.AuthProviders.SaveAuthProviders)
+		admin.GET("/data/auth-providers", h.Admin.AuthProviders.GetAuthProviders)
+		admin.POST("/data/auth-providers", h.Admin.AuthProviders.SaveAuthProviders)
+		admin.PUT("/data/auth-providers", h.Admin.AuthProviders.SaveAuthProviders)
+		admin.GET("/data/auth_providers.json", h.Admin.AuthProviders.GetAuthProviders)
+		admin.POST("/data/auth_providers.json", h.Admin.AuthProviders.SaveAuthProviders)
+		admin.PUT("/data/auth_providers.json", h.Admin.AuthProviders.SaveAuthProviders)
 	}
 }

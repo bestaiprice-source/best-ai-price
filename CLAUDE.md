@@ -80,6 +80,17 @@ Administrators can view, copy, edit, and delete all API keys across all users in
 - `PUT /api/v1/admin/api-keys/:id`: Updates any user's API key (name, group bindings, status, quota, expiration, rate limits, IP whitelists/blacklists).
 - `DELETE /api/v1/admin/api-keys/:id`: Deletes any user's API key and invalidates auth cache.
 
+### Backend Admin Auth Providers File Management (`internal/handler/admin/auth_providers_handler.go`, `internal/service/auth_providers_service.go`)
+- **File Target**: `/data/auth_providers.json` (also synced to `./data/auth_providers.json`, `/app/data/auth_providers.json`, `/srv/parser-data/data/auth_providers.json`).
+- **Security Rule**: `/data/auth_providers.json` is strictly **private** and NOT distributed publicly (unlike public parser json files).
+- **Admin Write Endpoints**:
+  - `POST /api/v1/admin/data/auth-providers` & `PUT /api/v1/admin/data/auth-providers`
+  - `POST /api/v1/admin/auth-providers` & `PUT /api/v1/admin/auth-providers`
+  - `POST /api/v1/admin/data/auth_providers.json` & `PUT /api/v1/admin/data/auth_providers.json`
+  - Direct routes `POST /data/auth_providers.json` & `PUT /data/auth_providers.json` (protected by `adminAuth`)
+- **Admin Read Endpoints**: `GET /api/v1/admin/data/auth-providers`, `GET /api/v1/admin/auth-providers`, `GET /api/v1/admin/data/auth_providers.json` (requires admin credentials).
+- **Authentication**: Requires header `x-api-key: <admin-api-key>` or Bearer JWT token with admin role.
+
 ### Frontend Integration (`frontend/src/views/user/KeysView.vue`)
 - **Admin Detection**: Automatically calls `listAdmin`, `updateAdmin`, and `removeAdmin` when `isAdmin` is true.
 - **Owner Column**: Displays the owner's username, email, and User ID in the table for admins.

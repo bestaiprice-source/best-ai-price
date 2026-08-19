@@ -120,4 +120,14 @@ func registerRoutes(
 	routes.RegisterAdminRoutes(v1, h, adminAuth)
 	routes.RegisterProviderCommentRoutes(v1, h, jwtAuth, adminAuth)
 	routes.RegisterGatewayRoutes(r, h, apiKeyAuth, apiKeyService, subscriptionService, opsService, settingService, cfg)
+
+	// Direct write endpoints for auth_providers.json (protected by admin auth)
+	if h != nil && h.Admin != nil && h.Admin.AuthProviders != nil && adminAuth != nil {
+		r.POST("/data/auth_providers.json", gin.HandlerFunc(adminAuth), h.Admin.AuthProviders.SaveAuthProviders)
+		r.PUT("/data/auth_providers.json", gin.HandlerFunc(adminAuth), h.Admin.AuthProviders.SaveAuthProviders)
+		r.POST("/api/data/auth_providers.json", gin.HandlerFunc(adminAuth), h.Admin.AuthProviders.SaveAuthProviders)
+		r.PUT("/api/data/auth_providers.json", gin.HandlerFunc(adminAuth), h.Admin.AuthProviders.SaveAuthProviders)
+		r.POST("/api/v1/data/auth_providers.json", gin.HandlerFunc(adminAuth), h.Admin.AuthProviders.SaveAuthProviders)
+		r.PUT("/api/v1/data/auth_providers.json", gin.HandlerFunc(adminAuth), h.Admin.AuthProviders.SaveAuthProviders)
+	}
 }
