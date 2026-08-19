@@ -41,10 +41,13 @@ func RegisterCommonRoutes(r gin.IRoutes) {
 	r.GET("/api/data/api_descriptions.json", gatewayctx.AdaptGinHandler(commonApiDescriptionsJSON))
 	r.GET("/api/v1/data/api_descriptions.json", gatewayctx.AdaptGinHandler(commonApiDescriptionsJSON))
 
-	// Parser provider_descriptions.json static endpoint (supports /data/provider_descriptions.json, /api/data/provider_descriptions.json, and /api/v1/data/provider_descriptions.json)
+	// Parser provider_descriptions.json / providers_description.json static endpoints
 	r.GET("/data/provider_descriptions.json", gatewayctx.AdaptGinHandler(commonProviderDescriptionsJSON))
 	r.GET("/api/data/provider_descriptions.json", gatewayctx.AdaptGinHandler(commonProviderDescriptionsJSON))
 	r.GET("/api/v1/data/provider_descriptions.json", gatewayctx.AdaptGinHandler(commonProviderDescriptionsJSON))
+	r.GET("/data/providers_description.json", gatewayctx.AdaptGinHandler(commonProviderDescriptionsJSON))
+	r.GET("/api/data/providers_description.json", gatewayctx.AdaptGinHandler(commonProviderDescriptionsJSON))
+	r.GET("/api/v1/data/providers_description.json", gatewayctx.AdaptGinHandler(commonProviderDescriptionsJSON))
 }
 
 func ExecutableCommonRoutes() []gatewayctx.RouteDef {
@@ -139,6 +142,24 @@ func ExecutableCommonRoutes() []gatewayctx.RouteDef {
 			Handler:    commonProviderDescriptionsJSON,
 			Middleware: []string{middlewareRequestLogger, middlewareCORS, middlewareSecurity},
 		},
+		{
+			Method:     http.MethodGet,
+			Path:       "/data/providers_description.json",
+			Handler:    commonProviderDescriptionsJSON,
+			Middleware: []string{middlewareRequestLogger, middlewareCORS, middlewareSecurity},
+		},
+		{
+			Method:     http.MethodGet,
+			Path:       "/api/data/providers_description.json",
+			Handler:    commonProviderDescriptionsJSON,
+			Middleware: []string{middlewareRequestLogger, middlewareCORS, middlewareSecurity},
+		},
+		{
+			Method:     http.MethodGet,
+			Path:       "/api/v1/data/providers_description.json",
+			Handler:    commonProviderDescriptionsJSON,
+			Middleware: []string{middlewareRequestLogger, middlewareCORS, middlewareSecurity},
+		},
 	}
 }
 
@@ -222,10 +243,15 @@ func commonApiDescriptionsJSON(c gatewayctx.GatewayContext) {
 
 func commonProviderDescriptionsJSON(c gatewayctx.GatewayContext) {
 	paths := []string{
+		"/app/data/parser/providers_description.json",
 		"/app/data/parser/provider_descriptions.json",
+		"/app/data/providers_description.json",
 		"/app/data/provider_descriptions.json",
+		"./data/providers_description.json",
 		"./data/provider_descriptions.json",
+		"/srv/parser-data/data/providers_description.json",
 		"/srv/parser-data/data/provider_descriptions.json",
+		"/root/bestai_prices_parser/public/data/providers_description.json",
 		"/root/bestai_prices_parser/public/data/provider_descriptions.json",
 	}
 	for _, p := range paths {
@@ -237,6 +263,6 @@ func commonProviderDescriptionsJSON(c gatewayctx.GatewayContext) {
 			}
 		}
 	}
-	c.WriteJSON(http.StatusNotFound, map[string]any{"error": "provider_descriptions.json not found"})
+	c.WriteJSON(http.StatusNotFound, map[string]any{"error": "providers_description.json not found"})
 }
 

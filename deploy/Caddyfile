@@ -21,6 +21,7 @@
 		path /data/models.json
 		path /data/api_descriptions.json
 		path /data/provider_descriptions.json
+		path /data/providers_description.json
 	}
 
 	# =========================================================================
