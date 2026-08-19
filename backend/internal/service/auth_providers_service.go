@@ -7,14 +7,15 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 )
 
 var (
 	DefaultAuthProvidersPaths = []string{
-		"/data/auth_providers.json",
-		"/app/data/parser/auth_providers.json",
 		"/app/data/auth_providers.json",
 		"./data/auth_providers.json",
+		"/data/auth_providers.json",
+		"/app/data/parser/auth_providers.json",
 		"/srv/parser-data/data/auth_providers.json",
 		"/root/bestai_prices_parser/public/data/auth_providers.json",
 	}
@@ -91,19 +92,31 @@ func (s *AuthProvidersService) Save(data []byte) error {
 	return nil
 }
 
-// Read reads auth_providers.json from the first existing candidate location
+// Read reads auth_providers.json returning the newest content among existing candidate locations
 func (s *AuthProvidersService) Read() ([]byte, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	paths := s.getPaths()
+	var latestData []byte
+	var latestModTime time.Time
+	found := false
+
 	for _, p := range paths {
-		if _, err := os.Stat(p); err == nil {
+		if info, err := os.Stat(p); err == nil && !info.IsDir() {
 			data, err := os.ReadFile(p)
 			if err == nil {
-				return data, nil
+				if !found || info.ModTime().After(latestModTime) {
+					latestData = data
+					latestModTime = info.ModTime()
+					found = true
+				}
 			}
 		}
+	}
+
+	if found {
+		return latestData, nil
 	}
 
 	return nil, os.ErrNotExist
