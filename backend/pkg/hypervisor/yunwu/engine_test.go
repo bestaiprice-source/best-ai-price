@@ -237,6 +237,7 @@ func TestClassifyMediaRequest(t *testing.T) {
 		units                                 int64
 	}{
 		{"image batch", http.MethodPost, "/v1/images/generations", "imagen-3", `{"n":3}`, "images", 3},
+		{"native gemini image", http.MethodPost, "/v1beta/models/gemini-2.5-flash-image:generateContent", "gemini-2.5-flash-image", `{}`, "images", 1},
 		{"video seconds", http.MethodPost, "/v1/videos", "veo-3", `{"duration":8}`, "video", 8},
 		{"speech", http.MethodPost, "/v1/audio/speech", "gemini-tts", `{}`, "audio", 1},
 		{"operation poll", http.MethodGet, "/v1beta/operations/abc", "", `{}`, "media_control", 0},

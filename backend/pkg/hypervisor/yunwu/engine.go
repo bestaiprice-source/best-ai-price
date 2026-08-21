@@ -788,6 +788,8 @@ func classifyMediaRequest(ctx context.Context, model string, payload []byte) med
 	switch {
 	case strings.Contains(path, "/images/") || strings.HasPrefix(strings.ToLower(model), "imagen-"):
 		kind = "images"
+	case strings.Contains(path, ":generatecontent") && strings.HasPrefix(strings.ToLower(model), "gemini-") && strings.Contains(strings.ToLower(model), "image"):
+		kind = "images"
 	case strings.Contains(path, "/audio/speech") || strings.HasPrefix(strings.ToLower(model), "chirp-") || strings.HasPrefix(strings.ToLower(model), "lyria-"):
 		kind = "audio"
 	case strings.Contains(path, "/audio/transcriptions"), strings.Contains(path, "/audio/translations"):

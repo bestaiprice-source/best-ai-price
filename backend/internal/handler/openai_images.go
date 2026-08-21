@@ -1,10 +1,13 @@
 package handler
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"mime"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -16,6 +19,8 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	hyperruntime "github.com/Wei-Shaw/sub2api/pkg/hypervisor/runtime"
 	"github.com/gin-gonic/gin"
+	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 	"go.uber.org/zap"
 )
 
@@ -86,9 +91,37 @@ func (h *OpenAIGatewayHandler) ImagesGateway(c gatewayctx.GatewayContext) {
 		if strings.TrimSpace(contentType) == "" {
 			contentType = "application/json"
 		}
+		if geminiBody, geminiModel, ok, err := buildYunwuGeminiImageGenerationRequest(body, contentType, path); err != nil {
+			h.errorResponseGateway(c, http.StatusBadRequest, "invalid_request_error", err.Error())
+			return
+		} else if ok {
+			requestCtx := hyperruntime.WithUpstreamRequest(c.Context(), http.MethodPost, "/v1beta/models/"+url.PathEscape(geminiModel)+":generateContent", "application/json")
+			var upstream bufferedHypervisorResponseWriter
+			_, forwardErr := h.hypervisorEngine.HandleRequest(requestCtx, strconv.FormatInt(subject.UserID, 10), c.HeaderValue("X-Conversation-ID"), geminiBody, &upstream, service.PlatformYunwu)
+			if forwardErr != nil {
+				h.errorResponseGateway(c, http.StatusBadGateway, "api_error", forwardErr.Error())
+				return
+			}
+			response, err := openAIImagesResponseFromGemini(upstream.Bytes())
+			if err != nil {
+				h.errorResponseGateway(c, http.StatusBadGateway, "api_error", err.Error())
+				return
+			}
+			c.SetHeader("Content-Type", "application/json")
+			c.WriteJSON(http.StatusOK, response)
+			return
+		}
+		forwardBody, err := normalizeYunwuOpenAIImagesRequest(body, contentType)
+		if err != nil {
+			h.errorResponseGateway(c, http.StatusBadRequest, "invalid_request_error", err.Error())
+			return
+		}
+		if rawQuery := c.Request().URL.RawQuery; rawQuery != "" {
+			path += "?" + rawQuery
+		}
 		requestCtx := hyperruntime.WithUpstreamRequest(c.Context(), http.MethodPost, path, contentType)
 		conversationID := c.HeaderValue("X-Conversation-ID")
-		_, forwardErr := h.hypervisorEngine.HandleRequest(requestCtx, strconv.FormatInt(subject.UserID, 10), conversationID, body, hypervisorGatewayWriter{ctx: c}, service.PlatformYunwu)
+		_, forwardErr := h.hypervisorEngine.HandleRequest(requestCtx, strconv.FormatInt(subject.UserID, 10), conversationID, forwardBody, hypervisorGatewayWriter{ctx: c}, service.PlatformYunwu)
 		if forwardErr != nil {
 			h.errorResponseGateway(c, http.StatusBadGateway, "api_error", forwardErr.Error())
 		}
@@ -308,6 +341,142 @@ func (h *OpenAIGatewayHandler) ImagesGateway(c gatewayctx.GatewayContext) {
 		})
 		return
 	}
+}
+
+type bufferedHypervisorResponseWriter struct {
+	bytes.Buffer
+	header http.Header
+	status int
+}
+
+func (w *bufferedHypervisorResponseWriter) Header() http.Header {
+	if w.header == nil {
+		w.header = make(http.Header)
+	}
+	return w.header
+}
+
+func (w *bufferedHypervisorResponseWriter) WriteHeader(status int) { w.status = status }
+func (w *bufferedHypervisorResponseWriter) Flush()                 {}
+
+// buildYunwuGeminiImageGenerationRequest converts the portable OpenAI Images
+// generation payload into Gemini's native generateContent schema. It is kept
+// deliberately narrow: editing and arbitrary Imagen options remain vendor
+// passthrough requests, while Gemini image models get a reliable common path.
+func buildYunwuGeminiImageGenerationRequest(body []byte, contentType, path string) ([]byte, string, bool, error) {
+	if !strings.Contains(path, "/images/generations") {
+		return nil, "", false, nil
+	}
+	mediaType, _, err := mime.ParseMediaType(strings.TrimSpace(contentType))
+	if err != nil || !strings.EqualFold(mediaType, "application/json") || !gjson.ValidBytes(body) {
+		return nil, "", false, nil
+	}
+	model := strings.TrimSpace(gjson.GetBytes(body, "model").String())
+	modelLower := strings.ToLower(model)
+	if !strings.HasPrefix(modelLower, "gemini-") || !strings.Contains(modelLower, "image") {
+		return nil, "", false, nil
+	}
+	prompt := strings.TrimSpace(gjson.GetBytes(body, "prompt").String())
+	if prompt == "" {
+		return nil, "", true, errors.New("prompt is required")
+	}
+	if n := gjson.GetBytes(body, "n"); n.Exists() && n.Int() > 1 {
+		return nil, "", true, errors.New("Gemini image generation supports n=1")
+	}
+	generationConfig := map[string]any{"responseModalities": []string{"IMAGE"}}
+	if imageSize := geminiImageSizeFromOpenAIImageSize(gjson.GetBytes(body, "size").String()); imageSize != "" {
+		generationConfig["imageConfig"] = map[string]any{"imageSize": imageSize}
+	}
+	payload := map[string]any{
+		"contents": []any{map[string]any{
+			"role":  "user",
+			"parts": []any{map[string]any{"text": prompt}},
+		}},
+		"generationConfig": generationConfig,
+	}
+	nativeBody, err := json.Marshal(payload)
+	return nativeBody, model, true, err
+}
+
+func geminiImageSizeFromOpenAIImageSize(size string) string {
+	switch strings.ToLower(strings.TrimSpace(size)) {
+	case "1024x1024":
+		return "1K"
+	case "1536x1024", "1024x1536", "1792x1024", "1024x1792", "":
+		return "2K"
+	case "2048x2048", "2048x1536", "1536x2048":
+		return "4K"
+	default:
+		return ""
+	}
+}
+
+func openAIImagesResponseFromGemini(body []byte) (map[string]any, error) {
+	if !gjson.ValidBytes(body) {
+		return nil, errors.New("Gemini image generation returned an invalid response")
+	}
+	data := make([]map[string]any, 0)
+	for _, candidate := range gjson.GetBytes(body, "candidates").Array() {
+		for _, part := range candidate.Get("content.parts").Array() {
+			inlineData := part.Get("inlineData")
+			if !inlineData.Exists() {
+				inlineData = part.Get("inline_data")
+			}
+			encoded := strings.TrimSpace(inlineData.Get("data").String())
+			if encoded == "" {
+				continue
+			}
+			data = append(data, map[string]any{"b64_json": encoded})
+		}
+	}
+	if len(data) == 0 {
+		return nil, errors.New("Gemini image generation returned no image data")
+	}
+	return map[string]any{"created": time.Now().Unix(), "data": data}, nil
+}
+
+// normalizeYunwuOpenAIImagesRequest applies the small compatibility layer
+// needed by OpenAI-compatible Yunwu media providers.  It deliberately leaves
+// non-GPT image models and multipart edit uploads unchanged: those providers
+// often have vendor-specific options which must be forwarded verbatim.
+func normalizeYunwuOpenAIImagesRequest(body []byte, contentType string) ([]byte, error) {
+	mediaType, _, err := mime.ParseMediaType(strings.TrimSpace(contentType))
+	if err != nil || !strings.EqualFold(mediaType, "application/json") {
+		return body, nil
+	}
+	if !gjson.ValidBytes(body) {
+		return nil, errors.New("failed to parse request body")
+	}
+
+	// Image edits can carry their source image in multipart form, while both
+	// OpenAI Images endpoints require a prompt.
+	if strings.TrimSpace(gjson.GetBytes(body, "prompt").String()) == "" {
+		return nil, errors.New("prompt is required")
+	}
+
+	model := strings.TrimSpace(gjson.GetBytes(body, "model").String())
+	if model == "" {
+		model = "gpt-image-1"
+		body, err = sjson.SetBytes(body, "model", model)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if !strings.HasPrefix(strings.ToLower(model), "gpt-image-") {
+		return body, nil
+	}
+
+	// Some OpenAI-compatible Yunwu vendors reject response_format even though
+	// it is optional in the Images API. Omitting it retains the vendor default
+	// (normally URL or b64_json) and avoids rejecting an otherwise valid image
+	// generation request.
+	if gjson.GetBytes(body, "response_format").Exists() {
+		body, err = sjson.DeleteBytes(body, "response_format")
+		if err != nil {
+			return nil, err
+		}
+	}
+	return body, nil
 }
 
 // YunwuMedia transparently proxies OpenAI-compatible audio and asynchronous
