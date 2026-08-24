@@ -283,9 +283,9 @@
             type="text"
             required
             class="input"
-            placeholder="https://yunwu.ai/v1"
+            placeholder="https://api.openlux.ai/v1"
           />
-          <p class="input-hint">Yunwu API Base URL (defaults to https://yunwu.ai/v1)</p>
+          <p class="input-hint">Yunwu API Base URL (defaults to https://api.openlux.ai/v1)</p>
         </div>
         <div>
           <label class="input-label">API Key</label>
@@ -3237,7 +3237,7 @@ const kiroSystemVersion = ref('darwin#24.6.0')
 const kiroNodeVersion = ref('22.21.1')
 const upstreamBaseUrl = ref('') // For upstream type: base URL
 const upstreamApiKey = ref('') // For upstream type: API key
-const yunwuBaseUrl = ref('https://yunwu.ai/v1') // For Yunwu type: base URL
+const yunwuBaseUrl = ref('https://api.openlux.ai/v1') // For Yunwu type: base URL
 const yunwuApiKey = ref('') // For Yunwu type: API key
 const antigravityModelRestrictionMode = ref<'whitelist' | 'mapping'>('whitelist')
 const antigravityWhitelistModels = ref<string[]>([])
@@ -4003,7 +4003,7 @@ const resetForm = () => {
   antigravityAccountType.value = 'oauth'
   upstreamBaseUrl.value = ''
   upstreamApiKey.value = ''
-  yunwuBaseUrl.value = 'https://yunwu.ai/v1'
+  yunwuBaseUrl.value = 'https://api.openlux.ai/v1'
   yunwuApiKey.value = ''
   tempUnschedEnabled.value = false
   tempUnschedRules.value = []
@@ -4173,7 +4173,7 @@ const handleSubmit = async () => {
     }
 
     const credentials: Record<string, unknown> = {
-      base_url: yunwuBaseUrl.value.trim() || 'https://yunwu.ai/v1',
+      base_url: yunwuBaseUrl.value.trim() || 'https://api.openlux.ai/v1',
       api_key: yunwuApiKey.value.trim()
     }
 

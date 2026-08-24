@@ -477,7 +477,7 @@ func (w *StatsWorker) recordSyncedSnapshot(ctx context.Context, node *health.Exe
 
 func normalizeBillingBaseURL(raw string) (string, string, error) {
 	if strings.TrimSpace(raw) == "" {
-		raw = "https://yunwu.ai/v1"
+		raw = "https://api.openlux.ai/v1"
 	}
 	u, err := url.Parse(strings.TrimRight(raw, "/"))
 	if err != nil || u.Scheme == "" || u.Host == "" {
@@ -501,7 +501,7 @@ func max64(a, b int64) int64 {
 
 func (w *StatsWorker) syncNodeStatsFallback(ctx context.Context, node *health.ExecutionNode, apiKey string, baseURL string) (*YunwuCreditGrantsResponse, error) {
 	if baseURL == "" {
-		baseURL = "https://yunwu.ai"
+		baseURL = "https://api.openlux.ai"
 	}
 
 	urls := []string{

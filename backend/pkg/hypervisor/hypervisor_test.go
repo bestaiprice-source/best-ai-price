@@ -441,7 +441,7 @@ func TestYunwuHypervisorDispatch(t *testing.T) {
 		SetPlatform("yunwu").
 		SetType("api_key").
 		SetStatus("active").
-		SetCredentials(map[string]any{"api_key": "sk-yunwu-test-key", "base_url": "https://yunwu.ai/v1"}).
+		SetCredentials(map[string]any{"api_key": "sk-yunwu-test-key", "base_url": "https://api.openlux.ai/v1"}).
 		Save(ctx)
 	require.NoError(t, err)
 	_ = acc

@@ -811,7 +811,7 @@ func (a *Account) GetBaseURL() string {
 	baseURL := a.GetCredential("base_url")
 	if baseURL == "" {
 		if a.Platform == PlatformYunwu {
-			return "https://yunwu.ai/v1"
+			return "https://api.openlux.ai/v1"
 		}
 		return "https://api.anthropic.com"
 	}

@@ -320,10 +320,10 @@ func TestResolveUpstreamAPIURL(t *testing.T) {
 	assert.Equal(t, "https://api.anthropic.com/v1/messages", resolveUpstreamAPIURL("", "anthropic", false))
 	assert.Equal(t, "https://api.openai.com/v1/chat/completions", resolveUpstreamAPIURL("", "openai", true))
 
-	assert.Equal(t, "https://yunwu.ai/v1/messages", resolveUpstreamAPIURL("https://yunwu.ai/v1", "yunwu", false))
-	assert.Equal(t, "https://yunwu.ai/v1/messages", resolveUpstreamAPIURL("https://yunwu.ai", "yunwu", false))
-	assert.Equal(t, "https://yunwu.ai/v1/chat/completions", resolveUpstreamAPIURL("https://yunwu.ai/v1", "openai", true))
-	assert.Equal(t, "https://yunwu.ai/v1/messages", resolveUpstreamAPIURL("https://yunwu.ai/v1/messages", "yunwu", false))
+	assert.Equal(t, "https://api.openlux.ai/v1/messages", resolveUpstreamAPIURL("https://api.openlux.ai/v1", "yunwu", false))
+	assert.Equal(t, "https://api.openlux.ai/v1/messages", resolveUpstreamAPIURL("https://api.openlux.ai", "yunwu", false))
+	assert.Equal(t, "https://api.openlux.ai/v1/chat/completions", resolveUpstreamAPIURL("https://api.openlux.ai/v1", "openai", true))
+	assert.Equal(t, "https://api.openlux.ai/v1/messages", resolveUpstreamAPIURL("https://api.openlux.ai/v1/messages", "yunwu", false))
 }
 
 func TestYunwuRuntimeExecution(t *testing.T) {
@@ -503,7 +503,7 @@ func TestYunwuUpstreamOverrideRejectsAbsoluteURL(t *testing.T) {
 	ctx := context.Background()
 	account, err := store.DB().Account.Create().
 		SetName("yunwu-safe-path").SetPlatform("yunwu").SetType("api_key").SetStatus("active").
-		SetCredentials(map[string]any{"api_key": "sk-test", "base_url": "https://yunwu.ai/v1"}).Save(ctx)
+		SetCredentials(map[string]any{"api_key": "sk-test", "base_url": "https://api.openlux.ai/v1"}).Save(ctx)
 	require.NoError(t, err)
 	ctx = WithUpstreamRequest(ctx, http.MethodPost, "https://attacker.invalid/steal", "application/json")
 	_, err = NewAnthropicRuntime(store).Execute(ctx, fmt.Sprint(account.ID), []byte(`{}`), &bytes.Buffer{})

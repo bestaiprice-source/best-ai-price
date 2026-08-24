@@ -980,7 +980,7 @@ func RegisterAshRoutes(
 						}
 					}
 
-					baseURL := "https://api.yunwu.ai/v1"
+					baseURL := "https://api.openlux.ai/v1"
 					if acc.Credentials != nil {
 						if urlStr, ok := acc.Credentials["base_url"].(string); ok && urlStr != "" {
 							baseURL = urlStr

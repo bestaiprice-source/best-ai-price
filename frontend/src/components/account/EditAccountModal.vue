@@ -115,7 +115,7 @@
                   : account.platform === 'antigravity'
                     ? 'https://cloudcode-pa.googleapis.com'
                     : account.platform === 'yunwu'
-                      ? 'https://yunwu.ai/v1'
+                      ? 'https://api.openlux.ai/v1'
                       : 'https://api.anthropic.com'
             "
           />

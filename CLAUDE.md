@@ -45,6 +45,7 @@ Welcome to **sub2api** and the **AI Session Hypervisor (ASH / Yunwu Engine)** re
   - `YunwuScheduler`: Tailored node selection for Yunwu execution nodes based on node health, queue depth, latency, and `UsedTokens` organic load balancing penalty (ensuring fair traffic distribution across active channels even when balance APIs are untracked). `YunwuRequireFreshBalance` defaults to `false` so nodes without balance API endpoints are not excluded.
   - `YunwuRebindingManager`: Handles failover and node cooldown transitions specifically for Yunwu provider clusters, enforcing Redis session-scoped distributed lock (`SETNX`) and running `YunwuScheduler` with user priority, credits, and system state during rebinding.
   - `StatsWorker`: Syncs upstream credit balance from `/api/user/self`, `/dashboard/billing/subscription`, and credit grants. In `/api/user/self`, `data.quota` is parsed directly as the current available balance (avoiding double-subtraction of `used_quota`).
+  - Default Base URL: `https://api.openlux.ai/v1` (domain migrated to `api.openlux.ai`).
   - Runtime credentials: `AnthropicRuntime.Execute` attaches `Authorization: Bearer <api_key>` headers for Yunwu platform accounts.
   - Administration endpoints under `/api/v1/ash/admin/yunwu/*`.
 

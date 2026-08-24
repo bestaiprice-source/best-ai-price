@@ -467,7 +467,7 @@ func (s *AccountTestService) fetchYunwuAvailableModels(ctx context.Context, acco
 
 	baseURL := account.GetBaseURL()
 	if strings.TrimSpace(baseURL) == "" {
-		baseURL = "https://yunwu.ai/v1"
+		baseURL = "https://api.openlux.ai/v1"
 	}
 	normalizedBaseURL, err := s.validateUpstreamBaseURL(baseURL)
 	if err != nil {
@@ -713,7 +713,7 @@ func (s *AccountTestService) testClaudeAccountConnection(c gatewayctx.GatewayCon
 			baseURL := account.GetBaseURL()
 			if baseURL == "" {
 				if account.Platform == PlatformYunwu {
-					baseURL = "https://yunwu.ai/v1"
+					baseURL = "https://api.openlux.ai/v1"
 				} else {
 					baseURL = "https://api.anthropic.com"
 				}
@@ -969,7 +969,7 @@ func (s *AccountTestService) testOpenAIAccountConnection(c gatewayctx.GatewayCon
 		baseURL := account.GetOpenAIBaseURL()
 		if baseURL == "" {
 			if account.Platform == PlatformYunwu {
-				baseURL = "https://yunwu.ai/v1"
+				baseURL = "https://api.openlux.ai/v1"
 			} else {
 				baseURL = "https://api.openai.com"
 			}

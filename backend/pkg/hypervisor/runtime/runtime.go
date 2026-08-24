@@ -906,7 +906,7 @@ func upstreamRequestID(headers http.Header) string {
 
 func upstreamOrigin(raw string) (string, error) {
 	if strings.TrimSpace(raw) == "" {
-		raw = "https://yunwu.ai"
+		raw = "https://api.openlux.ai"
 	}
 	u, err := url.Parse(strings.TrimSpace(raw))
 	if err != nil || u.Scheme == "" || u.Host == "" {
