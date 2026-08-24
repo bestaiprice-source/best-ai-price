@@ -581,7 +581,7 @@ export interface UpdateGroupRequest {
 // ==================== Account & Proxy Types ====================
 
 export type AccountPlatform = 'anthropic' | 'openai' | 'gemini' | 'antigravity' | 'sora' | 'kiro' | 'yunwu'
-export type AccountType = 'oauth' | 'setup-token' | 'apikey' | 'upstream' | 'bedrock'
+export type AccountType = 'oauth' | 'setup-token' | 'apikey' | 'api_key' | 'upstream' | 'bedrock'
 export type OAuthAddMethod = 'oauth' | 'setup-token'
 export type ProxyProtocol = 'http' | 'https' | 'socks4' | 'socks5' | 'socks5h'
 
