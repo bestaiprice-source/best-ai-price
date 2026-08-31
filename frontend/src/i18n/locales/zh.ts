@@ -97,7 +97,13 @@ export default {
       claude: 'Claude',
       gemini: 'Gemini',
       antigravity: 'Antigravity',
-      more: '更多'
+      deepseek: 'DeepSeek',
+      yunwu: 'Yunwu',
+      more: '更多',
+      sortByDefault: '默认排序',
+      sortByPopularity: '按热度排序',
+      clicks: '次访问',
+      popular: '热门'
     },
     // CTA 区块
     cta: {

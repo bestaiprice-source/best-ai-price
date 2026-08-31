@@ -345,6 +345,18 @@ func (f ProviderCommentVoteFunc) Mutate(ctx context.Context, m ent.Mutation) (en
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ProviderCommentVoteMutation", m)
 }
 
+// The ProviderPopularityFunc type is an adapter to allow the use of ordinary
+// function as ProviderPopularity mutator.
+type ProviderPopularityFunc func(context.Context, *ent.ProviderPopularityMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f ProviderPopularityFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ProviderPopularityMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ProviderPopularityMutation", m)
+}
+
 // The ProxyFunc type is an adapter to allow the use of ordinary
 // function as Proxy mutator.
 type ProxyFunc func(context.Context, *ent.ProxyMutation) (ent.Value, error)

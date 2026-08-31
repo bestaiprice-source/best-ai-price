@@ -119,6 +119,7 @@ func registerRoutes(
 	}
 	routes.RegisterAdminRoutes(v1, h, adminAuth)
 	routes.RegisterProviderCommentRoutes(v1, h, jwtAuth, adminAuth)
+	routes.RegisterProviderPopularityRoutes(v1, h)
 	routes.RegisterGatewayRoutes(r, h, apiKeyAuth, apiKeyService, subscriptionService, opsService, settingService, cfg)
 
 	// Direct write endpoints for auth_providers.json (protected by admin auth)

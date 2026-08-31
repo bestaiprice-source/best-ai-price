@@ -33,6 +33,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/promocodeusage"
 	"github.com/Wei-Shaw/sub2api/ent/providercomment"
 	"github.com/Wei-Shaw/sub2api/ent/providercommentvote"
+	"github.com/Wei-Shaw/sub2api/ent/providerpopularity"
 	"github.com/Wei-Shaw/sub2api/ent/proxy"
 	"github.com/Wei-Shaw/sub2api/ent/redeemcode"
 	"github.com/Wei-Shaw/sub2api/ent/schema"
@@ -1646,6 +1647,47 @@ func init() {
 			return nil
 		}
 	}()
+	providerpopularityMixin := schema.ProviderPopularity{}.Mixin()
+	providerpopularityMixinFields0 := providerpopularityMixin[0].Fields()
+	_ = providerpopularityMixinFields0
+	providerpopularityFields := schema.ProviderPopularity{}.Fields()
+	_ = providerpopularityFields
+	// providerpopularityDescCreatedAt is the schema descriptor for created_at field.
+	providerpopularityDescCreatedAt := providerpopularityMixinFields0[0].Descriptor()
+	// providerpopularity.DefaultCreatedAt holds the default value on creation for the created_at field.
+	providerpopularity.DefaultCreatedAt = providerpopularityDescCreatedAt.Default.(func() time.Time)
+	// providerpopularityDescUpdatedAt is the schema descriptor for updated_at field.
+	providerpopularityDescUpdatedAt := providerpopularityMixinFields0[1].Descriptor()
+	// providerpopularity.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	providerpopularity.DefaultUpdatedAt = providerpopularityDescUpdatedAt.Default.(func() time.Time)
+	// providerpopularity.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	providerpopularity.UpdateDefaultUpdatedAt = providerpopularityDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// providerpopularityDescProvider is the schema descriptor for provider field.
+	providerpopularityDescProvider := providerpopularityFields[0].Descriptor()
+	// providerpopularity.ProviderValidator is a validator for the "provider" field. It is called by the builders before save.
+	providerpopularity.ProviderValidator = func() func(string) error {
+		validators := providerpopularityDescProvider.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(provider string) error {
+			for _, fn := range fns {
+				if err := fn(provider); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// providerpopularityDescClickCount is the schema descriptor for click_count field.
+	providerpopularityDescClickCount := providerpopularityFields[1].Descriptor()
+	// providerpopularity.DefaultClickCount holds the default value on creation for the click_count field.
+	providerpopularity.DefaultClickCount = providerpopularityDescClickCount.Default.(int64)
+	// providerpopularityDescLastClickedAt is the schema descriptor for last_clicked_at field.
+	providerpopularityDescLastClickedAt := providerpopularityFields[2].Descriptor()
+	// providerpopularity.DefaultLastClickedAt holds the default value on creation for the last_clicked_at field.
+	providerpopularity.DefaultLastClickedAt = providerpopularityDescLastClickedAt.Default.(func() time.Time)
 	proxyMixin := schema.Proxy{}.Mixin()
 	proxyMixinHooks1 := proxyMixin[1].Hooks()
 	proxy.Hooks[0] = proxyMixinHooks1[0]

@@ -1288,6 +1288,33 @@ var (
 			},
 		},
 	}
+	// ProviderPopularityColumns holds the columns for the "provider_popularity" table.
+	ProviderPopularityColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "provider", Type: field.TypeString, Unique: true, Size: 100},
+		{Name: "click_count", Type: field.TypeInt64, Default: 0},
+		{Name: "last_clicked_at", Type: field.TypeTime, Nullable: true},
+	}
+	// ProviderPopularityTable holds the schema information for the "provider_popularity" table.
+	ProviderPopularityTable = &schema.Table{
+		Name:       "provider_popularity",
+		Columns:    ProviderPopularityColumns,
+		PrimaryKey: []*schema.Column{ProviderPopularityColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "providerpopularity_provider",
+				Unique:  true,
+				Columns: []*schema.Column{ProviderPopularityColumns[3]},
+			},
+			{
+				Name:    "providerpopularity_click_count",
+				Unique:  false,
+				Columns: []*schema.Column{ProviderPopularityColumns[4]},
+			},
+		},
+	}
 	// ProxiesColumns holds the columns for the "proxies" table.
 	ProxiesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
@@ -1917,6 +1944,7 @@ var (
 		PromoCodeUsagesTable,
 		ProviderCommentsTable,
 		ProviderCommentVotesTable,
+		ProviderPopularityTable,
 		ProxiesTable,
 		RedeemCodesTable,
 		SecuritySecretsTable,
@@ -2036,6 +2064,9 @@ func init() {
 	ProviderCommentVotesTable.ForeignKeys[1].RefTable = UsersTable
 	ProviderCommentVotesTable.Annotation = &entsql.Annotation{
 		Table: "provider_comment_votes",
+	}
+	ProviderPopularityTable.Annotation = &entsql.Annotation{
+		Table: "provider_popularity",
 	}
 	ProxiesTable.Annotation = &entsql.Annotation{
 		Table: "proxies",

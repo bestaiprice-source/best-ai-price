@@ -287,72 +287,66 @@
           <h2 class="mb-3 text-2xl font-bold text-gray-900 dark:text-white">
             {{ t('home.providers.title') }}
           </h2>
-          <p class="text-sm text-gray-600 dark:text-dark-400">
+          <p class="mb-4 text-sm text-gray-600 dark:text-dark-400">
             {{ t('home.providers.description') }}
           </p>
+
+          <!-- Popularity Sort Controls -->
+          <div class="inline-flex items-center rounded-xl bg-gray-100/80 p-1 backdrop-blur-sm dark:bg-dark-800/80">
+            <button
+              @click="providerSortBy = 'default'"
+              :class="[
+                'rounded-lg px-3 py-1 text-xs font-medium transition-all',
+                providerSortBy === 'default'
+                  ? 'bg-white text-gray-900 shadow-sm dark:bg-dark-700 dark:text-white'
+                  : 'text-gray-500 hover:text-gray-900 dark:text-dark-400 dark:hover:text-white'
+              ]"
+            >
+              {{ t('home.providers.sortByDefault') }}
+            </button>
+            <button
+              @click="providerSortBy = 'popularity'"
+              :class="[
+                'flex items-center gap-1 rounded-lg px-3 py-1 text-xs font-medium transition-all',
+                providerSortBy === 'popularity'
+                  ? 'bg-white text-primary-600 shadow-sm dark:bg-dark-700 dark:text-primary-400'
+                  : 'text-gray-500 hover:text-gray-900 dark:text-dark-400 dark:hover:text-white'
+              ]"
+            >
+              <span>🔥</span>
+              <span>{{ t('home.providers.sortByPopularity') }}</span>
+            </button>
+          </div>
         </div>
 
         <div class="mb-16 flex flex-wrap items-center justify-center gap-4">
-          <!-- Claude - Supported -->
-          <div
-            class="flex items-center gap-2 rounded-xl border border-primary-200 bg-white/60 px-5 py-3 ring-1 ring-primary-500/20 backdrop-blur-sm dark:border-primary-800 dark:bg-dark-800/60"
+          <!-- Interactive Supported Providers -->
+          <button
+            v-for="provider in displayedProviders"
+            :key="provider.id"
+            @click="handleProviderClick(provider.id)"
+            type="button"
+            class="group relative flex items-center gap-3 rounded-xl border border-primary-200 bg-white/60 px-5 py-3 ring-1 ring-primary-500/20 backdrop-blur-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 dark:border-primary-800 dark:bg-dark-800/60 cursor-pointer"
+            :title="`Click to visit ${provider.name}`"
           >
             <div
-              class="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-orange-400 to-orange-500"
+              :class="['flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold text-white shadow-sm', provider.gradient]"
             >
-              <span class="text-xs font-bold text-white">C</span>
+              <span>{{ provider.initial }}</span>
             </div>
-            <span class="text-sm font-medium text-gray-700 dark:text-dark-200">{{ t('home.providers.claude') }}</span>
-            <span
-              class="rounded bg-primary-100 px-1.5 py-0.5 text-[10px] font-medium text-primary-600 dark:bg-primary-900/30 dark:text-primary-400"
-              >{{ t('home.providers.supported') }}</span
-            >
-          </div>
-          <!-- GPT - Supported -->
-          <div
-            class="flex items-center gap-2 rounded-xl border border-primary-200 bg-white/60 px-5 py-3 ring-1 ring-primary-500/20 backdrop-blur-sm dark:border-primary-800 dark:bg-dark-800/60"
-          >
-            <div
-              class="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-green-500 to-green-600"
-            >
-              <span class="text-xs font-bold text-white">G</span>
+            <div class="flex flex-col items-start text-left">
+              <div class="flex items-center gap-1.5">
+                <span class="text-sm font-medium text-gray-700 dark:text-dark-200">{{ provider.name }}</span>
+                <span
+                  class="rounded bg-primary-100 px-1.5 py-0.5 text-[10px] font-medium text-primary-600 dark:bg-primary-900/30 dark:text-primary-400"
+                >{{ t('home.providers.supported') }}</span>
+              </div>
+              <span v-if="getClickCount(provider.id) > 0" class="text-[10px] font-medium text-amber-600 dark:text-amber-400 flex items-center gap-0.5 mt-0.5">
+                <span>🔥</span> {{ getClickCount(provider.id) }} {{ t('home.providers.clicks') }}
+              </span>
             </div>
-            <span class="text-sm font-medium text-gray-700 dark:text-dark-200">GPT</span>
-            <span
-              class="rounded bg-primary-100 px-1.5 py-0.5 text-[10px] font-medium text-primary-600 dark:bg-primary-900/30 dark:text-primary-400"
-              >{{ t('home.providers.supported') }}</span
-            >
-          </div>
-          <!-- Gemini - Supported -->
-          <div
-            class="flex items-center gap-2 rounded-xl border border-primary-200 bg-white/60 px-5 py-3 ring-1 ring-primary-500/20 backdrop-blur-sm dark:border-primary-800 dark:bg-dark-800/60"
-          >
-            <div
-              class="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-blue-600"
-            >
-              <span class="text-xs font-bold text-white">G</span>
-            </div>
-            <span class="text-sm font-medium text-gray-700 dark:text-dark-200">{{ t('home.providers.gemini') }}</span>
-            <span
-              class="rounded bg-primary-100 px-1.5 py-0.5 text-[10px] font-medium text-primary-600 dark:bg-primary-900/30 dark:text-primary-400"
-              >{{ t('home.providers.supported') }}</span
-            >
-          </div>
-          <!-- Antigravity - Supported -->
-          <div
-            class="flex items-center gap-2 rounded-xl border border-primary-200 bg-white/60 px-5 py-3 ring-1 ring-primary-500/20 backdrop-blur-sm dark:border-primary-800 dark:bg-dark-800/60"
-          >
-            <div
-              class="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-rose-500 to-pink-600"
-            >
-              <span class="text-xs font-bold text-white">A</span>
-            </div>
-            <span class="text-sm font-medium text-gray-700 dark:text-dark-200">{{ t('home.providers.antigravity') }}</span>
-            <span
-              class="rounded bg-primary-100 px-1.5 py-0.5 text-[10px] font-medium text-primary-600 dark:bg-primary-900/30 dark:text-primary-400"
-              >{{ t('home.providers.supported') }}</span
-            >
-          </div>
+          </button>
+
           <!-- More - Coming Soon -->
           <div
             class="flex items-center gap-2 rounded-xl border border-gray-200/50 bg-white/40 px-5 py-3 opacity-60 backdrop-blur-sm dark:border-dark-700/50 dark:bg-dark-800/40"
@@ -408,6 +402,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore, useAppStore } from '@/stores'
+import { useProviderPopularity } from '@/composables/useProviderPopularity'
 import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { renderRichContent } from '@/utils/sanitize'
@@ -417,6 +412,68 @@ const { t } = useI18n()
 
 const authStore = useAuthStore()
 const appStore = useAppStore()
+const { fetchPopularity, getClickCount, trackClick } = useProviderPopularity()
+
+// Provider Popularity & Sorting State
+const providerSortBy = ref<'default' | 'popularity'>('default')
+
+interface ProviderCard {
+  id: string
+  name: string
+  initial: string
+  gradient: string
+}
+
+const baseProviders = computed<ProviderCard[]>(() => [
+  {
+    id: 'claude',
+    name: t('home.providers.claude'),
+    initial: 'C',
+    gradient: 'bg-gradient-to-br from-orange-400 to-orange-500'
+  },
+  {
+    id: 'openai',
+    name: 'GPT',
+    initial: 'G',
+    gradient: 'bg-gradient-to-br from-green-500 to-green-600'
+  },
+  {
+    id: 'gemini',
+    name: t('home.providers.gemini'),
+    initial: 'G',
+    gradient: 'bg-gradient-to-br from-blue-500 to-blue-600'
+  },
+  {
+    id: 'antigravity',
+    name: t('home.providers.antigravity'),
+    initial: 'A',
+    gradient: 'bg-gradient-to-br from-rose-500 to-pink-600'
+  },
+  {
+    id: 'deepseek',
+    name: t('home.providers.deepseek'),
+    initial: 'D',
+    gradient: 'bg-gradient-to-br from-indigo-500 to-purple-600'
+  },
+  {
+    id: 'yunwu',
+    name: t('home.providers.yunwu'),
+    initial: 'Y',
+    gradient: 'bg-gradient-to-br from-teal-500 to-emerald-600'
+  }
+])
+
+const displayedProviders = computed(() => {
+  const list = [...baseProviders.value]
+  if (providerSortBy.value === 'popularity') {
+    list.sort((a, b) => getClickCount(b.id) - getClickCount(a.id))
+  }
+  return list
+})
+
+function handleProviderClick(providerId: string) {
+  trackClick(providerId)
+}
 
 // Site settings - directly from appStore (already initialized from injected config)
 const siteName = computed(() => appStore.cachedPublicSettings?.site_name || appStore.siteName || 'Sub2API')
@@ -478,6 +535,9 @@ onMounted(() => {
   if (!appStore.publicSettingsLoaded) {
     appStore.fetchPublicSettings()
   }
+
+  // Load AI provider popularity rankings
+  fetchPopularity()
 })
 </script>
 

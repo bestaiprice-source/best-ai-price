@@ -70,6 +70,8 @@ type Tx struct {
 	ProviderComment *ProviderCommentClient
 	// ProviderCommentVote is the client for interacting with the ProviderCommentVote builders.
 	ProviderCommentVote *ProviderCommentVoteClient
+	// ProviderPopularity is the client for interacting with the ProviderPopularity builders.
+	ProviderPopularity *ProviderPopularityClient
 	// Proxy is the client for interacting with the Proxy builders.
 	Proxy *ProxyClient
 	// RedeemCode is the client for interacting with the RedeemCode builders.
@@ -255,6 +257,7 @@ func (tx *Tx) init() {
 	tx.PromoCodeUsage = NewPromoCodeUsageClient(tx.config)
 	tx.ProviderComment = NewProviderCommentClient(tx.config)
 	tx.ProviderCommentVote = NewProviderCommentVoteClient(tx.config)
+	tx.ProviderPopularity = NewProviderPopularityClient(tx.config)
 	tx.Proxy = NewProxyClient(tx.config)
 	tx.RedeemCode = NewRedeemCodeClient(tx.config)
 	tx.SecuritySecret = NewSecuritySecretClient(tx.config)

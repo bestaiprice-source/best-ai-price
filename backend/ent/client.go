@@ -43,6 +43,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/promocodeusage"
 	"github.com/Wei-Shaw/sub2api/ent/providercomment"
 	"github.com/Wei-Shaw/sub2api/ent/providercommentvote"
+	"github.com/Wei-Shaw/sub2api/ent/providerpopularity"
 	"github.com/Wei-Shaw/sub2api/ent/proxy"
 	"github.com/Wei-Shaw/sub2api/ent/redeemcode"
 	"github.com/Wei-Shaw/sub2api/ent/securitysecret"
@@ -121,6 +122,8 @@ type Client struct {
 	ProviderComment *ProviderCommentClient
 	// ProviderCommentVote is the client for interacting with the ProviderCommentVote builders.
 	ProviderCommentVote *ProviderCommentVoteClient
+	// ProviderPopularity is the client for interacting with the ProviderPopularity builders.
+	ProviderPopularity *ProviderPopularityClient
 	// Proxy is the client for interacting with the Proxy builders.
 	Proxy *ProxyClient
 	// RedeemCode is the client for interacting with the RedeemCode builders.
@@ -186,6 +189,7 @@ func (c *Client) init() {
 	c.PromoCodeUsage = NewPromoCodeUsageClient(c.config)
 	c.ProviderComment = NewProviderCommentClient(c.config)
 	c.ProviderCommentVote = NewProviderCommentVoteClient(c.config)
+	c.ProviderPopularity = NewProviderPopularityClient(c.config)
 	c.Proxy = NewProxyClient(c.config)
 	c.RedeemCode = NewRedeemCodeClient(c.config)
 	c.SecuritySecret = NewSecuritySecretClient(c.config)
@@ -319,6 +323,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		PromoCodeUsage:                NewPromoCodeUsageClient(cfg),
 		ProviderComment:               NewProviderCommentClient(cfg),
 		ProviderCommentVote:           NewProviderCommentVoteClient(cfg),
+		ProviderPopularity:            NewProviderPopularityClient(cfg),
 		Proxy:                         NewProxyClient(cfg),
 		RedeemCode:                    NewRedeemCodeClient(cfg),
 		SecuritySecret:                NewSecuritySecretClient(cfg),
@@ -379,6 +384,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		PromoCodeUsage:                NewPromoCodeUsageClient(cfg),
 		ProviderComment:               NewProviderCommentClient(cfg),
 		ProviderCommentVote:           NewProviderCommentVoteClient(cfg),
+		ProviderPopularity:            NewProviderPopularityClient(cfg),
 		Proxy:                         NewProxyClient(cfg),
 		RedeemCode:                    NewRedeemCodeClient(cfg),
 		SecuritySecret:                NewSecuritySecretClient(cfg),
@@ -428,10 +434,10 @@ func (c *Client) Use(hooks ...Hook) {
 		c.ChannelMonitorRequestTemplate, c.ErrorPassthroughRule, c.Group,
 		c.IdempotencyRecord, c.IdentityAdoptionDecision, c.PaymentAuditLog,
 		c.PaymentOrder, c.PaymentProviderInstance, c.PendingAuthSession, c.PromoCode,
-		c.PromoCodeUsage, c.ProviderComment, c.ProviderCommentVote, c.Proxy,
-		c.RedeemCode, c.SecuritySecret, c.Setting, c.SubscriptionPlan,
-		c.TLSFingerprintProfile, c.UsageCleanupTask, c.UsageLog, c.User,
-		c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
+		c.PromoCodeUsage, c.ProviderComment, c.ProviderCommentVote,
+		c.ProviderPopularity, c.Proxy, c.RedeemCode, c.SecuritySecret, c.Setting,
+		c.SubscriptionPlan, c.TLSFingerprintProfile, c.UsageCleanupTask, c.UsageLog,
+		c.User, c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
 		c.UserSubscription,
 	} {
 		n.Use(hooks...)
@@ -449,10 +455,10 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.ChannelMonitorRequestTemplate, c.ErrorPassthroughRule, c.Group,
 		c.IdempotencyRecord, c.IdentityAdoptionDecision, c.PaymentAuditLog,
 		c.PaymentOrder, c.PaymentProviderInstance, c.PendingAuthSession, c.PromoCode,
-		c.PromoCodeUsage, c.ProviderComment, c.ProviderCommentVote, c.Proxy,
-		c.RedeemCode, c.SecuritySecret, c.Setting, c.SubscriptionPlan,
-		c.TLSFingerprintProfile, c.UsageCleanupTask, c.UsageLog, c.User,
-		c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
+		c.PromoCodeUsage, c.ProviderComment, c.ProviderCommentVote,
+		c.ProviderPopularity, c.Proxy, c.RedeemCode, c.SecuritySecret, c.Setting,
+		c.SubscriptionPlan, c.TLSFingerprintProfile, c.UsageCleanupTask, c.UsageLog,
+		c.User, c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
 		c.UserSubscription,
 	} {
 		n.Intercept(interceptors...)
@@ -518,6 +524,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.ProviderComment.mutate(ctx, m)
 	case *ProviderCommentVoteMutation:
 		return c.ProviderCommentVote.mutate(ctx, m)
+	case *ProviderPopularityMutation:
+		return c.ProviderPopularity.mutate(ctx, m)
 	case *ProxyMutation:
 		return c.Proxy.mutate(ctx, m)
 	case *RedeemCodeMutation:
@@ -4934,6 +4942,139 @@ func (c *ProviderCommentVoteClient) mutate(ctx context.Context, m *ProviderComme
 	}
 }
 
+// ProviderPopularityClient is a client for the ProviderPopularity schema.
+type ProviderPopularityClient struct {
+	config
+}
+
+// NewProviderPopularityClient returns a client for the ProviderPopularity from the given config.
+func NewProviderPopularityClient(c config) *ProviderPopularityClient {
+	return &ProviderPopularityClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `providerpopularity.Hooks(f(g(h())))`.
+func (c *ProviderPopularityClient) Use(hooks ...Hook) {
+	c.hooks.ProviderPopularity = append(c.hooks.ProviderPopularity, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `providerpopularity.Intercept(f(g(h())))`.
+func (c *ProviderPopularityClient) Intercept(interceptors ...Interceptor) {
+	c.inters.ProviderPopularity = append(c.inters.ProviderPopularity, interceptors...)
+}
+
+// Create returns a builder for creating a ProviderPopularity entity.
+func (c *ProviderPopularityClient) Create() *ProviderPopularityCreate {
+	mutation := newProviderPopularityMutation(c.config, OpCreate)
+	return &ProviderPopularityCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of ProviderPopularity entities.
+func (c *ProviderPopularityClient) CreateBulk(builders ...*ProviderPopularityCreate) *ProviderPopularityCreateBulk {
+	return &ProviderPopularityCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *ProviderPopularityClient) MapCreateBulk(slice any, setFunc func(*ProviderPopularityCreate, int)) *ProviderPopularityCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &ProviderPopularityCreateBulk{err: fmt.Errorf("calling to ProviderPopularityClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*ProviderPopularityCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &ProviderPopularityCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for ProviderPopularity.
+func (c *ProviderPopularityClient) Update() *ProviderPopularityUpdate {
+	mutation := newProviderPopularityMutation(c.config, OpUpdate)
+	return &ProviderPopularityUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *ProviderPopularityClient) UpdateOne(_m *ProviderPopularity) *ProviderPopularityUpdateOne {
+	mutation := newProviderPopularityMutation(c.config, OpUpdateOne, withProviderPopularity(_m))
+	return &ProviderPopularityUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *ProviderPopularityClient) UpdateOneID(id int64) *ProviderPopularityUpdateOne {
+	mutation := newProviderPopularityMutation(c.config, OpUpdateOne, withProviderPopularityID(id))
+	return &ProviderPopularityUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for ProviderPopularity.
+func (c *ProviderPopularityClient) Delete() *ProviderPopularityDelete {
+	mutation := newProviderPopularityMutation(c.config, OpDelete)
+	return &ProviderPopularityDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *ProviderPopularityClient) DeleteOne(_m *ProviderPopularity) *ProviderPopularityDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *ProviderPopularityClient) DeleteOneID(id int64) *ProviderPopularityDeleteOne {
+	builder := c.Delete().Where(providerpopularity.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &ProviderPopularityDeleteOne{builder}
+}
+
+// Query returns a query builder for ProviderPopularity.
+func (c *ProviderPopularityClient) Query() *ProviderPopularityQuery {
+	return &ProviderPopularityQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeProviderPopularity},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a ProviderPopularity entity by its id.
+func (c *ProviderPopularityClient) Get(ctx context.Context, id int64) (*ProviderPopularity, error) {
+	return c.Query().Where(providerpopularity.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *ProviderPopularityClient) GetX(ctx context.Context, id int64) *ProviderPopularity {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *ProviderPopularityClient) Hooks() []Hook {
+	return c.hooks.ProviderPopularity
+}
+
+// Interceptors returns the client interceptors.
+func (c *ProviderPopularityClient) Interceptors() []Interceptor {
+	return c.inters.ProviderPopularity
+}
+
+func (c *ProviderPopularityClient) mutate(ctx context.Context, m *ProviderPopularityMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&ProviderPopularityCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&ProviderPopularityUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&ProviderPopularityUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&ProviderPopularityDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown ProviderPopularity mutation op: %q", m.Op())
+	}
+}
+
 // ProxyClient is a client for the Proxy schema.
 type ProxyClient struct {
 	config
@@ -7143,10 +7284,10 @@ type (
 		ChannelMonitorHistory, ChannelMonitorRequestTemplate, ErrorPassthroughRule,
 		Group, IdempotencyRecord, IdentityAdoptionDecision, PaymentAuditLog,
 		PaymentOrder, PaymentProviderInstance, PendingAuthSession, PromoCode,
-		PromoCodeUsage, ProviderComment, ProviderCommentVote, Proxy, RedeemCode,
-		SecuritySecret, Setting, SubscriptionPlan, TLSFingerprintProfile,
-		UsageCleanupTask, UsageLog, User, UserAllowedGroup, UserAttributeDefinition,
-		UserAttributeValue, UserSubscription []ent.Hook
+		PromoCodeUsage, ProviderComment, ProviderCommentVote, ProviderPopularity,
+		Proxy, RedeemCode, SecuritySecret, Setting, SubscriptionPlan,
+		TLSFingerprintProfile, UsageCleanupTask, UsageLog, User, UserAllowedGroup,
+		UserAttributeDefinition, UserAttributeValue, UserSubscription []ent.Hook
 	}
 	inters struct {
 		APIKey, Account, AccountGroup, Announcement, AnnouncementRead, AshDeposit,
@@ -7155,10 +7296,10 @@ type (
 		ChannelMonitorHistory, ChannelMonitorRequestTemplate, ErrorPassthroughRule,
 		Group, IdempotencyRecord, IdentityAdoptionDecision, PaymentAuditLog,
 		PaymentOrder, PaymentProviderInstance, PendingAuthSession, PromoCode,
-		PromoCodeUsage, ProviderComment, ProviderCommentVote, Proxy, RedeemCode,
-		SecuritySecret, Setting, SubscriptionPlan, TLSFingerprintProfile,
-		UsageCleanupTask, UsageLog, User, UserAllowedGroup, UserAttributeDefinition,
-		UserAttributeValue, UserSubscription []ent.Interceptor
+		PromoCodeUsage, ProviderComment, ProviderCommentVote, ProviderPopularity,
+		Proxy, RedeemCode, SecuritySecret, Setting, SubscriptionPlan,
+		TLSFingerprintProfile, UsageCleanupTask, UsageLog, User, UserAllowedGroup,
+		UserAttributeDefinition, UserAttributeValue, UserSubscription []ent.Interceptor
 	}
 )
 

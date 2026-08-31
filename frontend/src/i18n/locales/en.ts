@@ -97,7 +97,13 @@ export default {
       claude: 'Claude',
       gemini: 'Gemini',
       antigravity: 'Antigravity',
-      more: 'More'
+      deepseek: 'DeepSeek',
+      yunwu: 'Yunwu',
+      more: 'More',
+      sortByDefault: 'Default',
+      sortByPopularity: 'Popularity',
+      clicks: 'clicks',
+      popular: 'Popular'
     },
     // CTA section
     cta: {

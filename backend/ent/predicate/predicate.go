@@ -90,6 +90,9 @@ type ProviderComment func(*sql.Selector)
 // ProviderCommentVote is the predicate function for providercommentvote builders.
 type ProviderCommentVote func(*sql.Selector)
 
+// ProviderPopularity is the predicate function for providerpopularity builders.
+type ProviderPopularity func(*sql.Selector)
+
 // Proxy is the predicate function for proxy builders.
 type Proxy func(*sql.Selector)
 
