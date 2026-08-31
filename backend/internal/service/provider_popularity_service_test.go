@@ -206,6 +206,15 @@ func TestProviderPopularityService_RecordClick_InvalidProvider(t *testing.T) {
 		})
 		assert.ErrorIs(t, err, domain.ErrInvalidProviderName)
 	}
+
+	// Valid domain provider like chatfire.cn
+	resDomain, err := svc.RecordClick(ctx, service.RecordClickInput{
+		Provider:  "chatfire.cn",
+		ClientIP:  "127.0.0.1",
+		UserAgent: validUA,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "chatfire.cn", resDomain.Provider)
 }
 
 func TestProviderPopularityService_GetAndListPopularity(t *testing.T) {

@@ -9,17 +9,17 @@ import (
 )
 
 var (
-	ErrInvalidProviderName   = infraerrors.BadRequest("INVALID_PROVIDER_NAME", "provider name must be between 1 and 100 alphanumeric characters, hyphens or underscores")
+	ErrInvalidProviderName   = infraerrors.BadRequest("INVALID_PROVIDER_NAME", "provider name must be between 1 and 100 alphanumeric characters, dots, hyphens or underscores")
 	ErrClickRateLimitExceeded = infraerrors.TooManyRequests("CLICK_RATE_LIMIT_EXCEEDED", "too many click requests, please slow down")
 	ErrBotDetected           = infraerrors.Forbidden("BOT_DETECTED", "automated bot traffic is not allowed")
 )
 
-var providerSlugRegex = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,100}$`)
+var providerSlugRegex = regexp.MustCompile(`^[a-zA-Z0-9_.-]{1,100}$`)
 
 // SanitizeProviderSlug validates and cleans provider slug
 func SanitizeProviderSlug(slug string) (string, error) {
 	clean := strings.TrimSpace(slug)
-	if clean == "" || len(clean) > 100 || !providerSlugRegex.MatchString(clean) {
+	if clean == "" || len(clean) > 100 || !providerSlugRegex.MatchString(clean) || strings.Contains(clean, "..") {
 		return "", ErrInvalidProviderName
 	}
 	return strings.ToLower(clean), nil
