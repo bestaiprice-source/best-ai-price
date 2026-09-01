@@ -20,10 +20,13 @@ import (
 func newProviderPopularityRepoSQLite(t *testing.T) (service.ProviderPopularityRepository, *dbent.Client) {
 	t.Helper()
 
-	dbName := fmt.Sprintf("file:provider_popularity_test_%d?mode=memory&cache=shared", time.Now().UnixNano())
+	dbName := fmt.Sprintf("file:provider_popularity_test_%d?mode=memory&cache=shared&_fk=1", time.Now().UnixNano())
 	db, err := sql.Open("sqlite", dbName)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })
+
+	_, err = db.Exec("PRAGMA foreign_keys = ON")
+	require.NoError(t, err)
 
 	drv := entsql.OpenDB(dialect.SQLite, db)
 	client := enttest.NewClient(t, enttest.WithOptions(dbent.Driver(drv)))
