@@ -29,6 +29,8 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/channelmonitorhistory"
 	"github.com/Wei-Shaw/sub2api/ent/channelmonitorrequesttemplate"
 	"github.com/Wei-Shaw/sub2api/ent/errorpassthroughrule"
+	"github.com/Wei-Shaw/sub2api/ent/forumpost"
+	"github.com/Wei-Shaw/sub2api/ent/forumpostvote"
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/idempotencyrecord"
 	"github.com/Wei-Shaw/sub2api/ent/identityadoptiondecision"
@@ -84,6 +86,8 @@ const (
 	TypeChannelMonitorHistory         = "ChannelMonitorHistory"
 	TypeChannelMonitorRequestTemplate = "ChannelMonitorRequestTemplate"
 	TypeErrorPassthroughRule          = "ErrorPassthroughRule"
+	TypeForumPost                     = "ForumPost"
+	TypeForumPostVote                 = "ForumPostVote"
 	TypeGroup                         = "Group"
 	TypeIdempotencyRecord             = "IdempotencyRecord"
 	TypeIdentityAdoptionDecision      = "IdentityAdoptionDecision"
@@ -19102,6 +19106,1801 @@ func (m *ErrorPassthroughRuleMutation) ClearEdge(name string) error {
 // It returns an error if the edge is not defined in the schema.
 func (m *ErrorPassthroughRuleMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown ErrorPassthroughRule edge %s", name)
+}
+
+// ForumPostMutation represents an operation that mutates the ForumPost nodes in the graph.
+type ForumPostMutation struct {
+	config
+	op               Op
+	typ              string
+	id               *int64
+	created_at       *time.Time
+	updated_at       *time.Time
+	content          *string
+	status           *string
+	like_count       *int
+	addlike_count    *int
+	dislike_count    *int
+	adddislike_count *int
+	reply_count      *int
+	addreply_count   *int
+	clearedFields    map[string]struct{}
+	user             *int64
+	cleareduser      bool
+	parent           *int64
+	clearedparent    bool
+	replies          map[int64]struct{}
+	removedreplies   map[int64]struct{}
+	clearedreplies   bool
+	votes            map[int64]struct{}
+	removedvotes     map[int64]struct{}
+	clearedvotes     bool
+	done             bool
+	oldValue         func(context.Context) (*ForumPost, error)
+	predicates       []predicate.ForumPost
+}
+
+var _ ent.Mutation = (*ForumPostMutation)(nil)
+
+// forumpostOption allows management of the mutation configuration using functional options.
+type forumpostOption func(*ForumPostMutation)
+
+// newForumPostMutation creates new mutation for the ForumPost entity.
+func newForumPostMutation(c config, op Op, opts ...forumpostOption) *ForumPostMutation {
+	m := &ForumPostMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeForumPost,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withForumPostID sets the ID field of the mutation.
+func withForumPostID(id int64) forumpostOption {
+	return func(m *ForumPostMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *ForumPost
+		)
+		m.oldValue = func(ctx context.Context) (*ForumPost, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().ForumPost.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withForumPost sets the old ForumPost of the mutation.
+func withForumPost(node *ForumPost) forumpostOption {
+	return func(m *ForumPostMutation) {
+		m.oldValue = func(context.Context) (*ForumPost, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m ForumPostMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m ForumPostMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *ForumPostMutation) ID() (id int64, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *ForumPostMutation) IDs(ctx context.Context) ([]int64, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int64{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().ForumPost.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *ForumPostMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *ForumPostMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the ForumPost entity.
+// If the ForumPost object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ForumPostMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *ForumPostMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *ForumPostMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *ForumPostMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the ForumPost entity.
+// If the ForumPost object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ForumPostMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *ForumPostMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// SetUserID sets the "user_id" field.
+func (m *ForumPostMutation) SetUserID(i int64) {
+	m.user = &i
+}
+
+// UserID returns the value of the "user_id" field in the mutation.
+func (m *ForumPostMutation) UserID() (r int64, exists bool) {
+	v := m.user
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUserID returns the old "user_id" field's value of the ForumPost entity.
+// If the ForumPost object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ForumPostMutation) OldUserID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUserID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUserID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUserID: %w", err)
+	}
+	return oldValue.UserID, nil
+}
+
+// ResetUserID resets all changes to the "user_id" field.
+func (m *ForumPostMutation) ResetUserID() {
+	m.user = nil
+}
+
+// SetParentID sets the "parent_id" field.
+func (m *ForumPostMutation) SetParentID(i int64) {
+	m.parent = &i
+}
+
+// ParentID returns the value of the "parent_id" field in the mutation.
+func (m *ForumPostMutation) ParentID() (r int64, exists bool) {
+	v := m.parent
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldParentID returns the old "parent_id" field's value of the ForumPost entity.
+// If the ForumPost object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ForumPostMutation) OldParentID(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldParentID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldParentID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldParentID: %w", err)
+	}
+	return oldValue.ParentID, nil
+}
+
+// ClearParentID clears the value of the "parent_id" field.
+func (m *ForumPostMutation) ClearParentID() {
+	m.parent = nil
+	m.clearedFields[forumpost.FieldParentID] = struct{}{}
+}
+
+// ParentIDCleared returns if the "parent_id" field was cleared in this mutation.
+func (m *ForumPostMutation) ParentIDCleared() bool {
+	_, ok := m.clearedFields[forumpost.FieldParentID]
+	return ok
+}
+
+// ResetParentID resets all changes to the "parent_id" field.
+func (m *ForumPostMutation) ResetParentID() {
+	m.parent = nil
+	delete(m.clearedFields, forumpost.FieldParentID)
+}
+
+// SetContent sets the "content" field.
+func (m *ForumPostMutation) SetContent(s string) {
+	m.content = &s
+}
+
+// Content returns the value of the "content" field in the mutation.
+func (m *ForumPostMutation) Content() (r string, exists bool) {
+	v := m.content
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldContent returns the old "content" field's value of the ForumPost entity.
+// If the ForumPost object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ForumPostMutation) OldContent(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldContent is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldContent requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldContent: %w", err)
+	}
+	return oldValue.Content, nil
+}
+
+// ResetContent resets all changes to the "content" field.
+func (m *ForumPostMutation) ResetContent() {
+	m.content = nil
+}
+
+// SetStatus sets the "status" field.
+func (m *ForumPostMutation) SetStatus(s string) {
+	m.status = &s
+}
+
+// Status returns the value of the "status" field in the mutation.
+func (m *ForumPostMutation) Status() (r string, exists bool) {
+	v := m.status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStatus returns the old "status" field's value of the ForumPost entity.
+// If the ForumPost object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ForumPostMutation) OldStatus(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
+	}
+	return oldValue.Status, nil
+}
+
+// ResetStatus resets all changes to the "status" field.
+func (m *ForumPostMutation) ResetStatus() {
+	m.status = nil
+}
+
+// SetLikeCount sets the "like_count" field.
+func (m *ForumPostMutation) SetLikeCount(i int) {
+	m.like_count = &i
+	m.addlike_count = nil
+}
+
+// LikeCount returns the value of the "like_count" field in the mutation.
+func (m *ForumPostMutation) LikeCount() (r int, exists bool) {
+	v := m.like_count
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLikeCount returns the old "like_count" field's value of the ForumPost entity.
+// If the ForumPost object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ForumPostMutation) OldLikeCount(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLikeCount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLikeCount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLikeCount: %w", err)
+	}
+	return oldValue.LikeCount, nil
+}
+
+// AddLikeCount adds i to the "like_count" field.
+func (m *ForumPostMutation) AddLikeCount(i int) {
+	if m.addlike_count != nil {
+		*m.addlike_count += i
+	} else {
+		m.addlike_count = &i
+	}
+}
+
+// AddedLikeCount returns the value that was added to the "like_count" field in this mutation.
+func (m *ForumPostMutation) AddedLikeCount() (r int, exists bool) {
+	v := m.addlike_count
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetLikeCount resets all changes to the "like_count" field.
+func (m *ForumPostMutation) ResetLikeCount() {
+	m.like_count = nil
+	m.addlike_count = nil
+}
+
+// SetDislikeCount sets the "dislike_count" field.
+func (m *ForumPostMutation) SetDislikeCount(i int) {
+	m.dislike_count = &i
+	m.adddislike_count = nil
+}
+
+// DislikeCount returns the value of the "dislike_count" field in the mutation.
+func (m *ForumPostMutation) DislikeCount() (r int, exists bool) {
+	v := m.dislike_count
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDislikeCount returns the old "dislike_count" field's value of the ForumPost entity.
+// If the ForumPost object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ForumPostMutation) OldDislikeCount(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDislikeCount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDislikeCount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDislikeCount: %w", err)
+	}
+	return oldValue.DislikeCount, nil
+}
+
+// AddDislikeCount adds i to the "dislike_count" field.
+func (m *ForumPostMutation) AddDislikeCount(i int) {
+	if m.adddislike_count != nil {
+		*m.adddislike_count += i
+	} else {
+		m.adddislike_count = &i
+	}
+}
+
+// AddedDislikeCount returns the value that was added to the "dislike_count" field in this mutation.
+func (m *ForumPostMutation) AddedDislikeCount() (r int, exists bool) {
+	v := m.adddislike_count
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetDislikeCount resets all changes to the "dislike_count" field.
+func (m *ForumPostMutation) ResetDislikeCount() {
+	m.dislike_count = nil
+	m.adddislike_count = nil
+}
+
+// SetReplyCount sets the "reply_count" field.
+func (m *ForumPostMutation) SetReplyCount(i int) {
+	m.reply_count = &i
+	m.addreply_count = nil
+}
+
+// ReplyCount returns the value of the "reply_count" field in the mutation.
+func (m *ForumPostMutation) ReplyCount() (r int, exists bool) {
+	v := m.reply_count
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldReplyCount returns the old "reply_count" field's value of the ForumPost entity.
+// If the ForumPost object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ForumPostMutation) OldReplyCount(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldReplyCount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldReplyCount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldReplyCount: %w", err)
+	}
+	return oldValue.ReplyCount, nil
+}
+
+// AddReplyCount adds i to the "reply_count" field.
+func (m *ForumPostMutation) AddReplyCount(i int) {
+	if m.addreply_count != nil {
+		*m.addreply_count += i
+	} else {
+		m.addreply_count = &i
+	}
+}
+
+// AddedReplyCount returns the value that was added to the "reply_count" field in this mutation.
+func (m *ForumPostMutation) AddedReplyCount() (r int, exists bool) {
+	v := m.addreply_count
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetReplyCount resets all changes to the "reply_count" field.
+func (m *ForumPostMutation) ResetReplyCount() {
+	m.reply_count = nil
+	m.addreply_count = nil
+}
+
+// ClearUser clears the "user" edge to the User entity.
+func (m *ForumPostMutation) ClearUser() {
+	m.cleareduser = true
+	m.clearedFields[forumpost.FieldUserID] = struct{}{}
+}
+
+// UserCleared reports if the "user" edge to the User entity was cleared.
+func (m *ForumPostMutation) UserCleared() bool {
+	return m.cleareduser
+}
+
+// UserIDs returns the "user" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// UserID instead. It exists only for internal usage by the builders.
+func (m *ForumPostMutation) UserIDs() (ids []int64) {
+	if id := m.user; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetUser resets all changes to the "user" edge.
+func (m *ForumPostMutation) ResetUser() {
+	m.user = nil
+	m.cleareduser = false
+}
+
+// ClearParent clears the "parent" edge to the ForumPost entity.
+func (m *ForumPostMutation) ClearParent() {
+	m.clearedparent = true
+	m.clearedFields[forumpost.FieldParentID] = struct{}{}
+}
+
+// ParentCleared reports if the "parent" edge to the ForumPost entity was cleared.
+func (m *ForumPostMutation) ParentCleared() bool {
+	return m.ParentIDCleared() || m.clearedparent
+}
+
+// ParentIDs returns the "parent" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// ParentID instead. It exists only for internal usage by the builders.
+func (m *ForumPostMutation) ParentIDs() (ids []int64) {
+	if id := m.parent; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetParent resets all changes to the "parent" edge.
+func (m *ForumPostMutation) ResetParent() {
+	m.parent = nil
+	m.clearedparent = false
+}
+
+// AddReplyIDs adds the "replies" edge to the ForumPost entity by ids.
+func (m *ForumPostMutation) AddReplyIDs(ids ...int64) {
+	if m.replies == nil {
+		m.replies = make(map[int64]struct{})
+	}
+	for i := range ids {
+		m.replies[ids[i]] = struct{}{}
+	}
+}
+
+// ClearReplies clears the "replies" edge to the ForumPost entity.
+func (m *ForumPostMutation) ClearReplies() {
+	m.clearedreplies = true
+}
+
+// RepliesCleared reports if the "replies" edge to the ForumPost entity was cleared.
+func (m *ForumPostMutation) RepliesCleared() bool {
+	return m.clearedreplies
+}
+
+// RemoveReplyIDs removes the "replies" edge to the ForumPost entity by IDs.
+func (m *ForumPostMutation) RemoveReplyIDs(ids ...int64) {
+	if m.removedreplies == nil {
+		m.removedreplies = make(map[int64]struct{})
+	}
+	for i := range ids {
+		delete(m.replies, ids[i])
+		m.removedreplies[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedReplies returns the removed IDs of the "replies" edge to the ForumPost entity.
+func (m *ForumPostMutation) RemovedRepliesIDs() (ids []int64) {
+	for id := range m.removedreplies {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// RepliesIDs returns the "replies" edge IDs in the mutation.
+func (m *ForumPostMutation) RepliesIDs() (ids []int64) {
+	for id := range m.replies {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetReplies resets all changes to the "replies" edge.
+func (m *ForumPostMutation) ResetReplies() {
+	m.replies = nil
+	m.clearedreplies = false
+	m.removedreplies = nil
+}
+
+// AddVoteIDs adds the "votes" edge to the ForumPostVote entity by ids.
+func (m *ForumPostMutation) AddVoteIDs(ids ...int64) {
+	if m.votes == nil {
+		m.votes = make(map[int64]struct{})
+	}
+	for i := range ids {
+		m.votes[ids[i]] = struct{}{}
+	}
+}
+
+// ClearVotes clears the "votes" edge to the ForumPostVote entity.
+func (m *ForumPostMutation) ClearVotes() {
+	m.clearedvotes = true
+}
+
+// VotesCleared reports if the "votes" edge to the ForumPostVote entity was cleared.
+func (m *ForumPostMutation) VotesCleared() bool {
+	return m.clearedvotes
+}
+
+// RemoveVoteIDs removes the "votes" edge to the ForumPostVote entity by IDs.
+func (m *ForumPostMutation) RemoveVoteIDs(ids ...int64) {
+	if m.removedvotes == nil {
+		m.removedvotes = make(map[int64]struct{})
+	}
+	for i := range ids {
+		delete(m.votes, ids[i])
+		m.removedvotes[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedVotes returns the removed IDs of the "votes" edge to the ForumPostVote entity.
+func (m *ForumPostMutation) RemovedVotesIDs() (ids []int64) {
+	for id := range m.removedvotes {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// VotesIDs returns the "votes" edge IDs in the mutation.
+func (m *ForumPostMutation) VotesIDs() (ids []int64) {
+	for id := range m.votes {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetVotes resets all changes to the "votes" edge.
+func (m *ForumPostMutation) ResetVotes() {
+	m.votes = nil
+	m.clearedvotes = false
+	m.removedvotes = nil
+}
+
+// Where appends a list predicates to the ForumPostMutation builder.
+func (m *ForumPostMutation) Where(ps ...predicate.ForumPost) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the ForumPostMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *ForumPostMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.ForumPost, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *ForumPostMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *ForumPostMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (ForumPost).
+func (m *ForumPostMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *ForumPostMutation) Fields() []string {
+	fields := make([]string, 0, 9)
+	if m.created_at != nil {
+		fields = append(fields, forumpost.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, forumpost.FieldUpdatedAt)
+	}
+	if m.user != nil {
+		fields = append(fields, forumpost.FieldUserID)
+	}
+	if m.parent != nil {
+		fields = append(fields, forumpost.FieldParentID)
+	}
+	if m.content != nil {
+		fields = append(fields, forumpost.FieldContent)
+	}
+	if m.status != nil {
+		fields = append(fields, forumpost.FieldStatus)
+	}
+	if m.like_count != nil {
+		fields = append(fields, forumpost.FieldLikeCount)
+	}
+	if m.dislike_count != nil {
+		fields = append(fields, forumpost.FieldDislikeCount)
+	}
+	if m.reply_count != nil {
+		fields = append(fields, forumpost.FieldReplyCount)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *ForumPostMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case forumpost.FieldCreatedAt:
+		return m.CreatedAt()
+	case forumpost.FieldUpdatedAt:
+		return m.UpdatedAt()
+	case forumpost.FieldUserID:
+		return m.UserID()
+	case forumpost.FieldParentID:
+		return m.ParentID()
+	case forumpost.FieldContent:
+		return m.Content()
+	case forumpost.FieldStatus:
+		return m.Status()
+	case forumpost.FieldLikeCount:
+		return m.LikeCount()
+	case forumpost.FieldDislikeCount:
+		return m.DislikeCount()
+	case forumpost.FieldReplyCount:
+		return m.ReplyCount()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *ForumPostMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case forumpost.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case forumpost.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	case forumpost.FieldUserID:
+		return m.OldUserID(ctx)
+	case forumpost.FieldParentID:
+		return m.OldParentID(ctx)
+	case forumpost.FieldContent:
+		return m.OldContent(ctx)
+	case forumpost.FieldStatus:
+		return m.OldStatus(ctx)
+	case forumpost.FieldLikeCount:
+		return m.OldLikeCount(ctx)
+	case forumpost.FieldDislikeCount:
+		return m.OldDislikeCount(ctx)
+	case forumpost.FieldReplyCount:
+		return m.OldReplyCount(ctx)
+	}
+	return nil, fmt.Errorf("unknown ForumPost field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *ForumPostMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case forumpost.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case forumpost.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	case forumpost.FieldUserID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUserID(v)
+		return nil
+	case forumpost.FieldParentID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetParentID(v)
+		return nil
+	case forumpost.FieldContent:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetContent(v)
+		return nil
+	case forumpost.FieldStatus:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStatus(v)
+		return nil
+	case forumpost.FieldLikeCount:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLikeCount(v)
+		return nil
+	case forumpost.FieldDislikeCount:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDislikeCount(v)
+		return nil
+	case forumpost.FieldReplyCount:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetReplyCount(v)
+		return nil
+	}
+	return fmt.Errorf("unknown ForumPost field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *ForumPostMutation) AddedFields() []string {
+	var fields []string
+	if m.addlike_count != nil {
+		fields = append(fields, forumpost.FieldLikeCount)
+	}
+	if m.adddislike_count != nil {
+		fields = append(fields, forumpost.FieldDislikeCount)
+	}
+	if m.addreply_count != nil {
+		fields = append(fields, forumpost.FieldReplyCount)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *ForumPostMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case forumpost.FieldLikeCount:
+		return m.AddedLikeCount()
+	case forumpost.FieldDislikeCount:
+		return m.AddedDislikeCount()
+	case forumpost.FieldReplyCount:
+		return m.AddedReplyCount()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *ForumPostMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case forumpost.FieldLikeCount:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddLikeCount(v)
+		return nil
+	case forumpost.FieldDislikeCount:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddDislikeCount(v)
+		return nil
+	case forumpost.FieldReplyCount:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddReplyCount(v)
+		return nil
+	}
+	return fmt.Errorf("unknown ForumPost numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *ForumPostMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(forumpost.FieldParentID) {
+		fields = append(fields, forumpost.FieldParentID)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *ForumPostMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *ForumPostMutation) ClearField(name string) error {
+	switch name {
+	case forumpost.FieldParentID:
+		m.ClearParentID()
+		return nil
+	}
+	return fmt.Errorf("unknown ForumPost nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *ForumPostMutation) ResetField(name string) error {
+	switch name {
+	case forumpost.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case forumpost.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	case forumpost.FieldUserID:
+		m.ResetUserID()
+		return nil
+	case forumpost.FieldParentID:
+		m.ResetParentID()
+		return nil
+	case forumpost.FieldContent:
+		m.ResetContent()
+		return nil
+	case forumpost.FieldStatus:
+		m.ResetStatus()
+		return nil
+	case forumpost.FieldLikeCount:
+		m.ResetLikeCount()
+		return nil
+	case forumpost.FieldDislikeCount:
+		m.ResetDislikeCount()
+		return nil
+	case forumpost.FieldReplyCount:
+		m.ResetReplyCount()
+		return nil
+	}
+	return fmt.Errorf("unknown ForumPost field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *ForumPostMutation) AddedEdges() []string {
+	edges := make([]string, 0, 4)
+	if m.user != nil {
+		edges = append(edges, forumpost.EdgeUser)
+	}
+	if m.parent != nil {
+		edges = append(edges, forumpost.EdgeParent)
+	}
+	if m.replies != nil {
+		edges = append(edges, forumpost.EdgeReplies)
+	}
+	if m.votes != nil {
+		edges = append(edges, forumpost.EdgeVotes)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *ForumPostMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case forumpost.EdgeUser:
+		if id := m.user; id != nil {
+			return []ent.Value{*id}
+		}
+	case forumpost.EdgeParent:
+		if id := m.parent; id != nil {
+			return []ent.Value{*id}
+		}
+	case forumpost.EdgeReplies:
+		ids := make([]ent.Value, 0, len(m.replies))
+		for id := range m.replies {
+			ids = append(ids, id)
+		}
+		return ids
+	case forumpost.EdgeVotes:
+		ids := make([]ent.Value, 0, len(m.votes))
+		for id := range m.votes {
+			ids = append(ids, id)
+		}
+		return ids
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *ForumPostMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 4)
+	if m.removedreplies != nil {
+		edges = append(edges, forumpost.EdgeReplies)
+	}
+	if m.removedvotes != nil {
+		edges = append(edges, forumpost.EdgeVotes)
+	}
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *ForumPostMutation) RemovedIDs(name string) []ent.Value {
+	switch name {
+	case forumpost.EdgeReplies:
+		ids := make([]ent.Value, 0, len(m.removedreplies))
+		for id := range m.removedreplies {
+			ids = append(ids, id)
+		}
+		return ids
+	case forumpost.EdgeVotes:
+		ids := make([]ent.Value, 0, len(m.removedvotes))
+		for id := range m.removedvotes {
+			ids = append(ids, id)
+		}
+		return ids
+	}
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *ForumPostMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 4)
+	if m.cleareduser {
+		edges = append(edges, forumpost.EdgeUser)
+	}
+	if m.clearedparent {
+		edges = append(edges, forumpost.EdgeParent)
+	}
+	if m.clearedreplies {
+		edges = append(edges, forumpost.EdgeReplies)
+	}
+	if m.clearedvotes {
+		edges = append(edges, forumpost.EdgeVotes)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *ForumPostMutation) EdgeCleared(name string) bool {
+	switch name {
+	case forumpost.EdgeUser:
+		return m.cleareduser
+	case forumpost.EdgeParent:
+		return m.clearedparent
+	case forumpost.EdgeReplies:
+		return m.clearedreplies
+	case forumpost.EdgeVotes:
+		return m.clearedvotes
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *ForumPostMutation) ClearEdge(name string) error {
+	switch name {
+	case forumpost.EdgeUser:
+		m.ClearUser()
+		return nil
+	case forumpost.EdgeParent:
+		m.ClearParent()
+		return nil
+	}
+	return fmt.Errorf("unknown ForumPost unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *ForumPostMutation) ResetEdge(name string) error {
+	switch name {
+	case forumpost.EdgeUser:
+		m.ResetUser()
+		return nil
+	case forumpost.EdgeParent:
+		m.ResetParent()
+		return nil
+	case forumpost.EdgeReplies:
+		m.ResetReplies()
+		return nil
+	case forumpost.EdgeVotes:
+		m.ResetVotes()
+		return nil
+	}
+	return fmt.Errorf("unknown ForumPost edge %s", name)
+}
+
+// ForumPostVoteMutation represents an operation that mutates the ForumPostVote nodes in the graph.
+type ForumPostVoteMutation struct {
+	config
+	op            Op
+	typ           string
+	id            *int64
+	created_at    *time.Time
+	updated_at    *time.Time
+	vote_type     *string
+	clearedFields map[string]struct{}
+	post          *int64
+	clearedpost   bool
+	user          *int64
+	cleareduser   bool
+	done          bool
+	oldValue      func(context.Context) (*ForumPostVote, error)
+	predicates    []predicate.ForumPostVote
+}
+
+var _ ent.Mutation = (*ForumPostVoteMutation)(nil)
+
+// forumpostvoteOption allows management of the mutation configuration using functional options.
+type forumpostvoteOption func(*ForumPostVoteMutation)
+
+// newForumPostVoteMutation creates new mutation for the ForumPostVote entity.
+func newForumPostVoteMutation(c config, op Op, opts ...forumpostvoteOption) *ForumPostVoteMutation {
+	m := &ForumPostVoteMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeForumPostVote,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withForumPostVoteID sets the ID field of the mutation.
+func withForumPostVoteID(id int64) forumpostvoteOption {
+	return func(m *ForumPostVoteMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *ForumPostVote
+		)
+		m.oldValue = func(ctx context.Context) (*ForumPostVote, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().ForumPostVote.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withForumPostVote sets the old ForumPostVote of the mutation.
+func withForumPostVote(node *ForumPostVote) forumpostvoteOption {
+	return func(m *ForumPostVoteMutation) {
+		m.oldValue = func(context.Context) (*ForumPostVote, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m ForumPostVoteMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m ForumPostVoteMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *ForumPostVoteMutation) ID() (id int64, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *ForumPostVoteMutation) IDs(ctx context.Context) ([]int64, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int64{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().ForumPostVote.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *ForumPostVoteMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *ForumPostVoteMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the ForumPostVote entity.
+// If the ForumPostVote object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ForumPostVoteMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *ForumPostVoteMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *ForumPostVoteMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *ForumPostVoteMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the ForumPostVote entity.
+// If the ForumPostVote object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ForumPostVoteMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *ForumPostVoteMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// SetPostID sets the "post_id" field.
+func (m *ForumPostVoteMutation) SetPostID(i int64) {
+	m.post = &i
+}
+
+// PostID returns the value of the "post_id" field in the mutation.
+func (m *ForumPostVoteMutation) PostID() (r int64, exists bool) {
+	v := m.post
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPostID returns the old "post_id" field's value of the ForumPostVote entity.
+// If the ForumPostVote object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ForumPostVoteMutation) OldPostID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPostID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPostID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPostID: %w", err)
+	}
+	return oldValue.PostID, nil
+}
+
+// ResetPostID resets all changes to the "post_id" field.
+func (m *ForumPostVoteMutation) ResetPostID() {
+	m.post = nil
+}
+
+// SetUserID sets the "user_id" field.
+func (m *ForumPostVoteMutation) SetUserID(i int64) {
+	m.user = &i
+}
+
+// UserID returns the value of the "user_id" field in the mutation.
+func (m *ForumPostVoteMutation) UserID() (r int64, exists bool) {
+	v := m.user
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUserID returns the old "user_id" field's value of the ForumPostVote entity.
+// If the ForumPostVote object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ForumPostVoteMutation) OldUserID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUserID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUserID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUserID: %w", err)
+	}
+	return oldValue.UserID, nil
+}
+
+// ResetUserID resets all changes to the "user_id" field.
+func (m *ForumPostVoteMutation) ResetUserID() {
+	m.user = nil
+}
+
+// SetVoteType sets the "vote_type" field.
+func (m *ForumPostVoteMutation) SetVoteType(s string) {
+	m.vote_type = &s
+}
+
+// VoteType returns the value of the "vote_type" field in the mutation.
+func (m *ForumPostVoteMutation) VoteType() (r string, exists bool) {
+	v := m.vote_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldVoteType returns the old "vote_type" field's value of the ForumPostVote entity.
+// If the ForumPostVote object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ForumPostVoteMutation) OldVoteType(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldVoteType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldVoteType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldVoteType: %w", err)
+	}
+	return oldValue.VoteType, nil
+}
+
+// ResetVoteType resets all changes to the "vote_type" field.
+func (m *ForumPostVoteMutation) ResetVoteType() {
+	m.vote_type = nil
+}
+
+// ClearPost clears the "post" edge to the ForumPost entity.
+func (m *ForumPostVoteMutation) ClearPost() {
+	m.clearedpost = true
+	m.clearedFields[forumpostvote.FieldPostID] = struct{}{}
+}
+
+// PostCleared reports if the "post" edge to the ForumPost entity was cleared.
+func (m *ForumPostVoteMutation) PostCleared() bool {
+	return m.clearedpost
+}
+
+// PostIDs returns the "post" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// PostID instead. It exists only for internal usage by the builders.
+func (m *ForumPostVoteMutation) PostIDs() (ids []int64) {
+	if id := m.post; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetPost resets all changes to the "post" edge.
+func (m *ForumPostVoteMutation) ResetPost() {
+	m.post = nil
+	m.clearedpost = false
+}
+
+// ClearUser clears the "user" edge to the User entity.
+func (m *ForumPostVoteMutation) ClearUser() {
+	m.cleareduser = true
+	m.clearedFields[forumpostvote.FieldUserID] = struct{}{}
+}
+
+// UserCleared reports if the "user" edge to the User entity was cleared.
+func (m *ForumPostVoteMutation) UserCleared() bool {
+	return m.cleareduser
+}
+
+// UserIDs returns the "user" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// UserID instead. It exists only for internal usage by the builders.
+func (m *ForumPostVoteMutation) UserIDs() (ids []int64) {
+	if id := m.user; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetUser resets all changes to the "user" edge.
+func (m *ForumPostVoteMutation) ResetUser() {
+	m.user = nil
+	m.cleareduser = false
+}
+
+// Where appends a list predicates to the ForumPostVoteMutation builder.
+func (m *ForumPostVoteMutation) Where(ps ...predicate.ForumPostVote) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the ForumPostVoteMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *ForumPostVoteMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.ForumPostVote, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *ForumPostVoteMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *ForumPostVoteMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (ForumPostVote).
+func (m *ForumPostVoteMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *ForumPostVoteMutation) Fields() []string {
+	fields := make([]string, 0, 5)
+	if m.created_at != nil {
+		fields = append(fields, forumpostvote.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, forumpostvote.FieldUpdatedAt)
+	}
+	if m.post != nil {
+		fields = append(fields, forumpostvote.FieldPostID)
+	}
+	if m.user != nil {
+		fields = append(fields, forumpostvote.FieldUserID)
+	}
+	if m.vote_type != nil {
+		fields = append(fields, forumpostvote.FieldVoteType)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *ForumPostVoteMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case forumpostvote.FieldCreatedAt:
+		return m.CreatedAt()
+	case forumpostvote.FieldUpdatedAt:
+		return m.UpdatedAt()
+	case forumpostvote.FieldPostID:
+		return m.PostID()
+	case forumpostvote.FieldUserID:
+		return m.UserID()
+	case forumpostvote.FieldVoteType:
+		return m.VoteType()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *ForumPostVoteMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case forumpostvote.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case forumpostvote.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	case forumpostvote.FieldPostID:
+		return m.OldPostID(ctx)
+	case forumpostvote.FieldUserID:
+		return m.OldUserID(ctx)
+	case forumpostvote.FieldVoteType:
+		return m.OldVoteType(ctx)
+	}
+	return nil, fmt.Errorf("unknown ForumPostVote field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *ForumPostVoteMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case forumpostvote.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case forumpostvote.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	case forumpostvote.FieldPostID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPostID(v)
+		return nil
+	case forumpostvote.FieldUserID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUserID(v)
+		return nil
+	case forumpostvote.FieldVoteType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetVoteType(v)
+		return nil
+	}
+	return fmt.Errorf("unknown ForumPostVote field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *ForumPostVoteMutation) AddedFields() []string {
+	var fields []string
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *ForumPostVoteMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *ForumPostVoteMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown ForumPostVote numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *ForumPostVoteMutation) ClearedFields() []string {
+	return nil
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *ForumPostVoteMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *ForumPostVoteMutation) ClearField(name string) error {
+	return fmt.Errorf("unknown ForumPostVote nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *ForumPostVoteMutation) ResetField(name string) error {
+	switch name {
+	case forumpostvote.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case forumpostvote.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	case forumpostvote.FieldPostID:
+		m.ResetPostID()
+		return nil
+	case forumpostvote.FieldUserID:
+		m.ResetUserID()
+		return nil
+	case forumpostvote.FieldVoteType:
+		m.ResetVoteType()
+		return nil
+	}
+	return fmt.Errorf("unknown ForumPostVote field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *ForumPostVoteMutation) AddedEdges() []string {
+	edges := make([]string, 0, 2)
+	if m.post != nil {
+		edges = append(edges, forumpostvote.EdgePost)
+	}
+	if m.user != nil {
+		edges = append(edges, forumpostvote.EdgeUser)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *ForumPostVoteMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case forumpostvote.EdgePost:
+		if id := m.post; id != nil {
+			return []ent.Value{*id}
+		}
+	case forumpostvote.EdgeUser:
+		if id := m.user; id != nil {
+			return []ent.Value{*id}
+		}
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *ForumPostVoteMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 2)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *ForumPostVoteMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *ForumPostVoteMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 2)
+	if m.clearedpost {
+		edges = append(edges, forumpostvote.EdgePost)
+	}
+	if m.cleareduser {
+		edges = append(edges, forumpostvote.EdgeUser)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *ForumPostVoteMutation) EdgeCleared(name string) bool {
+	switch name {
+	case forumpostvote.EdgePost:
+		return m.clearedpost
+	case forumpostvote.EdgeUser:
+		return m.cleareduser
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *ForumPostVoteMutation) ClearEdge(name string) error {
+	switch name {
+	case forumpostvote.EdgePost:
+		m.ClearPost()
+		return nil
+	case forumpostvote.EdgeUser:
+		m.ClearUser()
+		return nil
+	}
+	return fmt.Errorf("unknown ForumPostVote unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *ForumPostVoteMutation) ResetEdge(name string) error {
+	switch name {
+	case forumpostvote.EdgePost:
+		m.ResetPost()
+		return nil
+	case forumpostvote.EdgeUser:
+		m.ResetUser()
+		return nil
+	}
+	return fmt.Errorf("unknown ForumPostVote edge %s", name)
 }
 
 // GroupMutation represents an operation that mutates the Group nodes in the graph.
@@ -44381,6 +46180,12 @@ type UserMutation struct {
 	provider_comment_votes        map[int64]struct{}
 	removedprovider_comment_votes map[int64]struct{}
 	clearedprovider_comment_votes bool
+	forum_posts                   map[int64]struct{}
+	removedforum_posts            map[int64]struct{}
+	clearedforum_posts            bool
+	forum_post_votes              map[int64]struct{}
+	removedforum_post_votes       map[int64]struct{}
+	clearedforum_post_votes       bool
 	done                          bool
 	oldValue                      func(context.Context) (*User, error)
 	predicates                    []predicate.User
@@ -46303,6 +48108,114 @@ func (m *UserMutation) ResetProviderCommentVotes() {
 	m.removedprovider_comment_votes = nil
 }
 
+// AddForumPostIDs adds the "forum_posts" edge to the ForumPost entity by ids.
+func (m *UserMutation) AddForumPostIDs(ids ...int64) {
+	if m.forum_posts == nil {
+		m.forum_posts = make(map[int64]struct{})
+	}
+	for i := range ids {
+		m.forum_posts[ids[i]] = struct{}{}
+	}
+}
+
+// ClearForumPosts clears the "forum_posts" edge to the ForumPost entity.
+func (m *UserMutation) ClearForumPosts() {
+	m.clearedforum_posts = true
+}
+
+// ForumPostsCleared reports if the "forum_posts" edge to the ForumPost entity was cleared.
+func (m *UserMutation) ForumPostsCleared() bool {
+	return m.clearedforum_posts
+}
+
+// RemoveForumPostIDs removes the "forum_posts" edge to the ForumPost entity by IDs.
+func (m *UserMutation) RemoveForumPostIDs(ids ...int64) {
+	if m.removedforum_posts == nil {
+		m.removedforum_posts = make(map[int64]struct{})
+	}
+	for i := range ids {
+		delete(m.forum_posts, ids[i])
+		m.removedforum_posts[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedForumPosts returns the removed IDs of the "forum_posts" edge to the ForumPost entity.
+func (m *UserMutation) RemovedForumPostsIDs() (ids []int64) {
+	for id := range m.removedforum_posts {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ForumPostsIDs returns the "forum_posts" edge IDs in the mutation.
+func (m *UserMutation) ForumPostsIDs() (ids []int64) {
+	for id := range m.forum_posts {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetForumPosts resets all changes to the "forum_posts" edge.
+func (m *UserMutation) ResetForumPosts() {
+	m.forum_posts = nil
+	m.clearedforum_posts = false
+	m.removedforum_posts = nil
+}
+
+// AddForumPostVoteIDs adds the "forum_post_votes" edge to the ForumPostVote entity by ids.
+func (m *UserMutation) AddForumPostVoteIDs(ids ...int64) {
+	if m.forum_post_votes == nil {
+		m.forum_post_votes = make(map[int64]struct{})
+	}
+	for i := range ids {
+		m.forum_post_votes[ids[i]] = struct{}{}
+	}
+}
+
+// ClearForumPostVotes clears the "forum_post_votes" edge to the ForumPostVote entity.
+func (m *UserMutation) ClearForumPostVotes() {
+	m.clearedforum_post_votes = true
+}
+
+// ForumPostVotesCleared reports if the "forum_post_votes" edge to the ForumPostVote entity was cleared.
+func (m *UserMutation) ForumPostVotesCleared() bool {
+	return m.clearedforum_post_votes
+}
+
+// RemoveForumPostVoteIDs removes the "forum_post_votes" edge to the ForumPostVote entity by IDs.
+func (m *UserMutation) RemoveForumPostVoteIDs(ids ...int64) {
+	if m.removedforum_post_votes == nil {
+		m.removedforum_post_votes = make(map[int64]struct{})
+	}
+	for i := range ids {
+		delete(m.forum_post_votes, ids[i])
+		m.removedforum_post_votes[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedForumPostVotes returns the removed IDs of the "forum_post_votes" edge to the ForumPostVote entity.
+func (m *UserMutation) RemovedForumPostVotesIDs() (ids []int64) {
+	for id := range m.removedforum_post_votes {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ForumPostVotesIDs returns the "forum_post_votes" edge IDs in the mutation.
+func (m *UserMutation) ForumPostVotesIDs() (ids []int64) {
+	for id := range m.forum_post_votes {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetForumPostVotes resets all changes to the "forum_post_votes" edge.
+func (m *UserMutation) ResetForumPostVotes() {
+	m.forum_post_votes = nil
+	m.clearedforum_post_votes = false
+	m.removedforum_post_votes = nil
+}
+
 // Where appends a list predicates to the UserMutation builder.
 func (m *UserMutation) Where(ps ...predicate.User) {
 	m.predicates = append(m.predicates, ps...)
@@ -46941,7 +48854,7 @@ func (m *UserMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *UserMutation) AddedEdges() []string {
-	edges := make([]string, 0, 14)
+	edges := make([]string, 0, 16)
 	if m.api_keys != nil {
 		edges = append(edges, user.EdgeAPIKeys)
 	}
@@ -46983,6 +48896,12 @@ func (m *UserMutation) AddedEdges() []string {
 	}
 	if m.provider_comment_votes != nil {
 		edges = append(edges, user.EdgeProviderCommentVotes)
+	}
+	if m.forum_posts != nil {
+		edges = append(edges, user.EdgeForumPosts)
+	}
+	if m.forum_post_votes != nil {
+		edges = append(edges, user.EdgeForumPostVotes)
 	}
 	return edges
 }
@@ -47075,13 +48994,25 @@ func (m *UserMutation) AddedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
+	case user.EdgeForumPosts:
+		ids := make([]ent.Value, 0, len(m.forum_posts))
+		for id := range m.forum_posts {
+			ids = append(ids, id)
+		}
+		return ids
+	case user.EdgeForumPostVotes:
+		ids := make([]ent.Value, 0, len(m.forum_post_votes))
+		for id := range m.forum_post_votes {
+			ids = append(ids, id)
+		}
+		return ids
 	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *UserMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 14)
+	edges := make([]string, 0, 16)
 	if m.removedapi_keys != nil {
 		edges = append(edges, user.EdgeAPIKeys)
 	}
@@ -47123,6 +49054,12 @@ func (m *UserMutation) RemovedEdges() []string {
 	}
 	if m.removedprovider_comment_votes != nil {
 		edges = append(edges, user.EdgeProviderCommentVotes)
+	}
+	if m.removedforum_posts != nil {
+		edges = append(edges, user.EdgeForumPosts)
+	}
+	if m.removedforum_post_votes != nil {
+		edges = append(edges, user.EdgeForumPostVotes)
 	}
 	return edges
 }
@@ -47215,13 +49152,25 @@ func (m *UserMutation) RemovedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
+	case user.EdgeForumPosts:
+		ids := make([]ent.Value, 0, len(m.removedforum_posts))
+		for id := range m.removedforum_posts {
+			ids = append(ids, id)
+		}
+		return ids
+	case user.EdgeForumPostVotes:
+		ids := make([]ent.Value, 0, len(m.removedforum_post_votes))
+		for id := range m.removedforum_post_votes {
+			ids = append(ids, id)
+		}
+		return ids
 	}
 	return nil
 }
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *UserMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 14)
+	edges := make([]string, 0, 16)
 	if m.clearedapi_keys {
 		edges = append(edges, user.EdgeAPIKeys)
 	}
@@ -47264,6 +49213,12 @@ func (m *UserMutation) ClearedEdges() []string {
 	if m.clearedprovider_comment_votes {
 		edges = append(edges, user.EdgeProviderCommentVotes)
 	}
+	if m.clearedforum_posts {
+		edges = append(edges, user.EdgeForumPosts)
+	}
+	if m.clearedforum_post_votes {
+		edges = append(edges, user.EdgeForumPostVotes)
+	}
 	return edges
 }
 
@@ -47299,6 +49254,10 @@ func (m *UserMutation) EdgeCleared(name string) bool {
 		return m.clearedprovider_comments
 	case user.EdgeProviderCommentVotes:
 		return m.clearedprovider_comment_votes
+	case user.EdgeForumPosts:
+		return m.clearedforum_posts
+	case user.EdgeForumPostVotes:
+		return m.clearedforum_post_votes
 	}
 	return false
 }
@@ -47356,6 +49315,12 @@ func (m *UserMutation) ResetEdge(name string) error {
 		return nil
 	case user.EdgeProviderCommentVotes:
 		m.ResetProviderCommentVotes()
+		return nil
+	case user.EdgeForumPosts:
+		m.ResetForumPosts()
+		return nil
+	case user.EdgeForumPostVotes:
+		m.ResetForumPostVotes()
 		return nil
 	}
 	return fmt.Errorf("unknown User edge %s", name)

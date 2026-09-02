@@ -25,6 +25,8 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/channelmonitorhistory"
 	"github.com/Wei-Shaw/sub2api/ent/channelmonitorrequesttemplate"
 	"github.com/Wei-Shaw/sub2api/ent/errorpassthroughrule"
+	"github.com/Wei-Shaw/sub2api/ent/forumpost"
+	"github.com/Wei-Shaw/sub2api/ent/forumpostvote"
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/idempotencyrecord"
 	"github.com/Wei-Shaw/sub2api/ent/identityadoptiondecision"
@@ -566,6 +568,60 @@ func (f TraverseErrorPassthroughRule) Traverse(ctx context.Context, q ent.Query)
 		return f(ctx, q)
 	}
 	return fmt.Errorf("unexpected query type %T. expect *ent.ErrorPassthroughRuleQuery", q)
+}
+
+// The ForumPostFunc type is an adapter to allow the use of ordinary function as a Querier.
+type ForumPostFunc func(context.Context, *ent.ForumPostQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f ForumPostFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.ForumPostQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.ForumPostQuery", q)
+}
+
+// The TraverseForumPost type is an adapter to allow the use of ordinary function as Traverser.
+type TraverseForumPost func(context.Context, *ent.ForumPostQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraverseForumPost) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraverseForumPost) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.ForumPostQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.ForumPostQuery", q)
+}
+
+// The ForumPostVoteFunc type is an adapter to allow the use of ordinary function as a Querier.
+type ForumPostVoteFunc func(context.Context, *ent.ForumPostVoteQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f ForumPostVoteFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.ForumPostVoteQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.ForumPostVoteQuery", q)
+}
+
+// The TraverseForumPostVote type is an adapter to allow the use of ordinary function as Traverser.
+type TraverseForumPostVote func(context.Context, *ent.ForumPostVoteQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraverseForumPostVote) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraverseForumPostVote) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.ForumPostVoteQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.ForumPostVoteQuery", q)
 }
 
 // The GroupFunc type is an adapter to allow the use of ordinary function as a Querier.
@@ -1280,6 +1336,10 @@ func NewQuery(q ent.Query) (Query, error) {
 		return &query[*ent.ChannelMonitorRequestTemplateQuery, predicate.ChannelMonitorRequestTemplate, channelmonitorrequesttemplate.OrderOption]{typ: ent.TypeChannelMonitorRequestTemplate, tq: q}, nil
 	case *ent.ErrorPassthroughRuleQuery:
 		return &query[*ent.ErrorPassthroughRuleQuery, predicate.ErrorPassthroughRule, errorpassthroughrule.OrderOption]{typ: ent.TypeErrorPassthroughRule, tq: q}, nil
+	case *ent.ForumPostQuery:
+		return &query[*ent.ForumPostQuery, predicate.ForumPost, forumpost.OrderOption]{typ: ent.TypeForumPost, tq: q}, nil
+	case *ent.ForumPostVoteQuery:
+		return &query[*ent.ForumPostVoteQuery, predicate.ForumPostVote, forumpostvote.OrderOption]{typ: ent.TypeForumPostVote, tq: q}, nil
 	case *ent.GroupQuery:
 		return &query[*ent.GroupQuery, predicate.Group, group.OrderOption]{typ: ent.TypeGroup, tq: q}, nil
 	case *ent.IdempotencyRecordQuery:

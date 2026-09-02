@@ -101,11 +101,15 @@ type UserEdges struct {
 	ProviderComments []*ProviderComment `json:"provider_comments,omitempty"`
 	// ProviderCommentVotes holds the value of the provider_comment_votes edge.
 	ProviderCommentVotes []*ProviderCommentVote `json:"provider_comment_votes,omitempty"`
+	// ForumPosts holds the value of the forum_posts edge.
+	ForumPosts []*ForumPost `json:"forum_posts,omitempty"`
+	// ForumPostVotes holds the value of the forum_post_votes edge.
+	ForumPostVotes []*ForumPostVote `json:"forum_post_votes,omitempty"`
 	// UserAllowedGroups holds the value of the user_allowed_groups edge.
 	UserAllowedGroups []*UserAllowedGroup `json:"user_allowed_groups,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [15]bool
+	loadedTypes [17]bool
 }
 
 // APIKeysOrErr returns the APIKeys value or an error if the edge
@@ -234,10 +238,28 @@ func (e UserEdges) ProviderCommentVotesOrErr() ([]*ProviderCommentVote, error) {
 	return nil, &NotLoadedError{edge: "provider_comment_votes"}
 }
 
+// ForumPostsOrErr returns the ForumPosts value or an error if the edge
+// was not loaded in eager-loading.
+func (e UserEdges) ForumPostsOrErr() ([]*ForumPost, error) {
+	if e.loadedTypes[14] {
+		return e.ForumPosts, nil
+	}
+	return nil, &NotLoadedError{edge: "forum_posts"}
+}
+
+// ForumPostVotesOrErr returns the ForumPostVotes value or an error if the edge
+// was not loaded in eager-loading.
+func (e UserEdges) ForumPostVotesOrErr() ([]*ForumPostVote, error) {
+	if e.loadedTypes[15] {
+		return e.ForumPostVotes, nil
+	}
+	return nil, &NotLoadedError{edge: "forum_post_votes"}
+}
+
 // UserAllowedGroupsOrErr returns the UserAllowedGroups value or an error if the edge
 // was not loaded in eager-loading.
 func (e UserEdges) UserAllowedGroupsOrErr() ([]*UserAllowedGroup, error) {
-	if e.loadedTypes[14] {
+	if e.loadedTypes[16] {
 		return e.UserAllowedGroups, nil
 	}
 	return nil, &NotLoadedError{edge: "user_allowed_groups"}
@@ -510,6 +532,16 @@ func (_m *User) QueryProviderComments() *ProviderCommentQuery {
 // QueryProviderCommentVotes queries the "provider_comment_votes" edge of the User entity.
 func (_m *User) QueryProviderCommentVotes() *ProviderCommentVoteQuery {
 	return NewUserClient(_m.config).QueryProviderCommentVotes(_m)
+}
+
+// QueryForumPosts queries the "forum_posts" edge of the User entity.
+func (_m *User) QueryForumPosts() *ForumPostQuery {
+	return NewUserClient(_m.config).QueryForumPosts(_m)
+}
+
+// QueryForumPostVotes queries the "forum_post_votes" edge of the User entity.
+func (_m *User) QueryForumPostVotes() *ForumPostVoteQuery {
+	return NewUserClient(_m.config).QueryForumPostVotes(_m)
 }
 
 // QueryUserAllowedGroups queries the "user_allowed_groups" edge of the User entity.

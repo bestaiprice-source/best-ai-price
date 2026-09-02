@@ -91,6 +91,10 @@ const (
 	EdgeProviderComments = "provider_comments"
 	// EdgeProviderCommentVotes holds the string denoting the provider_comment_votes edge name in mutations.
 	EdgeProviderCommentVotes = "provider_comment_votes"
+	// EdgeForumPosts holds the string denoting the forum_posts edge name in mutations.
+	EdgeForumPosts = "forum_posts"
+	// EdgeForumPostVotes holds the string denoting the forum_post_votes edge name in mutations.
+	EdgeForumPostVotes = "forum_post_votes"
 	// EdgeUserAllowedGroups holds the string denoting the user_allowed_groups edge name in mutations.
 	EdgeUserAllowedGroups = "user_allowed_groups"
 	// Table holds the table name of the user in the database.
@@ -191,6 +195,20 @@ const (
 	ProviderCommentVotesInverseTable = "provider_comment_votes"
 	// ProviderCommentVotesColumn is the table column denoting the provider_comment_votes relation/edge.
 	ProviderCommentVotesColumn = "user_id"
+	// ForumPostsTable is the table that holds the forum_posts relation/edge.
+	ForumPostsTable = "forum_posts"
+	// ForumPostsInverseTable is the table name for the ForumPost entity.
+	// It exists in this package in order to avoid circular dependency with the "forumpost" package.
+	ForumPostsInverseTable = "forum_posts"
+	// ForumPostsColumn is the table column denoting the forum_posts relation/edge.
+	ForumPostsColumn = "user_id"
+	// ForumPostVotesTable is the table that holds the forum_post_votes relation/edge.
+	ForumPostVotesTable = "forum_post_votes"
+	// ForumPostVotesInverseTable is the table name for the ForumPostVote entity.
+	// It exists in this package in order to avoid circular dependency with the "forumpostvote" package.
+	ForumPostVotesInverseTable = "forum_post_votes"
+	// ForumPostVotesColumn is the table column denoting the forum_post_votes relation/edge.
+	ForumPostVotesColumn = "user_id"
 	// UserAllowedGroupsTable is the table that holds the user_allowed_groups relation/edge.
 	UserAllowedGroupsTable = "user_allowed_groups"
 	// UserAllowedGroupsInverseTable is the table name for the UserAllowedGroup entity.
@@ -625,6 +643,34 @@ func ByProviderCommentVotes(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOpt
 	}
 }
 
+// ByForumPostsCount orders the results by forum_posts count.
+func ByForumPostsCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newForumPostsStep(), opts...)
+	}
+}
+
+// ByForumPosts orders the results by forum_posts terms.
+func ByForumPosts(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newForumPostsStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
+// ByForumPostVotesCount orders the results by forum_post_votes count.
+func ByForumPostVotesCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newForumPostVotesStep(), opts...)
+	}
+}
+
+// ByForumPostVotes orders the results by forum_post_votes terms.
+func ByForumPostVotes(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newForumPostVotesStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
 // ByUserAllowedGroupsCount orders the results by user_allowed_groups count.
 func ByUserAllowedGroupsCount(opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
@@ -734,6 +780,20 @@ func newProviderCommentVotesStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(ProviderCommentVotesInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2M, false, ProviderCommentVotesTable, ProviderCommentVotesColumn),
+	)
+}
+func newForumPostsStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(ForumPostsInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, ForumPostsTable, ForumPostsColumn),
+	)
+}
+func newForumPostVotesStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(ForumPostVotesInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, ForumPostVotesTable, ForumPostVotesColumn),
 	)
 }
 func newUserAllowedGroupsStep() *sqlgraph.Step {

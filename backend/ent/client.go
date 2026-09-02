@@ -32,6 +32,8 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/channelmonitorhistory"
 	"github.com/Wei-Shaw/sub2api/ent/channelmonitorrequesttemplate"
 	"github.com/Wei-Shaw/sub2api/ent/errorpassthroughrule"
+	"github.com/Wei-Shaw/sub2api/ent/forumpost"
+	"github.com/Wei-Shaw/sub2api/ent/forumpostvote"
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/idempotencyrecord"
 	"github.com/Wei-Shaw/sub2api/ent/identityadoptiondecision"
@@ -100,6 +102,10 @@ type Client struct {
 	ChannelMonitorRequestTemplate *ChannelMonitorRequestTemplateClient
 	// ErrorPassthroughRule is the client for interacting with the ErrorPassthroughRule builders.
 	ErrorPassthroughRule *ErrorPassthroughRuleClient
+	// ForumPost is the client for interacting with the ForumPost builders.
+	ForumPost *ForumPostClient
+	// ForumPostVote is the client for interacting with the ForumPostVote builders.
+	ForumPostVote *ForumPostVoteClient
 	// Group is the client for interacting with the Group builders.
 	Group *GroupClient
 	// IdempotencyRecord is the client for interacting with the IdempotencyRecord builders.
@@ -178,6 +184,8 @@ func (c *Client) init() {
 	c.ChannelMonitorHistory = NewChannelMonitorHistoryClient(c.config)
 	c.ChannelMonitorRequestTemplate = NewChannelMonitorRequestTemplateClient(c.config)
 	c.ErrorPassthroughRule = NewErrorPassthroughRuleClient(c.config)
+	c.ForumPost = NewForumPostClient(c.config)
+	c.ForumPostVote = NewForumPostVoteClient(c.config)
 	c.Group = NewGroupClient(c.config)
 	c.IdempotencyRecord = NewIdempotencyRecordClient(c.config)
 	c.IdentityAdoptionDecision = NewIdentityAdoptionDecisionClient(c.config)
@@ -312,6 +320,8 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		ChannelMonitorHistory:         NewChannelMonitorHistoryClient(cfg),
 		ChannelMonitorRequestTemplate: NewChannelMonitorRequestTemplateClient(cfg),
 		ErrorPassthroughRule:          NewErrorPassthroughRuleClient(cfg),
+		ForumPost:                     NewForumPostClient(cfg),
+		ForumPostVote:                 NewForumPostVoteClient(cfg),
 		Group:                         NewGroupClient(cfg),
 		IdempotencyRecord:             NewIdempotencyRecordClient(cfg),
 		IdentityAdoptionDecision:      NewIdentityAdoptionDecisionClient(cfg),
@@ -373,6 +383,8 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		ChannelMonitorHistory:         NewChannelMonitorHistoryClient(cfg),
 		ChannelMonitorRequestTemplate: NewChannelMonitorRequestTemplateClient(cfg),
 		ErrorPassthroughRule:          NewErrorPassthroughRuleClient(cfg),
+		ForumPost:                     NewForumPostClient(cfg),
+		ForumPostVote:                 NewForumPostVoteClient(cfg),
 		Group:                         NewGroupClient(cfg),
 		IdempotencyRecord:             NewIdempotencyRecordClient(cfg),
 		IdentityAdoptionDecision:      NewIdentityAdoptionDecisionClient(cfg),
@@ -431,14 +443,14 @@ func (c *Client) Use(hooks ...Hook) {
 		c.AshDeposit, c.AshEvent, c.AshSession, c.AshUsage, c.AshUserPolicy,
 		c.AuthIdentity, c.AuthIdentityChannel, c.ChannelMonitor,
 		c.ChannelMonitorDailyRollup, c.ChannelMonitorHistory,
-		c.ChannelMonitorRequestTemplate, c.ErrorPassthroughRule, c.Group,
-		c.IdempotencyRecord, c.IdentityAdoptionDecision, c.PaymentAuditLog,
-		c.PaymentOrder, c.PaymentProviderInstance, c.PendingAuthSession, c.PromoCode,
-		c.PromoCodeUsage, c.ProviderComment, c.ProviderCommentVote,
-		c.ProviderPopularity, c.Proxy, c.RedeemCode, c.SecuritySecret, c.Setting,
-		c.SubscriptionPlan, c.TLSFingerprintProfile, c.UsageCleanupTask, c.UsageLog,
-		c.User, c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
-		c.UserSubscription,
+		c.ChannelMonitorRequestTemplate, c.ErrorPassthroughRule, c.ForumPost,
+		c.ForumPostVote, c.Group, c.IdempotencyRecord, c.IdentityAdoptionDecision,
+		c.PaymentAuditLog, c.PaymentOrder, c.PaymentProviderInstance,
+		c.PendingAuthSession, c.PromoCode, c.PromoCodeUsage, c.ProviderComment,
+		c.ProviderCommentVote, c.ProviderPopularity, c.Proxy, c.RedeemCode,
+		c.SecuritySecret, c.Setting, c.SubscriptionPlan, c.TLSFingerprintProfile,
+		c.UsageCleanupTask, c.UsageLog, c.User, c.UserAllowedGroup,
+		c.UserAttributeDefinition, c.UserAttributeValue, c.UserSubscription,
 	} {
 		n.Use(hooks...)
 	}
@@ -452,14 +464,14 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.AshDeposit, c.AshEvent, c.AshSession, c.AshUsage, c.AshUserPolicy,
 		c.AuthIdentity, c.AuthIdentityChannel, c.ChannelMonitor,
 		c.ChannelMonitorDailyRollup, c.ChannelMonitorHistory,
-		c.ChannelMonitorRequestTemplate, c.ErrorPassthroughRule, c.Group,
-		c.IdempotencyRecord, c.IdentityAdoptionDecision, c.PaymentAuditLog,
-		c.PaymentOrder, c.PaymentProviderInstance, c.PendingAuthSession, c.PromoCode,
-		c.PromoCodeUsage, c.ProviderComment, c.ProviderCommentVote,
-		c.ProviderPopularity, c.Proxy, c.RedeemCode, c.SecuritySecret, c.Setting,
-		c.SubscriptionPlan, c.TLSFingerprintProfile, c.UsageCleanupTask, c.UsageLog,
-		c.User, c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
-		c.UserSubscription,
+		c.ChannelMonitorRequestTemplate, c.ErrorPassthroughRule, c.ForumPost,
+		c.ForumPostVote, c.Group, c.IdempotencyRecord, c.IdentityAdoptionDecision,
+		c.PaymentAuditLog, c.PaymentOrder, c.PaymentProviderInstance,
+		c.PendingAuthSession, c.PromoCode, c.PromoCodeUsage, c.ProviderComment,
+		c.ProviderCommentVote, c.ProviderPopularity, c.Proxy, c.RedeemCode,
+		c.SecuritySecret, c.Setting, c.SubscriptionPlan, c.TLSFingerprintProfile,
+		c.UsageCleanupTask, c.UsageLog, c.User, c.UserAllowedGroup,
+		c.UserAttributeDefinition, c.UserAttributeValue, c.UserSubscription,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -502,6 +514,10 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.ChannelMonitorRequestTemplate.mutate(ctx, m)
 	case *ErrorPassthroughRuleMutation:
 		return c.ErrorPassthroughRule.mutate(ctx, m)
+	case *ForumPostMutation:
+		return c.ForumPost.mutate(ctx, m)
+	case *ForumPostVoteMutation:
+		return c.ForumPostVote.mutate(ctx, m)
 	case *GroupMutation:
 		return c.Group.mutate(ctx, m)
 	case *IdempotencyRecordMutation:
@@ -3122,6 +3138,368 @@ func (c *ErrorPassthroughRuleClient) mutate(ctx context.Context, m *ErrorPassthr
 		return (&ErrorPassthroughRuleDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown ErrorPassthroughRule mutation op: %q", m.Op())
+	}
+}
+
+// ForumPostClient is a client for the ForumPost schema.
+type ForumPostClient struct {
+	config
+}
+
+// NewForumPostClient returns a client for the ForumPost from the given config.
+func NewForumPostClient(c config) *ForumPostClient {
+	return &ForumPostClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `forumpost.Hooks(f(g(h())))`.
+func (c *ForumPostClient) Use(hooks ...Hook) {
+	c.hooks.ForumPost = append(c.hooks.ForumPost, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `forumpost.Intercept(f(g(h())))`.
+func (c *ForumPostClient) Intercept(interceptors ...Interceptor) {
+	c.inters.ForumPost = append(c.inters.ForumPost, interceptors...)
+}
+
+// Create returns a builder for creating a ForumPost entity.
+func (c *ForumPostClient) Create() *ForumPostCreate {
+	mutation := newForumPostMutation(c.config, OpCreate)
+	return &ForumPostCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of ForumPost entities.
+func (c *ForumPostClient) CreateBulk(builders ...*ForumPostCreate) *ForumPostCreateBulk {
+	return &ForumPostCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *ForumPostClient) MapCreateBulk(slice any, setFunc func(*ForumPostCreate, int)) *ForumPostCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &ForumPostCreateBulk{err: fmt.Errorf("calling to ForumPostClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*ForumPostCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &ForumPostCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for ForumPost.
+func (c *ForumPostClient) Update() *ForumPostUpdate {
+	mutation := newForumPostMutation(c.config, OpUpdate)
+	return &ForumPostUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *ForumPostClient) UpdateOne(_m *ForumPost) *ForumPostUpdateOne {
+	mutation := newForumPostMutation(c.config, OpUpdateOne, withForumPost(_m))
+	return &ForumPostUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *ForumPostClient) UpdateOneID(id int64) *ForumPostUpdateOne {
+	mutation := newForumPostMutation(c.config, OpUpdateOne, withForumPostID(id))
+	return &ForumPostUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for ForumPost.
+func (c *ForumPostClient) Delete() *ForumPostDelete {
+	mutation := newForumPostMutation(c.config, OpDelete)
+	return &ForumPostDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *ForumPostClient) DeleteOne(_m *ForumPost) *ForumPostDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *ForumPostClient) DeleteOneID(id int64) *ForumPostDeleteOne {
+	builder := c.Delete().Where(forumpost.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &ForumPostDeleteOne{builder}
+}
+
+// Query returns a query builder for ForumPost.
+func (c *ForumPostClient) Query() *ForumPostQuery {
+	return &ForumPostQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeForumPost},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a ForumPost entity by its id.
+func (c *ForumPostClient) Get(ctx context.Context, id int64) (*ForumPost, error) {
+	return c.Query().Where(forumpost.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *ForumPostClient) GetX(ctx context.Context, id int64) *ForumPost {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryUser queries the user edge of a ForumPost.
+func (c *ForumPostClient) QueryUser(_m *ForumPost) *UserQuery {
+	query := (&UserClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(forumpost.Table, forumpost.FieldID, id),
+			sqlgraph.To(user.Table, user.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, forumpost.UserTable, forumpost.UserColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryParent queries the parent edge of a ForumPost.
+func (c *ForumPostClient) QueryParent(_m *ForumPost) *ForumPostQuery {
+	query := (&ForumPostClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(forumpost.Table, forumpost.FieldID, id),
+			sqlgraph.To(forumpost.Table, forumpost.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, forumpost.ParentTable, forumpost.ParentColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryReplies queries the replies edge of a ForumPost.
+func (c *ForumPostClient) QueryReplies(_m *ForumPost) *ForumPostQuery {
+	query := (&ForumPostClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(forumpost.Table, forumpost.FieldID, id),
+			sqlgraph.To(forumpost.Table, forumpost.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, forumpost.RepliesTable, forumpost.RepliesColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryVotes queries the votes edge of a ForumPost.
+func (c *ForumPostClient) QueryVotes(_m *ForumPost) *ForumPostVoteQuery {
+	query := (&ForumPostVoteClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(forumpost.Table, forumpost.FieldID, id),
+			sqlgraph.To(forumpostvote.Table, forumpostvote.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, forumpost.VotesTable, forumpost.VotesColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *ForumPostClient) Hooks() []Hook {
+	return c.hooks.ForumPost
+}
+
+// Interceptors returns the client interceptors.
+func (c *ForumPostClient) Interceptors() []Interceptor {
+	return c.inters.ForumPost
+}
+
+func (c *ForumPostClient) mutate(ctx context.Context, m *ForumPostMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&ForumPostCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&ForumPostUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&ForumPostUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&ForumPostDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown ForumPost mutation op: %q", m.Op())
+	}
+}
+
+// ForumPostVoteClient is a client for the ForumPostVote schema.
+type ForumPostVoteClient struct {
+	config
+}
+
+// NewForumPostVoteClient returns a client for the ForumPostVote from the given config.
+func NewForumPostVoteClient(c config) *ForumPostVoteClient {
+	return &ForumPostVoteClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `forumpostvote.Hooks(f(g(h())))`.
+func (c *ForumPostVoteClient) Use(hooks ...Hook) {
+	c.hooks.ForumPostVote = append(c.hooks.ForumPostVote, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `forumpostvote.Intercept(f(g(h())))`.
+func (c *ForumPostVoteClient) Intercept(interceptors ...Interceptor) {
+	c.inters.ForumPostVote = append(c.inters.ForumPostVote, interceptors...)
+}
+
+// Create returns a builder for creating a ForumPostVote entity.
+func (c *ForumPostVoteClient) Create() *ForumPostVoteCreate {
+	mutation := newForumPostVoteMutation(c.config, OpCreate)
+	return &ForumPostVoteCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of ForumPostVote entities.
+func (c *ForumPostVoteClient) CreateBulk(builders ...*ForumPostVoteCreate) *ForumPostVoteCreateBulk {
+	return &ForumPostVoteCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *ForumPostVoteClient) MapCreateBulk(slice any, setFunc func(*ForumPostVoteCreate, int)) *ForumPostVoteCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &ForumPostVoteCreateBulk{err: fmt.Errorf("calling to ForumPostVoteClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*ForumPostVoteCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &ForumPostVoteCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for ForumPostVote.
+func (c *ForumPostVoteClient) Update() *ForumPostVoteUpdate {
+	mutation := newForumPostVoteMutation(c.config, OpUpdate)
+	return &ForumPostVoteUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *ForumPostVoteClient) UpdateOne(_m *ForumPostVote) *ForumPostVoteUpdateOne {
+	mutation := newForumPostVoteMutation(c.config, OpUpdateOne, withForumPostVote(_m))
+	return &ForumPostVoteUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *ForumPostVoteClient) UpdateOneID(id int64) *ForumPostVoteUpdateOne {
+	mutation := newForumPostVoteMutation(c.config, OpUpdateOne, withForumPostVoteID(id))
+	return &ForumPostVoteUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for ForumPostVote.
+func (c *ForumPostVoteClient) Delete() *ForumPostVoteDelete {
+	mutation := newForumPostVoteMutation(c.config, OpDelete)
+	return &ForumPostVoteDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *ForumPostVoteClient) DeleteOne(_m *ForumPostVote) *ForumPostVoteDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *ForumPostVoteClient) DeleteOneID(id int64) *ForumPostVoteDeleteOne {
+	builder := c.Delete().Where(forumpostvote.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &ForumPostVoteDeleteOne{builder}
+}
+
+// Query returns a query builder for ForumPostVote.
+func (c *ForumPostVoteClient) Query() *ForumPostVoteQuery {
+	return &ForumPostVoteQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeForumPostVote},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a ForumPostVote entity by its id.
+func (c *ForumPostVoteClient) Get(ctx context.Context, id int64) (*ForumPostVote, error) {
+	return c.Query().Where(forumpostvote.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *ForumPostVoteClient) GetX(ctx context.Context, id int64) *ForumPostVote {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryPost queries the post edge of a ForumPostVote.
+func (c *ForumPostVoteClient) QueryPost(_m *ForumPostVote) *ForumPostQuery {
+	query := (&ForumPostClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(forumpostvote.Table, forumpostvote.FieldID, id),
+			sqlgraph.To(forumpost.Table, forumpost.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, forumpostvote.PostTable, forumpostvote.PostColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryUser queries the user edge of a ForumPostVote.
+func (c *ForumPostVoteClient) QueryUser(_m *ForumPostVote) *UserQuery {
+	query := (&UserClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(forumpostvote.Table, forumpostvote.FieldID, id),
+			sqlgraph.To(user.Table, user.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, forumpostvote.UserTable, forumpostvote.UserColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *ForumPostVoteClient) Hooks() []Hook {
+	return c.hooks.ForumPostVote
+}
+
+// Interceptors returns the client interceptors.
+func (c *ForumPostVoteClient) Interceptors() []Interceptor {
+	return c.inters.ForumPostVote
+}
+
+func (c *ForumPostVoteClient) mutate(ctx context.Context, m *ForumPostVoteMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&ForumPostVoteCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&ForumPostVoteUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&ForumPostVoteUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&ForumPostVoteDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown ForumPostVote mutation op: %q", m.Op())
 	}
 }
 
@@ -6601,6 +6979,38 @@ func (c *UserClient) QueryProviderCommentVotes(_m *User) *ProviderCommentVoteQue
 	return query
 }
 
+// QueryForumPosts queries the forum_posts edge of a User.
+func (c *UserClient) QueryForumPosts(_m *User) *ForumPostQuery {
+	query := (&ForumPostClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, id),
+			sqlgraph.To(forumpost.Table, forumpost.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, user.ForumPostsTable, user.ForumPostsColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryForumPostVotes queries the forum_post_votes edge of a User.
+func (c *UserClient) QueryForumPostVotes(_m *User) *ForumPostVoteQuery {
+	query := (&ForumPostVoteClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, id),
+			sqlgraph.To(forumpostvote.Table, forumpostvote.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, user.ForumPostVotesTable, user.ForumPostVotesColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // QueryUserAllowedGroups queries the user_allowed_groups edge of a User.
 func (c *UserClient) QueryUserAllowedGroups(_m *User) *UserAllowedGroupQuery {
 	query := (&UserAllowedGroupClient{config: c.config}).Query()
@@ -7282,24 +7692,26 @@ type (
 		AshEvent, AshSession, AshUsage, AshUserPolicy, AuthIdentity,
 		AuthIdentityChannel, ChannelMonitor, ChannelMonitorDailyRollup,
 		ChannelMonitorHistory, ChannelMonitorRequestTemplate, ErrorPassthroughRule,
-		Group, IdempotencyRecord, IdentityAdoptionDecision, PaymentAuditLog,
-		PaymentOrder, PaymentProviderInstance, PendingAuthSession, PromoCode,
-		PromoCodeUsage, ProviderComment, ProviderCommentVote, ProviderPopularity,
-		Proxy, RedeemCode, SecuritySecret, Setting, SubscriptionPlan,
-		TLSFingerprintProfile, UsageCleanupTask, UsageLog, User, UserAllowedGroup,
-		UserAttributeDefinition, UserAttributeValue, UserSubscription []ent.Hook
+		ForumPost, ForumPostVote, Group, IdempotencyRecord, IdentityAdoptionDecision,
+		PaymentAuditLog, PaymentOrder, PaymentProviderInstance, PendingAuthSession,
+		PromoCode, PromoCodeUsage, ProviderComment, ProviderCommentVote,
+		ProviderPopularity, Proxy, RedeemCode, SecuritySecret, Setting,
+		SubscriptionPlan, TLSFingerprintProfile, UsageCleanupTask, UsageLog, User,
+		UserAllowedGroup, UserAttributeDefinition, UserAttributeValue,
+		UserSubscription []ent.Hook
 	}
 	inters struct {
 		APIKey, Account, AccountGroup, Announcement, AnnouncementRead, AshDeposit,
 		AshEvent, AshSession, AshUsage, AshUserPolicy, AuthIdentity,
 		AuthIdentityChannel, ChannelMonitor, ChannelMonitorDailyRollup,
 		ChannelMonitorHistory, ChannelMonitorRequestTemplate, ErrorPassthroughRule,
-		Group, IdempotencyRecord, IdentityAdoptionDecision, PaymentAuditLog,
-		PaymentOrder, PaymentProviderInstance, PendingAuthSession, PromoCode,
-		PromoCodeUsage, ProviderComment, ProviderCommentVote, ProviderPopularity,
-		Proxy, RedeemCode, SecuritySecret, Setting, SubscriptionPlan,
-		TLSFingerprintProfile, UsageCleanupTask, UsageLog, User, UserAllowedGroup,
-		UserAttributeDefinition, UserAttributeValue, UserSubscription []ent.Interceptor
+		ForumPost, ForumPostVote, Group, IdempotencyRecord, IdentityAdoptionDecision,
+		PaymentAuditLog, PaymentOrder, PaymentProviderInstance, PendingAuthSession,
+		PromoCode, PromoCodeUsage, ProviderComment, ProviderCommentVote,
+		ProviderPopularity, Proxy, RedeemCode, SecuritySecret, Setting,
+		SubscriptionPlan, TLSFingerprintProfile, UsageCleanupTask, UsageLog, User,
+		UserAllowedGroup, UserAttributeDefinition, UserAttributeValue,
+		UserSubscription []ent.Interceptor
 	}
 )
 

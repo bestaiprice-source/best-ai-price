@@ -14,6 +14,8 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/announcementread"
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
 	"github.com/Wei-Shaw/sub2api/ent/authidentity"
+	"github.com/Wei-Shaw/sub2api/ent/forumpost"
+	"github.com/Wei-Shaw/sub2api/ent/forumpostvote"
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
 	"github.com/Wei-Shaw/sub2api/ent/pendingauthsession"
@@ -643,6 +645,36 @@ func (_u *UserUpdate) AddProviderCommentVotes(v ...*ProviderCommentVote) *UserUp
 	return _u.AddProviderCommentVoteIDs(ids...)
 }
 
+// AddForumPostIDs adds the "forum_posts" edge to the ForumPost entity by IDs.
+func (_u *UserUpdate) AddForumPostIDs(ids ...int64) *UserUpdate {
+	_u.mutation.AddForumPostIDs(ids...)
+	return _u
+}
+
+// AddForumPosts adds the "forum_posts" edges to the ForumPost entity.
+func (_u *UserUpdate) AddForumPosts(v ...*ForumPost) *UserUpdate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddForumPostIDs(ids...)
+}
+
+// AddForumPostVoteIDs adds the "forum_post_votes" edge to the ForumPostVote entity by IDs.
+func (_u *UserUpdate) AddForumPostVoteIDs(ids ...int64) *UserUpdate {
+	_u.mutation.AddForumPostVoteIDs(ids...)
+	return _u
+}
+
+// AddForumPostVotes adds the "forum_post_votes" edges to the ForumPostVote entity.
+func (_u *UserUpdate) AddForumPostVotes(v ...*ForumPostVote) *UserUpdate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddForumPostVoteIDs(ids...)
+}
+
 // Mutation returns the UserMutation object of the builder.
 func (_u *UserUpdate) Mutation() *UserMutation {
 	return _u.mutation
@@ -940,6 +972,48 @@ func (_u *UserUpdate) RemoveProviderCommentVotes(v ...*ProviderCommentVote) *Use
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveProviderCommentVoteIDs(ids...)
+}
+
+// ClearForumPosts clears all "forum_posts" edges to the ForumPost entity.
+func (_u *UserUpdate) ClearForumPosts() *UserUpdate {
+	_u.mutation.ClearForumPosts()
+	return _u
+}
+
+// RemoveForumPostIDs removes the "forum_posts" edge to ForumPost entities by IDs.
+func (_u *UserUpdate) RemoveForumPostIDs(ids ...int64) *UserUpdate {
+	_u.mutation.RemoveForumPostIDs(ids...)
+	return _u
+}
+
+// RemoveForumPosts removes "forum_posts" edges to ForumPost entities.
+func (_u *UserUpdate) RemoveForumPosts(v ...*ForumPost) *UserUpdate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveForumPostIDs(ids...)
+}
+
+// ClearForumPostVotes clears all "forum_post_votes" edges to the ForumPostVote entity.
+func (_u *UserUpdate) ClearForumPostVotes() *UserUpdate {
+	_u.mutation.ClearForumPostVotes()
+	return _u
+}
+
+// RemoveForumPostVoteIDs removes the "forum_post_votes" edge to ForumPostVote entities by IDs.
+func (_u *UserUpdate) RemoveForumPostVoteIDs(ids ...int64) *UserUpdate {
+	_u.mutation.RemoveForumPostVoteIDs(ids...)
+	return _u
+}
+
+// RemoveForumPostVotes removes "forum_post_votes" edges to ForumPostVote entities.
+func (_u *UserUpdate) RemoveForumPostVotes(v ...*ForumPostVote) *UserUpdate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveForumPostVoteIDs(ids...)
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -1778,6 +1852,96 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
+	if _u.mutation.ForumPostsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.ForumPostsTable,
+			Columns: []string{user.ForumPostsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(forumpost.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedForumPostsIDs(); len(nodes) > 0 && !_u.mutation.ForumPostsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.ForumPostsTable,
+			Columns: []string{user.ForumPostsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(forumpost.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.ForumPostsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.ForumPostsTable,
+			Columns: []string{user.ForumPostsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(forumpost.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.ForumPostVotesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.ForumPostVotesTable,
+			Columns: []string{user.ForumPostVotesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(forumpostvote.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedForumPostVotesIDs(); len(nodes) > 0 && !_u.mutation.ForumPostVotesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.ForumPostVotesTable,
+			Columns: []string{user.ForumPostVotesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(forumpostvote.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.ForumPostVotesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.ForumPostVotesTable,
+			Columns: []string{user.ForumPostVotesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(forumpostvote.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{user.Label}
@@ -2400,6 +2564,36 @@ func (_u *UserUpdateOne) AddProviderCommentVotes(v ...*ProviderCommentVote) *Use
 	return _u.AddProviderCommentVoteIDs(ids...)
 }
 
+// AddForumPostIDs adds the "forum_posts" edge to the ForumPost entity by IDs.
+func (_u *UserUpdateOne) AddForumPostIDs(ids ...int64) *UserUpdateOne {
+	_u.mutation.AddForumPostIDs(ids...)
+	return _u
+}
+
+// AddForumPosts adds the "forum_posts" edges to the ForumPost entity.
+func (_u *UserUpdateOne) AddForumPosts(v ...*ForumPost) *UserUpdateOne {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddForumPostIDs(ids...)
+}
+
+// AddForumPostVoteIDs adds the "forum_post_votes" edge to the ForumPostVote entity by IDs.
+func (_u *UserUpdateOne) AddForumPostVoteIDs(ids ...int64) *UserUpdateOne {
+	_u.mutation.AddForumPostVoteIDs(ids...)
+	return _u
+}
+
+// AddForumPostVotes adds the "forum_post_votes" edges to the ForumPostVote entity.
+func (_u *UserUpdateOne) AddForumPostVotes(v ...*ForumPostVote) *UserUpdateOne {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddForumPostVoteIDs(ids...)
+}
+
 // Mutation returns the UserMutation object of the builder.
 func (_u *UserUpdateOne) Mutation() *UserMutation {
 	return _u.mutation
@@ -2697,6 +2891,48 @@ func (_u *UserUpdateOne) RemoveProviderCommentVotes(v ...*ProviderCommentVote) *
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveProviderCommentVoteIDs(ids...)
+}
+
+// ClearForumPosts clears all "forum_posts" edges to the ForumPost entity.
+func (_u *UserUpdateOne) ClearForumPosts() *UserUpdateOne {
+	_u.mutation.ClearForumPosts()
+	return _u
+}
+
+// RemoveForumPostIDs removes the "forum_posts" edge to ForumPost entities by IDs.
+func (_u *UserUpdateOne) RemoveForumPostIDs(ids ...int64) *UserUpdateOne {
+	_u.mutation.RemoveForumPostIDs(ids...)
+	return _u
+}
+
+// RemoveForumPosts removes "forum_posts" edges to ForumPost entities.
+func (_u *UserUpdateOne) RemoveForumPosts(v ...*ForumPost) *UserUpdateOne {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveForumPostIDs(ids...)
+}
+
+// ClearForumPostVotes clears all "forum_post_votes" edges to the ForumPostVote entity.
+func (_u *UserUpdateOne) ClearForumPostVotes() *UserUpdateOne {
+	_u.mutation.ClearForumPostVotes()
+	return _u
+}
+
+// RemoveForumPostVoteIDs removes the "forum_post_votes" edge to ForumPostVote entities by IDs.
+func (_u *UserUpdateOne) RemoveForumPostVoteIDs(ids ...int64) *UserUpdateOne {
+	_u.mutation.RemoveForumPostVoteIDs(ids...)
+	return _u
+}
+
+// RemoveForumPostVotes removes "forum_post_votes" edges to ForumPostVote entities.
+func (_u *UserUpdateOne) RemoveForumPostVotes(v ...*ForumPostVote) *UserUpdateOne {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveForumPostVoteIDs(ids...)
 }
 
 // Where appends a list predicates to the UserUpdate builder.
@@ -3558,6 +3794,96 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(providercommentvote.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.ForumPostsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.ForumPostsTable,
+			Columns: []string{user.ForumPostsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(forumpost.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedForumPostsIDs(); len(nodes) > 0 && !_u.mutation.ForumPostsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.ForumPostsTable,
+			Columns: []string{user.ForumPostsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(forumpost.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.ForumPostsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.ForumPostsTable,
+			Columns: []string{user.ForumPostsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(forumpost.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.ForumPostVotesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.ForumPostVotesTable,
+			Columns: []string{user.ForumPostVotesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(forumpostvote.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedForumPostVotesIDs(); len(nodes) > 0 && !_u.mutation.ForumPostVotesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.ForumPostVotesTable,
+			Columns: []string{user.ForumPostVotesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(forumpostvote.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.ForumPostVotesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.ForumPostVotesTable,
+			Columns: []string{user.ForumPostVotesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(forumpostvote.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {

@@ -16,6 +16,8 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/announcementread"
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
 	"github.com/Wei-Shaw/sub2api/ent/authidentity"
+	"github.com/Wei-Shaw/sub2api/ent/forumpost"
+	"github.com/Wei-Shaw/sub2api/ent/forumpostvote"
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
 	"github.com/Wei-Shaw/sub2api/ent/pendingauthsession"
@@ -52,6 +54,8 @@ type UserQuery struct {
 	withPromoCodeUsages       *PromoCodeUsageQuery
 	withProviderComments      *ProviderCommentQuery
 	withProviderCommentVotes  *ProviderCommentVoteQuery
+	withForumPosts            *ForumPostQuery
+	withForumPostVotes        *ForumPostVoteQuery
 	withUserAllowedGroups     *UserAllowedGroupQuery
 	modifiers                 []func(*sql.Selector)
 	// intermediate query (i.e. traversal path).
@@ -398,6 +402,50 @@ func (_q *UserQuery) QueryProviderCommentVotes() *ProviderCommentVoteQuery {
 	return query
 }
 
+// QueryForumPosts chains the current query on the "forum_posts" edge.
+func (_q *UserQuery) QueryForumPosts() *ForumPostQuery {
+	query := (&ForumPostClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, selector),
+			sqlgraph.To(forumpost.Table, forumpost.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, user.ForumPostsTable, user.ForumPostsColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryForumPostVotes chains the current query on the "forum_post_votes" edge.
+func (_q *UserQuery) QueryForumPostVotes() *ForumPostVoteQuery {
+	query := (&ForumPostVoteClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, selector),
+			sqlgraph.To(forumpostvote.Table, forumpostvote.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, user.ForumPostVotesTable, user.ForumPostVotesColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
 // QueryUserAllowedGroups chains the current query on the "user_allowed_groups" edge.
 func (_q *UserQuery) QueryUserAllowedGroups() *UserAllowedGroupQuery {
 	query := (&UserAllowedGroupClient{config: _q.config}).Query()
@@ -626,6 +674,8 @@ func (_q *UserQuery) Clone() *UserQuery {
 		withPromoCodeUsages:       _q.withPromoCodeUsages.Clone(),
 		withProviderComments:      _q.withProviderComments.Clone(),
 		withProviderCommentVotes:  _q.withProviderCommentVotes.Clone(),
+		withForumPosts:            _q.withForumPosts.Clone(),
+		withForumPostVotes:        _q.withForumPostVotes.Clone(),
 		withUserAllowedGroups:     _q.withUserAllowedGroups.Clone(),
 		// clone intermediate query.
 		sql:  _q.sql.Clone(),
@@ -787,6 +837,28 @@ func (_q *UserQuery) WithProviderCommentVotes(opts ...func(*ProviderCommentVoteQ
 	return _q
 }
 
+// WithForumPosts tells the query-builder to eager-load the nodes that are connected to
+// the "forum_posts" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *UserQuery) WithForumPosts(opts ...func(*ForumPostQuery)) *UserQuery {
+	query := (&ForumPostClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withForumPosts = query
+	return _q
+}
+
+// WithForumPostVotes tells the query-builder to eager-load the nodes that are connected to
+// the "forum_post_votes" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *UserQuery) WithForumPostVotes(opts ...func(*ForumPostVoteQuery)) *UserQuery {
+	query := (&ForumPostVoteClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withForumPostVotes = query
+	return _q
+}
+
 // WithUserAllowedGroups tells the query-builder to eager-load the nodes that are connected to
 // the "user_allowed_groups" edge. The optional arguments are used to configure the query builder of the edge.
 func (_q *UserQuery) WithUserAllowedGroups(opts ...func(*UserAllowedGroupQuery)) *UserQuery {
@@ -876,7 +948,7 @@ func (_q *UserQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*User, e
 	var (
 		nodes       = []*User{}
 		_spec       = _q.querySpec()
-		loadedTypes = [15]bool{
+		loadedTypes = [17]bool{
 			_q.withAPIKeys != nil,
 			_q.withRedeemCodes != nil,
 			_q.withSubscriptions != nil,
@@ -891,6 +963,8 @@ func (_q *UserQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*User, e
 			_q.withPromoCodeUsages != nil,
 			_q.withProviderComments != nil,
 			_q.withProviderCommentVotes != nil,
+			_q.withForumPosts != nil,
+			_q.withForumPostVotes != nil,
 			_q.withUserAllowedGroups != nil,
 		}
 	)
@@ -1016,6 +1090,20 @@ func (_q *UserQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*User, e
 			func(n *User, e *ProviderCommentVote) {
 				n.Edges.ProviderCommentVotes = append(n.Edges.ProviderCommentVotes, e)
 			}); err != nil {
+			return nil, err
+		}
+	}
+	if query := _q.withForumPosts; query != nil {
+		if err := _q.loadForumPosts(ctx, query, nodes,
+			func(n *User) { n.Edges.ForumPosts = []*ForumPost{} },
+			func(n *User, e *ForumPost) { n.Edges.ForumPosts = append(n.Edges.ForumPosts, e) }); err != nil {
+			return nil, err
+		}
+	}
+	if query := _q.withForumPostVotes; query != nil {
+		if err := _q.loadForumPostVotes(ctx, query, nodes,
+			func(n *User) { n.Edges.ForumPostVotes = []*ForumPostVote{} },
+			func(n *User, e *ForumPostVote) { n.Edges.ForumPostVotes = append(n.Edges.ForumPostVotes, e) }); err != nil {
 			return nil, err
 		}
 	}
@@ -1474,6 +1562,66 @@ func (_q *UserQuery) loadProviderCommentVotes(ctx context.Context, query *Provid
 	}
 	query.Where(predicate.ProviderCommentVote(func(s *sql.Selector) {
 		s.Where(sql.InValues(s.C(user.ProviderCommentVotesColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.UserID
+		node, ok := nodeids[fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "user_id" returned %v for node %v`, fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
+}
+func (_q *UserQuery) loadForumPosts(ctx context.Context, query *ForumPostQuery, nodes []*User, init func(*User), assign func(*User, *ForumPost)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[int64]*User)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(forumpost.FieldUserID)
+	}
+	query.Where(predicate.ForumPost(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(user.ForumPostsColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.UserID
+		node, ok := nodeids[fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "user_id" returned %v for node %v`, fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
+}
+func (_q *UserQuery) loadForumPostVotes(ctx context.Context, query *ForumPostVoteQuery, nodes []*User, init func(*User), assign func(*User, *ForumPostVote)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[int64]*User)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(forumpostvote.FieldUserID)
+	}
+	query.Where(predicate.ForumPostVote(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(user.ForumPostVotesColumn), fks...))
 	}))
 	neighbors, err := query.All(ctx)
 	if err != nil {

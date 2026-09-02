@@ -57,6 +57,12 @@ type ChannelMonitorRequestTemplate func(*sql.Selector)
 // ErrorPassthroughRule is the predicate function for errorpassthroughrule builders.
 type ErrorPassthroughRule func(*sql.Selector)
 
+// ForumPost is the predicate function for forumpost builders.
+type ForumPost func(*sql.Selector)
+
+// ForumPostVote is the predicate function for forumpostvote builders.
+type ForumPostVote func(*sql.Selector)
+
 // Group is the predicate function for group builders.
 type Group func(*sql.Selector)
 

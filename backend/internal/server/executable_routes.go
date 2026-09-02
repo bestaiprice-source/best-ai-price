@@ -101,6 +101,7 @@ func buildExecutableRuntimeConfig(
 	rawDefs = append(rawDefs, routes.ExecutableSoraClientRoutes(handlers)...)
 	rawDefs = append(rawDefs, routes.ExecutableProviderCommentRoutes(handlers)...)
 	rawDefs = append(rawDefs, routes.ExecutableProviderPopularityRoutes(handlers)...)
+	rawDefs = append(rawDefs, routes.ExecutableForumRoutes(handlers)...)
 	rawDefs = append(rawDefs, web.ExecutableRoutes(frontendServer)...)
 
 	out := make([]executableRoute, 0, len(rawDefs))

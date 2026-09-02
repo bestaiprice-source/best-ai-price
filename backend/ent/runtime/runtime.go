@@ -22,6 +22,8 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/channelmonitorhistory"
 	"github.com/Wei-Shaw/sub2api/ent/channelmonitorrequesttemplate"
 	"github.com/Wei-Shaw/sub2api/ent/errorpassthroughrule"
+	"github.com/Wei-Shaw/sub2api/ent/forumpost"
+	"github.com/Wei-Shaw/sub2api/ent/forumpostvote"
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/idempotencyrecord"
 	"github.com/Wei-Shaw/sub2api/ent/identityadoptiondecision"
@@ -1055,6 +1057,76 @@ func init() {
 	errorpassthroughruleDescSkipMonitoring := errorpassthroughruleFields[11].Descriptor()
 	// errorpassthroughrule.DefaultSkipMonitoring holds the default value on creation for the skip_monitoring field.
 	errorpassthroughrule.DefaultSkipMonitoring = errorpassthroughruleDescSkipMonitoring.Default.(bool)
+	forumpostMixin := schema.ForumPost{}.Mixin()
+	forumpostMixinFields0 := forumpostMixin[0].Fields()
+	_ = forumpostMixinFields0
+	forumpostFields := schema.ForumPost{}.Fields()
+	_ = forumpostFields
+	// forumpostDescCreatedAt is the schema descriptor for created_at field.
+	forumpostDescCreatedAt := forumpostMixinFields0[0].Descriptor()
+	// forumpost.DefaultCreatedAt holds the default value on creation for the created_at field.
+	forumpost.DefaultCreatedAt = forumpostDescCreatedAt.Default.(func() time.Time)
+	// forumpostDescUpdatedAt is the schema descriptor for updated_at field.
+	forumpostDescUpdatedAt := forumpostMixinFields0[1].Descriptor()
+	// forumpost.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	forumpost.DefaultUpdatedAt = forumpostDescUpdatedAt.Default.(func() time.Time)
+	// forumpost.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	forumpost.UpdateDefaultUpdatedAt = forumpostDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// forumpostDescContent is the schema descriptor for content field.
+	forumpostDescContent := forumpostFields[2].Descriptor()
+	// forumpost.ContentValidator is a validator for the "content" field. It is called by the builders before save.
+	forumpost.ContentValidator = forumpostDescContent.Validators[0].(func(string) error)
+	// forumpostDescStatus is the schema descriptor for status field.
+	forumpostDescStatus := forumpostFields[3].Descriptor()
+	// forumpost.DefaultStatus holds the default value on creation for the status field.
+	forumpost.DefaultStatus = forumpostDescStatus.Default.(string)
+	// forumpost.StatusValidator is a validator for the "status" field. It is called by the builders before save.
+	forumpost.StatusValidator = forumpostDescStatus.Validators[0].(func(string) error)
+	// forumpostDescLikeCount is the schema descriptor for like_count field.
+	forumpostDescLikeCount := forumpostFields[4].Descriptor()
+	// forumpost.DefaultLikeCount holds the default value on creation for the like_count field.
+	forumpost.DefaultLikeCount = forumpostDescLikeCount.Default.(int)
+	// forumpostDescDislikeCount is the schema descriptor for dislike_count field.
+	forumpostDescDislikeCount := forumpostFields[5].Descriptor()
+	// forumpost.DefaultDislikeCount holds the default value on creation for the dislike_count field.
+	forumpost.DefaultDislikeCount = forumpostDescDislikeCount.Default.(int)
+	// forumpostDescReplyCount is the schema descriptor for reply_count field.
+	forumpostDescReplyCount := forumpostFields[6].Descriptor()
+	// forumpost.DefaultReplyCount holds the default value on creation for the reply_count field.
+	forumpost.DefaultReplyCount = forumpostDescReplyCount.Default.(int)
+	forumpostvoteMixin := schema.ForumPostVote{}.Mixin()
+	forumpostvoteMixinFields0 := forumpostvoteMixin[0].Fields()
+	_ = forumpostvoteMixinFields0
+	forumpostvoteFields := schema.ForumPostVote{}.Fields()
+	_ = forumpostvoteFields
+	// forumpostvoteDescCreatedAt is the schema descriptor for created_at field.
+	forumpostvoteDescCreatedAt := forumpostvoteMixinFields0[0].Descriptor()
+	// forumpostvote.DefaultCreatedAt holds the default value on creation for the created_at field.
+	forumpostvote.DefaultCreatedAt = forumpostvoteDescCreatedAt.Default.(func() time.Time)
+	// forumpostvoteDescUpdatedAt is the schema descriptor for updated_at field.
+	forumpostvoteDescUpdatedAt := forumpostvoteMixinFields0[1].Descriptor()
+	// forumpostvote.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	forumpostvote.DefaultUpdatedAt = forumpostvoteDescUpdatedAt.Default.(func() time.Time)
+	// forumpostvote.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	forumpostvote.UpdateDefaultUpdatedAt = forumpostvoteDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// forumpostvoteDescVoteType is the schema descriptor for vote_type field.
+	forumpostvoteDescVoteType := forumpostvoteFields[2].Descriptor()
+	// forumpostvote.VoteTypeValidator is a validator for the "vote_type" field. It is called by the builders before save.
+	forumpostvote.VoteTypeValidator = func() func(string) error {
+		validators := forumpostvoteDescVoteType.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(vote_type string) error {
+			for _, fn := range fns {
+				if err := fn(vote_type); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
 	groupMixin := schema.Group{}.Mixin()
 	groupMixinHooks1 := groupMixin[1].Hooks()
 	group.Hooks[0] = groupMixinHooks1[0]

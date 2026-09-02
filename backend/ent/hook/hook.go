@@ -213,6 +213,30 @@ func (f ErrorPassthroughRuleFunc) Mutate(ctx context.Context, m ent.Mutation) (e
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ErrorPassthroughRuleMutation", m)
 }
 
+// The ForumPostFunc type is an adapter to allow the use of ordinary
+// function as ForumPost mutator.
+type ForumPostFunc func(context.Context, *ent.ForumPostMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f ForumPostFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ForumPostMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ForumPostMutation", m)
+}
+
+// The ForumPostVoteFunc type is an adapter to allow the use of ordinary
+// function as ForumPostVote mutator.
+type ForumPostVoteFunc func(context.Context, *ent.ForumPostVoteMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f ForumPostVoteFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ForumPostVoteMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ForumPostVoteMutation", m)
+}
+
 // The GroupFunc type is an adapter to allow the use of ordinary
 // function as Group mutator.
 type GroupFunc func(context.Context, *ent.GroupMutation) (ent.Value, error)

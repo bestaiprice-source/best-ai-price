@@ -111,6 +111,7 @@ func ProvideHandlers(
 	adminVendorHandler *AdminVendorHandler,
 	providerCommentHandler *ProviderCommentHandler,
 	providerPopularityHandler *ProviderPopularityHandler,
+	forumHandler *ForumHandler,
 	_ *service.IdempotencyCoordinator,
 	_ *service.IdempotencyCleanupService,
 	_ *adminTaskStateCacheSetup,
@@ -140,6 +141,7 @@ func ProvideHandlers(
 		AdminVendor:        adminVendorHandler,
 		ProviderComment:    providerCommentHandler,
 		ProviderPopularity: providerPopularityHandler,
+		Forum:              forumHandler,
 	}
 }
 
@@ -162,6 +164,7 @@ var ProviderSet = wire.NewSet(
 	NewAnnouncementHandler,
 	NewProviderCommentHandler,
 	NewProviderPopularityHandler,
+	NewForumHandler,
 	NewChannelMonitorUserHandler,
 	NewGatewayHandler,
 	NewOpenAIGatewayHandler,

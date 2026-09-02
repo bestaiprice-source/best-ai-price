@@ -241,6 +241,16 @@ sub2api/
 - `GET /api/v1/admin/provider-comments`: Admin moderation list with provider, status, and sentiment filters.
 - `PUT /api/v1/admin/provider-comments/:id/status`: Admin status toggle (`active` / `hidden`).
 
+### Forum APIs (`/api/v1/forum/*`)
+- `GET /api/v1/forum/posts`: Paginated list of root forum posts with sort options (`latest`, `top_liked`, `most_replies`) and `user_vote` for authenticated viewers.
+- `POST /api/v1/forum/posts`: Creates a new root forum post.
+- `GET /api/v1/forum/posts/:id/replies`: Paginated list of nested replies to a post or reply.
+- `POST /api/v1/forum/posts/:id/reply`: Posts a nested reply, automatically incrementing parent's `reply_count`.
+- `POST /api/v1/forum/posts/:id/vote`: Sets reaction (`like`, `dislike`, or `none` to remove vote) with transactional counter updates.
+- `DELETE /api/v1/forum/posts/:id`: Always returns 403 Forbidden (`ErrCannotDeleteForumPost`) since forum posts are immutable and only votes can be removed.
+- `GET /api/v1/admin/forum/posts`: Admin moderation list with status filter.
+- `PUT /api/v1/admin/forum/posts/:id/status`: Admin status toggle (`active` / `hidden`).
+
 ### Admin APIs (`/api/v1/admin/*`)
 - `GET /api/v1/admin/api-keys`: Search and list all users' API keys.
 - `PUT /api/v1/admin/api-keys/:id`: Edit any user's API key.
