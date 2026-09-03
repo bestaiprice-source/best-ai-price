@@ -46,6 +46,26 @@ func RegisterCommonRoutes(r gin.IRoutes) {
 	r.GET("/api/data/llm_rankings.json", gatewayctx.AdaptGinHandler(commonLlmRankingsJSON))
 	r.GET("/api/v1/data/llm_rankings.json", gatewayctx.AdaptGinHandler(commonLlmRankingsJSON))
 
+	// Parser image_generation_rankings.json static endpoint
+	r.GET("/data/image_generation_rankings.json", gatewayctx.AdaptGinHandler(commonImageGenerationRankingsJSON))
+	r.GET("/api/data/image_generation_rankings.json", gatewayctx.AdaptGinHandler(commonImageGenerationRankingsJSON))
+	r.GET("/api/v1/data/image_generation_rankings.json", gatewayctx.AdaptGinHandler(commonImageGenerationRankingsJSON))
+
+	// Parser video_generation_rankings.json static endpoint
+	r.GET("/data/video_generation_rankings.json", gatewayctx.AdaptGinHandler(commonVideoGenerationRankingsJSON))
+	r.GET("/api/data/video_generation_rankings.json", gatewayctx.AdaptGinHandler(commonVideoGenerationRankingsJSON))
+	r.GET("/api/v1/data/video_generation_rankings.json", gatewayctx.AdaptGinHandler(commonVideoGenerationRankingsJSON))
+
+	// Parser text_to_speech_rankings.json static endpoint
+	r.GET("/data/text_to_speech_rankings.json", gatewayctx.AdaptGinHandler(commonTextToSpeechRankingsJSON))
+	r.GET("/api/data/text_to_speech_rankings.json", gatewayctx.AdaptGinHandler(commonTextToSpeechRankingsJSON))
+	r.GET("/api/v1/data/text_to_speech_rankings.json", gatewayctx.AdaptGinHandler(commonTextToSpeechRankingsJSON))
+
+	// Parser speech_to_text_rankings.json static endpoint
+	r.GET("/data/speech_to_text_rankings.json", gatewayctx.AdaptGinHandler(commonSpeechToTextRankingsJSON))
+	r.GET("/api/data/speech_to_text_rankings.json", gatewayctx.AdaptGinHandler(commonSpeechToTextRankingsJSON))
+	r.GET("/api/v1/data/speech_to_text_rankings.json", gatewayctx.AdaptGinHandler(commonSpeechToTextRankingsJSON))
+
 	// Parser provider_descriptions.json / providers_description.json static endpoints
 	r.GET("/data/provider_descriptions.json", gatewayctx.AdaptGinHandler(commonProviderDescriptionsJSON))
 	r.GET("/api/data/provider_descriptions.json", gatewayctx.AdaptGinHandler(commonProviderDescriptionsJSON))
@@ -145,6 +165,78 @@ func ExecutableCommonRoutes() []gatewayctx.RouteDef {
 			Method:     http.MethodGet,
 			Path:       "/api/v1/data/llm_rankings.json",
 			Handler:    commonLlmRankingsJSON,
+			Middleware: []string{middlewareRequestLogger, middlewareCORS, middlewareSecurity},
+		},
+		{
+			Method:     http.MethodGet,
+			Path:       "/data/image_generation_rankings.json",
+			Handler:    commonImageGenerationRankingsJSON,
+			Middleware: []string{middlewareRequestLogger, middlewareCORS, middlewareSecurity},
+		},
+		{
+			Method:     http.MethodGet,
+			Path:       "/api/data/image_generation_rankings.json",
+			Handler:    commonImageGenerationRankingsJSON,
+			Middleware: []string{middlewareRequestLogger, middlewareCORS, middlewareSecurity},
+		},
+		{
+			Method:     http.MethodGet,
+			Path:       "/api/v1/data/image_generation_rankings.json",
+			Handler:    commonImageGenerationRankingsJSON,
+			Middleware: []string{middlewareRequestLogger, middlewareCORS, middlewareSecurity},
+		},
+		{
+			Method:     http.MethodGet,
+			Path:       "/data/video_generation_rankings.json",
+			Handler:    commonVideoGenerationRankingsJSON,
+			Middleware: []string{middlewareRequestLogger, middlewareCORS, middlewareSecurity},
+		},
+		{
+			Method:     http.MethodGet,
+			Path:       "/api/data/video_generation_rankings.json",
+			Handler:    commonVideoGenerationRankingsJSON,
+			Middleware: []string{middlewareRequestLogger, middlewareCORS, middlewareSecurity},
+		},
+		{
+			Method:     http.MethodGet,
+			Path:       "/api/v1/data/video_generation_rankings.json",
+			Handler:    commonVideoGenerationRankingsJSON,
+			Middleware: []string{middlewareRequestLogger, middlewareCORS, middlewareSecurity},
+		},
+		{
+			Method:     http.MethodGet,
+			Path:       "/data/text_to_speech_rankings.json",
+			Handler:    commonTextToSpeechRankingsJSON,
+			Middleware: []string{middlewareRequestLogger, middlewareCORS, middlewareSecurity},
+		},
+		{
+			Method:     http.MethodGet,
+			Path:       "/api/data/text_to_speech_rankings.json",
+			Handler:    commonTextToSpeechRankingsJSON,
+			Middleware: []string{middlewareRequestLogger, middlewareCORS, middlewareSecurity},
+		},
+		{
+			Method:     http.MethodGet,
+			Path:       "/api/v1/data/text_to_speech_rankings.json",
+			Handler:    commonTextToSpeechRankingsJSON,
+			Middleware: []string{middlewareRequestLogger, middlewareCORS, middlewareSecurity},
+		},
+		{
+			Method:     http.MethodGet,
+			Path:       "/data/speech_to_text_rankings.json",
+			Handler:    commonSpeechToTextRankingsJSON,
+			Middleware: []string{middlewareRequestLogger, middlewareCORS, middlewareSecurity},
+		},
+		{
+			Method:     http.MethodGet,
+			Path:       "/api/data/speech_to_text_rankings.json",
+			Handler:    commonSpeechToTextRankingsJSON,
+			Middleware: []string{middlewareRequestLogger, middlewareCORS, middlewareSecurity},
+		},
+		{
+			Method:     http.MethodGet,
+			Path:       "/api/v1/data/speech_to_text_rankings.json",
+			Handler:    commonSpeechToTextRankingsJSON,
 			Middleware: []string{middlewareRequestLogger, middlewareCORS, middlewareSecurity},
 		},
 		{
@@ -264,13 +356,13 @@ func commonApiDescriptionsJSON(c gatewayctx.GatewayContext) {
 	c.WriteJSON(http.StatusNotFound, map[string]any{"error": "api_descriptions.json not found"})
 }
 
-func commonLlmRankingsJSON(c gatewayctx.GatewayContext) {
+func serveStaticDataJSON(c gatewayctx.GatewayContext, filename string) {
 	paths := []string{
-		"/app/data/parser/llm_rankings.json",
-		"/app/data/llm_rankings.json",
-		"./data/llm_rankings.json",
-		"/srv/parser-data/data/llm_rankings.json",
-		"/root/bestai_prices_parser/public/data/llm_rankings.json",
+		"/app/data/parser/" + filename,
+		"/app/data/" + filename,
+		"./data/" + filename,
+		"/srv/parser-data/data/" + filename,
+		"/root/bestai_prices_parser/public/data/" + filename,
 	}
 	for _, p := range paths {
 		if _, err := os.Stat(p); err == nil {
@@ -281,7 +373,27 @@ func commonLlmRankingsJSON(c gatewayctx.GatewayContext) {
 			}
 		}
 	}
-	c.WriteJSON(http.StatusNotFound, map[string]any{"error": "llm_rankings.json not found"})
+	c.WriteJSON(http.StatusNotFound, map[string]any{"error": filename + " not found"})
+}
+
+func commonLlmRankingsJSON(c gatewayctx.GatewayContext) {
+	serveStaticDataJSON(c, "llm_rankings.json")
+}
+
+func commonImageGenerationRankingsJSON(c gatewayctx.GatewayContext) {
+	serveStaticDataJSON(c, "image_generation_rankings.json")
+}
+
+func commonVideoGenerationRankingsJSON(c gatewayctx.GatewayContext) {
+	serveStaticDataJSON(c, "video_generation_rankings.json")
+}
+
+func commonTextToSpeechRankingsJSON(c gatewayctx.GatewayContext) {
+	serveStaticDataJSON(c, "text_to_speech_rankings.json")
+}
+
+func commonSpeechToTextRankingsJSON(c gatewayctx.GatewayContext) {
+	serveStaticDataJSON(c, "speech_to_text_rankings.json")
 }
 
 func commonProviderDescriptionsJSON(c gatewayctx.GatewayContext) {

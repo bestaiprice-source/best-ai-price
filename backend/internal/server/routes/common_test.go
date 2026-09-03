@@ -92,6 +92,55 @@ func TestRegisterCommonRoutes(t *testing.T) {
 		require.JSONEq(t, `{"error":"llm_rankings.json not found"}`, rec3.Body.String())
 	})
 
+	t.Run("multimedia rankings json not found default", func(t *testing.T) {
+		rankings := []string{
+			"image_generation_rankings.json",
+			"video_generation_rankings.json",
+			"text_to_speech_rankings.json",
+			"speech_to_text_rankings.json",
+		}
+		for _, name := range rankings {
+			for _, prefix := range []string{"/data/", "/api/data/", "/api/v1/data/"} {
+				req := httptest.NewRequest(http.MethodGet, prefix+name, nil)
+				rec := httptest.NewRecorder()
+				router.ServeHTTP(rec, req)
+
+				require.Equal(t, http.StatusNotFound, rec.Code)
+				require.JSONEq(t, `{"error":"`+name+` not found"}`, rec.Body.String())
+			}
+		}
+	})
+
+	t.Run("multimedia rankings json serves file when exists", func(t *testing.T) {
+		err := os.MkdirAll("./data", 0755)
+		require.NoError(t, err)
+
+		rankings := []string{
+			"image_generation_rankings.json",
+			"video_generation_rankings.json",
+			"text_to_speech_rankings.json",
+			"speech_to_text_rankings.json",
+		}
+		for _, name := range rankings {
+			filePath := "./data/" + name
+			testJSON := `{"rankings":[{"rank":1,"model":"test-model"}]}`
+			err = os.WriteFile(filePath, []byte(testJSON), 0644)
+			require.NoError(t, err)
+			defer os.Remove(filePath)
+
+			for _, prefix := range []string{"/data/", "/api/data/", "/api/v1/data/"} {
+				req := httptest.NewRequest(http.MethodGet, prefix+name, nil)
+				rec := httptest.NewRecorder()
+				router.ServeHTTP(rec, req)
+
+				require.Equal(t, http.StatusOK, rec.Code)
+				require.Equal(t, "public, max-age=300", rec.Header().Get("Cache-Control"))
+				require.Equal(t, "*", rec.Header().Get("Access-Control-Allow-Origin"))
+				require.JSONEq(t, testJSON, rec.Body.String())
+			}
+		}
+	})
+
 	t.Run("provider descriptions json not found default", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/data/provider_descriptions.json", nil)
 		rec := httptest.NewRecorder()
@@ -146,6 +195,18 @@ func TestRegisterCommonRoutes(t *testing.T) {
 		require.True(t, paths["/data/llm_rankings.json"])
 		require.True(t, paths["/api/data/llm_rankings.json"])
 		require.True(t, paths["/api/v1/data/llm_rankings.json"])
+		require.True(t, paths["/data/image_generation_rankings.json"])
+		require.True(t, paths["/api/data/image_generation_rankings.json"])
+		require.True(t, paths["/api/v1/data/image_generation_rankings.json"])
+		require.True(t, paths["/data/video_generation_rankings.json"])
+		require.True(t, paths["/api/data/video_generation_rankings.json"])
+		require.True(t, paths["/api/v1/data/video_generation_rankings.json"])
+		require.True(t, paths["/data/text_to_speech_rankings.json"])
+		require.True(t, paths["/api/data/text_to_speech_rankings.json"])
+		require.True(t, paths["/api/v1/data/text_to_speech_rankings.json"])
+		require.True(t, paths["/data/speech_to_text_rankings.json"])
+		require.True(t, paths["/api/data/speech_to_text_rankings.json"])
+		require.True(t, paths["/api/v1/data/speech_to_text_rankings.json"])
 		require.True(t, paths["/data/provider_descriptions.json"])
 		require.True(t, paths["/api/data/provider_descriptions.json"])
 		require.True(t, paths["/api/v1/data/provider_descriptions.json"])
