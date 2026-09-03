@@ -41,6 +41,11 @@ func RegisterCommonRoutes(r gin.IRoutes) {
 	r.GET("/api/data/api_descriptions.json", gatewayctx.AdaptGinHandler(commonApiDescriptionsJSON))
 	r.GET("/api/v1/data/api_descriptions.json", gatewayctx.AdaptGinHandler(commonApiDescriptionsJSON))
 
+	// Parser llm_rankings.json static endpoint (supports /data/llm_rankings.json, /api/data/llm_rankings.json, and /api/v1/data/llm_rankings.json)
+	r.GET("/data/llm_rankings.json", gatewayctx.AdaptGinHandler(commonLlmRankingsJSON))
+	r.GET("/api/data/llm_rankings.json", gatewayctx.AdaptGinHandler(commonLlmRankingsJSON))
+	r.GET("/api/v1/data/llm_rankings.json", gatewayctx.AdaptGinHandler(commonLlmRankingsJSON))
+
 	// Parser provider_descriptions.json / providers_description.json static endpoints
 	r.GET("/data/provider_descriptions.json", gatewayctx.AdaptGinHandler(commonProviderDescriptionsJSON))
 	r.GET("/api/data/provider_descriptions.json", gatewayctx.AdaptGinHandler(commonProviderDescriptionsJSON))
@@ -122,6 +127,24 @@ func ExecutableCommonRoutes() []gatewayctx.RouteDef {
 			Method:     http.MethodGet,
 			Path:       "/api/v1/data/api_descriptions.json",
 			Handler:    commonApiDescriptionsJSON,
+			Middleware: []string{middlewareRequestLogger, middlewareCORS, middlewareSecurity},
+		},
+		{
+			Method:     http.MethodGet,
+			Path:       "/data/llm_rankings.json",
+			Handler:    commonLlmRankingsJSON,
+			Middleware: []string{middlewareRequestLogger, middlewareCORS, middlewareSecurity},
+		},
+		{
+			Method:     http.MethodGet,
+			Path:       "/api/data/llm_rankings.json",
+			Handler:    commonLlmRankingsJSON,
+			Middleware: []string{middlewareRequestLogger, middlewareCORS, middlewareSecurity},
+		},
+		{
+			Method:     http.MethodGet,
+			Path:       "/api/v1/data/llm_rankings.json",
+			Handler:    commonLlmRankingsJSON,
 			Middleware: []string{middlewareRequestLogger, middlewareCORS, middlewareSecurity},
 		},
 		{
@@ -239,6 +262,26 @@ func commonApiDescriptionsJSON(c gatewayctx.GatewayContext) {
 		}
 	}
 	c.WriteJSON(http.StatusNotFound, map[string]any{"error": "api_descriptions.json not found"})
+}
+
+func commonLlmRankingsJSON(c gatewayctx.GatewayContext) {
+	paths := []string{
+		"/app/data/parser/llm_rankings.json",
+		"/app/data/llm_rankings.json",
+		"./data/llm_rankings.json",
+		"/srv/parser-data/data/llm_rankings.json",
+		"/root/bestai_prices_parser/public/data/llm_rankings.json",
+	}
+	for _, p := range paths {
+		if _, err := os.Stat(p); err == nil {
+			c.SetHeader("Cache-Control", "public, max-age=300")
+			c.SetHeader("Access-Control-Allow-Origin", "*")
+			if err := c.ServeFile(p); err == nil {
+				return
+			}
+		}
+	}
+	c.WriteJSON(http.StatusNotFound, map[string]any{"error": "llm_rankings.json not found"})
 }
 
 func commonProviderDescriptionsJSON(c gatewayctx.GatewayContext) {

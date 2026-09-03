@@ -3,6 +3,7 @@ package routes
 import (
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -68,6 +69,29 @@ func TestRegisterCommonRoutes(t *testing.T) {
 		require.JSONEq(t, `{"error":"api_descriptions.json not found"}`, rec.Body.String())
 	})
 
+	t.Run("llm rankings json not found default", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/data/llm_rankings.json", nil)
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		require.Equal(t, http.StatusNotFound, rec.Code)
+		require.JSONEq(t, `{"error":"llm_rankings.json not found"}`, rec.Body.String())
+
+		req2 := httptest.NewRequest(http.MethodGet, "/api/data/llm_rankings.json", nil)
+		rec2 := httptest.NewRecorder()
+		router.ServeHTTP(rec2, req2)
+
+		require.Equal(t, http.StatusNotFound, rec2.Code)
+		require.JSONEq(t, `{"error":"llm_rankings.json not found"}`, rec2.Body.String())
+
+		req3 := httptest.NewRequest(http.MethodGet, "/api/v1/data/llm_rankings.json", nil)
+		rec3 := httptest.NewRecorder()
+		router.ServeHTTP(rec3, req3)
+
+		require.Equal(t, http.StatusNotFound, rec3.Code)
+		require.JSONEq(t, `{"error":"llm_rankings.json not found"}`, rec3.Body.String())
+	})
+
 	t.Run("provider descriptions json not found default", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/data/provider_descriptions.json", nil)
 		rec := httptest.NewRecorder()
@@ -84,6 +108,27 @@ func TestRegisterCommonRoutes(t *testing.T) {
 		require.JSONEq(t, `{"error":"providers_description.json not found"}`, rec2.Body.String())
 	})
 
+	t.Run("llm rankings json serves file when exists", func(t *testing.T) {
+		err := os.MkdirAll("./data", 0755)
+		require.NoError(t, err)
+		filePath := "./data/llm_rankings.json"
+		testJSON := `{"rankings":[{"rank":1,"model":"gpt-4o"}]}`
+		err = os.WriteFile(filePath, []byte(testJSON), 0644)
+		require.NoError(t, err)
+		defer os.Remove(filePath)
+
+		for _, p := range []string{"/data/llm_rankings.json", "/api/data/llm_rankings.json", "/api/v1/data/llm_rankings.json"} {
+			req := httptest.NewRequest(http.MethodGet, p, nil)
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, req)
+
+			require.Equal(t, http.StatusOK, rec.Code)
+			require.Equal(t, "public, max-age=300", rec.Header().Get("Cache-Control"))
+			require.Equal(t, "*", rec.Header().Get("Access-Control-Allow-Origin"))
+			require.JSONEq(t, testJSON, rec.Body.String())
+		}
+	})
+
 	t.Run("executable common routes completeness", func(t *testing.T) {
 		routes := ExecutableCommonRoutes()
 		require.NotEmpty(t, routes)
@@ -98,6 +143,9 @@ func TestRegisterCommonRoutes(t *testing.T) {
 		require.True(t, paths["/data/api_descriptions.json"])
 		require.True(t, paths["/api/data/api_descriptions.json"])
 		require.True(t, paths["/api/v1/data/api_descriptions.json"])
+		require.True(t, paths["/data/llm_rankings.json"])
+		require.True(t, paths["/api/data/llm_rankings.json"])
+		require.True(t, paths["/api/v1/data/llm_rankings.json"])
 		require.True(t, paths["/data/provider_descriptions.json"])
 		require.True(t, paths["/api/data/provider_descriptions.json"])
 		require.True(t, paths["/api/v1/data/provider_descriptions.json"])
