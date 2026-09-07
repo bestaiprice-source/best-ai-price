@@ -13,62 +13,62 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/Wei-Shaw/sub2api/ent/forumpost"
-	"github.com/Wei-Shaw/sub2api/ent/forumpostvote"
+	"github.com/Wei-Shaw/sub2api/ent/forumcomment"
+	"github.com/Wei-Shaw/sub2api/ent/forumtopic"
+	"github.com/Wei-Shaw/sub2api/ent/forumtopicvote"
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
 	"github.com/Wei-Shaw/sub2api/ent/user"
 )
 
-// ForumPostQuery is the builder for querying ForumPost entities.
-type ForumPostQuery struct {
+// ForumTopicQuery is the builder for querying ForumTopic entities.
+type ForumTopicQuery struct {
 	config
-	ctx         *QueryContext
-	order       []forumpost.OrderOption
-	inters      []Interceptor
-	predicates  []predicate.ForumPost
-	withUser    *UserQuery
-	withParent  *ForumPostQuery
-	withReplies *ForumPostQuery
-	withVotes   *ForumPostVoteQuery
-	modifiers   []func(*sql.Selector)
+	ctx          *QueryContext
+	order        []forumtopic.OrderOption
+	inters       []Interceptor
+	predicates   []predicate.ForumTopic
+	withUser     *UserQuery
+	withComments *ForumCommentQuery
+	withVotes    *ForumTopicVoteQuery
+	modifiers    []func(*sql.Selector)
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
 }
 
-// Where adds a new predicate for the ForumPostQuery builder.
-func (_q *ForumPostQuery) Where(ps ...predicate.ForumPost) *ForumPostQuery {
+// Where adds a new predicate for the ForumTopicQuery builder.
+func (_q *ForumTopicQuery) Where(ps ...predicate.ForumTopic) *ForumTopicQuery {
 	_q.predicates = append(_q.predicates, ps...)
 	return _q
 }
 
 // Limit the number of records to be returned by this query.
-func (_q *ForumPostQuery) Limit(limit int) *ForumPostQuery {
+func (_q *ForumTopicQuery) Limit(limit int) *ForumTopicQuery {
 	_q.ctx.Limit = &limit
 	return _q
 }
 
 // Offset to start from.
-func (_q *ForumPostQuery) Offset(offset int) *ForumPostQuery {
+func (_q *ForumTopicQuery) Offset(offset int) *ForumTopicQuery {
 	_q.ctx.Offset = &offset
 	return _q
 }
 
 // Unique configures the query builder to filter duplicate records on query.
 // By default, unique is set to true, and can be disabled using this method.
-func (_q *ForumPostQuery) Unique(unique bool) *ForumPostQuery {
+func (_q *ForumTopicQuery) Unique(unique bool) *ForumTopicQuery {
 	_q.ctx.Unique = &unique
 	return _q
 }
 
 // Order specifies how the records should be ordered.
-func (_q *ForumPostQuery) Order(o ...forumpost.OrderOption) *ForumPostQuery {
+func (_q *ForumTopicQuery) Order(o ...forumtopic.OrderOption) *ForumTopicQuery {
 	_q.order = append(_q.order, o...)
 	return _q
 }
 
 // QueryUser chains the current query on the "user" edge.
-func (_q *ForumPostQuery) QueryUser() *UserQuery {
+func (_q *ForumTopicQuery) QueryUser() *UserQuery {
 	query := (&UserClient{config: _q.config}).Query()
 	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
 		if err := _q.prepareQuery(ctx); err != nil {
@@ -79,9 +79,9 @@ func (_q *ForumPostQuery) QueryUser() *UserQuery {
 			return nil, err
 		}
 		step := sqlgraph.NewStep(
-			sqlgraph.From(forumpost.Table, forumpost.FieldID, selector),
+			sqlgraph.From(forumtopic.Table, forumtopic.FieldID, selector),
 			sqlgraph.To(user.Table, user.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, true, forumpost.UserTable, forumpost.UserColumn),
+			sqlgraph.Edge(sqlgraph.M2O, true, forumtopic.UserTable, forumtopic.UserColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
 		return fromU, nil
@@ -89,9 +89,9 @@ func (_q *ForumPostQuery) QueryUser() *UserQuery {
 	return query
 }
 
-// QueryParent chains the current query on the "parent" edge.
-func (_q *ForumPostQuery) QueryParent() *ForumPostQuery {
-	query := (&ForumPostClient{config: _q.config}).Query()
+// QueryComments chains the current query on the "comments" edge.
+func (_q *ForumTopicQuery) QueryComments() *ForumCommentQuery {
+	query := (&ForumCommentClient{config: _q.config}).Query()
 	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
 		if err := _q.prepareQuery(ctx); err != nil {
 			return nil, err
@@ -101,31 +101,9 @@ func (_q *ForumPostQuery) QueryParent() *ForumPostQuery {
 			return nil, err
 		}
 		step := sqlgraph.NewStep(
-			sqlgraph.From(forumpost.Table, forumpost.FieldID, selector),
-			sqlgraph.To(forumpost.Table, forumpost.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, true, forumpost.ParentTable, forumpost.ParentColumn),
-		)
-		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
-		return fromU, nil
-	}
-	return query
-}
-
-// QueryReplies chains the current query on the "replies" edge.
-func (_q *ForumPostQuery) QueryReplies() *ForumPostQuery {
-	query := (&ForumPostClient{config: _q.config}).Query()
-	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
-		if err := _q.prepareQuery(ctx); err != nil {
-			return nil, err
-		}
-		selector := _q.sqlQuery(ctx)
-		if err := selector.Err(); err != nil {
-			return nil, err
-		}
-		step := sqlgraph.NewStep(
-			sqlgraph.From(forumpost.Table, forumpost.FieldID, selector),
-			sqlgraph.To(forumpost.Table, forumpost.FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, forumpost.RepliesTable, forumpost.RepliesColumn),
+			sqlgraph.From(forumtopic.Table, forumtopic.FieldID, selector),
+			sqlgraph.To(forumcomment.Table, forumcomment.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, forumtopic.CommentsTable, forumtopic.CommentsColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
 		return fromU, nil
@@ -134,8 +112,8 @@ func (_q *ForumPostQuery) QueryReplies() *ForumPostQuery {
 }
 
 // QueryVotes chains the current query on the "votes" edge.
-func (_q *ForumPostQuery) QueryVotes() *ForumPostVoteQuery {
-	query := (&ForumPostVoteClient{config: _q.config}).Query()
+func (_q *ForumTopicQuery) QueryVotes() *ForumTopicVoteQuery {
+	query := (&ForumTopicVoteClient{config: _q.config}).Query()
 	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
 		if err := _q.prepareQuery(ctx); err != nil {
 			return nil, err
@@ -145,9 +123,9 @@ func (_q *ForumPostQuery) QueryVotes() *ForumPostVoteQuery {
 			return nil, err
 		}
 		step := sqlgraph.NewStep(
-			sqlgraph.From(forumpost.Table, forumpost.FieldID, selector),
-			sqlgraph.To(forumpostvote.Table, forumpostvote.FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, forumpost.VotesTable, forumpost.VotesColumn),
+			sqlgraph.From(forumtopic.Table, forumtopic.FieldID, selector),
+			sqlgraph.To(forumtopicvote.Table, forumtopicvote.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, forumtopic.VotesTable, forumtopic.VotesColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
 		return fromU, nil
@@ -155,21 +133,21 @@ func (_q *ForumPostQuery) QueryVotes() *ForumPostVoteQuery {
 	return query
 }
 
-// First returns the first ForumPost entity from the query.
-// Returns a *NotFoundError when no ForumPost was found.
-func (_q *ForumPostQuery) First(ctx context.Context) (*ForumPost, error) {
+// First returns the first ForumTopic entity from the query.
+// Returns a *NotFoundError when no ForumTopic was found.
+func (_q *ForumTopicQuery) First(ctx context.Context) (*ForumTopic, error) {
 	nodes, err := _q.Limit(1).All(setContextOp(ctx, _q.ctx, ent.OpQueryFirst))
 	if err != nil {
 		return nil, err
 	}
 	if len(nodes) == 0 {
-		return nil, &NotFoundError{forumpost.Label}
+		return nil, &NotFoundError{forumtopic.Label}
 	}
 	return nodes[0], nil
 }
 
 // FirstX is like First, but panics if an error occurs.
-func (_q *ForumPostQuery) FirstX(ctx context.Context) *ForumPost {
+func (_q *ForumTopicQuery) FirstX(ctx context.Context) *ForumTopic {
 	node, err := _q.First(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
@@ -177,22 +155,22 @@ func (_q *ForumPostQuery) FirstX(ctx context.Context) *ForumPost {
 	return node
 }
 
-// FirstID returns the first ForumPost ID from the query.
-// Returns a *NotFoundError when no ForumPost ID was found.
-func (_q *ForumPostQuery) FirstID(ctx context.Context) (id int64, err error) {
+// FirstID returns the first ForumTopic ID from the query.
+// Returns a *NotFoundError when no ForumTopic ID was found.
+func (_q *ForumTopicQuery) FirstID(ctx context.Context) (id int64, err error) {
 	var ids []int64
 	if ids, err = _q.Limit(1).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryFirstID)); err != nil {
 		return
 	}
 	if len(ids) == 0 {
-		err = &NotFoundError{forumpost.Label}
+		err = &NotFoundError{forumtopic.Label}
 		return
 	}
 	return ids[0], nil
 }
 
 // FirstIDX is like FirstID, but panics if an error occurs.
-func (_q *ForumPostQuery) FirstIDX(ctx context.Context) int64 {
+func (_q *ForumTopicQuery) FirstIDX(ctx context.Context) int64 {
 	id, err := _q.FirstID(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
@@ -200,10 +178,10 @@ func (_q *ForumPostQuery) FirstIDX(ctx context.Context) int64 {
 	return id
 }
 
-// Only returns a single ForumPost entity found by the query, ensuring it only returns one.
-// Returns a *NotSingularError when more than one ForumPost entity is found.
-// Returns a *NotFoundError when no ForumPost entities are found.
-func (_q *ForumPostQuery) Only(ctx context.Context) (*ForumPost, error) {
+// Only returns a single ForumTopic entity found by the query, ensuring it only returns one.
+// Returns a *NotSingularError when more than one ForumTopic entity is found.
+// Returns a *NotFoundError when no ForumTopic entities are found.
+func (_q *ForumTopicQuery) Only(ctx context.Context) (*ForumTopic, error) {
 	nodes, err := _q.Limit(2).All(setContextOp(ctx, _q.ctx, ent.OpQueryOnly))
 	if err != nil {
 		return nil, err
@@ -212,14 +190,14 @@ func (_q *ForumPostQuery) Only(ctx context.Context) (*ForumPost, error) {
 	case 1:
 		return nodes[0], nil
 	case 0:
-		return nil, &NotFoundError{forumpost.Label}
+		return nil, &NotFoundError{forumtopic.Label}
 	default:
-		return nil, &NotSingularError{forumpost.Label}
+		return nil, &NotSingularError{forumtopic.Label}
 	}
 }
 
 // OnlyX is like Only, but panics if an error occurs.
-func (_q *ForumPostQuery) OnlyX(ctx context.Context) *ForumPost {
+func (_q *ForumTopicQuery) OnlyX(ctx context.Context) *ForumTopic {
 	node, err := _q.Only(ctx)
 	if err != nil {
 		panic(err)
@@ -227,10 +205,10 @@ func (_q *ForumPostQuery) OnlyX(ctx context.Context) *ForumPost {
 	return node
 }
 
-// OnlyID is like Only, but returns the only ForumPost ID in the query.
-// Returns a *NotSingularError when more than one ForumPost ID is found.
+// OnlyID is like Only, but returns the only ForumTopic ID in the query.
+// Returns a *NotSingularError when more than one ForumTopic ID is found.
 // Returns a *NotFoundError when no entities are found.
-func (_q *ForumPostQuery) OnlyID(ctx context.Context) (id int64, err error) {
+func (_q *ForumTopicQuery) OnlyID(ctx context.Context) (id int64, err error) {
 	var ids []int64
 	if ids, err = _q.Limit(2).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryOnlyID)); err != nil {
 		return
@@ -239,15 +217,15 @@ func (_q *ForumPostQuery) OnlyID(ctx context.Context) (id int64, err error) {
 	case 1:
 		id = ids[0]
 	case 0:
-		err = &NotFoundError{forumpost.Label}
+		err = &NotFoundError{forumtopic.Label}
 	default:
-		err = &NotSingularError{forumpost.Label}
+		err = &NotSingularError{forumtopic.Label}
 	}
 	return
 }
 
 // OnlyIDX is like OnlyID, but panics if an error occurs.
-func (_q *ForumPostQuery) OnlyIDX(ctx context.Context) int64 {
+func (_q *ForumTopicQuery) OnlyIDX(ctx context.Context) int64 {
 	id, err := _q.OnlyID(ctx)
 	if err != nil {
 		panic(err)
@@ -255,18 +233,18 @@ func (_q *ForumPostQuery) OnlyIDX(ctx context.Context) int64 {
 	return id
 }
 
-// All executes the query and returns a list of ForumPosts.
-func (_q *ForumPostQuery) All(ctx context.Context) ([]*ForumPost, error) {
+// All executes the query and returns a list of ForumTopics.
+func (_q *ForumTopicQuery) All(ctx context.Context) ([]*ForumTopic, error) {
 	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryAll)
 	if err := _q.prepareQuery(ctx); err != nil {
 		return nil, err
 	}
-	qr := querierAll[[]*ForumPost, *ForumPostQuery]()
-	return withInterceptors[[]*ForumPost](ctx, _q, qr, _q.inters)
+	qr := querierAll[[]*ForumTopic, *ForumTopicQuery]()
+	return withInterceptors[[]*ForumTopic](ctx, _q, qr, _q.inters)
 }
 
 // AllX is like All, but panics if an error occurs.
-func (_q *ForumPostQuery) AllX(ctx context.Context) []*ForumPost {
+func (_q *ForumTopicQuery) AllX(ctx context.Context) []*ForumTopic {
 	nodes, err := _q.All(ctx)
 	if err != nil {
 		panic(err)
@@ -274,20 +252,20 @@ func (_q *ForumPostQuery) AllX(ctx context.Context) []*ForumPost {
 	return nodes
 }
 
-// IDs executes the query and returns a list of ForumPost IDs.
-func (_q *ForumPostQuery) IDs(ctx context.Context) (ids []int64, err error) {
+// IDs executes the query and returns a list of ForumTopic IDs.
+func (_q *ForumTopicQuery) IDs(ctx context.Context) (ids []int64, err error) {
 	if _q.ctx.Unique == nil && _q.path != nil {
 		_q.Unique(true)
 	}
 	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryIDs)
-	if err = _q.Select(forumpost.FieldID).Scan(ctx, &ids); err != nil {
+	if err = _q.Select(forumtopic.FieldID).Scan(ctx, &ids); err != nil {
 		return nil, err
 	}
 	return ids, nil
 }
 
 // IDsX is like IDs, but panics if an error occurs.
-func (_q *ForumPostQuery) IDsX(ctx context.Context) []int64 {
+func (_q *ForumTopicQuery) IDsX(ctx context.Context) []int64 {
 	ids, err := _q.IDs(ctx)
 	if err != nil {
 		panic(err)
@@ -296,16 +274,16 @@ func (_q *ForumPostQuery) IDsX(ctx context.Context) []int64 {
 }
 
 // Count returns the count of the given query.
-func (_q *ForumPostQuery) Count(ctx context.Context) (int, error) {
+func (_q *ForumTopicQuery) Count(ctx context.Context) (int, error) {
 	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryCount)
 	if err := _q.prepareQuery(ctx); err != nil {
 		return 0, err
 	}
-	return withInterceptors[int](ctx, _q, querierCount[*ForumPostQuery](), _q.inters)
+	return withInterceptors[int](ctx, _q, querierCount[*ForumTopicQuery](), _q.inters)
 }
 
 // CountX is like Count, but panics if an error occurs.
-func (_q *ForumPostQuery) CountX(ctx context.Context) int {
+func (_q *ForumTopicQuery) CountX(ctx context.Context) int {
 	count, err := _q.Count(ctx)
 	if err != nil {
 		panic(err)
@@ -314,7 +292,7 @@ func (_q *ForumPostQuery) CountX(ctx context.Context) int {
 }
 
 // Exist returns true if the query has elements in the graph.
-func (_q *ForumPostQuery) Exist(ctx context.Context) (bool, error) {
+func (_q *ForumTopicQuery) Exist(ctx context.Context) (bool, error) {
 	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryExist)
 	switch _, err := _q.FirstID(ctx); {
 	case IsNotFound(err):
@@ -327,7 +305,7 @@ func (_q *ForumPostQuery) Exist(ctx context.Context) (bool, error) {
 }
 
 // ExistX is like Exist, but panics if an error occurs.
-func (_q *ForumPostQuery) ExistX(ctx context.Context) bool {
+func (_q *ForumTopicQuery) ExistX(ctx context.Context) bool {
 	exist, err := _q.Exist(ctx)
 	if err != nil {
 		panic(err)
@@ -335,22 +313,21 @@ func (_q *ForumPostQuery) ExistX(ctx context.Context) bool {
 	return exist
 }
 
-// Clone returns a duplicate of the ForumPostQuery builder, including all associated steps. It can be
+// Clone returns a duplicate of the ForumTopicQuery builder, including all associated steps. It can be
 // used to prepare common query builders and use them differently after the clone is made.
-func (_q *ForumPostQuery) Clone() *ForumPostQuery {
+func (_q *ForumTopicQuery) Clone() *ForumTopicQuery {
 	if _q == nil {
 		return nil
 	}
-	return &ForumPostQuery{
-		config:      _q.config,
-		ctx:         _q.ctx.Clone(),
-		order:       append([]forumpost.OrderOption{}, _q.order...),
-		inters:      append([]Interceptor{}, _q.inters...),
-		predicates:  append([]predicate.ForumPost{}, _q.predicates...),
-		withUser:    _q.withUser.Clone(),
-		withParent:  _q.withParent.Clone(),
-		withReplies: _q.withReplies.Clone(),
-		withVotes:   _q.withVotes.Clone(),
+	return &ForumTopicQuery{
+		config:       _q.config,
+		ctx:          _q.ctx.Clone(),
+		order:        append([]forumtopic.OrderOption{}, _q.order...),
+		inters:       append([]Interceptor{}, _q.inters...),
+		predicates:   append([]predicate.ForumTopic{}, _q.predicates...),
+		withUser:     _q.withUser.Clone(),
+		withComments: _q.withComments.Clone(),
+		withVotes:    _q.withVotes.Clone(),
 		// clone intermediate query.
 		sql:  _q.sql.Clone(),
 		path: _q.path,
@@ -359,7 +336,7 @@ func (_q *ForumPostQuery) Clone() *ForumPostQuery {
 
 // WithUser tells the query-builder to eager-load the nodes that are connected to
 // the "user" edge. The optional arguments are used to configure the query builder of the edge.
-func (_q *ForumPostQuery) WithUser(opts ...func(*UserQuery)) *ForumPostQuery {
+func (_q *ForumTopicQuery) WithUser(opts ...func(*UserQuery)) *ForumTopicQuery {
 	query := (&UserClient{config: _q.config}).Query()
 	for _, opt := range opts {
 		opt(query)
@@ -368,32 +345,21 @@ func (_q *ForumPostQuery) WithUser(opts ...func(*UserQuery)) *ForumPostQuery {
 	return _q
 }
 
-// WithParent tells the query-builder to eager-load the nodes that are connected to
-// the "parent" edge. The optional arguments are used to configure the query builder of the edge.
-func (_q *ForumPostQuery) WithParent(opts ...func(*ForumPostQuery)) *ForumPostQuery {
-	query := (&ForumPostClient{config: _q.config}).Query()
+// WithComments tells the query-builder to eager-load the nodes that are connected to
+// the "comments" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *ForumTopicQuery) WithComments(opts ...func(*ForumCommentQuery)) *ForumTopicQuery {
+	query := (&ForumCommentClient{config: _q.config}).Query()
 	for _, opt := range opts {
 		opt(query)
 	}
-	_q.withParent = query
-	return _q
-}
-
-// WithReplies tells the query-builder to eager-load the nodes that are connected to
-// the "replies" edge. The optional arguments are used to configure the query builder of the edge.
-func (_q *ForumPostQuery) WithReplies(opts ...func(*ForumPostQuery)) *ForumPostQuery {
-	query := (&ForumPostClient{config: _q.config}).Query()
-	for _, opt := range opts {
-		opt(query)
-	}
-	_q.withReplies = query
+	_q.withComments = query
 	return _q
 }
 
 // WithVotes tells the query-builder to eager-load the nodes that are connected to
 // the "votes" edge. The optional arguments are used to configure the query builder of the edge.
-func (_q *ForumPostQuery) WithVotes(opts ...func(*ForumPostVoteQuery)) *ForumPostQuery {
-	query := (&ForumPostVoteClient{config: _q.config}).Query()
+func (_q *ForumTopicQuery) WithVotes(opts ...func(*ForumTopicVoteQuery)) *ForumTopicQuery {
+	query := (&ForumTopicVoteClient{config: _q.config}).Query()
 	for _, opt := range opts {
 		opt(query)
 	}
@@ -411,15 +377,15 @@ func (_q *ForumPostQuery) WithVotes(opts ...func(*ForumPostVoteQuery)) *ForumPos
 //		Count int `json:"count,omitempty"`
 //	}
 //
-//	client.ForumPost.Query().
-//		GroupBy(forumpost.FieldCreatedAt).
+//	client.ForumTopic.Query().
+//		GroupBy(forumtopic.FieldCreatedAt).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
-func (_q *ForumPostQuery) GroupBy(field string, fields ...string) *ForumPostGroupBy {
+func (_q *ForumTopicQuery) GroupBy(field string, fields ...string) *ForumTopicGroupBy {
 	_q.ctx.Fields = append([]string{field}, fields...)
-	grbuild := &ForumPostGroupBy{build: _q}
+	grbuild := &ForumTopicGroupBy{build: _q}
 	grbuild.flds = &_q.ctx.Fields
-	grbuild.label = forumpost.Label
+	grbuild.label = forumtopic.Label
 	grbuild.scan = grbuild.Scan
 	return grbuild
 }
@@ -433,23 +399,23 @@ func (_q *ForumPostQuery) GroupBy(field string, fields ...string) *ForumPostGrou
 //		CreatedAt time.Time `json:"created_at,omitempty"`
 //	}
 //
-//	client.ForumPost.Query().
-//		Select(forumpost.FieldCreatedAt).
+//	client.ForumTopic.Query().
+//		Select(forumtopic.FieldCreatedAt).
 //		Scan(ctx, &v)
-func (_q *ForumPostQuery) Select(fields ...string) *ForumPostSelect {
+func (_q *ForumTopicQuery) Select(fields ...string) *ForumTopicSelect {
 	_q.ctx.Fields = append(_q.ctx.Fields, fields...)
-	sbuild := &ForumPostSelect{ForumPostQuery: _q}
-	sbuild.label = forumpost.Label
+	sbuild := &ForumTopicSelect{ForumTopicQuery: _q}
+	sbuild.label = forumtopic.Label
 	sbuild.flds, sbuild.scan = &_q.ctx.Fields, sbuild.Scan
 	return sbuild
 }
 
-// Aggregate returns a ForumPostSelect configured with the given aggregations.
-func (_q *ForumPostQuery) Aggregate(fns ...AggregateFunc) *ForumPostSelect {
+// Aggregate returns a ForumTopicSelect configured with the given aggregations.
+func (_q *ForumTopicQuery) Aggregate(fns ...AggregateFunc) *ForumTopicSelect {
 	return _q.Select().Aggregate(fns...)
 }
 
-func (_q *ForumPostQuery) prepareQuery(ctx context.Context) error {
+func (_q *ForumTopicQuery) prepareQuery(ctx context.Context) error {
 	for _, inter := range _q.inters {
 		if inter == nil {
 			return fmt.Errorf("ent: uninitialized interceptor (forgotten import ent/runtime?)")
@@ -461,7 +427,7 @@ func (_q *ForumPostQuery) prepareQuery(ctx context.Context) error {
 		}
 	}
 	for _, f := range _q.ctx.Fields {
-		if !forumpost.ValidColumn(f) {
+		if !forumtopic.ValidColumn(f) {
 			return &ValidationError{Name: f, err: fmt.Errorf("ent: invalid field %q for query", f)}
 		}
 	}
@@ -475,22 +441,21 @@ func (_q *ForumPostQuery) prepareQuery(ctx context.Context) error {
 	return nil
 }
 
-func (_q *ForumPostQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*ForumPost, error) {
+func (_q *ForumTopicQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*ForumTopic, error) {
 	var (
-		nodes       = []*ForumPost{}
+		nodes       = []*ForumTopic{}
 		_spec       = _q.querySpec()
-		loadedTypes = [4]bool{
+		loadedTypes = [3]bool{
 			_q.withUser != nil,
-			_q.withParent != nil,
-			_q.withReplies != nil,
+			_q.withComments != nil,
 			_q.withVotes != nil,
 		}
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
-		return (*ForumPost).scanValues(nil, columns)
+		return (*ForumTopic).scanValues(nil, columns)
 	}
 	_spec.Assign = func(columns []string, values []any) error {
-		node := &ForumPost{config: _q.config}
+		node := &ForumTopic{config: _q.config}
 		nodes = append(nodes, node)
 		node.Edges.loadedTypes = loadedTypes
 		return node.assignValues(columns, values)
@@ -509,36 +474,30 @@ func (_q *ForumPostQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Fo
 	}
 	if query := _q.withUser; query != nil {
 		if err := _q.loadUser(ctx, query, nodes, nil,
-			func(n *ForumPost, e *User) { n.Edges.User = e }); err != nil {
+			func(n *ForumTopic, e *User) { n.Edges.User = e }); err != nil {
 			return nil, err
 		}
 	}
-	if query := _q.withParent; query != nil {
-		if err := _q.loadParent(ctx, query, nodes, nil,
-			func(n *ForumPost, e *ForumPost) { n.Edges.Parent = e }); err != nil {
-			return nil, err
-		}
-	}
-	if query := _q.withReplies; query != nil {
-		if err := _q.loadReplies(ctx, query, nodes,
-			func(n *ForumPost) { n.Edges.Replies = []*ForumPost{} },
-			func(n *ForumPost, e *ForumPost) { n.Edges.Replies = append(n.Edges.Replies, e) }); err != nil {
+	if query := _q.withComments; query != nil {
+		if err := _q.loadComments(ctx, query, nodes,
+			func(n *ForumTopic) { n.Edges.Comments = []*ForumComment{} },
+			func(n *ForumTopic, e *ForumComment) { n.Edges.Comments = append(n.Edges.Comments, e) }); err != nil {
 			return nil, err
 		}
 	}
 	if query := _q.withVotes; query != nil {
 		if err := _q.loadVotes(ctx, query, nodes,
-			func(n *ForumPost) { n.Edges.Votes = []*ForumPostVote{} },
-			func(n *ForumPost, e *ForumPostVote) { n.Edges.Votes = append(n.Edges.Votes, e) }); err != nil {
+			func(n *ForumTopic) { n.Edges.Votes = []*ForumTopicVote{} },
+			func(n *ForumTopic, e *ForumTopicVote) { n.Edges.Votes = append(n.Edges.Votes, e) }); err != nil {
 			return nil, err
 		}
 	}
 	return nodes, nil
 }
 
-func (_q *ForumPostQuery) loadUser(ctx context.Context, query *UserQuery, nodes []*ForumPost, init func(*ForumPost), assign func(*ForumPost, *User)) error {
+func (_q *ForumTopicQuery) loadUser(ctx context.Context, query *UserQuery, nodes []*ForumTopic, init func(*ForumTopic), assign func(*ForumTopic, *User)) error {
 	ids := make([]int64, 0, len(nodes))
-	nodeids := make(map[int64][]*ForumPost)
+	nodeids := make(map[int64][]*ForumTopic)
 	for i := range nodes {
 		fk := nodes[i].UserID
 		if _, ok := nodeids[fk]; !ok {
@@ -565,41 +524,9 @@ func (_q *ForumPostQuery) loadUser(ctx context.Context, query *UserQuery, nodes 
 	}
 	return nil
 }
-func (_q *ForumPostQuery) loadParent(ctx context.Context, query *ForumPostQuery, nodes []*ForumPost, init func(*ForumPost), assign func(*ForumPost, *ForumPost)) error {
-	ids := make([]int64, 0, len(nodes))
-	nodeids := make(map[int64][]*ForumPost)
-	for i := range nodes {
-		if nodes[i].ParentID == nil {
-			continue
-		}
-		fk := *nodes[i].ParentID
-		if _, ok := nodeids[fk]; !ok {
-			ids = append(ids, fk)
-		}
-		nodeids[fk] = append(nodeids[fk], nodes[i])
-	}
-	if len(ids) == 0 {
-		return nil
-	}
-	query.Where(forumpost.IDIn(ids...))
-	neighbors, err := query.All(ctx)
-	if err != nil {
-		return err
-	}
-	for _, n := range neighbors {
-		nodes, ok := nodeids[n.ID]
-		if !ok {
-			return fmt.Errorf(`unexpected foreign-key "parent_id" returned %v`, n.ID)
-		}
-		for i := range nodes {
-			assign(nodes[i], n)
-		}
-	}
-	return nil
-}
-func (_q *ForumPostQuery) loadReplies(ctx context.Context, query *ForumPostQuery, nodes []*ForumPost, init func(*ForumPost), assign func(*ForumPost, *ForumPost)) error {
+func (_q *ForumTopicQuery) loadComments(ctx context.Context, query *ForumCommentQuery, nodes []*ForumTopic, init func(*ForumTopic), assign func(*ForumTopic, *ForumComment)) error {
 	fks := make([]driver.Value, 0, len(nodes))
-	nodeids := make(map[int64]*ForumPost)
+	nodeids := make(map[int64]*ForumTopic)
 	for i := range nodes {
 		fks = append(fks, nodes[i].ID)
 		nodeids[nodes[i].ID] = nodes[i]
@@ -608,31 +535,28 @@ func (_q *ForumPostQuery) loadReplies(ctx context.Context, query *ForumPostQuery
 		}
 	}
 	if len(query.ctx.Fields) > 0 {
-		query.ctx.AppendFieldOnce(forumpost.FieldParentID)
+		query.ctx.AppendFieldOnce(forumcomment.FieldTopicID)
 	}
-	query.Where(predicate.ForumPost(func(s *sql.Selector) {
-		s.Where(sql.InValues(s.C(forumpost.RepliesColumn), fks...))
+	query.Where(predicate.ForumComment(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(forumtopic.CommentsColumn), fks...))
 	}))
 	neighbors, err := query.All(ctx)
 	if err != nil {
 		return err
 	}
 	for _, n := range neighbors {
-		fk := n.ParentID
-		if fk == nil {
-			return fmt.Errorf(`foreign-key "parent_id" is nil for node %v`, n.ID)
-		}
-		node, ok := nodeids[*fk]
+		fk := n.TopicID
+		node, ok := nodeids[fk]
 		if !ok {
-			return fmt.Errorf(`unexpected referenced foreign-key "parent_id" returned %v for node %v`, *fk, n.ID)
+			return fmt.Errorf(`unexpected referenced foreign-key "topic_id" returned %v for node %v`, fk, n.ID)
 		}
 		assign(node, n)
 	}
 	return nil
 }
-func (_q *ForumPostQuery) loadVotes(ctx context.Context, query *ForumPostVoteQuery, nodes []*ForumPost, init func(*ForumPost), assign func(*ForumPost, *ForumPostVote)) error {
+func (_q *ForumTopicQuery) loadVotes(ctx context.Context, query *ForumTopicVoteQuery, nodes []*ForumTopic, init func(*ForumTopic), assign func(*ForumTopic, *ForumTopicVote)) error {
 	fks := make([]driver.Value, 0, len(nodes))
-	nodeids := make(map[int64]*ForumPost)
+	nodeids := make(map[int64]*ForumTopic)
 	for i := range nodes {
 		fks = append(fks, nodes[i].ID)
 		nodeids[nodes[i].ID] = nodes[i]
@@ -641,27 +565,27 @@ func (_q *ForumPostQuery) loadVotes(ctx context.Context, query *ForumPostVoteQue
 		}
 	}
 	if len(query.ctx.Fields) > 0 {
-		query.ctx.AppendFieldOnce(forumpostvote.FieldPostID)
+		query.ctx.AppendFieldOnce(forumtopicvote.FieldTopicID)
 	}
-	query.Where(predicate.ForumPostVote(func(s *sql.Selector) {
-		s.Where(sql.InValues(s.C(forumpost.VotesColumn), fks...))
+	query.Where(predicate.ForumTopicVote(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(forumtopic.VotesColumn), fks...))
 	}))
 	neighbors, err := query.All(ctx)
 	if err != nil {
 		return err
 	}
 	for _, n := range neighbors {
-		fk := n.PostID
+		fk := n.TopicID
 		node, ok := nodeids[fk]
 		if !ok {
-			return fmt.Errorf(`unexpected referenced foreign-key "post_id" returned %v for node %v`, fk, n.ID)
+			return fmt.Errorf(`unexpected referenced foreign-key "topic_id" returned %v for node %v`, fk, n.ID)
 		}
 		assign(node, n)
 	}
 	return nil
 }
 
-func (_q *ForumPostQuery) sqlCount(ctx context.Context) (int, error) {
+func (_q *ForumTopicQuery) sqlCount(ctx context.Context) (int, error) {
 	_spec := _q.querySpec()
 	if len(_q.modifiers) > 0 {
 		_spec.Modifiers = _q.modifiers
@@ -673,8 +597,8 @@ func (_q *ForumPostQuery) sqlCount(ctx context.Context) (int, error) {
 	return sqlgraph.CountNodes(ctx, _q.driver, _spec)
 }
 
-func (_q *ForumPostQuery) querySpec() *sqlgraph.QuerySpec {
-	_spec := sqlgraph.NewQuerySpec(forumpost.Table, forumpost.Columns, sqlgraph.NewFieldSpec(forumpost.FieldID, field.TypeInt64))
+func (_q *ForumTopicQuery) querySpec() *sqlgraph.QuerySpec {
+	_spec := sqlgraph.NewQuerySpec(forumtopic.Table, forumtopic.Columns, sqlgraph.NewFieldSpec(forumtopic.FieldID, field.TypeInt64))
 	_spec.From = _q.sql
 	if unique := _q.ctx.Unique; unique != nil {
 		_spec.Unique = *unique
@@ -683,17 +607,14 @@ func (_q *ForumPostQuery) querySpec() *sqlgraph.QuerySpec {
 	}
 	if fields := _q.ctx.Fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
-		_spec.Node.Columns = append(_spec.Node.Columns, forumpost.FieldID)
+		_spec.Node.Columns = append(_spec.Node.Columns, forumtopic.FieldID)
 		for i := range fields {
-			if fields[i] != forumpost.FieldID {
+			if fields[i] != forumtopic.FieldID {
 				_spec.Node.Columns = append(_spec.Node.Columns, fields[i])
 			}
 		}
 		if _q.withUser != nil {
-			_spec.Node.AddColumnOnce(forumpost.FieldUserID)
-		}
-		if _q.withParent != nil {
-			_spec.Node.AddColumnOnce(forumpost.FieldParentID)
+			_spec.Node.AddColumnOnce(forumtopic.FieldUserID)
 		}
 	}
 	if ps := _q.predicates; len(ps) > 0 {
@@ -719,12 +640,12 @@ func (_q *ForumPostQuery) querySpec() *sqlgraph.QuerySpec {
 	return _spec
 }
 
-func (_q *ForumPostQuery) sqlQuery(ctx context.Context) *sql.Selector {
+func (_q *ForumTopicQuery) sqlQuery(ctx context.Context) *sql.Selector {
 	builder := sql.Dialect(_q.driver.Dialect())
-	t1 := builder.Table(forumpost.Table)
+	t1 := builder.Table(forumtopic.Table)
 	columns := _q.ctx.Fields
 	if len(columns) == 0 {
-		columns = forumpost.Columns
+		columns = forumtopic.Columns
 	}
 	selector := builder.Select(t1.Columns(columns...)...).From(t1)
 	if _q.sql != nil {
@@ -757,7 +678,7 @@ func (_q *ForumPostQuery) sqlQuery(ctx context.Context) *sql.Selector {
 // ForUpdate locks the selected rows against concurrent updates, and prevent them from being
 // updated, deleted or "selected ... for update" by other sessions, until the transaction is
 // either committed or rolled-back.
-func (_q *ForumPostQuery) ForUpdate(opts ...sql.LockOption) *ForumPostQuery {
+func (_q *ForumTopicQuery) ForUpdate(opts ...sql.LockOption) *ForumTopicQuery {
 	if _q.driver.Dialect() == dialect.Postgres {
 		_q.Unique(false)
 	}
@@ -770,7 +691,7 @@ func (_q *ForumPostQuery) ForUpdate(opts ...sql.LockOption) *ForumPostQuery {
 // ForShare behaves similarly to ForUpdate, except that it acquires a shared mode lock
 // on any rows that are read. Other sessions can read the rows, but cannot modify them
 // until your transaction commits.
-func (_q *ForumPostQuery) ForShare(opts ...sql.LockOption) *ForumPostQuery {
+func (_q *ForumTopicQuery) ForShare(opts ...sql.LockOption) *ForumTopicQuery {
 	if _q.driver.Dialect() == dialect.Postgres {
 		_q.Unique(false)
 	}
@@ -780,28 +701,28 @@ func (_q *ForumPostQuery) ForShare(opts ...sql.LockOption) *ForumPostQuery {
 	return _q
 }
 
-// ForumPostGroupBy is the group-by builder for ForumPost entities.
-type ForumPostGroupBy struct {
+// ForumTopicGroupBy is the group-by builder for ForumTopic entities.
+type ForumTopicGroupBy struct {
 	selector
-	build *ForumPostQuery
+	build *ForumTopicQuery
 }
 
 // Aggregate adds the given aggregation functions to the group-by query.
-func (_g *ForumPostGroupBy) Aggregate(fns ...AggregateFunc) *ForumPostGroupBy {
+func (_g *ForumTopicGroupBy) Aggregate(fns ...AggregateFunc) *ForumTopicGroupBy {
 	_g.fns = append(_g.fns, fns...)
 	return _g
 }
 
 // Scan applies the selector query and scans the result into the given value.
-func (_g *ForumPostGroupBy) Scan(ctx context.Context, v any) error {
+func (_g *ForumTopicGroupBy) Scan(ctx context.Context, v any) error {
 	ctx = setContextOp(ctx, _g.build.ctx, ent.OpQueryGroupBy)
 	if err := _g.build.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*ForumPostQuery, *ForumPostGroupBy](ctx, _g.build, _g, _g.build.inters, v)
+	return scanWithInterceptors[*ForumTopicQuery, *ForumTopicGroupBy](ctx, _g.build, _g, _g.build.inters, v)
 }
 
-func (_g *ForumPostGroupBy) sqlScan(ctx context.Context, root *ForumPostQuery, v any) error {
+func (_g *ForumTopicGroupBy) sqlScan(ctx context.Context, root *ForumTopicQuery, v any) error {
 	selector := root.sqlQuery(ctx).Select()
 	aggregation := make([]string, 0, len(_g.fns))
 	for _, fn := range _g.fns {
@@ -828,28 +749,28 @@ func (_g *ForumPostGroupBy) sqlScan(ctx context.Context, root *ForumPostQuery, v
 	return sql.ScanSlice(rows, v)
 }
 
-// ForumPostSelect is the builder for selecting fields of ForumPost entities.
-type ForumPostSelect struct {
-	*ForumPostQuery
+// ForumTopicSelect is the builder for selecting fields of ForumTopic entities.
+type ForumTopicSelect struct {
+	*ForumTopicQuery
 	selector
 }
 
 // Aggregate adds the given aggregation functions to the selector query.
-func (_s *ForumPostSelect) Aggregate(fns ...AggregateFunc) *ForumPostSelect {
+func (_s *ForumTopicSelect) Aggregate(fns ...AggregateFunc) *ForumTopicSelect {
 	_s.fns = append(_s.fns, fns...)
 	return _s
 }
 
 // Scan applies the selector query and scans the result into the given value.
-func (_s *ForumPostSelect) Scan(ctx context.Context, v any) error {
+func (_s *ForumTopicSelect) Scan(ctx context.Context, v any) error {
 	ctx = setContextOp(ctx, _s.ctx, ent.OpQuerySelect)
 	if err := _s.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*ForumPostQuery, *ForumPostSelect](ctx, _s.ForumPostQuery, _s, _s.inters, v)
+	return scanWithInterceptors[*ForumTopicQuery, *ForumTopicSelect](ctx, _s.ForumTopicQuery, _s, _s.inters, v)
 }
 
-func (_s *ForumPostSelect) sqlScan(ctx context.Context, root *ForumPostQuery, v any) error {
+func (_s *ForumTopicSelect) sqlScan(ctx context.Context, root *ForumTopicQuery, v any) error {
 	selector := root.sqlQuery(ctx)
 	aggregation := make([]string, 0, len(_s.fns))
 	for _, fn := range _s.fns {

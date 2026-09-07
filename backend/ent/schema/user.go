@@ -134,8 +134,10 @@ func (User) Edges() []ent.Edge {
 		edge.To("promo_code_usages", PromoCodeUsage.Type),
 		edge.To("provider_comments", ProviderComment.Type),
 		edge.To("provider_comment_votes", ProviderCommentVote.Type),
-		edge.To("forum_posts", ForumPost.Type),
-		edge.To("forum_post_votes", ForumPostVote.Type),
+		edge.To("forum_topics", ForumTopic.Type),
+		edge.To("forum_topic_votes", ForumTopicVote.Type),
+		edge.To("forum_comments", ForumComment.Type),
+		edge.To("forum_comment_votes", ForumCommentVote.Type),
 	}
 }
 

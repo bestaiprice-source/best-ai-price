@@ -1707,21 +1707,21 @@ func HasProviderCommentVotesWith(preds ...predicate.ProviderCommentVote) predica
 	})
 }
 
-// HasForumPosts applies the HasEdge predicate on the "forum_posts" edge.
-func HasForumPosts() predicate.User {
+// HasForumTopics applies the HasEdge predicate on the "forum_topics" edge.
+func HasForumTopics() predicate.User {
 	return predicate.User(func(s *sql.Selector) {
 		step := sqlgraph.NewStep(
 			sqlgraph.From(Table, FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, ForumPostsTable, ForumPostsColumn),
+			sqlgraph.Edge(sqlgraph.O2M, false, ForumTopicsTable, ForumTopicsColumn),
 		)
 		sqlgraph.HasNeighbors(s, step)
 	})
 }
 
-// HasForumPostsWith applies the HasEdge predicate on the "forum_posts" edge with a given conditions (other predicates).
-func HasForumPostsWith(preds ...predicate.ForumPost) predicate.User {
+// HasForumTopicsWith applies the HasEdge predicate on the "forum_topics" edge with a given conditions (other predicates).
+func HasForumTopicsWith(preds ...predicate.ForumTopic) predicate.User {
 	return predicate.User(func(s *sql.Selector) {
-		step := newForumPostsStep()
+		step := newForumTopicsStep()
 		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
 			for _, p := range preds {
 				p(s)
@@ -1730,21 +1730,67 @@ func HasForumPostsWith(preds ...predicate.ForumPost) predicate.User {
 	})
 }
 
-// HasForumPostVotes applies the HasEdge predicate on the "forum_post_votes" edge.
-func HasForumPostVotes() predicate.User {
+// HasForumTopicVotes applies the HasEdge predicate on the "forum_topic_votes" edge.
+func HasForumTopicVotes() predicate.User {
 	return predicate.User(func(s *sql.Selector) {
 		step := sqlgraph.NewStep(
 			sqlgraph.From(Table, FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, ForumPostVotesTable, ForumPostVotesColumn),
+			sqlgraph.Edge(sqlgraph.O2M, false, ForumTopicVotesTable, ForumTopicVotesColumn),
 		)
 		sqlgraph.HasNeighbors(s, step)
 	})
 }
 
-// HasForumPostVotesWith applies the HasEdge predicate on the "forum_post_votes" edge with a given conditions (other predicates).
-func HasForumPostVotesWith(preds ...predicate.ForumPostVote) predicate.User {
+// HasForumTopicVotesWith applies the HasEdge predicate on the "forum_topic_votes" edge with a given conditions (other predicates).
+func HasForumTopicVotesWith(preds ...predicate.ForumTopicVote) predicate.User {
 	return predicate.User(func(s *sql.Selector) {
-		step := newForumPostVotesStep()
+		step := newForumTopicVotesStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasForumComments applies the HasEdge predicate on the "forum_comments" edge.
+func HasForumComments() predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, ForumCommentsTable, ForumCommentsColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasForumCommentsWith applies the HasEdge predicate on the "forum_comments" edge with a given conditions (other predicates).
+func HasForumCommentsWith(preds ...predicate.ForumComment) predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := newForumCommentsStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasForumCommentVotes applies the HasEdge predicate on the "forum_comment_votes" edge.
+func HasForumCommentVotes() predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, ForumCommentVotesTable, ForumCommentVotesColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasForumCommentVotesWith applies the HasEdge predicate on the "forum_comment_votes" edge with a given conditions (other predicates).
+func HasForumCommentVotesWith(preds ...predicate.ForumCommentVote) predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := newForumCommentVotesStep()
 		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
 			for _, p := range preds {
 				p(s)

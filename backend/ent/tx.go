@@ -48,10 +48,14 @@ type Tx struct {
 	ChannelMonitorRequestTemplate *ChannelMonitorRequestTemplateClient
 	// ErrorPassthroughRule is the client for interacting with the ErrorPassthroughRule builders.
 	ErrorPassthroughRule *ErrorPassthroughRuleClient
-	// ForumPost is the client for interacting with the ForumPost builders.
-	ForumPost *ForumPostClient
-	// ForumPostVote is the client for interacting with the ForumPostVote builders.
-	ForumPostVote *ForumPostVoteClient
+	// ForumComment is the client for interacting with the ForumComment builders.
+	ForumComment *ForumCommentClient
+	// ForumCommentVote is the client for interacting with the ForumCommentVote builders.
+	ForumCommentVote *ForumCommentVoteClient
+	// ForumTopic is the client for interacting with the ForumTopic builders.
+	ForumTopic *ForumTopicClient
+	// ForumTopicVote is the client for interacting with the ForumTopicVote builders.
+	ForumTopicVote *ForumTopicVoteClient
 	// Group is the client for interacting with the Group builders.
 	Group *GroupClient
 	// IdempotencyRecord is the client for interacting with the IdempotencyRecord builders.
@@ -250,8 +254,10 @@ func (tx *Tx) init() {
 	tx.ChannelMonitorHistory = NewChannelMonitorHistoryClient(tx.config)
 	tx.ChannelMonitorRequestTemplate = NewChannelMonitorRequestTemplateClient(tx.config)
 	tx.ErrorPassthroughRule = NewErrorPassthroughRuleClient(tx.config)
-	tx.ForumPost = NewForumPostClient(tx.config)
-	tx.ForumPostVote = NewForumPostVoteClient(tx.config)
+	tx.ForumComment = NewForumCommentClient(tx.config)
+	tx.ForumCommentVote = NewForumCommentVoteClient(tx.config)
+	tx.ForumTopic = NewForumTopicClient(tx.config)
+	tx.ForumTopicVote = NewForumTopicVoteClient(tx.config)
 	tx.Group = NewGroupClient(tx.config)
 	tx.IdempotencyRecord = NewIdempotencyRecordClient(tx.config)
 	tx.IdentityAdoptionDecision = NewIdentityAdoptionDecisionClient(tx.config)

@@ -29,8 +29,10 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/channelmonitorhistory"
 	"github.com/Wei-Shaw/sub2api/ent/channelmonitorrequesttemplate"
 	"github.com/Wei-Shaw/sub2api/ent/errorpassthroughrule"
-	"github.com/Wei-Shaw/sub2api/ent/forumpost"
-	"github.com/Wei-Shaw/sub2api/ent/forumpostvote"
+	"github.com/Wei-Shaw/sub2api/ent/forumcomment"
+	"github.com/Wei-Shaw/sub2api/ent/forumcommentvote"
+	"github.com/Wei-Shaw/sub2api/ent/forumtopic"
+	"github.com/Wei-Shaw/sub2api/ent/forumtopicvote"
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/idempotencyrecord"
 	"github.com/Wei-Shaw/sub2api/ent/identityadoptiondecision"
@@ -133,8 +135,10 @@ func checkColumn(t, c string) error {
 			channelmonitorhistory.Table:         channelmonitorhistory.ValidColumn,
 			channelmonitorrequesttemplate.Table: channelmonitorrequesttemplate.ValidColumn,
 			errorpassthroughrule.Table:          errorpassthroughrule.ValidColumn,
-			forumpost.Table:                     forumpost.ValidColumn,
-			forumpostvote.Table:                 forumpostvote.ValidColumn,
+			forumcomment.Table:                  forumcomment.ValidColumn,
+			forumcommentvote.Table:              forumcommentvote.ValidColumn,
+			forumtopic.Table:                    forumtopic.ValidColumn,
+			forumtopicvote.Table:                forumtopicvote.ValidColumn,
 			group.Table:                         group.ValidColumn,
 			idempotencyrecord.Table:             idempotencyrecord.ValidColumn,
 			identityadoptiondecision.Table:      identityadoptiondecision.ValidColumn,

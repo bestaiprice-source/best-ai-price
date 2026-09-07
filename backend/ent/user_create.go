@@ -14,8 +14,10 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/announcementread"
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
 	"github.com/Wei-Shaw/sub2api/ent/authidentity"
-	"github.com/Wei-Shaw/sub2api/ent/forumpost"
-	"github.com/Wei-Shaw/sub2api/ent/forumpostvote"
+	"github.com/Wei-Shaw/sub2api/ent/forumcomment"
+	"github.com/Wei-Shaw/sub2api/ent/forumcommentvote"
+	"github.com/Wei-Shaw/sub2api/ent/forumtopic"
+	"github.com/Wei-Shaw/sub2api/ent/forumtopicvote"
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
 	"github.com/Wei-Shaw/sub2api/ent/pendingauthsession"
@@ -567,34 +569,64 @@ func (_c *UserCreate) AddProviderCommentVotes(v ...*ProviderCommentVote) *UserCr
 	return _c.AddProviderCommentVoteIDs(ids...)
 }
 
-// AddForumPostIDs adds the "forum_posts" edge to the ForumPost entity by IDs.
-func (_c *UserCreate) AddForumPostIDs(ids ...int64) *UserCreate {
-	_c.mutation.AddForumPostIDs(ids...)
+// AddForumTopicIDs adds the "forum_topics" edge to the ForumTopic entity by IDs.
+func (_c *UserCreate) AddForumTopicIDs(ids ...int64) *UserCreate {
+	_c.mutation.AddForumTopicIDs(ids...)
 	return _c
 }
 
-// AddForumPosts adds the "forum_posts" edges to the ForumPost entity.
-func (_c *UserCreate) AddForumPosts(v ...*ForumPost) *UserCreate {
+// AddForumTopics adds the "forum_topics" edges to the ForumTopic entity.
+func (_c *UserCreate) AddForumTopics(v ...*ForumTopic) *UserCreate {
 	ids := make([]int64, len(v))
 	for i := range v {
 		ids[i] = v[i].ID
 	}
-	return _c.AddForumPostIDs(ids...)
+	return _c.AddForumTopicIDs(ids...)
 }
 
-// AddForumPostVoteIDs adds the "forum_post_votes" edge to the ForumPostVote entity by IDs.
-func (_c *UserCreate) AddForumPostVoteIDs(ids ...int64) *UserCreate {
-	_c.mutation.AddForumPostVoteIDs(ids...)
+// AddForumTopicVoteIDs adds the "forum_topic_votes" edge to the ForumTopicVote entity by IDs.
+func (_c *UserCreate) AddForumTopicVoteIDs(ids ...int64) *UserCreate {
+	_c.mutation.AddForumTopicVoteIDs(ids...)
 	return _c
 }
 
-// AddForumPostVotes adds the "forum_post_votes" edges to the ForumPostVote entity.
-func (_c *UserCreate) AddForumPostVotes(v ...*ForumPostVote) *UserCreate {
+// AddForumTopicVotes adds the "forum_topic_votes" edges to the ForumTopicVote entity.
+func (_c *UserCreate) AddForumTopicVotes(v ...*ForumTopicVote) *UserCreate {
 	ids := make([]int64, len(v))
 	for i := range v {
 		ids[i] = v[i].ID
 	}
-	return _c.AddForumPostVoteIDs(ids...)
+	return _c.AddForumTopicVoteIDs(ids...)
+}
+
+// AddForumCommentIDs adds the "forum_comments" edge to the ForumComment entity by IDs.
+func (_c *UserCreate) AddForumCommentIDs(ids ...int64) *UserCreate {
+	_c.mutation.AddForumCommentIDs(ids...)
+	return _c
+}
+
+// AddForumComments adds the "forum_comments" edges to the ForumComment entity.
+func (_c *UserCreate) AddForumComments(v ...*ForumComment) *UserCreate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddForumCommentIDs(ids...)
+}
+
+// AddForumCommentVoteIDs adds the "forum_comment_votes" edge to the ForumCommentVote entity by IDs.
+func (_c *UserCreate) AddForumCommentVoteIDs(ids ...int64) *UserCreate {
+	_c.mutation.AddForumCommentVoteIDs(ids...)
+	return _c
+}
+
+// AddForumCommentVotes adds the "forum_comment_votes" edges to the ForumCommentVote entity.
+func (_c *UserCreate) AddForumCommentVotes(v ...*ForumCommentVote) *UserCreate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddForumCommentVoteIDs(ids...)
 }
 
 // Mutation returns the UserMutation object of the builder.
@@ -1144,15 +1176,15 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 		}
 		_spec.Edges = append(_spec.Edges, edge)
 	}
-	if nodes := _c.mutation.ForumPostsIDs(); len(nodes) > 0 {
+	if nodes := _c.mutation.ForumTopicsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
-			Table:   user.ForumPostsTable,
-			Columns: []string{user.ForumPostsColumn},
+			Table:   user.ForumTopicsTable,
+			Columns: []string{user.ForumTopicsColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(forumpost.FieldID, field.TypeInt64),
+				IDSpec: sqlgraph.NewFieldSpec(forumtopic.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {
@@ -1160,15 +1192,47 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 		}
 		_spec.Edges = append(_spec.Edges, edge)
 	}
-	if nodes := _c.mutation.ForumPostVotesIDs(); len(nodes) > 0 {
+	if nodes := _c.mutation.ForumTopicVotesIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
-			Table:   user.ForumPostVotesTable,
-			Columns: []string{user.ForumPostVotesColumn},
+			Table:   user.ForumTopicVotesTable,
+			Columns: []string{user.ForumTopicVotesColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(forumpostvote.FieldID, field.TypeInt64),
+				IDSpec: sqlgraph.NewFieldSpec(forumtopicvote.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.ForumCommentsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.ForumCommentsTable,
+			Columns: []string{user.ForumCommentsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(forumcomment.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.ForumCommentVotesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.ForumCommentVotesTable,
+			Columns: []string{user.ForumCommentVotesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(forumcommentvote.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {

@@ -91,10 +91,14 @@ const (
 	EdgeProviderComments = "provider_comments"
 	// EdgeProviderCommentVotes holds the string denoting the provider_comment_votes edge name in mutations.
 	EdgeProviderCommentVotes = "provider_comment_votes"
-	// EdgeForumPosts holds the string denoting the forum_posts edge name in mutations.
-	EdgeForumPosts = "forum_posts"
-	// EdgeForumPostVotes holds the string denoting the forum_post_votes edge name in mutations.
-	EdgeForumPostVotes = "forum_post_votes"
+	// EdgeForumTopics holds the string denoting the forum_topics edge name in mutations.
+	EdgeForumTopics = "forum_topics"
+	// EdgeForumTopicVotes holds the string denoting the forum_topic_votes edge name in mutations.
+	EdgeForumTopicVotes = "forum_topic_votes"
+	// EdgeForumComments holds the string denoting the forum_comments edge name in mutations.
+	EdgeForumComments = "forum_comments"
+	// EdgeForumCommentVotes holds the string denoting the forum_comment_votes edge name in mutations.
+	EdgeForumCommentVotes = "forum_comment_votes"
 	// EdgeUserAllowedGroups holds the string denoting the user_allowed_groups edge name in mutations.
 	EdgeUserAllowedGroups = "user_allowed_groups"
 	// Table holds the table name of the user in the database.
@@ -195,20 +199,34 @@ const (
 	ProviderCommentVotesInverseTable = "provider_comment_votes"
 	// ProviderCommentVotesColumn is the table column denoting the provider_comment_votes relation/edge.
 	ProviderCommentVotesColumn = "user_id"
-	// ForumPostsTable is the table that holds the forum_posts relation/edge.
-	ForumPostsTable = "forum_posts"
-	// ForumPostsInverseTable is the table name for the ForumPost entity.
-	// It exists in this package in order to avoid circular dependency with the "forumpost" package.
-	ForumPostsInverseTable = "forum_posts"
-	// ForumPostsColumn is the table column denoting the forum_posts relation/edge.
-	ForumPostsColumn = "user_id"
-	// ForumPostVotesTable is the table that holds the forum_post_votes relation/edge.
-	ForumPostVotesTable = "forum_post_votes"
-	// ForumPostVotesInverseTable is the table name for the ForumPostVote entity.
-	// It exists in this package in order to avoid circular dependency with the "forumpostvote" package.
-	ForumPostVotesInverseTable = "forum_post_votes"
-	// ForumPostVotesColumn is the table column denoting the forum_post_votes relation/edge.
-	ForumPostVotesColumn = "user_id"
+	// ForumTopicsTable is the table that holds the forum_topics relation/edge.
+	ForumTopicsTable = "forum_topics"
+	// ForumTopicsInverseTable is the table name for the ForumTopic entity.
+	// It exists in this package in order to avoid circular dependency with the "forumtopic" package.
+	ForumTopicsInverseTable = "forum_topics"
+	// ForumTopicsColumn is the table column denoting the forum_topics relation/edge.
+	ForumTopicsColumn = "user_id"
+	// ForumTopicVotesTable is the table that holds the forum_topic_votes relation/edge.
+	ForumTopicVotesTable = "forum_topic_votes"
+	// ForumTopicVotesInverseTable is the table name for the ForumTopicVote entity.
+	// It exists in this package in order to avoid circular dependency with the "forumtopicvote" package.
+	ForumTopicVotesInverseTable = "forum_topic_votes"
+	// ForumTopicVotesColumn is the table column denoting the forum_topic_votes relation/edge.
+	ForumTopicVotesColumn = "user_id"
+	// ForumCommentsTable is the table that holds the forum_comments relation/edge.
+	ForumCommentsTable = "forum_comments"
+	// ForumCommentsInverseTable is the table name for the ForumComment entity.
+	// It exists in this package in order to avoid circular dependency with the "forumcomment" package.
+	ForumCommentsInverseTable = "forum_comments"
+	// ForumCommentsColumn is the table column denoting the forum_comments relation/edge.
+	ForumCommentsColumn = "user_id"
+	// ForumCommentVotesTable is the table that holds the forum_comment_votes relation/edge.
+	ForumCommentVotesTable = "forum_comment_votes"
+	// ForumCommentVotesInverseTable is the table name for the ForumCommentVote entity.
+	// It exists in this package in order to avoid circular dependency with the "forumcommentvote" package.
+	ForumCommentVotesInverseTable = "forum_comment_votes"
+	// ForumCommentVotesColumn is the table column denoting the forum_comment_votes relation/edge.
+	ForumCommentVotesColumn = "user_id"
 	// UserAllowedGroupsTable is the table that holds the user_allowed_groups relation/edge.
 	UserAllowedGroupsTable = "user_allowed_groups"
 	// UserAllowedGroupsInverseTable is the table name for the UserAllowedGroup entity.
@@ -643,31 +661,59 @@ func ByProviderCommentVotes(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOpt
 	}
 }
 
-// ByForumPostsCount orders the results by forum_posts count.
-func ByForumPostsCount(opts ...sql.OrderTermOption) OrderOption {
+// ByForumTopicsCount orders the results by forum_topics count.
+func ByForumTopicsCount(opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborsCount(s, newForumPostsStep(), opts...)
+		sqlgraph.OrderByNeighborsCount(s, newForumTopicsStep(), opts...)
 	}
 }
 
-// ByForumPosts orders the results by forum_posts terms.
-func ByForumPosts(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+// ByForumTopics orders the results by forum_topics terms.
+func ByForumTopics(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newForumPostsStep(), append([]sql.OrderTerm{term}, terms...)...)
+		sqlgraph.OrderByNeighborTerms(s, newForumTopicsStep(), append([]sql.OrderTerm{term}, terms...)...)
 	}
 }
 
-// ByForumPostVotesCount orders the results by forum_post_votes count.
-func ByForumPostVotesCount(opts ...sql.OrderTermOption) OrderOption {
+// ByForumTopicVotesCount orders the results by forum_topic_votes count.
+func ByForumTopicVotesCount(opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborsCount(s, newForumPostVotesStep(), opts...)
+		sqlgraph.OrderByNeighborsCount(s, newForumTopicVotesStep(), opts...)
 	}
 }
 
-// ByForumPostVotes orders the results by forum_post_votes terms.
-func ByForumPostVotes(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+// ByForumTopicVotes orders the results by forum_topic_votes terms.
+func ByForumTopicVotes(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newForumPostVotesStep(), append([]sql.OrderTerm{term}, terms...)...)
+		sqlgraph.OrderByNeighborTerms(s, newForumTopicVotesStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
+// ByForumCommentsCount orders the results by forum_comments count.
+func ByForumCommentsCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newForumCommentsStep(), opts...)
+	}
+}
+
+// ByForumComments orders the results by forum_comments terms.
+func ByForumComments(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newForumCommentsStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
+// ByForumCommentVotesCount orders the results by forum_comment_votes count.
+func ByForumCommentVotesCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newForumCommentVotesStep(), opts...)
+	}
+}
+
+// ByForumCommentVotes orders the results by forum_comment_votes terms.
+func ByForumCommentVotes(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newForumCommentVotesStep(), append([]sql.OrderTerm{term}, terms...)...)
 	}
 }
 
@@ -782,18 +828,32 @@ func newProviderCommentVotesStep() *sqlgraph.Step {
 		sqlgraph.Edge(sqlgraph.O2M, false, ProviderCommentVotesTable, ProviderCommentVotesColumn),
 	)
 }
-func newForumPostsStep() *sqlgraph.Step {
+func newForumTopicsStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(ForumPostsInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.O2M, false, ForumPostsTable, ForumPostsColumn),
+		sqlgraph.To(ForumTopicsInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, ForumTopicsTable, ForumTopicsColumn),
 	)
 }
-func newForumPostVotesStep() *sqlgraph.Step {
+func newForumTopicVotesStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(ForumPostVotesInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.O2M, false, ForumPostVotesTable, ForumPostVotesColumn),
+		sqlgraph.To(ForumTopicVotesInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, ForumTopicVotesTable, ForumTopicVotesColumn),
+	)
+}
+func newForumCommentsStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(ForumCommentsInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, ForumCommentsTable, ForumCommentsColumn),
+	)
+}
+func newForumCommentVotesStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(ForumCommentVotesInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, ForumCommentVotesTable, ForumCommentVotesColumn),
 	)
 }
 func newUserAllowedGroupsStep() *sqlgraph.Step {

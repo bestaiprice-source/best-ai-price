@@ -12,61 +12,61 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/Wei-Shaw/sub2api/ent/forumpost"
-	"github.com/Wei-Shaw/sub2api/ent/forumpostvote"
+	"github.com/Wei-Shaw/sub2api/ent/forumcomment"
+	"github.com/Wei-Shaw/sub2api/ent/forumcommentvote"
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
 	"github.com/Wei-Shaw/sub2api/ent/user"
 )
 
-// ForumPostVoteQuery is the builder for querying ForumPostVote entities.
-type ForumPostVoteQuery struct {
+// ForumCommentVoteQuery is the builder for querying ForumCommentVote entities.
+type ForumCommentVoteQuery struct {
 	config
-	ctx        *QueryContext
-	order      []forumpostvote.OrderOption
-	inters     []Interceptor
-	predicates []predicate.ForumPostVote
-	withPost   *ForumPostQuery
-	withUser   *UserQuery
-	modifiers  []func(*sql.Selector)
+	ctx         *QueryContext
+	order       []forumcommentvote.OrderOption
+	inters      []Interceptor
+	predicates  []predicate.ForumCommentVote
+	withComment *ForumCommentQuery
+	withUser    *UserQuery
+	modifiers   []func(*sql.Selector)
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
 }
 
-// Where adds a new predicate for the ForumPostVoteQuery builder.
-func (_q *ForumPostVoteQuery) Where(ps ...predicate.ForumPostVote) *ForumPostVoteQuery {
+// Where adds a new predicate for the ForumCommentVoteQuery builder.
+func (_q *ForumCommentVoteQuery) Where(ps ...predicate.ForumCommentVote) *ForumCommentVoteQuery {
 	_q.predicates = append(_q.predicates, ps...)
 	return _q
 }
 
 // Limit the number of records to be returned by this query.
-func (_q *ForumPostVoteQuery) Limit(limit int) *ForumPostVoteQuery {
+func (_q *ForumCommentVoteQuery) Limit(limit int) *ForumCommentVoteQuery {
 	_q.ctx.Limit = &limit
 	return _q
 }
 
 // Offset to start from.
-func (_q *ForumPostVoteQuery) Offset(offset int) *ForumPostVoteQuery {
+func (_q *ForumCommentVoteQuery) Offset(offset int) *ForumCommentVoteQuery {
 	_q.ctx.Offset = &offset
 	return _q
 }
 
 // Unique configures the query builder to filter duplicate records on query.
 // By default, unique is set to true, and can be disabled using this method.
-func (_q *ForumPostVoteQuery) Unique(unique bool) *ForumPostVoteQuery {
+func (_q *ForumCommentVoteQuery) Unique(unique bool) *ForumCommentVoteQuery {
 	_q.ctx.Unique = &unique
 	return _q
 }
 
 // Order specifies how the records should be ordered.
-func (_q *ForumPostVoteQuery) Order(o ...forumpostvote.OrderOption) *ForumPostVoteQuery {
+func (_q *ForumCommentVoteQuery) Order(o ...forumcommentvote.OrderOption) *ForumCommentVoteQuery {
 	_q.order = append(_q.order, o...)
 	return _q
 }
 
-// QueryPost chains the current query on the "post" edge.
-func (_q *ForumPostVoteQuery) QueryPost() *ForumPostQuery {
-	query := (&ForumPostClient{config: _q.config}).Query()
+// QueryComment chains the current query on the "comment" edge.
+func (_q *ForumCommentVoteQuery) QueryComment() *ForumCommentQuery {
+	query := (&ForumCommentClient{config: _q.config}).Query()
 	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
 		if err := _q.prepareQuery(ctx); err != nil {
 			return nil, err
@@ -76,9 +76,9 @@ func (_q *ForumPostVoteQuery) QueryPost() *ForumPostQuery {
 			return nil, err
 		}
 		step := sqlgraph.NewStep(
-			sqlgraph.From(forumpostvote.Table, forumpostvote.FieldID, selector),
-			sqlgraph.To(forumpost.Table, forumpost.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, true, forumpostvote.PostTable, forumpostvote.PostColumn),
+			sqlgraph.From(forumcommentvote.Table, forumcommentvote.FieldID, selector),
+			sqlgraph.To(forumcomment.Table, forumcomment.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, forumcommentvote.CommentTable, forumcommentvote.CommentColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
 		return fromU, nil
@@ -87,7 +87,7 @@ func (_q *ForumPostVoteQuery) QueryPost() *ForumPostQuery {
 }
 
 // QueryUser chains the current query on the "user" edge.
-func (_q *ForumPostVoteQuery) QueryUser() *UserQuery {
+func (_q *ForumCommentVoteQuery) QueryUser() *UserQuery {
 	query := (&UserClient{config: _q.config}).Query()
 	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
 		if err := _q.prepareQuery(ctx); err != nil {
@@ -98,9 +98,9 @@ func (_q *ForumPostVoteQuery) QueryUser() *UserQuery {
 			return nil, err
 		}
 		step := sqlgraph.NewStep(
-			sqlgraph.From(forumpostvote.Table, forumpostvote.FieldID, selector),
+			sqlgraph.From(forumcommentvote.Table, forumcommentvote.FieldID, selector),
 			sqlgraph.To(user.Table, user.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, true, forumpostvote.UserTable, forumpostvote.UserColumn),
+			sqlgraph.Edge(sqlgraph.M2O, true, forumcommentvote.UserTable, forumcommentvote.UserColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
 		return fromU, nil
@@ -108,21 +108,21 @@ func (_q *ForumPostVoteQuery) QueryUser() *UserQuery {
 	return query
 }
 
-// First returns the first ForumPostVote entity from the query.
-// Returns a *NotFoundError when no ForumPostVote was found.
-func (_q *ForumPostVoteQuery) First(ctx context.Context) (*ForumPostVote, error) {
+// First returns the first ForumCommentVote entity from the query.
+// Returns a *NotFoundError when no ForumCommentVote was found.
+func (_q *ForumCommentVoteQuery) First(ctx context.Context) (*ForumCommentVote, error) {
 	nodes, err := _q.Limit(1).All(setContextOp(ctx, _q.ctx, ent.OpQueryFirst))
 	if err != nil {
 		return nil, err
 	}
 	if len(nodes) == 0 {
-		return nil, &NotFoundError{forumpostvote.Label}
+		return nil, &NotFoundError{forumcommentvote.Label}
 	}
 	return nodes[0], nil
 }
 
 // FirstX is like First, but panics if an error occurs.
-func (_q *ForumPostVoteQuery) FirstX(ctx context.Context) *ForumPostVote {
+func (_q *ForumCommentVoteQuery) FirstX(ctx context.Context) *ForumCommentVote {
 	node, err := _q.First(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
@@ -130,22 +130,22 @@ func (_q *ForumPostVoteQuery) FirstX(ctx context.Context) *ForumPostVote {
 	return node
 }
 
-// FirstID returns the first ForumPostVote ID from the query.
-// Returns a *NotFoundError when no ForumPostVote ID was found.
-func (_q *ForumPostVoteQuery) FirstID(ctx context.Context) (id int64, err error) {
+// FirstID returns the first ForumCommentVote ID from the query.
+// Returns a *NotFoundError when no ForumCommentVote ID was found.
+func (_q *ForumCommentVoteQuery) FirstID(ctx context.Context) (id int64, err error) {
 	var ids []int64
 	if ids, err = _q.Limit(1).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryFirstID)); err != nil {
 		return
 	}
 	if len(ids) == 0 {
-		err = &NotFoundError{forumpostvote.Label}
+		err = &NotFoundError{forumcommentvote.Label}
 		return
 	}
 	return ids[0], nil
 }
 
 // FirstIDX is like FirstID, but panics if an error occurs.
-func (_q *ForumPostVoteQuery) FirstIDX(ctx context.Context) int64 {
+func (_q *ForumCommentVoteQuery) FirstIDX(ctx context.Context) int64 {
 	id, err := _q.FirstID(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
@@ -153,10 +153,10 @@ func (_q *ForumPostVoteQuery) FirstIDX(ctx context.Context) int64 {
 	return id
 }
 
-// Only returns a single ForumPostVote entity found by the query, ensuring it only returns one.
-// Returns a *NotSingularError when more than one ForumPostVote entity is found.
-// Returns a *NotFoundError when no ForumPostVote entities are found.
-func (_q *ForumPostVoteQuery) Only(ctx context.Context) (*ForumPostVote, error) {
+// Only returns a single ForumCommentVote entity found by the query, ensuring it only returns one.
+// Returns a *NotSingularError when more than one ForumCommentVote entity is found.
+// Returns a *NotFoundError when no ForumCommentVote entities are found.
+func (_q *ForumCommentVoteQuery) Only(ctx context.Context) (*ForumCommentVote, error) {
 	nodes, err := _q.Limit(2).All(setContextOp(ctx, _q.ctx, ent.OpQueryOnly))
 	if err != nil {
 		return nil, err
@@ -165,14 +165,14 @@ func (_q *ForumPostVoteQuery) Only(ctx context.Context) (*ForumPostVote, error) 
 	case 1:
 		return nodes[0], nil
 	case 0:
-		return nil, &NotFoundError{forumpostvote.Label}
+		return nil, &NotFoundError{forumcommentvote.Label}
 	default:
-		return nil, &NotSingularError{forumpostvote.Label}
+		return nil, &NotSingularError{forumcommentvote.Label}
 	}
 }
 
 // OnlyX is like Only, but panics if an error occurs.
-func (_q *ForumPostVoteQuery) OnlyX(ctx context.Context) *ForumPostVote {
+func (_q *ForumCommentVoteQuery) OnlyX(ctx context.Context) *ForumCommentVote {
 	node, err := _q.Only(ctx)
 	if err != nil {
 		panic(err)
@@ -180,10 +180,10 @@ func (_q *ForumPostVoteQuery) OnlyX(ctx context.Context) *ForumPostVote {
 	return node
 }
 
-// OnlyID is like Only, but returns the only ForumPostVote ID in the query.
-// Returns a *NotSingularError when more than one ForumPostVote ID is found.
+// OnlyID is like Only, but returns the only ForumCommentVote ID in the query.
+// Returns a *NotSingularError when more than one ForumCommentVote ID is found.
 // Returns a *NotFoundError when no entities are found.
-func (_q *ForumPostVoteQuery) OnlyID(ctx context.Context) (id int64, err error) {
+func (_q *ForumCommentVoteQuery) OnlyID(ctx context.Context) (id int64, err error) {
 	var ids []int64
 	if ids, err = _q.Limit(2).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryOnlyID)); err != nil {
 		return
@@ -192,15 +192,15 @@ func (_q *ForumPostVoteQuery) OnlyID(ctx context.Context) (id int64, err error) 
 	case 1:
 		id = ids[0]
 	case 0:
-		err = &NotFoundError{forumpostvote.Label}
+		err = &NotFoundError{forumcommentvote.Label}
 	default:
-		err = &NotSingularError{forumpostvote.Label}
+		err = &NotSingularError{forumcommentvote.Label}
 	}
 	return
 }
 
 // OnlyIDX is like OnlyID, but panics if an error occurs.
-func (_q *ForumPostVoteQuery) OnlyIDX(ctx context.Context) int64 {
+func (_q *ForumCommentVoteQuery) OnlyIDX(ctx context.Context) int64 {
 	id, err := _q.OnlyID(ctx)
 	if err != nil {
 		panic(err)
@@ -208,18 +208,18 @@ func (_q *ForumPostVoteQuery) OnlyIDX(ctx context.Context) int64 {
 	return id
 }
 
-// All executes the query and returns a list of ForumPostVotes.
-func (_q *ForumPostVoteQuery) All(ctx context.Context) ([]*ForumPostVote, error) {
+// All executes the query and returns a list of ForumCommentVotes.
+func (_q *ForumCommentVoteQuery) All(ctx context.Context) ([]*ForumCommentVote, error) {
 	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryAll)
 	if err := _q.prepareQuery(ctx); err != nil {
 		return nil, err
 	}
-	qr := querierAll[[]*ForumPostVote, *ForumPostVoteQuery]()
-	return withInterceptors[[]*ForumPostVote](ctx, _q, qr, _q.inters)
+	qr := querierAll[[]*ForumCommentVote, *ForumCommentVoteQuery]()
+	return withInterceptors[[]*ForumCommentVote](ctx, _q, qr, _q.inters)
 }
 
 // AllX is like All, but panics if an error occurs.
-func (_q *ForumPostVoteQuery) AllX(ctx context.Context) []*ForumPostVote {
+func (_q *ForumCommentVoteQuery) AllX(ctx context.Context) []*ForumCommentVote {
 	nodes, err := _q.All(ctx)
 	if err != nil {
 		panic(err)
@@ -227,20 +227,20 @@ func (_q *ForumPostVoteQuery) AllX(ctx context.Context) []*ForumPostVote {
 	return nodes
 }
 
-// IDs executes the query and returns a list of ForumPostVote IDs.
-func (_q *ForumPostVoteQuery) IDs(ctx context.Context) (ids []int64, err error) {
+// IDs executes the query and returns a list of ForumCommentVote IDs.
+func (_q *ForumCommentVoteQuery) IDs(ctx context.Context) (ids []int64, err error) {
 	if _q.ctx.Unique == nil && _q.path != nil {
 		_q.Unique(true)
 	}
 	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryIDs)
-	if err = _q.Select(forumpostvote.FieldID).Scan(ctx, &ids); err != nil {
+	if err = _q.Select(forumcommentvote.FieldID).Scan(ctx, &ids); err != nil {
 		return nil, err
 	}
 	return ids, nil
 }
 
 // IDsX is like IDs, but panics if an error occurs.
-func (_q *ForumPostVoteQuery) IDsX(ctx context.Context) []int64 {
+func (_q *ForumCommentVoteQuery) IDsX(ctx context.Context) []int64 {
 	ids, err := _q.IDs(ctx)
 	if err != nil {
 		panic(err)
@@ -249,16 +249,16 @@ func (_q *ForumPostVoteQuery) IDsX(ctx context.Context) []int64 {
 }
 
 // Count returns the count of the given query.
-func (_q *ForumPostVoteQuery) Count(ctx context.Context) (int, error) {
+func (_q *ForumCommentVoteQuery) Count(ctx context.Context) (int, error) {
 	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryCount)
 	if err := _q.prepareQuery(ctx); err != nil {
 		return 0, err
 	}
-	return withInterceptors[int](ctx, _q, querierCount[*ForumPostVoteQuery](), _q.inters)
+	return withInterceptors[int](ctx, _q, querierCount[*ForumCommentVoteQuery](), _q.inters)
 }
 
 // CountX is like Count, but panics if an error occurs.
-func (_q *ForumPostVoteQuery) CountX(ctx context.Context) int {
+func (_q *ForumCommentVoteQuery) CountX(ctx context.Context) int {
 	count, err := _q.Count(ctx)
 	if err != nil {
 		panic(err)
@@ -267,7 +267,7 @@ func (_q *ForumPostVoteQuery) CountX(ctx context.Context) int {
 }
 
 // Exist returns true if the query has elements in the graph.
-func (_q *ForumPostVoteQuery) Exist(ctx context.Context) (bool, error) {
+func (_q *ForumCommentVoteQuery) Exist(ctx context.Context) (bool, error) {
 	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryExist)
 	switch _, err := _q.FirstID(ctx); {
 	case IsNotFound(err):
@@ -280,7 +280,7 @@ func (_q *ForumPostVoteQuery) Exist(ctx context.Context) (bool, error) {
 }
 
 // ExistX is like Exist, but panics if an error occurs.
-func (_q *ForumPostVoteQuery) ExistX(ctx context.Context) bool {
+func (_q *ForumCommentVoteQuery) ExistX(ctx context.Context) bool {
 	exist, err := _q.Exist(ctx)
 	if err != nil {
 		panic(err)
@@ -288,40 +288,40 @@ func (_q *ForumPostVoteQuery) ExistX(ctx context.Context) bool {
 	return exist
 }
 
-// Clone returns a duplicate of the ForumPostVoteQuery builder, including all associated steps. It can be
+// Clone returns a duplicate of the ForumCommentVoteQuery builder, including all associated steps. It can be
 // used to prepare common query builders and use them differently after the clone is made.
-func (_q *ForumPostVoteQuery) Clone() *ForumPostVoteQuery {
+func (_q *ForumCommentVoteQuery) Clone() *ForumCommentVoteQuery {
 	if _q == nil {
 		return nil
 	}
-	return &ForumPostVoteQuery{
-		config:     _q.config,
-		ctx:        _q.ctx.Clone(),
-		order:      append([]forumpostvote.OrderOption{}, _q.order...),
-		inters:     append([]Interceptor{}, _q.inters...),
-		predicates: append([]predicate.ForumPostVote{}, _q.predicates...),
-		withPost:   _q.withPost.Clone(),
-		withUser:   _q.withUser.Clone(),
+	return &ForumCommentVoteQuery{
+		config:      _q.config,
+		ctx:         _q.ctx.Clone(),
+		order:       append([]forumcommentvote.OrderOption{}, _q.order...),
+		inters:      append([]Interceptor{}, _q.inters...),
+		predicates:  append([]predicate.ForumCommentVote{}, _q.predicates...),
+		withComment: _q.withComment.Clone(),
+		withUser:    _q.withUser.Clone(),
 		// clone intermediate query.
 		sql:  _q.sql.Clone(),
 		path: _q.path,
 	}
 }
 
-// WithPost tells the query-builder to eager-load the nodes that are connected to
-// the "post" edge. The optional arguments are used to configure the query builder of the edge.
-func (_q *ForumPostVoteQuery) WithPost(opts ...func(*ForumPostQuery)) *ForumPostVoteQuery {
-	query := (&ForumPostClient{config: _q.config}).Query()
+// WithComment tells the query-builder to eager-load the nodes that are connected to
+// the "comment" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *ForumCommentVoteQuery) WithComment(opts ...func(*ForumCommentQuery)) *ForumCommentVoteQuery {
+	query := (&ForumCommentClient{config: _q.config}).Query()
 	for _, opt := range opts {
 		opt(query)
 	}
-	_q.withPost = query
+	_q.withComment = query
 	return _q
 }
 
 // WithUser tells the query-builder to eager-load the nodes that are connected to
 // the "user" edge. The optional arguments are used to configure the query builder of the edge.
-func (_q *ForumPostVoteQuery) WithUser(opts ...func(*UserQuery)) *ForumPostVoteQuery {
+func (_q *ForumCommentVoteQuery) WithUser(opts ...func(*UserQuery)) *ForumCommentVoteQuery {
 	query := (&UserClient{config: _q.config}).Query()
 	for _, opt := range opts {
 		opt(query)
@@ -340,15 +340,15 @@ func (_q *ForumPostVoteQuery) WithUser(opts ...func(*UserQuery)) *ForumPostVoteQ
 //		Count int `json:"count,omitempty"`
 //	}
 //
-//	client.ForumPostVote.Query().
-//		GroupBy(forumpostvote.FieldCreatedAt).
+//	client.ForumCommentVote.Query().
+//		GroupBy(forumcommentvote.FieldCreatedAt).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
-func (_q *ForumPostVoteQuery) GroupBy(field string, fields ...string) *ForumPostVoteGroupBy {
+func (_q *ForumCommentVoteQuery) GroupBy(field string, fields ...string) *ForumCommentVoteGroupBy {
 	_q.ctx.Fields = append([]string{field}, fields...)
-	grbuild := &ForumPostVoteGroupBy{build: _q}
+	grbuild := &ForumCommentVoteGroupBy{build: _q}
 	grbuild.flds = &_q.ctx.Fields
-	grbuild.label = forumpostvote.Label
+	grbuild.label = forumcommentvote.Label
 	grbuild.scan = grbuild.Scan
 	return grbuild
 }
@@ -362,23 +362,23 @@ func (_q *ForumPostVoteQuery) GroupBy(field string, fields ...string) *ForumPost
 //		CreatedAt time.Time `json:"created_at,omitempty"`
 //	}
 //
-//	client.ForumPostVote.Query().
-//		Select(forumpostvote.FieldCreatedAt).
+//	client.ForumCommentVote.Query().
+//		Select(forumcommentvote.FieldCreatedAt).
 //		Scan(ctx, &v)
-func (_q *ForumPostVoteQuery) Select(fields ...string) *ForumPostVoteSelect {
+func (_q *ForumCommentVoteQuery) Select(fields ...string) *ForumCommentVoteSelect {
 	_q.ctx.Fields = append(_q.ctx.Fields, fields...)
-	sbuild := &ForumPostVoteSelect{ForumPostVoteQuery: _q}
-	sbuild.label = forumpostvote.Label
+	sbuild := &ForumCommentVoteSelect{ForumCommentVoteQuery: _q}
+	sbuild.label = forumcommentvote.Label
 	sbuild.flds, sbuild.scan = &_q.ctx.Fields, sbuild.Scan
 	return sbuild
 }
 
-// Aggregate returns a ForumPostVoteSelect configured with the given aggregations.
-func (_q *ForumPostVoteQuery) Aggregate(fns ...AggregateFunc) *ForumPostVoteSelect {
+// Aggregate returns a ForumCommentVoteSelect configured with the given aggregations.
+func (_q *ForumCommentVoteQuery) Aggregate(fns ...AggregateFunc) *ForumCommentVoteSelect {
 	return _q.Select().Aggregate(fns...)
 }
 
-func (_q *ForumPostVoteQuery) prepareQuery(ctx context.Context) error {
+func (_q *ForumCommentVoteQuery) prepareQuery(ctx context.Context) error {
 	for _, inter := range _q.inters {
 		if inter == nil {
 			return fmt.Errorf("ent: uninitialized interceptor (forgotten import ent/runtime?)")
@@ -390,7 +390,7 @@ func (_q *ForumPostVoteQuery) prepareQuery(ctx context.Context) error {
 		}
 	}
 	for _, f := range _q.ctx.Fields {
-		if !forumpostvote.ValidColumn(f) {
+		if !forumcommentvote.ValidColumn(f) {
 			return &ValidationError{Name: f, err: fmt.Errorf("ent: invalid field %q for query", f)}
 		}
 	}
@@ -404,20 +404,20 @@ func (_q *ForumPostVoteQuery) prepareQuery(ctx context.Context) error {
 	return nil
 }
 
-func (_q *ForumPostVoteQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*ForumPostVote, error) {
+func (_q *ForumCommentVoteQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*ForumCommentVote, error) {
 	var (
-		nodes       = []*ForumPostVote{}
+		nodes       = []*ForumCommentVote{}
 		_spec       = _q.querySpec()
 		loadedTypes = [2]bool{
-			_q.withPost != nil,
+			_q.withComment != nil,
 			_q.withUser != nil,
 		}
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
-		return (*ForumPostVote).scanValues(nil, columns)
+		return (*ForumCommentVote).scanValues(nil, columns)
 	}
 	_spec.Assign = func(columns []string, values []any) error {
-		node := &ForumPostVote{config: _q.config}
+		node := &ForumCommentVote{config: _q.config}
 		nodes = append(nodes, node)
 		node.Edges.loadedTypes = loadedTypes
 		return node.assignValues(columns, values)
@@ -434,26 +434,26 @@ func (_q *ForumPostVoteQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([
 	if len(nodes) == 0 {
 		return nodes, nil
 	}
-	if query := _q.withPost; query != nil {
-		if err := _q.loadPost(ctx, query, nodes, nil,
-			func(n *ForumPostVote, e *ForumPost) { n.Edges.Post = e }); err != nil {
+	if query := _q.withComment; query != nil {
+		if err := _q.loadComment(ctx, query, nodes, nil,
+			func(n *ForumCommentVote, e *ForumComment) { n.Edges.Comment = e }); err != nil {
 			return nil, err
 		}
 	}
 	if query := _q.withUser; query != nil {
 		if err := _q.loadUser(ctx, query, nodes, nil,
-			func(n *ForumPostVote, e *User) { n.Edges.User = e }); err != nil {
+			func(n *ForumCommentVote, e *User) { n.Edges.User = e }); err != nil {
 			return nil, err
 		}
 	}
 	return nodes, nil
 }
 
-func (_q *ForumPostVoteQuery) loadPost(ctx context.Context, query *ForumPostQuery, nodes []*ForumPostVote, init func(*ForumPostVote), assign func(*ForumPostVote, *ForumPost)) error {
+func (_q *ForumCommentVoteQuery) loadComment(ctx context.Context, query *ForumCommentQuery, nodes []*ForumCommentVote, init func(*ForumCommentVote), assign func(*ForumCommentVote, *ForumComment)) error {
 	ids := make([]int64, 0, len(nodes))
-	nodeids := make(map[int64][]*ForumPostVote)
+	nodeids := make(map[int64][]*ForumCommentVote)
 	for i := range nodes {
-		fk := nodes[i].PostID
+		fk := nodes[i].CommentID
 		if _, ok := nodeids[fk]; !ok {
 			ids = append(ids, fk)
 		}
@@ -462,7 +462,7 @@ func (_q *ForumPostVoteQuery) loadPost(ctx context.Context, query *ForumPostQuer
 	if len(ids) == 0 {
 		return nil
 	}
-	query.Where(forumpost.IDIn(ids...))
+	query.Where(forumcomment.IDIn(ids...))
 	neighbors, err := query.All(ctx)
 	if err != nil {
 		return err
@@ -470,7 +470,7 @@ func (_q *ForumPostVoteQuery) loadPost(ctx context.Context, query *ForumPostQuer
 	for _, n := range neighbors {
 		nodes, ok := nodeids[n.ID]
 		if !ok {
-			return fmt.Errorf(`unexpected foreign-key "post_id" returned %v`, n.ID)
+			return fmt.Errorf(`unexpected foreign-key "comment_id" returned %v`, n.ID)
 		}
 		for i := range nodes {
 			assign(nodes[i], n)
@@ -478,9 +478,9 @@ func (_q *ForumPostVoteQuery) loadPost(ctx context.Context, query *ForumPostQuer
 	}
 	return nil
 }
-func (_q *ForumPostVoteQuery) loadUser(ctx context.Context, query *UserQuery, nodes []*ForumPostVote, init func(*ForumPostVote), assign func(*ForumPostVote, *User)) error {
+func (_q *ForumCommentVoteQuery) loadUser(ctx context.Context, query *UserQuery, nodes []*ForumCommentVote, init func(*ForumCommentVote), assign func(*ForumCommentVote, *User)) error {
 	ids := make([]int64, 0, len(nodes))
-	nodeids := make(map[int64][]*ForumPostVote)
+	nodeids := make(map[int64][]*ForumCommentVote)
 	for i := range nodes {
 		fk := nodes[i].UserID
 		if _, ok := nodeids[fk]; !ok {
@@ -508,7 +508,7 @@ func (_q *ForumPostVoteQuery) loadUser(ctx context.Context, query *UserQuery, no
 	return nil
 }
 
-func (_q *ForumPostVoteQuery) sqlCount(ctx context.Context) (int, error) {
+func (_q *ForumCommentVoteQuery) sqlCount(ctx context.Context) (int, error) {
 	_spec := _q.querySpec()
 	if len(_q.modifiers) > 0 {
 		_spec.Modifiers = _q.modifiers
@@ -520,8 +520,8 @@ func (_q *ForumPostVoteQuery) sqlCount(ctx context.Context) (int, error) {
 	return sqlgraph.CountNodes(ctx, _q.driver, _spec)
 }
 
-func (_q *ForumPostVoteQuery) querySpec() *sqlgraph.QuerySpec {
-	_spec := sqlgraph.NewQuerySpec(forumpostvote.Table, forumpostvote.Columns, sqlgraph.NewFieldSpec(forumpostvote.FieldID, field.TypeInt64))
+func (_q *ForumCommentVoteQuery) querySpec() *sqlgraph.QuerySpec {
+	_spec := sqlgraph.NewQuerySpec(forumcommentvote.Table, forumcommentvote.Columns, sqlgraph.NewFieldSpec(forumcommentvote.FieldID, field.TypeInt64))
 	_spec.From = _q.sql
 	if unique := _q.ctx.Unique; unique != nil {
 		_spec.Unique = *unique
@@ -530,17 +530,17 @@ func (_q *ForumPostVoteQuery) querySpec() *sqlgraph.QuerySpec {
 	}
 	if fields := _q.ctx.Fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
-		_spec.Node.Columns = append(_spec.Node.Columns, forumpostvote.FieldID)
+		_spec.Node.Columns = append(_spec.Node.Columns, forumcommentvote.FieldID)
 		for i := range fields {
-			if fields[i] != forumpostvote.FieldID {
+			if fields[i] != forumcommentvote.FieldID {
 				_spec.Node.Columns = append(_spec.Node.Columns, fields[i])
 			}
 		}
-		if _q.withPost != nil {
-			_spec.Node.AddColumnOnce(forumpostvote.FieldPostID)
+		if _q.withComment != nil {
+			_spec.Node.AddColumnOnce(forumcommentvote.FieldCommentID)
 		}
 		if _q.withUser != nil {
-			_spec.Node.AddColumnOnce(forumpostvote.FieldUserID)
+			_spec.Node.AddColumnOnce(forumcommentvote.FieldUserID)
 		}
 	}
 	if ps := _q.predicates; len(ps) > 0 {
@@ -566,12 +566,12 @@ func (_q *ForumPostVoteQuery) querySpec() *sqlgraph.QuerySpec {
 	return _spec
 }
 
-func (_q *ForumPostVoteQuery) sqlQuery(ctx context.Context) *sql.Selector {
+func (_q *ForumCommentVoteQuery) sqlQuery(ctx context.Context) *sql.Selector {
 	builder := sql.Dialect(_q.driver.Dialect())
-	t1 := builder.Table(forumpostvote.Table)
+	t1 := builder.Table(forumcommentvote.Table)
 	columns := _q.ctx.Fields
 	if len(columns) == 0 {
-		columns = forumpostvote.Columns
+		columns = forumcommentvote.Columns
 	}
 	selector := builder.Select(t1.Columns(columns...)...).From(t1)
 	if _q.sql != nil {
@@ -604,7 +604,7 @@ func (_q *ForumPostVoteQuery) sqlQuery(ctx context.Context) *sql.Selector {
 // ForUpdate locks the selected rows against concurrent updates, and prevent them from being
 // updated, deleted or "selected ... for update" by other sessions, until the transaction is
 // either committed or rolled-back.
-func (_q *ForumPostVoteQuery) ForUpdate(opts ...sql.LockOption) *ForumPostVoteQuery {
+func (_q *ForumCommentVoteQuery) ForUpdate(opts ...sql.LockOption) *ForumCommentVoteQuery {
 	if _q.driver.Dialect() == dialect.Postgres {
 		_q.Unique(false)
 	}
@@ -617,7 +617,7 @@ func (_q *ForumPostVoteQuery) ForUpdate(opts ...sql.LockOption) *ForumPostVoteQu
 // ForShare behaves similarly to ForUpdate, except that it acquires a shared mode lock
 // on any rows that are read. Other sessions can read the rows, but cannot modify them
 // until your transaction commits.
-func (_q *ForumPostVoteQuery) ForShare(opts ...sql.LockOption) *ForumPostVoteQuery {
+func (_q *ForumCommentVoteQuery) ForShare(opts ...sql.LockOption) *ForumCommentVoteQuery {
 	if _q.driver.Dialect() == dialect.Postgres {
 		_q.Unique(false)
 	}
@@ -627,28 +627,28 @@ func (_q *ForumPostVoteQuery) ForShare(opts ...sql.LockOption) *ForumPostVoteQue
 	return _q
 }
 
-// ForumPostVoteGroupBy is the group-by builder for ForumPostVote entities.
-type ForumPostVoteGroupBy struct {
+// ForumCommentVoteGroupBy is the group-by builder for ForumCommentVote entities.
+type ForumCommentVoteGroupBy struct {
 	selector
-	build *ForumPostVoteQuery
+	build *ForumCommentVoteQuery
 }
 
 // Aggregate adds the given aggregation functions to the group-by query.
-func (_g *ForumPostVoteGroupBy) Aggregate(fns ...AggregateFunc) *ForumPostVoteGroupBy {
+func (_g *ForumCommentVoteGroupBy) Aggregate(fns ...AggregateFunc) *ForumCommentVoteGroupBy {
 	_g.fns = append(_g.fns, fns...)
 	return _g
 }
 
 // Scan applies the selector query and scans the result into the given value.
-func (_g *ForumPostVoteGroupBy) Scan(ctx context.Context, v any) error {
+func (_g *ForumCommentVoteGroupBy) Scan(ctx context.Context, v any) error {
 	ctx = setContextOp(ctx, _g.build.ctx, ent.OpQueryGroupBy)
 	if err := _g.build.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*ForumPostVoteQuery, *ForumPostVoteGroupBy](ctx, _g.build, _g, _g.build.inters, v)
+	return scanWithInterceptors[*ForumCommentVoteQuery, *ForumCommentVoteGroupBy](ctx, _g.build, _g, _g.build.inters, v)
 }
 
-func (_g *ForumPostVoteGroupBy) sqlScan(ctx context.Context, root *ForumPostVoteQuery, v any) error {
+func (_g *ForumCommentVoteGroupBy) sqlScan(ctx context.Context, root *ForumCommentVoteQuery, v any) error {
 	selector := root.sqlQuery(ctx).Select()
 	aggregation := make([]string, 0, len(_g.fns))
 	for _, fn := range _g.fns {
@@ -675,28 +675,28 @@ func (_g *ForumPostVoteGroupBy) sqlScan(ctx context.Context, root *ForumPostVote
 	return sql.ScanSlice(rows, v)
 }
 
-// ForumPostVoteSelect is the builder for selecting fields of ForumPostVote entities.
-type ForumPostVoteSelect struct {
-	*ForumPostVoteQuery
+// ForumCommentVoteSelect is the builder for selecting fields of ForumCommentVote entities.
+type ForumCommentVoteSelect struct {
+	*ForumCommentVoteQuery
 	selector
 }
 
 // Aggregate adds the given aggregation functions to the selector query.
-func (_s *ForumPostVoteSelect) Aggregate(fns ...AggregateFunc) *ForumPostVoteSelect {
+func (_s *ForumCommentVoteSelect) Aggregate(fns ...AggregateFunc) *ForumCommentVoteSelect {
 	_s.fns = append(_s.fns, fns...)
 	return _s
 }
 
 // Scan applies the selector query and scans the result into the given value.
-func (_s *ForumPostVoteSelect) Scan(ctx context.Context, v any) error {
+func (_s *ForumCommentVoteSelect) Scan(ctx context.Context, v any) error {
 	ctx = setContextOp(ctx, _s.ctx, ent.OpQuerySelect)
 	if err := _s.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*ForumPostVoteQuery, *ForumPostVoteSelect](ctx, _s.ForumPostVoteQuery, _s, _s.inters, v)
+	return scanWithInterceptors[*ForumCommentVoteQuery, *ForumCommentVoteSelect](ctx, _s.ForumCommentVoteQuery, _s, _s.inters, v)
 }
 
-func (_s *ForumPostVoteSelect) sqlScan(ctx context.Context, root *ForumPostVoteQuery, v any) error {
+func (_s *ForumCommentVoteSelect) sqlScan(ctx context.Context, root *ForumCommentVoteQuery, v any) error {
 	selector := root.sqlQuery(ctx)
 	aggregation := make([]string, 0, len(_s.fns))
 	for _, fn := range _s.fns {

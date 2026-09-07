@@ -11,27 +11,27 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/Wei-Shaw/sub2api/ent/forumpost"
-	"github.com/Wei-Shaw/sub2api/ent/forumpostvote"
+	"github.com/Wei-Shaw/sub2api/ent/forumtopic"
+	"github.com/Wei-Shaw/sub2api/ent/forumtopicvote"
 	"github.com/Wei-Shaw/sub2api/ent/user"
 )
 
-// ForumPostVoteCreate is the builder for creating a ForumPostVote entity.
-type ForumPostVoteCreate struct {
+// ForumTopicVoteCreate is the builder for creating a ForumTopicVote entity.
+type ForumTopicVoteCreate struct {
 	config
-	mutation *ForumPostVoteMutation
+	mutation *ForumTopicVoteMutation
 	hooks    []Hook
 	conflict []sql.ConflictOption
 }
 
 // SetCreatedAt sets the "created_at" field.
-func (_c *ForumPostVoteCreate) SetCreatedAt(v time.Time) *ForumPostVoteCreate {
+func (_c *ForumTopicVoteCreate) SetCreatedAt(v time.Time) *ForumTopicVoteCreate {
 	_c.mutation.SetCreatedAt(v)
 	return _c
 }
 
 // SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
-func (_c *ForumPostVoteCreate) SetNillableCreatedAt(v *time.Time) *ForumPostVoteCreate {
+func (_c *ForumTopicVoteCreate) SetNillableCreatedAt(v *time.Time) *ForumTopicVoteCreate {
 	if v != nil {
 		_c.SetCreatedAt(*v)
 	}
@@ -39,60 +39,60 @@ func (_c *ForumPostVoteCreate) SetNillableCreatedAt(v *time.Time) *ForumPostVote
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (_c *ForumPostVoteCreate) SetUpdatedAt(v time.Time) *ForumPostVoteCreate {
+func (_c *ForumTopicVoteCreate) SetUpdatedAt(v time.Time) *ForumTopicVoteCreate {
 	_c.mutation.SetUpdatedAt(v)
 	return _c
 }
 
 // SetNillableUpdatedAt sets the "updated_at" field if the given value is not nil.
-func (_c *ForumPostVoteCreate) SetNillableUpdatedAt(v *time.Time) *ForumPostVoteCreate {
+func (_c *ForumTopicVoteCreate) SetNillableUpdatedAt(v *time.Time) *ForumTopicVoteCreate {
 	if v != nil {
 		_c.SetUpdatedAt(*v)
 	}
 	return _c
 }
 
-// SetPostID sets the "post_id" field.
-func (_c *ForumPostVoteCreate) SetPostID(v int64) *ForumPostVoteCreate {
-	_c.mutation.SetPostID(v)
+// SetTopicID sets the "topic_id" field.
+func (_c *ForumTopicVoteCreate) SetTopicID(v int64) *ForumTopicVoteCreate {
+	_c.mutation.SetTopicID(v)
 	return _c
 }
 
 // SetUserID sets the "user_id" field.
-func (_c *ForumPostVoteCreate) SetUserID(v int64) *ForumPostVoteCreate {
+func (_c *ForumTopicVoteCreate) SetUserID(v int64) *ForumTopicVoteCreate {
 	_c.mutation.SetUserID(v)
 	return _c
 }
 
 // SetVoteType sets the "vote_type" field.
-func (_c *ForumPostVoteCreate) SetVoteType(v string) *ForumPostVoteCreate {
+func (_c *ForumTopicVoteCreate) SetVoteType(v string) *ForumTopicVoteCreate {
 	_c.mutation.SetVoteType(v)
 	return _c
 }
 
-// SetPost sets the "post" edge to the ForumPost entity.
-func (_c *ForumPostVoteCreate) SetPost(v *ForumPost) *ForumPostVoteCreate {
-	return _c.SetPostID(v.ID)
+// SetTopic sets the "topic" edge to the ForumTopic entity.
+func (_c *ForumTopicVoteCreate) SetTopic(v *ForumTopic) *ForumTopicVoteCreate {
+	return _c.SetTopicID(v.ID)
 }
 
 // SetUser sets the "user" edge to the User entity.
-func (_c *ForumPostVoteCreate) SetUser(v *User) *ForumPostVoteCreate {
+func (_c *ForumTopicVoteCreate) SetUser(v *User) *ForumTopicVoteCreate {
 	return _c.SetUserID(v.ID)
 }
 
-// Mutation returns the ForumPostVoteMutation object of the builder.
-func (_c *ForumPostVoteCreate) Mutation() *ForumPostVoteMutation {
+// Mutation returns the ForumTopicVoteMutation object of the builder.
+func (_c *ForumTopicVoteCreate) Mutation() *ForumTopicVoteMutation {
 	return _c.mutation
 }
 
-// Save creates the ForumPostVote in the database.
-func (_c *ForumPostVoteCreate) Save(ctx context.Context) (*ForumPostVote, error) {
+// Save creates the ForumTopicVote in the database.
+func (_c *ForumTopicVoteCreate) Save(ctx context.Context) (*ForumTopicVote, error) {
 	_c.defaults()
 	return withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
 }
 
 // SaveX calls Save and panics if Save returns an error.
-func (_c *ForumPostVoteCreate) SaveX(ctx context.Context) *ForumPostVote {
+func (_c *ForumTopicVoteCreate) SaveX(ctx context.Context) *ForumTopicVote {
 	v, err := _c.Save(ctx)
 	if err != nil {
 		panic(err)
@@ -101,62 +101,62 @@ func (_c *ForumPostVoteCreate) SaveX(ctx context.Context) *ForumPostVote {
 }
 
 // Exec executes the query.
-func (_c *ForumPostVoteCreate) Exec(ctx context.Context) error {
+func (_c *ForumTopicVoteCreate) Exec(ctx context.Context) error {
 	_, err := _c.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (_c *ForumPostVoteCreate) ExecX(ctx context.Context) {
+func (_c *ForumTopicVoteCreate) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (_c *ForumPostVoteCreate) defaults() {
+func (_c *ForumTopicVoteCreate) defaults() {
 	if _, ok := _c.mutation.CreatedAt(); !ok {
-		v := forumpostvote.DefaultCreatedAt()
+		v := forumtopicvote.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
 	}
 	if _, ok := _c.mutation.UpdatedAt(); !ok {
-		v := forumpostvote.DefaultUpdatedAt()
+		v := forumtopicvote.DefaultUpdatedAt()
 		_c.mutation.SetUpdatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (_c *ForumPostVoteCreate) check() error {
+func (_c *ForumTopicVoteCreate) check() error {
 	if _, ok := _c.mutation.CreatedAt(); !ok {
-		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "ForumPostVote.created_at"`)}
+		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "ForumTopicVote.created_at"`)}
 	}
 	if _, ok := _c.mutation.UpdatedAt(); !ok {
-		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "ForumPostVote.updated_at"`)}
+		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "ForumTopicVote.updated_at"`)}
 	}
-	if _, ok := _c.mutation.PostID(); !ok {
-		return &ValidationError{Name: "post_id", err: errors.New(`ent: missing required field "ForumPostVote.post_id"`)}
+	if _, ok := _c.mutation.TopicID(); !ok {
+		return &ValidationError{Name: "topic_id", err: errors.New(`ent: missing required field "ForumTopicVote.topic_id"`)}
 	}
 	if _, ok := _c.mutation.UserID(); !ok {
-		return &ValidationError{Name: "user_id", err: errors.New(`ent: missing required field "ForumPostVote.user_id"`)}
+		return &ValidationError{Name: "user_id", err: errors.New(`ent: missing required field "ForumTopicVote.user_id"`)}
 	}
 	if _, ok := _c.mutation.VoteType(); !ok {
-		return &ValidationError{Name: "vote_type", err: errors.New(`ent: missing required field "ForumPostVote.vote_type"`)}
+		return &ValidationError{Name: "vote_type", err: errors.New(`ent: missing required field "ForumTopicVote.vote_type"`)}
 	}
 	if v, ok := _c.mutation.VoteType(); ok {
-		if err := forumpostvote.VoteTypeValidator(v); err != nil {
-			return &ValidationError{Name: "vote_type", err: fmt.Errorf(`ent: validator failed for field "ForumPostVote.vote_type": %w`, err)}
+		if err := forumtopicvote.VoteTypeValidator(v); err != nil {
+			return &ValidationError{Name: "vote_type", err: fmt.Errorf(`ent: validator failed for field "ForumTopicVote.vote_type": %w`, err)}
 		}
 	}
-	if len(_c.mutation.PostIDs()) == 0 {
-		return &ValidationError{Name: "post", err: errors.New(`ent: missing required edge "ForumPostVote.post"`)}
+	if len(_c.mutation.TopicIDs()) == 0 {
+		return &ValidationError{Name: "topic", err: errors.New(`ent: missing required edge "ForumTopicVote.topic"`)}
 	}
 	if len(_c.mutation.UserIDs()) == 0 {
-		return &ValidationError{Name: "user", err: errors.New(`ent: missing required edge "ForumPostVote.user"`)}
+		return &ValidationError{Name: "user", err: errors.New(`ent: missing required edge "ForumTopicVote.user"`)}
 	}
 	return nil
 }
 
-func (_c *ForumPostVoteCreate) sqlSave(ctx context.Context) (*ForumPostVote, error) {
+func (_c *ForumTopicVoteCreate) sqlSave(ctx context.Context) (*ForumTopicVote, error) {
 	if err := _c.check(); err != nil {
 		return nil, err
 	}
@@ -174,47 +174,47 @@ func (_c *ForumPostVoteCreate) sqlSave(ctx context.Context) (*ForumPostVote, err
 	return _node, nil
 }
 
-func (_c *ForumPostVoteCreate) createSpec() (*ForumPostVote, *sqlgraph.CreateSpec) {
+func (_c *ForumTopicVoteCreate) createSpec() (*ForumTopicVote, *sqlgraph.CreateSpec) {
 	var (
-		_node = &ForumPostVote{config: _c.config}
-		_spec = sqlgraph.NewCreateSpec(forumpostvote.Table, sqlgraph.NewFieldSpec(forumpostvote.FieldID, field.TypeInt64))
+		_node = &ForumTopicVote{config: _c.config}
+		_spec = sqlgraph.NewCreateSpec(forumtopicvote.Table, sqlgraph.NewFieldSpec(forumtopicvote.FieldID, field.TypeInt64))
 	)
 	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.CreatedAt(); ok {
-		_spec.SetField(forumpostvote.FieldCreatedAt, field.TypeTime, value)
+		_spec.SetField(forumtopicvote.FieldCreatedAt, field.TypeTime, value)
 		_node.CreatedAt = value
 	}
 	if value, ok := _c.mutation.UpdatedAt(); ok {
-		_spec.SetField(forumpostvote.FieldUpdatedAt, field.TypeTime, value)
+		_spec.SetField(forumtopicvote.FieldUpdatedAt, field.TypeTime, value)
 		_node.UpdatedAt = value
 	}
 	if value, ok := _c.mutation.VoteType(); ok {
-		_spec.SetField(forumpostvote.FieldVoteType, field.TypeString, value)
+		_spec.SetField(forumtopicvote.FieldVoteType, field.TypeString, value)
 		_node.VoteType = value
 	}
-	if nodes := _c.mutation.PostIDs(); len(nodes) > 0 {
+	if nodes := _c.mutation.TopicIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
 			Inverse: true,
-			Table:   forumpostvote.PostTable,
-			Columns: []string{forumpostvote.PostColumn},
+			Table:   forumtopicvote.TopicTable,
+			Columns: []string{forumtopicvote.TopicColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(forumpost.FieldID, field.TypeInt64),
+				IDSpec: sqlgraph.NewFieldSpec(forumtopic.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
-		_node.PostID = nodes[0]
+		_node.TopicID = nodes[0]
 		_spec.Edges = append(_spec.Edges, edge)
 	}
 	if nodes := _c.mutation.UserIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
 			Inverse: true,
-			Table:   forumpostvote.UserTable,
-			Columns: []string{forumpostvote.UserColumn},
+			Table:   forumtopicvote.UserTable,
+			Columns: []string{forumtopicvote.UserColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(user.FieldID, field.TypeInt64),
@@ -232,7 +232,7 @@ func (_c *ForumPostVoteCreate) createSpec() (*ForumPostVote, *sqlgraph.CreateSpe
 // OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
 // of the `INSERT` statement. For example:
 //
-//	client.ForumPostVote.Create().
+//	client.ForumTopicVote.Create().
 //		SetCreatedAt(v).
 //		OnConflict(
 //			// Update the row with the new values
@@ -241,13 +241,13 @@ func (_c *ForumPostVoteCreate) createSpec() (*ForumPostVote, *sqlgraph.CreateSpe
 //		).
 //		// Override some of the fields with custom
 //		// update values.
-//		Update(func(u *ent.ForumPostVoteUpsert) {
+//		Update(func(u *ent.ForumTopicVoteUpsert) {
 //			SetCreatedAt(v+v).
 //		}).
 //		Exec(ctx)
-func (_c *ForumPostVoteCreate) OnConflict(opts ...sql.ConflictOption) *ForumPostVoteUpsertOne {
+func (_c *ForumTopicVoteCreate) OnConflict(opts ...sql.ConflictOption) *ForumTopicVoteUpsertOne {
 	_c.conflict = opts
-	return &ForumPostVoteUpsertOne{
+	return &ForumTopicVoteUpsertOne{
 		create: _c,
 	}
 }
@@ -255,90 +255,90 @@ func (_c *ForumPostVoteCreate) OnConflict(opts ...sql.ConflictOption) *ForumPost
 // OnConflictColumns calls `OnConflict` and configures the columns
 // as conflict target. Using this option is equivalent to using:
 //
-//	client.ForumPostVote.Create().
+//	client.ForumTopicVote.Create().
 //		OnConflict(sql.ConflictColumns(columns...)).
 //		Exec(ctx)
-func (_c *ForumPostVoteCreate) OnConflictColumns(columns ...string) *ForumPostVoteUpsertOne {
+func (_c *ForumTopicVoteCreate) OnConflictColumns(columns ...string) *ForumTopicVoteUpsertOne {
 	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
-	return &ForumPostVoteUpsertOne{
+	return &ForumTopicVoteUpsertOne{
 		create: _c,
 	}
 }
 
 type (
-	// ForumPostVoteUpsertOne is the builder for "upsert"-ing
-	//  one ForumPostVote node.
-	ForumPostVoteUpsertOne struct {
-		create *ForumPostVoteCreate
+	// ForumTopicVoteUpsertOne is the builder for "upsert"-ing
+	//  one ForumTopicVote node.
+	ForumTopicVoteUpsertOne struct {
+		create *ForumTopicVoteCreate
 	}
 
-	// ForumPostVoteUpsert is the "OnConflict" setter.
-	ForumPostVoteUpsert struct {
+	// ForumTopicVoteUpsert is the "OnConflict" setter.
+	ForumTopicVoteUpsert struct {
 		*sql.UpdateSet
 	}
 )
 
 // SetUpdatedAt sets the "updated_at" field.
-func (u *ForumPostVoteUpsert) SetUpdatedAt(v time.Time) *ForumPostVoteUpsert {
-	u.Set(forumpostvote.FieldUpdatedAt, v)
+func (u *ForumTopicVoteUpsert) SetUpdatedAt(v time.Time) *ForumTopicVoteUpsert {
+	u.Set(forumtopicvote.FieldUpdatedAt, v)
 	return u
 }
 
 // UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
-func (u *ForumPostVoteUpsert) UpdateUpdatedAt() *ForumPostVoteUpsert {
-	u.SetExcluded(forumpostvote.FieldUpdatedAt)
+func (u *ForumTopicVoteUpsert) UpdateUpdatedAt() *ForumTopicVoteUpsert {
+	u.SetExcluded(forumtopicvote.FieldUpdatedAt)
 	return u
 }
 
-// SetPostID sets the "post_id" field.
-func (u *ForumPostVoteUpsert) SetPostID(v int64) *ForumPostVoteUpsert {
-	u.Set(forumpostvote.FieldPostID, v)
+// SetTopicID sets the "topic_id" field.
+func (u *ForumTopicVoteUpsert) SetTopicID(v int64) *ForumTopicVoteUpsert {
+	u.Set(forumtopicvote.FieldTopicID, v)
 	return u
 }
 
-// UpdatePostID sets the "post_id" field to the value that was provided on create.
-func (u *ForumPostVoteUpsert) UpdatePostID() *ForumPostVoteUpsert {
-	u.SetExcluded(forumpostvote.FieldPostID)
+// UpdateTopicID sets the "topic_id" field to the value that was provided on create.
+func (u *ForumTopicVoteUpsert) UpdateTopicID() *ForumTopicVoteUpsert {
+	u.SetExcluded(forumtopicvote.FieldTopicID)
 	return u
 }
 
 // SetUserID sets the "user_id" field.
-func (u *ForumPostVoteUpsert) SetUserID(v int64) *ForumPostVoteUpsert {
-	u.Set(forumpostvote.FieldUserID, v)
+func (u *ForumTopicVoteUpsert) SetUserID(v int64) *ForumTopicVoteUpsert {
+	u.Set(forumtopicvote.FieldUserID, v)
 	return u
 }
 
 // UpdateUserID sets the "user_id" field to the value that was provided on create.
-func (u *ForumPostVoteUpsert) UpdateUserID() *ForumPostVoteUpsert {
-	u.SetExcluded(forumpostvote.FieldUserID)
+func (u *ForumTopicVoteUpsert) UpdateUserID() *ForumTopicVoteUpsert {
+	u.SetExcluded(forumtopicvote.FieldUserID)
 	return u
 }
 
 // SetVoteType sets the "vote_type" field.
-func (u *ForumPostVoteUpsert) SetVoteType(v string) *ForumPostVoteUpsert {
-	u.Set(forumpostvote.FieldVoteType, v)
+func (u *ForumTopicVoteUpsert) SetVoteType(v string) *ForumTopicVoteUpsert {
+	u.Set(forumtopicvote.FieldVoteType, v)
 	return u
 }
 
 // UpdateVoteType sets the "vote_type" field to the value that was provided on create.
-func (u *ForumPostVoteUpsert) UpdateVoteType() *ForumPostVoteUpsert {
-	u.SetExcluded(forumpostvote.FieldVoteType)
+func (u *ForumTopicVoteUpsert) UpdateVoteType() *ForumTopicVoteUpsert {
+	u.SetExcluded(forumtopicvote.FieldVoteType)
 	return u
 }
 
 // UpdateNewValues updates the mutable fields using the new values that were set on create.
 // Using this option is equivalent to using:
 //
-//	client.ForumPostVote.Create().
+//	client.ForumTopicVote.Create().
 //		OnConflict(
 //			sql.ResolveWithNewValues(),
 //		).
 //		Exec(ctx)
-func (u *ForumPostVoteUpsertOne) UpdateNewValues() *ForumPostVoteUpsertOne {
+func (u *ForumTopicVoteUpsertOne) UpdateNewValues() *ForumTopicVoteUpsertOne {
 	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
 	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(s *sql.UpdateSet) {
 		if _, exists := u.create.mutation.CreatedAt(); exists {
-			s.SetIgnore(forumpostvote.FieldCreatedAt)
+			s.SetIgnore(forumtopicvote.FieldCreatedAt)
 		}
 	}))
 	return u
@@ -347,103 +347,103 @@ func (u *ForumPostVoteUpsertOne) UpdateNewValues() *ForumPostVoteUpsertOne {
 // Ignore sets each column to itself in case of conflict.
 // Using this option is equivalent to using:
 //
-//	client.ForumPostVote.Create().
+//	client.ForumTopicVote.Create().
 //	    OnConflict(sql.ResolveWithIgnore()).
 //	    Exec(ctx)
-func (u *ForumPostVoteUpsertOne) Ignore() *ForumPostVoteUpsertOne {
+func (u *ForumTopicVoteUpsertOne) Ignore() *ForumTopicVoteUpsertOne {
 	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
 	return u
 }
 
 // DoNothing configures the conflict_action to `DO NOTHING`.
 // Supported only by SQLite and PostgreSQL.
-func (u *ForumPostVoteUpsertOne) DoNothing() *ForumPostVoteUpsertOne {
+func (u *ForumTopicVoteUpsertOne) DoNothing() *ForumTopicVoteUpsertOne {
 	u.create.conflict = append(u.create.conflict, sql.DoNothing())
 	return u
 }
 
-// Update allows overriding fields `UPDATE` values. See the ForumPostVoteCreate.OnConflict
+// Update allows overriding fields `UPDATE` values. See the ForumTopicVoteCreate.OnConflict
 // documentation for more info.
-func (u *ForumPostVoteUpsertOne) Update(set func(*ForumPostVoteUpsert)) *ForumPostVoteUpsertOne {
+func (u *ForumTopicVoteUpsertOne) Update(set func(*ForumTopicVoteUpsert)) *ForumTopicVoteUpsertOne {
 	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
-		set(&ForumPostVoteUpsert{UpdateSet: update})
+		set(&ForumTopicVoteUpsert{UpdateSet: update})
 	}))
 	return u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (u *ForumPostVoteUpsertOne) SetUpdatedAt(v time.Time) *ForumPostVoteUpsertOne {
-	return u.Update(func(s *ForumPostVoteUpsert) {
+func (u *ForumTopicVoteUpsertOne) SetUpdatedAt(v time.Time) *ForumTopicVoteUpsertOne {
+	return u.Update(func(s *ForumTopicVoteUpsert) {
 		s.SetUpdatedAt(v)
 	})
 }
 
 // UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
-func (u *ForumPostVoteUpsertOne) UpdateUpdatedAt() *ForumPostVoteUpsertOne {
-	return u.Update(func(s *ForumPostVoteUpsert) {
+func (u *ForumTopicVoteUpsertOne) UpdateUpdatedAt() *ForumTopicVoteUpsertOne {
+	return u.Update(func(s *ForumTopicVoteUpsert) {
 		s.UpdateUpdatedAt()
 	})
 }
 
-// SetPostID sets the "post_id" field.
-func (u *ForumPostVoteUpsertOne) SetPostID(v int64) *ForumPostVoteUpsertOne {
-	return u.Update(func(s *ForumPostVoteUpsert) {
-		s.SetPostID(v)
+// SetTopicID sets the "topic_id" field.
+func (u *ForumTopicVoteUpsertOne) SetTopicID(v int64) *ForumTopicVoteUpsertOne {
+	return u.Update(func(s *ForumTopicVoteUpsert) {
+		s.SetTopicID(v)
 	})
 }
 
-// UpdatePostID sets the "post_id" field to the value that was provided on create.
-func (u *ForumPostVoteUpsertOne) UpdatePostID() *ForumPostVoteUpsertOne {
-	return u.Update(func(s *ForumPostVoteUpsert) {
-		s.UpdatePostID()
+// UpdateTopicID sets the "topic_id" field to the value that was provided on create.
+func (u *ForumTopicVoteUpsertOne) UpdateTopicID() *ForumTopicVoteUpsertOne {
+	return u.Update(func(s *ForumTopicVoteUpsert) {
+		s.UpdateTopicID()
 	})
 }
 
 // SetUserID sets the "user_id" field.
-func (u *ForumPostVoteUpsertOne) SetUserID(v int64) *ForumPostVoteUpsertOne {
-	return u.Update(func(s *ForumPostVoteUpsert) {
+func (u *ForumTopicVoteUpsertOne) SetUserID(v int64) *ForumTopicVoteUpsertOne {
+	return u.Update(func(s *ForumTopicVoteUpsert) {
 		s.SetUserID(v)
 	})
 }
 
 // UpdateUserID sets the "user_id" field to the value that was provided on create.
-func (u *ForumPostVoteUpsertOne) UpdateUserID() *ForumPostVoteUpsertOne {
-	return u.Update(func(s *ForumPostVoteUpsert) {
+func (u *ForumTopicVoteUpsertOne) UpdateUserID() *ForumTopicVoteUpsertOne {
+	return u.Update(func(s *ForumTopicVoteUpsert) {
 		s.UpdateUserID()
 	})
 }
 
 // SetVoteType sets the "vote_type" field.
-func (u *ForumPostVoteUpsertOne) SetVoteType(v string) *ForumPostVoteUpsertOne {
-	return u.Update(func(s *ForumPostVoteUpsert) {
+func (u *ForumTopicVoteUpsertOne) SetVoteType(v string) *ForumTopicVoteUpsertOne {
+	return u.Update(func(s *ForumTopicVoteUpsert) {
 		s.SetVoteType(v)
 	})
 }
 
 // UpdateVoteType sets the "vote_type" field to the value that was provided on create.
-func (u *ForumPostVoteUpsertOne) UpdateVoteType() *ForumPostVoteUpsertOne {
-	return u.Update(func(s *ForumPostVoteUpsert) {
+func (u *ForumTopicVoteUpsertOne) UpdateVoteType() *ForumTopicVoteUpsertOne {
+	return u.Update(func(s *ForumTopicVoteUpsert) {
 		s.UpdateVoteType()
 	})
 }
 
 // Exec executes the query.
-func (u *ForumPostVoteUpsertOne) Exec(ctx context.Context) error {
+func (u *ForumTopicVoteUpsertOne) Exec(ctx context.Context) error {
 	if len(u.create.conflict) == 0 {
-		return errors.New("ent: missing options for ForumPostVoteCreate.OnConflict")
+		return errors.New("ent: missing options for ForumTopicVoteCreate.OnConflict")
 	}
 	return u.create.Exec(ctx)
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (u *ForumPostVoteUpsertOne) ExecX(ctx context.Context) {
+func (u *ForumTopicVoteUpsertOne) ExecX(ctx context.Context) {
 	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // Exec executes the UPSERT query and returns the inserted/updated ID.
-func (u *ForumPostVoteUpsertOne) ID(ctx context.Context) (id int64, err error) {
+func (u *ForumTopicVoteUpsertOne) ID(ctx context.Context) (id int64, err error) {
 	node, err := u.create.Save(ctx)
 	if err != nil {
 		return id, err
@@ -452,7 +452,7 @@ func (u *ForumPostVoteUpsertOne) ID(ctx context.Context) (id int64, err error) {
 }
 
 // IDX is like ID, but panics if an error occurs.
-func (u *ForumPostVoteUpsertOne) IDX(ctx context.Context) int64 {
+func (u *ForumTopicVoteUpsertOne) IDX(ctx context.Context) int64 {
 	id, err := u.ID(ctx)
 	if err != nil {
 		panic(err)
@@ -460,28 +460,28 @@ func (u *ForumPostVoteUpsertOne) IDX(ctx context.Context) int64 {
 	return id
 }
 
-// ForumPostVoteCreateBulk is the builder for creating many ForumPostVote entities in bulk.
-type ForumPostVoteCreateBulk struct {
+// ForumTopicVoteCreateBulk is the builder for creating many ForumTopicVote entities in bulk.
+type ForumTopicVoteCreateBulk struct {
 	config
 	err      error
-	builders []*ForumPostVoteCreate
+	builders []*ForumTopicVoteCreate
 	conflict []sql.ConflictOption
 }
 
-// Save creates the ForumPostVote entities in the database.
-func (_c *ForumPostVoteCreateBulk) Save(ctx context.Context) ([]*ForumPostVote, error) {
+// Save creates the ForumTopicVote entities in the database.
+func (_c *ForumTopicVoteCreateBulk) Save(ctx context.Context) ([]*ForumTopicVote, error) {
 	if _c.err != nil {
 		return nil, _c.err
 	}
 	specs := make([]*sqlgraph.CreateSpec, len(_c.builders))
-	nodes := make([]*ForumPostVote, len(_c.builders))
+	nodes := make([]*ForumTopicVote, len(_c.builders))
 	mutators := make([]Mutator, len(_c.builders))
 	for i := range _c.builders {
 		func(i int, root context.Context) {
 			builder := _c.builders[i]
 			builder.defaults()
 			var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
-				mutation, ok := m.(*ForumPostVoteMutation)
+				mutation, ok := m.(*ForumTopicVoteMutation)
 				if !ok {
 					return nil, fmt.Errorf("unexpected mutation type %T", m)
 				}
@@ -529,7 +529,7 @@ func (_c *ForumPostVoteCreateBulk) Save(ctx context.Context) ([]*ForumPostVote, 
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (_c *ForumPostVoteCreateBulk) SaveX(ctx context.Context) []*ForumPostVote {
+func (_c *ForumTopicVoteCreateBulk) SaveX(ctx context.Context) []*ForumTopicVote {
 	v, err := _c.Save(ctx)
 	if err != nil {
 		panic(err)
@@ -538,13 +538,13 @@ func (_c *ForumPostVoteCreateBulk) SaveX(ctx context.Context) []*ForumPostVote {
 }
 
 // Exec executes the query.
-func (_c *ForumPostVoteCreateBulk) Exec(ctx context.Context) error {
+func (_c *ForumTopicVoteCreateBulk) Exec(ctx context.Context) error {
 	_, err := _c.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (_c *ForumPostVoteCreateBulk) ExecX(ctx context.Context) {
+func (_c *ForumTopicVoteCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
 		panic(err)
 	}
@@ -553,7 +553,7 @@ func (_c *ForumPostVoteCreateBulk) ExecX(ctx context.Context) {
 // OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
 // of the `INSERT` statement. For example:
 //
-//	client.ForumPostVote.CreateBulk(builders...).
+//	client.ForumTopicVote.CreateBulk(builders...).
 //		OnConflict(
 //			// Update the row with the new values
 //			// the was proposed for insertion.
@@ -561,13 +561,13 @@ func (_c *ForumPostVoteCreateBulk) ExecX(ctx context.Context) {
 //		).
 //		// Override some of the fields with custom
 //		// update values.
-//		Update(func(u *ent.ForumPostVoteUpsert) {
+//		Update(func(u *ent.ForumTopicVoteUpsert) {
 //			SetCreatedAt(v+v).
 //		}).
 //		Exec(ctx)
-func (_c *ForumPostVoteCreateBulk) OnConflict(opts ...sql.ConflictOption) *ForumPostVoteUpsertBulk {
+func (_c *ForumTopicVoteCreateBulk) OnConflict(opts ...sql.ConflictOption) *ForumTopicVoteUpsertBulk {
 	_c.conflict = opts
-	return &ForumPostVoteUpsertBulk{
+	return &ForumTopicVoteUpsertBulk{
 		create: _c,
 	}
 }
@@ -575,36 +575,36 @@ func (_c *ForumPostVoteCreateBulk) OnConflict(opts ...sql.ConflictOption) *Forum
 // OnConflictColumns calls `OnConflict` and configures the columns
 // as conflict target. Using this option is equivalent to using:
 //
-//	client.ForumPostVote.Create().
+//	client.ForumTopicVote.Create().
 //		OnConflict(sql.ConflictColumns(columns...)).
 //		Exec(ctx)
-func (_c *ForumPostVoteCreateBulk) OnConflictColumns(columns ...string) *ForumPostVoteUpsertBulk {
+func (_c *ForumTopicVoteCreateBulk) OnConflictColumns(columns ...string) *ForumTopicVoteUpsertBulk {
 	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
-	return &ForumPostVoteUpsertBulk{
+	return &ForumTopicVoteUpsertBulk{
 		create: _c,
 	}
 }
 
-// ForumPostVoteUpsertBulk is the builder for "upsert"-ing
-// a bulk of ForumPostVote nodes.
-type ForumPostVoteUpsertBulk struct {
-	create *ForumPostVoteCreateBulk
+// ForumTopicVoteUpsertBulk is the builder for "upsert"-ing
+// a bulk of ForumTopicVote nodes.
+type ForumTopicVoteUpsertBulk struct {
+	create *ForumTopicVoteCreateBulk
 }
 
 // UpdateNewValues updates the mutable fields using the new values that
 // were set on create. Using this option is equivalent to using:
 //
-//	client.ForumPostVote.Create().
+//	client.ForumTopicVote.Create().
 //		OnConflict(
 //			sql.ResolveWithNewValues(),
 //		).
 //		Exec(ctx)
-func (u *ForumPostVoteUpsertBulk) UpdateNewValues() *ForumPostVoteUpsertBulk {
+func (u *ForumTopicVoteUpsertBulk) UpdateNewValues() *ForumTopicVoteUpsertBulk {
 	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
 	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(s *sql.UpdateSet) {
 		for _, b := range u.create.builders {
 			if _, exists := b.mutation.CreatedAt(); exists {
-				s.SetIgnore(forumpostvote.FieldCreatedAt)
+				s.SetIgnore(forumtopicvote.FieldCreatedAt)
 			}
 		}
 	}))
@@ -614,104 +614,104 @@ func (u *ForumPostVoteUpsertBulk) UpdateNewValues() *ForumPostVoteUpsertBulk {
 // Ignore sets each column to itself in case of conflict.
 // Using this option is equivalent to using:
 //
-//	client.ForumPostVote.Create().
+//	client.ForumTopicVote.Create().
 //		OnConflict(sql.ResolveWithIgnore()).
 //		Exec(ctx)
-func (u *ForumPostVoteUpsertBulk) Ignore() *ForumPostVoteUpsertBulk {
+func (u *ForumTopicVoteUpsertBulk) Ignore() *ForumTopicVoteUpsertBulk {
 	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
 	return u
 }
 
 // DoNothing configures the conflict_action to `DO NOTHING`.
 // Supported only by SQLite and PostgreSQL.
-func (u *ForumPostVoteUpsertBulk) DoNothing() *ForumPostVoteUpsertBulk {
+func (u *ForumTopicVoteUpsertBulk) DoNothing() *ForumTopicVoteUpsertBulk {
 	u.create.conflict = append(u.create.conflict, sql.DoNothing())
 	return u
 }
 
-// Update allows overriding fields `UPDATE` values. See the ForumPostVoteCreateBulk.OnConflict
+// Update allows overriding fields `UPDATE` values. See the ForumTopicVoteCreateBulk.OnConflict
 // documentation for more info.
-func (u *ForumPostVoteUpsertBulk) Update(set func(*ForumPostVoteUpsert)) *ForumPostVoteUpsertBulk {
+func (u *ForumTopicVoteUpsertBulk) Update(set func(*ForumTopicVoteUpsert)) *ForumTopicVoteUpsertBulk {
 	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
-		set(&ForumPostVoteUpsert{UpdateSet: update})
+		set(&ForumTopicVoteUpsert{UpdateSet: update})
 	}))
 	return u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (u *ForumPostVoteUpsertBulk) SetUpdatedAt(v time.Time) *ForumPostVoteUpsertBulk {
-	return u.Update(func(s *ForumPostVoteUpsert) {
+func (u *ForumTopicVoteUpsertBulk) SetUpdatedAt(v time.Time) *ForumTopicVoteUpsertBulk {
+	return u.Update(func(s *ForumTopicVoteUpsert) {
 		s.SetUpdatedAt(v)
 	})
 }
 
 // UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
-func (u *ForumPostVoteUpsertBulk) UpdateUpdatedAt() *ForumPostVoteUpsertBulk {
-	return u.Update(func(s *ForumPostVoteUpsert) {
+func (u *ForumTopicVoteUpsertBulk) UpdateUpdatedAt() *ForumTopicVoteUpsertBulk {
+	return u.Update(func(s *ForumTopicVoteUpsert) {
 		s.UpdateUpdatedAt()
 	})
 }
 
-// SetPostID sets the "post_id" field.
-func (u *ForumPostVoteUpsertBulk) SetPostID(v int64) *ForumPostVoteUpsertBulk {
-	return u.Update(func(s *ForumPostVoteUpsert) {
-		s.SetPostID(v)
+// SetTopicID sets the "topic_id" field.
+func (u *ForumTopicVoteUpsertBulk) SetTopicID(v int64) *ForumTopicVoteUpsertBulk {
+	return u.Update(func(s *ForumTopicVoteUpsert) {
+		s.SetTopicID(v)
 	})
 }
 
-// UpdatePostID sets the "post_id" field to the value that was provided on create.
-func (u *ForumPostVoteUpsertBulk) UpdatePostID() *ForumPostVoteUpsertBulk {
-	return u.Update(func(s *ForumPostVoteUpsert) {
-		s.UpdatePostID()
+// UpdateTopicID sets the "topic_id" field to the value that was provided on create.
+func (u *ForumTopicVoteUpsertBulk) UpdateTopicID() *ForumTopicVoteUpsertBulk {
+	return u.Update(func(s *ForumTopicVoteUpsert) {
+		s.UpdateTopicID()
 	})
 }
 
 // SetUserID sets the "user_id" field.
-func (u *ForumPostVoteUpsertBulk) SetUserID(v int64) *ForumPostVoteUpsertBulk {
-	return u.Update(func(s *ForumPostVoteUpsert) {
+func (u *ForumTopicVoteUpsertBulk) SetUserID(v int64) *ForumTopicVoteUpsertBulk {
+	return u.Update(func(s *ForumTopicVoteUpsert) {
 		s.SetUserID(v)
 	})
 }
 
 // UpdateUserID sets the "user_id" field to the value that was provided on create.
-func (u *ForumPostVoteUpsertBulk) UpdateUserID() *ForumPostVoteUpsertBulk {
-	return u.Update(func(s *ForumPostVoteUpsert) {
+func (u *ForumTopicVoteUpsertBulk) UpdateUserID() *ForumTopicVoteUpsertBulk {
+	return u.Update(func(s *ForumTopicVoteUpsert) {
 		s.UpdateUserID()
 	})
 }
 
 // SetVoteType sets the "vote_type" field.
-func (u *ForumPostVoteUpsertBulk) SetVoteType(v string) *ForumPostVoteUpsertBulk {
-	return u.Update(func(s *ForumPostVoteUpsert) {
+func (u *ForumTopicVoteUpsertBulk) SetVoteType(v string) *ForumTopicVoteUpsertBulk {
+	return u.Update(func(s *ForumTopicVoteUpsert) {
 		s.SetVoteType(v)
 	})
 }
 
 // UpdateVoteType sets the "vote_type" field to the value that was provided on create.
-func (u *ForumPostVoteUpsertBulk) UpdateVoteType() *ForumPostVoteUpsertBulk {
-	return u.Update(func(s *ForumPostVoteUpsert) {
+func (u *ForumTopicVoteUpsertBulk) UpdateVoteType() *ForumTopicVoteUpsertBulk {
+	return u.Update(func(s *ForumTopicVoteUpsert) {
 		s.UpdateVoteType()
 	})
 }
 
 // Exec executes the query.
-func (u *ForumPostVoteUpsertBulk) Exec(ctx context.Context) error {
+func (u *ForumTopicVoteUpsertBulk) Exec(ctx context.Context) error {
 	if u.create.err != nil {
 		return u.create.err
 	}
 	for i, b := range u.create.builders {
 		if len(b.conflict) != 0 {
-			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the ForumPostVoteCreateBulk instead", i)
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the ForumTopicVoteCreateBulk instead", i)
 		}
 	}
 	if len(u.create.conflict) == 0 {
-		return errors.New("ent: missing options for ForumPostVoteCreateBulk.OnConflict")
+		return errors.New("ent: missing options for ForumTopicVoteCreateBulk.OnConflict")
 	}
 	return u.create.Exec(ctx)
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (u *ForumPostVoteUpsertBulk) ExecX(ctx context.Context) {
+func (u *ForumTopicVoteUpsertBulk) ExecX(ctx context.Context) {
 	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}

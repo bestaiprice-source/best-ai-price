@@ -246,15 +246,20 @@ sub2api/
 - `GET /api/v1/admin/provider-comments`: Admin moderation list with provider, status, and sentiment filters.
 - `PUT /api/v1/admin/provider-comments/:id/status`: Admin status toggle (`active` / `hidden`).
 
-### Forum APIs (`/api/v1/forum/*`)
-- `GET /api/v1/forum/posts`: Paginated list of root forum posts with sort options (`latest`, `top_liked`, `most_replies`) and `user_vote` for authenticated viewers.
-- `POST /api/v1/forum/posts`: Creates a new root forum post.
-- `GET /api/v1/forum/posts/:id/replies`: Paginated list of nested replies to a post or reply.
-- `POST /api/v1/forum/posts/:id/reply`: Posts a nested reply, automatically incrementing parent's `reply_count`.
-- `POST /api/v1/forum/posts/:id/vote`: Sets reaction (`like`, `dislike`, or `none` to remove vote) with transactional counter updates.
-- `DELETE /api/v1/forum/posts/:id`: Always returns 403 Forbidden (`ErrCannotDeleteForumPost`) since forum posts are immutable and only votes can be removed.
-- `GET /api/v1/admin/forum/posts`: Admin moderation list with status filter.
-- `PUT /api/v1/admin/forum/posts/:id/status`: Admin status toggle (`active` / `hidden`).
+### Forum APIs (`/api/v1/forum/*` & `/api/v1/admin/forum/*`)
+- `GET /api/v1/forum/topics`: Paginated list of forum topics with sort options (`latest`, `top_liked`, `most_comments`), keyword `search`, and `user_vote` for authenticated viewers.
+- `POST /api/v1/forum/topics`: Creates a new forum topic with `title` (up to 255 chars) and `content`/description (up to 10000 chars).
+- `GET /api/v1/forum/topics/:id`: Fetches detailed topic information by ID.
+- `POST /api/v1/forum/topics/:id/vote`: Sets reaction on topic (`like`, `dislike`, or `none` to remove vote) with transactional counter updates.
+- `DELETE /api/v1/forum/topics/:id`: Always returns 403 Forbidden (`ErrCannotDeleteForumPost`).
+- `GET /api/v1/forum/topics/:id/comments`: Paginated list of root comments for a topic (`sort`: `latest`, `oldest`, `top_liked`) with `user_vote`.
+- `POST /api/v1/forum/topics/:id/comments`: Creates a root comment under a topic, automatically incrementing `comment_count`.
+- `GET /api/v1/forum/comments/:id/replies`: Paginated list of replies to a specific comment.
+- `POST /api/v1/forum/comments/:id/reply`: Posts a nested reply under a comment, automatically incrementing parent's `reply_count` and topic's `comment_count`.
+- `POST /api/v1/forum/comments/:id/vote`: Sets reaction on comment (`like`, `dislike`, `none`).
+- `DELETE /api/v1/forum/comments/:id`: Always returns 403 Forbidden (`ErrCannotDeleteForumPost`).
+- `GET /api/v1/admin/forum/topics` & `PUT /api/v1/admin/forum/topics/:id/status`: Admin topic moderation (`active` / `hidden`).
+- `GET /api/v1/admin/forum/comments` & `PUT /api/v1/admin/forum/comments/:id/status`: Admin comment moderation (`active` / `hidden`).
 
 ### Admin APIs (`/api/v1/admin/*`)
 - `GET /api/v1/admin/api-keys`: Search and list all users' API keys.

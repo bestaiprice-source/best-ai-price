@@ -213,28 +213,52 @@ func (f ErrorPassthroughRuleFunc) Mutate(ctx context.Context, m ent.Mutation) (e
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ErrorPassthroughRuleMutation", m)
 }
 
-// The ForumPostFunc type is an adapter to allow the use of ordinary
-// function as ForumPost mutator.
-type ForumPostFunc func(context.Context, *ent.ForumPostMutation) (ent.Value, error)
+// The ForumCommentFunc type is an adapter to allow the use of ordinary
+// function as ForumComment mutator.
+type ForumCommentFunc func(context.Context, *ent.ForumCommentMutation) (ent.Value, error)
 
 // Mutate calls f(ctx, m).
-func (f ForumPostFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
-	if mv, ok := m.(*ent.ForumPostMutation); ok {
+func (f ForumCommentFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ForumCommentMutation); ok {
 		return f(ctx, mv)
 	}
-	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ForumPostMutation", m)
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ForumCommentMutation", m)
 }
 
-// The ForumPostVoteFunc type is an adapter to allow the use of ordinary
-// function as ForumPostVote mutator.
-type ForumPostVoteFunc func(context.Context, *ent.ForumPostVoteMutation) (ent.Value, error)
+// The ForumCommentVoteFunc type is an adapter to allow the use of ordinary
+// function as ForumCommentVote mutator.
+type ForumCommentVoteFunc func(context.Context, *ent.ForumCommentVoteMutation) (ent.Value, error)
 
 // Mutate calls f(ctx, m).
-func (f ForumPostVoteFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
-	if mv, ok := m.(*ent.ForumPostVoteMutation); ok {
+func (f ForumCommentVoteFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ForumCommentVoteMutation); ok {
 		return f(ctx, mv)
 	}
-	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ForumPostVoteMutation", m)
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ForumCommentVoteMutation", m)
+}
+
+// The ForumTopicFunc type is an adapter to allow the use of ordinary
+// function as ForumTopic mutator.
+type ForumTopicFunc func(context.Context, *ent.ForumTopicMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f ForumTopicFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ForumTopicMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ForumTopicMutation", m)
+}
+
+// The ForumTopicVoteFunc type is an adapter to allow the use of ordinary
+// function as ForumTopicVote mutator.
+type ForumTopicVoteFunc func(context.Context, *ent.ForumTopicVoteMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f ForumTopicVoteFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ForumTopicVoteMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ForumTopicVoteMutation", m)
 }
 
 // The GroupFunc type is an adapter to allow the use of ordinary

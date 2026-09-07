@@ -8,30 +8,30 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/Wei-Shaw/sub2api/ent/forumpostvote"
+	"github.com/Wei-Shaw/sub2api/ent/forumtopic"
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
 )
 
-// ForumPostVoteDelete is the builder for deleting a ForumPostVote entity.
-type ForumPostVoteDelete struct {
+// ForumTopicDelete is the builder for deleting a ForumTopic entity.
+type ForumTopicDelete struct {
 	config
 	hooks    []Hook
-	mutation *ForumPostVoteMutation
+	mutation *ForumTopicMutation
 }
 
-// Where appends a list predicates to the ForumPostVoteDelete builder.
-func (_d *ForumPostVoteDelete) Where(ps ...predicate.ForumPostVote) *ForumPostVoteDelete {
+// Where appends a list predicates to the ForumTopicDelete builder.
+func (_d *ForumTopicDelete) Where(ps ...predicate.ForumTopic) *ForumTopicDelete {
 	_d.mutation.Where(ps...)
 	return _d
 }
 
 // Exec executes the deletion query and returns how many vertices were deleted.
-func (_d *ForumPostVoteDelete) Exec(ctx context.Context) (int, error) {
+func (_d *ForumTopicDelete) Exec(ctx context.Context) (int, error) {
 	return withHooks(ctx, _d.sqlExec, _d.mutation, _d.hooks)
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (_d *ForumPostVoteDelete) ExecX(ctx context.Context) int {
+func (_d *ForumTopicDelete) ExecX(ctx context.Context) int {
 	n, err := _d.Exec(ctx)
 	if err != nil {
 		panic(err)
@@ -39,8 +39,8 @@ func (_d *ForumPostVoteDelete) ExecX(ctx context.Context) int {
 	return n
 }
 
-func (_d *ForumPostVoteDelete) sqlExec(ctx context.Context) (int, error) {
-	_spec := sqlgraph.NewDeleteSpec(forumpostvote.Table, sqlgraph.NewFieldSpec(forumpostvote.FieldID, field.TypeInt64))
+func (_d *ForumTopicDelete) sqlExec(ctx context.Context) (int, error) {
+	_spec := sqlgraph.NewDeleteSpec(forumtopic.Table, sqlgraph.NewFieldSpec(forumtopic.FieldID, field.TypeInt64))
 	if ps := _d.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
@@ -56,32 +56,32 @@ func (_d *ForumPostVoteDelete) sqlExec(ctx context.Context) (int, error) {
 	return affected, err
 }
 
-// ForumPostVoteDeleteOne is the builder for deleting a single ForumPostVote entity.
-type ForumPostVoteDeleteOne struct {
-	_d *ForumPostVoteDelete
+// ForumTopicDeleteOne is the builder for deleting a single ForumTopic entity.
+type ForumTopicDeleteOne struct {
+	_d *ForumTopicDelete
 }
 
-// Where appends a list predicates to the ForumPostVoteDelete builder.
-func (_d *ForumPostVoteDeleteOne) Where(ps ...predicate.ForumPostVote) *ForumPostVoteDeleteOne {
+// Where appends a list predicates to the ForumTopicDelete builder.
+func (_d *ForumTopicDeleteOne) Where(ps ...predicate.ForumTopic) *ForumTopicDeleteOne {
 	_d._d.mutation.Where(ps...)
 	return _d
 }
 
 // Exec executes the deletion query.
-func (_d *ForumPostVoteDeleteOne) Exec(ctx context.Context) error {
+func (_d *ForumTopicDeleteOne) Exec(ctx context.Context) error {
 	n, err := _d._d.Exec(ctx)
 	switch {
 	case err != nil:
 		return err
 	case n == 0:
-		return &NotFoundError{forumpostvote.Label}
+		return &NotFoundError{forumtopic.Label}
 	default:
 		return nil
 	}
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (_d *ForumPostVoteDeleteOne) ExecX(ctx context.Context) {
+func (_d *ForumTopicDeleteOne) ExecX(ctx context.Context) {
 	if err := _d.Exec(ctx); err != nil {
 		panic(err)
 	}

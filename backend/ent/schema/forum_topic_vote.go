@@ -11,27 +11,27 @@ import (
 	"entgo.io/ent/schema/index"
 )
 
-// ForumPostVote holds the schema definition for the ForumPostVote entity.
-type ForumPostVote struct {
+// ForumTopicVote holds the schema definition for the ForumTopicVote entity.
+type ForumTopicVote struct {
 	ent.Schema
 }
 
-func (ForumPostVote) Annotations() []schema.Annotation {
+func (ForumTopicVote) Annotations() []schema.Annotation {
 	return []schema.Annotation{
-		entsql.Annotation{Table: "forum_post_votes"},
+		entsql.Annotation{Table: "forum_topic_votes"},
 	}
 }
 
-func (ForumPostVote) Mixin() []ent.Mixin {
+func (ForumTopicVote) Mixin() []ent.Mixin {
 	return []ent.Mixin{
 		mixins.TimeMixin{},
 	}
 }
 
-func (ForumPostVote) Fields() []ent.Field {
+func (ForumTopicVote) Fields() []ent.Field {
 	return []ent.Field{
-		field.Int64("post_id").
-			Comment("Target forum post ID"),
+		field.Int64("topic_id").
+			Comment("Target forum topic ID"),
 		field.Int64("user_id").
 			Comment("Voting user ID"),
 		field.String("vote_type").
@@ -41,24 +41,24 @@ func (ForumPostVote) Fields() []ent.Field {
 	}
 }
 
-func (ForumPostVote) Edges() []ent.Edge {
+func (ForumTopicVote) Edges() []ent.Edge {
 	return []ent.Edge{
-		edge.From("post", ForumPost.Type).
+		edge.From("topic", ForumTopic.Type).
 			Ref("votes").
-			Field("post_id").
+			Field("topic_id").
 			Unique().
 			Required(),
 		edge.From("user", User.Type).
-			Ref("forum_post_votes").
+			Ref("forum_topic_votes").
 			Field("user_id").
 			Unique().
 			Required(),
 	}
 }
 
-func (ForumPostVote) Indexes() []ent.Index {
+func (ForumTopicVote) Indexes() []ent.Index {
 	return []ent.Index{
-		index.Fields("post_id", "user_id").
+		index.Fields("topic_id", "user_id").
 			Unique(),
 	}
 }

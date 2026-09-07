@@ -5,8 +5,10 @@ import (
 	"math"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
-	"github.com/Wei-Shaw/sub2api/ent/forumpost"
-	"github.com/Wei-Shaw/sub2api/ent/forumpostvote"
+	"github.com/Wei-Shaw/sub2api/ent/forumcomment"
+	"github.com/Wei-Shaw/sub2api/ent/forumcommentvote"
+	"github.com/Wei-Shaw/sub2api/ent/forumtopic"
+	"github.com/Wei-Shaw/sub2api/ent/forumtopicvote"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 )
@@ -19,49 +21,51 @@ func NewForumRepository(client *dbent.Client) service.ForumRepository {
 	return &forumRepository{client: client}
 }
 
-func (r *forumRepository) CreatePost(ctx context.Context, p *service.ForumPost) error {
-	client := clientFromContext(ctx, r.client)
-	builder := client.ForumPost.Create().
-		SetUserID(p.UserID).
-		SetContent(p.Content).
-		SetStatus(p.Status).
-		SetLikeCount(p.LikeCount).
-		SetDislikeCount(p.DislikeCount).
-		SetReplyCount(p.ReplyCount)
+// -----------------------------------------------------------------------------
+// Topics
+// -----------------------------------------------------------------------------
 
-	if p.ParentID != nil && *p.ParentID > 0 {
-		builder.SetParentID(*p.ParentID)
-	}
+func (r *forumRepository) CreateTopic(ctx context.Context, t *service.ForumTopic) error {
+	client := clientFromContext(ctx, r.client)
+	builder := client.ForumTopic.Create().
+		SetUserID(t.UserID).
+		SetTitle(t.Title).
+		SetContent(t.Content).
+		SetStatus(t.Status).
+		SetLikeCount(t.LikeCount).
+		SetDislikeCount(t.DislikeCount).
+		SetCommentCount(t.CommentCount)
 
 	created, err := builder.Save(ctx)
 	if err != nil {
 		return err
 	}
 
-	p.ID = created.ID
-	p.CreatedAt = created.CreatedAt
-	p.UpdatedAt = created.UpdatedAt
+	t.ID = created.ID
+	t.CreatedAt = created.CreatedAt
+	t.UpdatedAt = created.UpdatedAt
 	return nil
 }
 
-func (r *forumRepository) GetByID(ctx context.Context, id int64) (*service.ForumPost, error) {
-	entPost, err := r.client.ForumPost.Query().
-		Where(forumpost.IDEQ(id)).
+func (r *forumRepository) GetTopicByID(ctx context.Context, id int64) (*service.ForumTopic, error) {
+	entTopic, err := r.client.ForumTopic.Query().
+		Where(forumtopic.IDEQ(id)).
 		WithUser().
 		Only(ctx)
 	if err != nil {
-		return nil, translatePersistenceError(err, service.ErrForumPostNotFound, nil)
+		return nil, translatePersistenceError(err, service.ErrForumTopicNotFound, nil)
 	}
 
-	return r.mapEntityToService(entPost, ""), nil
+	return r.mapTopicEntityToService(entTopic, ""), nil
 }
 
-func (r *forumRepository) ListPosts(ctx context.Context, query service.ForumPostListQuery) ([]service.ForumPost, *pagination.PaginationResult, error) {
-	q := r.client.ForumPost.Query().
-		Where(
-			forumpost.ParentIDIsNil(),
-			forumpost.StatusEQ(service.ForumPostStatusActive),
-		)
+func (r *forumRepository) ListTopics(ctx context.Context, query service.ForumTopicListQuery) ([]service.ForumTopic, *pagination.PaginationResult, error) {
+	q := r.client.ForumTopic.Query().
+		Where(forumtopic.StatusEQ(service.ForumTopicStatusActive))
+
+	if query.Search != "" {
+		q = q.Where(forumtopic.TitleContainsFold(query.Search))
+	}
 
 	total, err := q.Count(ctx)
 	if err != nil {
@@ -70,11 +74,11 @@ func (r *forumRepository) ListPosts(ctx context.Context, query service.ForumPost
 
 	switch query.Sort {
 	case "top_liked":
-		q = q.Order(dbent.Desc(forumpost.FieldLikeCount), dbent.Desc(forumpost.FieldCreatedAt))
-	case "most_replies":
-		q = q.Order(dbent.Desc(forumpost.FieldReplyCount), dbent.Desc(forumpost.FieldCreatedAt))
+		q = q.Order(dbent.Desc(forumtopic.FieldLikeCount), dbent.Desc(forumtopic.FieldCreatedAt))
+	case "most_comments":
+		q = q.Order(dbent.Desc(forumtopic.FieldCommentCount), dbent.Desc(forumtopic.FieldCreatedAt))
 	default:
-		q = q.Order(dbent.Desc(forumpost.FieldCreatedAt))
+		q = q.Order(dbent.Desc(forumtopic.FieldCreatedAt))
 	}
 
 	offset := (query.Page - 1) * query.PageSize
@@ -86,23 +90,23 @@ func (r *forumRepository) ListPosts(ctx context.Context, query service.ForumPost
 		return nil, nil, err
 	}
 
-	postIDs := make([]int64, len(entities))
+	topicIDs := make([]int64, len(entities))
 	for i, e := range entities {
-		postIDs[i] = e.ID
+		topicIDs[i] = e.ID
 	}
 
 	var userVotes map[int64]string
-	if query.UserID > 0 && len(postIDs) > 0 {
-		userVotes, _ = r.GetUserVotes(ctx, query.UserID, postIDs)
+	if query.UserID > 0 && len(topicIDs) > 0 {
+		userVotes, _ = r.GetTopicUserVotes(ctx, query.UserID, topicIDs)
 	}
 
-	posts := make([]service.ForumPost, len(entities))
+	topics := make([]service.ForumTopic, len(entities))
 	for i, e := range entities {
 		vote := ""
 		if userVotes != nil {
 			vote = userVotes[e.ID]
 		}
-		posts[i] = *r.mapEntityToService(e, vote)
+		topics[i] = *r.mapTopicEntityToService(e, vote)
 	}
 
 	pagResult := &pagination.PaginationResult{
@@ -112,15 +116,129 @@ func (r *forumRepository) ListPosts(ctx context.Context, query service.ForumPost
 		Pages:    int(math.Ceil(float64(total) / float64(query.PageSize))),
 	}
 
-	return posts, pagResult, nil
+	return topics, pagResult, nil
 }
 
-func (r *forumRepository) ListReplies(ctx context.Context, parentID int64, page, pageSize int, currentUserID int64) ([]service.ForumPost, *pagination.PaginationResult, error) {
-	q := r.client.ForumPost.Query().
+func (r *forumRepository) SetTopicVote(ctx context.Context, topicID, userID int64, voteType string) (*service.ForumVoteResult, error) {
+	tx, err := r.client.Tx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
+	existingVote, err := tx.ForumTopicVote.Query().
 		Where(
-			forumpost.ParentIDEQ(parentID),
-			forumpost.StatusEQ(service.ForumPostStatusActive),
-		)
+			forumtopicvote.TopicIDEQ(topicID),
+			forumtopicvote.UserIDEQ(userID),
+		).
+		First(ctx)
+	if err != nil && !dbent.IsNotFound(err) {
+		return nil, err
+	}
+
+	topic, err := tx.ForumTopic.Query().
+		Where(forumtopic.IDEQ(topicID)).
+		Only(ctx)
+	if err != nil {
+		return nil, translatePersistenceError(err, service.ErrForumTopicNotFound, nil)
+	}
+
+	likeDelta := 0
+	dislikeDelta := 0
+	finalVote := voteType
+
+	if existingVote != nil {
+		if voteType == service.ForumVoteTypeNone || voteType == existingVote.VoteType {
+			if existingVote.VoteType == service.ForumVoteTypeLike {
+				likeDelta = -1
+			} else if existingVote.VoteType == service.ForumVoteTypeDislike {
+				dislikeDelta = -1
+			}
+			if err := tx.ForumTopicVote.DeleteOne(existingVote).Exec(ctx); err != nil {
+				return nil, err
+			}
+			finalVote = service.ForumVoteTypeNone
+		} else {
+			if existingVote.VoteType == service.ForumVoteTypeLike && voteType == service.ForumVoteTypeDislike {
+				likeDelta = -1
+				dislikeDelta = 1
+			} else if existingVote.VoteType == service.ForumVoteTypeDislike && voteType == service.ForumVoteTypeLike {
+				likeDelta = 1
+				dislikeDelta = -1
+			}
+			if err := tx.ForumTopicVote.UpdateOne(existingVote).SetVoteType(voteType).Exec(ctx); err != nil {
+				return nil, err
+			}
+		}
+	} else {
+		if voteType != service.ForumVoteTypeNone {
+			if voteType == service.ForumVoteTypeLike {
+				likeDelta = 1
+			} else if voteType == service.ForumVoteTypeDislike {
+				dislikeDelta = 1
+			}
+			if err := tx.ForumTopicVote.Create().
+				SetTopicID(topicID).
+				SetUserID(userID).
+				SetVoteType(voteType).
+				Exec(ctx); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	newLikes := maxInt(0, topic.LikeCount+likeDelta)
+	newDislikes := maxInt(0, topic.DislikeCount+dislikeDelta)
+
+	if err := tx.ForumTopic.UpdateOneID(topicID).
+		SetLikeCount(newLikes).
+		SetDislikeCount(newDislikes).
+		Exec(ctx); err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+
+	return &service.ForumVoteResult{
+		ID:           topicID,
+		LikeCount:    newLikes,
+		DislikeCount: newDislikes,
+		UserVote:     finalVote,
+	}, nil
+}
+
+func (r *forumRepository) GetTopicUserVotes(ctx context.Context, userID int64, topicIDs []int64) (map[int64]string, error) {
+	if len(topicIDs) == 0 {
+		return make(map[int64]string), nil
+	}
+
+	votes, err := r.client.ForumTopicVote.Query().
+		Where(
+			forumtopicvote.UserIDEQ(userID),
+			forumtopicvote.TopicIDIn(topicIDs...),
+		).
+		All(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make(map[int64]string, len(votes))
+	for _, v := range votes {
+		result[v.TopicID] = v.VoteType
+	}
+	return result, nil
+}
+
+func (r *forumRepository) AdminListTopics(ctx context.Context, status string, page, pageSize int) ([]service.ForumTopic, *pagination.PaginationResult, error) {
+	q := r.client.ForumTopic.Query()
+
+	if status != "" {
+		q = q.Where(forumtopic.StatusEQ(status))
+	}
 
 	total, err := q.Count(ctx)
 	if err != nil {
@@ -128,7 +246,7 @@ func (r *forumRepository) ListReplies(ctx context.Context, parentID int64, page,
 	}
 
 	offset := (page - 1) * pageSize
-	entities, err := q.Order(dbent.Asc(forumpost.FieldCreatedAt)).
+	entities, err := q.Order(dbent.Desc(forumtopic.FieldCreatedAt)).
 		Limit(pageSize).
 		Offset(offset).
 		WithUser().
@@ -137,23 +255,169 @@ func (r *forumRepository) ListReplies(ctx context.Context, parentID int64, page,
 		return nil, nil, err
 	}
 
-	postIDs := make([]int64, len(entities))
+	topics := make([]service.ForumTopic, len(entities))
 	for i, e := range entities {
-		postIDs[i] = e.ID
+		topics[i] = *r.mapTopicEntityToService(e, "")
+	}
+
+	pagResult := &pagination.PaginationResult{
+		Total:    int64(total),
+		Page:     page,
+		PageSize: pageSize,
+		Pages:    int(math.Ceil(float64(total) / float64(pageSize))),
+	}
+
+	return topics, pagResult, nil
+}
+
+func (r *forumRepository) AdminSetTopicStatus(ctx context.Context, id int64, status string) error {
+	client := clientFromContext(ctx, r.client)
+	return client.ForumTopic.UpdateOneID(id).
+		SetStatus(status).
+		Exec(ctx)
+}
+
+// -----------------------------------------------------------------------------
+// Comments
+// -----------------------------------------------------------------------------
+
+func (r *forumRepository) CreateComment(ctx context.Context, c *service.ForumComment) error {
+	client := clientFromContext(ctx, r.client)
+	builder := client.ForumComment.Create().
+		SetTopicID(c.TopicID).
+		SetUserID(c.UserID).
+		SetContent(c.Content).
+		SetStatus(c.Status).
+		SetLikeCount(c.LikeCount).
+		SetDislikeCount(c.DislikeCount).
+		SetReplyCount(c.ReplyCount)
+
+	if c.ParentID != nil && *c.ParentID > 0 {
+		builder.SetParentID(*c.ParentID)
+	}
+
+	created, err := builder.Save(ctx)
+	if err != nil {
+		return err
+	}
+
+	c.ID = created.ID
+	c.CreatedAt = created.CreatedAt
+	c.UpdatedAt = created.UpdatedAt
+	return nil
+}
+
+func (r *forumRepository) GetCommentByID(ctx context.Context, id int64) (*service.ForumComment, error) {
+	entComment, err := r.client.ForumComment.Query().
+		Where(forumcomment.IDEQ(id)).
+		WithUser().
+		Only(ctx)
+	if err != nil {
+		return nil, translatePersistenceError(err, service.ErrForumCommentNotFound, nil)
+	}
+
+	return r.mapCommentEntityToService(entComment, ""), nil
+}
+
+func (r *forumRepository) ListCommentsByTopic(ctx context.Context, query service.ForumCommentListQuery) ([]service.ForumComment, *pagination.PaginationResult, error) {
+	q := r.client.ForumComment.Query().
+		Where(
+			forumcomment.TopicIDEQ(query.TopicID),
+			forumcomment.ParentIDIsNil(),
+			forumcomment.StatusEQ(service.ForumCommentStatusActive),
+		)
+
+	total, err := q.Count(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	switch query.Sort {
+	case "top_liked":
+		q = q.Order(dbent.Desc(forumcomment.FieldLikeCount), dbent.Desc(forumcomment.FieldCreatedAt))
+	case "oldest":
+		q = q.Order(dbent.Asc(forumcomment.FieldCreatedAt))
+	default:
+		q = q.Order(dbent.Desc(forumcomment.FieldCreatedAt))
+	}
+
+	offset := (query.Page - 1) * query.PageSize
+	entities, err := q.Limit(query.PageSize).
+		Offset(offset).
+		WithUser().
+		All(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	commentIDs := make([]int64, len(entities))
+	for i, e := range entities {
+		commentIDs[i] = e.ID
 	}
 
 	var userVotes map[int64]string
-	if currentUserID > 0 && len(postIDs) > 0 {
-		userVotes, _ = r.GetUserVotes(ctx, currentUserID, postIDs)
+	if query.UserID > 0 && len(commentIDs) > 0 {
+		userVotes, _ = r.GetCommentUserVotes(ctx, query.UserID, commentIDs)
 	}
 
-	replies := make([]service.ForumPost, len(entities))
+	comments := make([]service.ForumComment, len(entities))
 	for i, e := range entities {
 		vote := ""
 		if userVotes != nil {
 			vote = userVotes[e.ID]
 		}
-		replies[i] = *r.mapEntityToService(e, vote)
+		comments[i] = *r.mapCommentEntityToService(e, vote)
+	}
+
+	pagResult := &pagination.PaginationResult{
+		Total:    int64(total),
+		Page:     query.Page,
+		PageSize: query.PageSize,
+		Pages:    int(math.Ceil(float64(total) / float64(query.PageSize))),
+	}
+
+	return comments, pagResult, nil
+}
+
+func (r *forumRepository) ListCommentReplies(ctx context.Context, parentID int64, page, pageSize int, currentUserID int64) ([]service.ForumComment, *pagination.PaginationResult, error) {
+	q := r.client.ForumComment.Query().
+		Where(
+			forumcomment.ParentIDEQ(parentID),
+			forumcomment.StatusEQ(service.ForumCommentStatusActive),
+		)
+
+	total, err := q.Count(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	offset := (page - 1) * pageSize
+	entities, err := q.Order(dbent.Asc(forumcomment.FieldCreatedAt)).
+		Limit(pageSize).
+		Offset(offset).
+		WithUser().
+		All(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	commentIDs := make([]int64, len(entities))
+	for i, e := range entities {
+		commentIDs[i] = e.ID
+	}
+
+	var userVotes map[int64]string
+	if currentUserID > 0 && len(commentIDs) > 0 {
+		userVotes, _ = r.GetCommentUserVotes(ctx, currentUserID, commentIDs)
+	}
+
+	replies := make([]service.ForumComment, len(entities))
+	for i, e := range entities {
+		vote := ""
+		if userVotes != nil {
+			vote = userVotes[e.ID]
+		}
+		replies[i] = *r.mapCommentEntityToService(e, vote)
 	}
 
 	pagResult := &pagination.PaginationResult{
@@ -166,14 +430,21 @@ func (r *forumRepository) ListReplies(ctx context.Context, parentID int64, page,
 	return replies, pagResult, nil
 }
 
-func (r *forumRepository) IncrementReplyCount(ctx context.Context, postID int64) error {
+func (r *forumRepository) IncrementTopicCommentCount(ctx context.Context, topicID int64) error {
 	client := clientFromContext(ctx, r.client)
-	return client.ForumPost.UpdateOneID(postID).
+	return client.ForumTopic.UpdateOneID(topicID).
+		AddCommentCount(1).
+		Exec(ctx)
+}
+
+func (r *forumRepository) IncrementCommentReplyCount(ctx context.Context, commentID int64) error {
+	client := clientFromContext(ctx, r.client)
+	return client.ForumComment.UpdateOneID(commentID).
 		AddReplyCount(1).
 		Exec(ctx)
 }
 
-func (r *forumRepository) SetVote(ctx context.Context, postID, userID int64, voteType string) (*service.ForumVoteResult, error) {
+func (r *forumRepository) SetCommentVote(ctx context.Context, commentID, userID int64, voteType string) (*service.ForumVoteResult, error) {
 	tx, err := r.client.Tx(ctx)
 	if err != nil {
 		return nil, err
@@ -182,21 +453,21 @@ func (r *forumRepository) SetVote(ctx context.Context, postID, userID int64, vot
 		_ = tx.Rollback()
 	}()
 
-	existingVote, err := tx.ForumPostVote.Query().
+	existingVote, err := tx.ForumCommentVote.Query().
 		Where(
-			forumpostvote.PostIDEQ(postID),
-			forumpostvote.UserIDEQ(userID),
+			forumcommentvote.CommentIDEQ(commentID),
+			forumcommentvote.UserIDEQ(userID),
 		).
 		First(ctx)
 	if err != nil && !dbent.IsNotFound(err) {
 		return nil, err
 	}
 
-	post, err := tx.ForumPost.Query().
-		Where(forumpost.IDEQ(postID)).
+	comment, err := tx.ForumComment.Query().
+		Where(forumcomment.IDEQ(commentID)).
 		Only(ctx)
 	if err != nil {
-		return nil, translatePersistenceError(err, service.ErrForumPostNotFound, nil)
+		return nil, translatePersistenceError(err, service.ErrForumCommentNotFound, nil)
 	}
 
 	likeDelta := 0
@@ -205,18 +476,16 @@ func (r *forumRepository) SetVote(ctx context.Context, postID, userID int64, vot
 
 	if existingVote != nil {
 		if voteType == service.ForumVoteTypeNone || voteType == existingVote.VoteType {
-			// Remove vote
 			if existingVote.VoteType == service.ForumVoteTypeLike {
 				likeDelta = -1
 			} else if existingVote.VoteType == service.ForumVoteTypeDislike {
 				dislikeDelta = -1
 			}
-			if err := tx.ForumPostVote.DeleteOne(existingVote).Exec(ctx); err != nil {
+			if err := tx.ForumCommentVote.DeleteOne(existingVote).Exec(ctx); err != nil {
 				return nil, err
 			}
 			finalVote = service.ForumVoteTypeNone
 		} else {
-			// Change vote from like -> dislike or dislike -> like
 			if existingVote.VoteType == service.ForumVoteTypeLike && voteType == service.ForumVoteTypeDislike {
 				likeDelta = -1
 				dislikeDelta = 1
@@ -224,20 +493,19 @@ func (r *forumRepository) SetVote(ctx context.Context, postID, userID int64, vot
 				likeDelta = 1
 				dislikeDelta = -1
 			}
-			if err := tx.ForumPostVote.UpdateOne(existingVote).SetVoteType(voteType).Exec(ctx); err != nil {
+			if err := tx.ForumCommentVote.UpdateOne(existingVote).SetVoteType(voteType).Exec(ctx); err != nil {
 				return nil, err
 			}
 		}
 	} else {
-		// New vote
 		if voteType != service.ForumVoteTypeNone {
 			if voteType == service.ForumVoteTypeLike {
 				likeDelta = 1
 			} else if voteType == service.ForumVoteTypeDislike {
 				dislikeDelta = 1
 			}
-			if err := tx.ForumPostVote.Create().
-				SetPostID(postID).
+			if err := tx.ForumCommentVote.Create().
+				SetCommentID(commentID).
 				SetUserID(userID).
 				SetVoteType(voteType).
 				Exec(ctx); err != nil {
@@ -246,11 +514,10 @@ func (r *forumRepository) SetVote(ctx context.Context, postID, userID int64, vot
 		}
 	}
 
-	// Update counts
-	newLikes := maxInt(0, post.LikeCount+likeDelta)
-	newDislikes := maxInt(0, post.DislikeCount+dislikeDelta)
+	newLikes := maxInt(0, comment.LikeCount+likeDelta)
+	newDislikes := maxInt(0, comment.DislikeCount+dislikeDelta)
 
-	if err := tx.ForumPost.UpdateOneID(postID).
+	if err := tx.ForumComment.UpdateOneID(commentID).
 		SetLikeCount(newLikes).
 		SetDislikeCount(newDislikes).
 		Exec(ctx); err != nil {
@@ -262,22 +529,22 @@ func (r *forumRepository) SetVote(ctx context.Context, postID, userID int64, vot
 	}
 
 	return &service.ForumVoteResult{
-		PostID:       postID,
+		ID:           commentID,
 		LikeCount:    newLikes,
 		DislikeCount: newDislikes,
 		UserVote:     finalVote,
 	}, nil
 }
 
-func (r *forumRepository) GetUserVotes(ctx context.Context, userID int64, postIDs []int64) (map[int64]string, error) {
-	if len(postIDs) == 0 {
+func (r *forumRepository) GetCommentUserVotes(ctx context.Context, userID int64, commentIDs []int64) (map[int64]string, error) {
+	if len(commentIDs) == 0 {
 		return make(map[int64]string), nil
 	}
 
-	votes, err := r.client.ForumPostVote.Query().
+	votes, err := r.client.ForumCommentVote.Query().
 		Where(
-			forumpostvote.UserIDEQ(userID),
-			forumpostvote.PostIDIn(postIDs...),
+			forumcommentvote.UserIDEQ(userID),
+			forumcommentvote.CommentIDIn(commentIDs...),
 		).
 		All(ctx)
 	if err != nil {
@@ -286,16 +553,16 @@ func (r *forumRepository) GetUserVotes(ctx context.Context, userID int64, postID
 
 	result := make(map[int64]string, len(votes))
 	for _, v := range votes {
-		result[v.PostID] = v.VoteType
+		result[v.CommentID] = v.VoteType
 	}
 	return result, nil
 }
 
-func (r *forumRepository) AdminListPosts(ctx context.Context, status string, page, pageSize int) ([]service.ForumPost, *pagination.PaginationResult, error) {
-	q := r.client.ForumPost.Query()
+func (r *forumRepository) AdminListComments(ctx context.Context, status string, page, pageSize int) ([]service.ForumComment, *pagination.PaginationResult, error) {
+	q := r.client.ForumComment.Query()
 
 	if status != "" {
-		q = q.Where(forumpost.StatusEQ(status))
+		q = q.Where(forumcomment.StatusEQ(status))
 	}
 
 	total, err := q.Count(ctx)
@@ -304,7 +571,7 @@ func (r *forumRepository) AdminListPosts(ctx context.Context, status string, pag
 	}
 
 	offset := (page - 1) * pageSize
-	entities, err := q.Order(dbent.Desc(forumpost.FieldCreatedAt)).
+	entities, err := q.Order(dbent.Desc(forumcomment.FieldCreatedAt)).
 		Limit(pageSize).
 		Offset(offset).
 		WithUser().
@@ -313,9 +580,9 @@ func (r *forumRepository) AdminListPosts(ctx context.Context, status string, pag
 		return nil, nil, err
 	}
 
-	posts := make([]service.ForumPost, len(entities))
+	comments := make([]service.ForumComment, len(entities))
 	for i, e := range entities {
-		posts[i] = *r.mapEntityToService(e, "")
+		comments[i] = *r.mapCommentEntityToService(e, "")
 	}
 
 	pagResult := &pagination.PaginationResult{
@@ -325,17 +592,21 @@ func (r *forumRepository) AdminListPosts(ctx context.Context, status string, pag
 		Pages:    int(math.Ceil(float64(total) / float64(pageSize))),
 	}
 
-	return posts, pagResult, nil
+	return comments, pagResult, nil
 }
 
-func (r *forumRepository) AdminSetStatus(ctx context.Context, id int64, status string) error {
+func (r *forumRepository) AdminSetCommentStatus(ctx context.Context, id int64, status string) error {
 	client := clientFromContext(ctx, r.client)
-	return client.ForumPost.UpdateOneID(id).
+	return client.ForumComment.UpdateOneID(id).
 		SetStatus(status).
 		Exec(ctx)
 }
 
-func (r *forumRepository) mapEntityToService(e *dbent.ForumPost, userVote string) *service.ForumPost {
+// -----------------------------------------------------------------------------
+// Mapping Helpers
+// -----------------------------------------------------------------------------
+
+func (r *forumRepository) mapTopicEntityToService(e *dbent.ForumTopic, userVote string) *service.ForumTopic {
 	if e == nil {
 		return nil
 	}
@@ -345,8 +616,35 @@ func (r *forumRepository) mapEntityToService(e *dbent.ForumPost, userVote string
 		emailMasked = service.MaskEmail(e.Edges.User.Email)
 	}
 
-	res := &service.ForumPost{
+	return &service.ForumTopic{
 		ID:              e.ID,
+		UserID:          e.UserID,
+		UserEmailMasked: emailMasked,
+		Title:           e.Title,
+		Content:         e.Content,
+		Status:          e.Status,
+		LikeCount:       e.LikeCount,
+		DislikeCount:    e.DislikeCount,
+		CommentCount:    e.CommentCount,
+		UserVote:        userVote,
+		CreatedAt:       e.CreatedAt,
+		UpdatedAt:       e.UpdatedAt,
+	}
+}
+
+func (r *forumRepository) mapCommentEntityToService(e *dbent.ForumComment, userVote string) *service.ForumComment {
+	if e == nil {
+		return nil
+	}
+
+	emailMasked := ""
+	if e.Edges.User != nil {
+		emailMasked = service.MaskEmail(e.Edges.User.Email)
+	}
+
+	return &service.ForumComment{
+		ID:              e.ID,
+		TopicID:         e.TopicID,
 		UserID:          e.UserID,
 		UserEmailMasked: emailMasked,
 		ParentID:        e.ParentID,
@@ -359,5 +657,4 @@ func (r *forumRepository) mapEntityToService(e *dbent.ForumPost, userVote string
 		CreatedAt:       e.CreatedAt,
 		UpdatedAt:       e.UpdatedAt,
 	}
-	return res
 }

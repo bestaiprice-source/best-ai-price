@@ -735,8 +735,8 @@ var (
 			},
 		},
 	}
-	// ForumPostsColumns holds the columns for the "forum_posts" table.
-	ForumPostsColumns = []*schema.Column{
+	// ForumCommentsColumns holds the columns for the "forum_comments" table.
+	ForumCommentsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
 		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
 		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
@@ -746,78 +746,160 @@ var (
 		{Name: "dislike_count", Type: field.TypeInt, Default: 0},
 		{Name: "reply_count", Type: field.TypeInt, Default: 0},
 		{Name: "parent_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "topic_id", Type: field.TypeInt64},
 		{Name: "user_id", Type: field.TypeInt64},
 	}
-	// ForumPostsTable holds the schema information for the "forum_posts" table.
-	ForumPostsTable = &schema.Table{
-		Name:       "forum_posts",
-		Columns:    ForumPostsColumns,
-		PrimaryKey: []*schema.Column{ForumPostsColumns[0]},
+	// ForumCommentsTable holds the schema information for the "forum_comments" table.
+	ForumCommentsTable = &schema.Table{
+		Name:       "forum_comments",
+		Columns:    ForumCommentsColumns,
+		PrimaryKey: []*schema.Column{ForumCommentsColumns[0]},
 		ForeignKeys: []*schema.ForeignKey{
 			{
-				Symbol:     "forum_posts_forum_posts_replies",
-				Columns:    []*schema.Column{ForumPostsColumns[8]},
-				RefColumns: []*schema.Column{ForumPostsColumns[0]},
+				Symbol:     "forum_comments_forum_comments_replies",
+				Columns:    []*schema.Column{ForumCommentsColumns[8]},
+				RefColumns: []*schema.Column{ForumCommentsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
-				Symbol:     "forum_posts_users_forum_posts",
-				Columns:    []*schema.Column{ForumPostsColumns[9]},
+				Symbol:     "forum_comments_forum_topics_comments",
+				Columns:    []*schema.Column{ForumCommentsColumns[9]},
+				RefColumns: []*schema.Column{ForumTopicsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+			{
+				Symbol:     "forum_comments_users_forum_comments",
+				Columns:    []*schema.Column{ForumCommentsColumns[10]},
 				RefColumns: []*schema.Column{UsersColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
 		},
 		Indexes: []*schema.Index{
 			{
-				Name:    "forumpost_status_created_at",
+				Name:    "forumcomment_topic_id_status_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{ForumPostsColumns[4], ForumPostsColumns[1]},
+				Columns: []*schema.Column{ForumCommentsColumns[9], ForumCommentsColumns[4], ForumCommentsColumns[1]},
 			},
 			{
-				Name:    "forumpost_parent_id",
+				Name:    "forumcomment_parent_id",
 				Unique:  false,
-				Columns: []*schema.Column{ForumPostsColumns[8]},
+				Columns: []*schema.Column{ForumCommentsColumns[8]},
 			},
 			{
-				Name:    "forumpost_user_id",
+				Name:    "forumcomment_user_id",
 				Unique:  false,
-				Columns: []*schema.Column{ForumPostsColumns[9]},
+				Columns: []*schema.Column{ForumCommentsColumns[10]},
 			},
 		},
 	}
-	// ForumPostVotesColumns holds the columns for the "forum_post_votes" table.
-	ForumPostVotesColumns = []*schema.Column{
+	// ForumCommentVotesColumns holds the columns for the "forum_comment_votes" table.
+	ForumCommentVotesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
 		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
 		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
 		{Name: "vote_type", Type: field.TypeString, Size: 20},
-		{Name: "post_id", Type: field.TypeInt64},
+		{Name: "comment_id", Type: field.TypeInt64},
 		{Name: "user_id", Type: field.TypeInt64},
 	}
-	// ForumPostVotesTable holds the schema information for the "forum_post_votes" table.
-	ForumPostVotesTable = &schema.Table{
-		Name:       "forum_post_votes",
-		Columns:    ForumPostVotesColumns,
-		PrimaryKey: []*schema.Column{ForumPostVotesColumns[0]},
+	// ForumCommentVotesTable holds the schema information for the "forum_comment_votes" table.
+	ForumCommentVotesTable = &schema.Table{
+		Name:       "forum_comment_votes",
+		Columns:    ForumCommentVotesColumns,
+		PrimaryKey: []*schema.Column{ForumCommentVotesColumns[0]},
 		ForeignKeys: []*schema.ForeignKey{
 			{
-				Symbol:     "forum_post_votes_forum_posts_votes",
-				Columns:    []*schema.Column{ForumPostVotesColumns[4]},
-				RefColumns: []*schema.Column{ForumPostsColumns[0]},
+				Symbol:     "forum_comment_votes_forum_comments_votes",
+				Columns:    []*schema.Column{ForumCommentVotesColumns[4]},
+				RefColumns: []*schema.Column{ForumCommentsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
 			{
-				Symbol:     "forum_post_votes_users_forum_post_votes",
-				Columns:    []*schema.Column{ForumPostVotesColumns[5]},
+				Symbol:     "forum_comment_votes_users_forum_comment_votes",
+				Columns:    []*schema.Column{ForumCommentVotesColumns[5]},
 				RefColumns: []*schema.Column{UsersColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
 		},
 		Indexes: []*schema.Index{
 			{
-				Name:    "forumpostvote_post_id_user_id",
+				Name:    "forumcommentvote_comment_id_user_id",
 				Unique:  true,
-				Columns: []*schema.Column{ForumPostVotesColumns[4], ForumPostVotesColumns[5]},
+				Columns: []*schema.Column{ForumCommentVotesColumns[4], ForumCommentVotesColumns[5]},
+			},
+		},
+	}
+	// ForumTopicsColumns holds the columns for the "forum_topics" table.
+	ForumTopicsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "title", Type: field.TypeString, Size: 255},
+		{Name: "content", Type: field.TypeString, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "status", Type: field.TypeString, Size: 20, Default: "active"},
+		{Name: "like_count", Type: field.TypeInt, Default: 0},
+		{Name: "dislike_count", Type: field.TypeInt, Default: 0},
+		{Name: "comment_count", Type: field.TypeInt, Default: 0},
+		{Name: "user_id", Type: field.TypeInt64},
+	}
+	// ForumTopicsTable holds the schema information for the "forum_topics" table.
+	ForumTopicsTable = &schema.Table{
+		Name:       "forum_topics",
+		Columns:    ForumTopicsColumns,
+		PrimaryKey: []*schema.Column{ForumTopicsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "forum_topics_users_forum_topics",
+				Columns:    []*schema.Column{ForumTopicsColumns[9]},
+				RefColumns: []*schema.Column{UsersColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "forumtopic_status_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{ForumTopicsColumns[5], ForumTopicsColumns[1]},
+			},
+			{
+				Name:    "forumtopic_user_id",
+				Unique:  false,
+				Columns: []*schema.Column{ForumTopicsColumns[9]},
+			},
+		},
+	}
+	// ForumTopicVotesColumns holds the columns for the "forum_topic_votes" table.
+	ForumTopicVotesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "vote_type", Type: field.TypeString, Size: 20},
+		{Name: "topic_id", Type: field.TypeInt64},
+		{Name: "user_id", Type: field.TypeInt64},
+	}
+	// ForumTopicVotesTable holds the schema information for the "forum_topic_votes" table.
+	ForumTopicVotesTable = &schema.Table{
+		Name:       "forum_topic_votes",
+		Columns:    ForumTopicVotesColumns,
+		PrimaryKey: []*schema.Column{ForumTopicVotesColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "forum_topic_votes_forum_topics_votes",
+				Columns:    []*schema.Column{ForumTopicVotesColumns[4]},
+				RefColumns: []*schema.Column{ForumTopicsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+			{
+				Symbol:     "forum_topic_votes_users_forum_topic_votes",
+				Columns:    []*schema.Column{ForumTopicVotesColumns[5]},
+				RefColumns: []*schema.Column{UsersColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "forumtopicvote_topic_id_user_id",
+				Unique:  true,
+				Columns: []*schema.Column{ForumTopicVotesColumns[4], ForumTopicVotesColumns[5]},
 			},
 		},
 	}
@@ -2019,8 +2101,10 @@ var (
 		ChannelMonitorHistoriesTable,
 		ChannelMonitorRequestTemplatesTable,
 		ErrorPassthroughRulesTable,
-		ForumPostsTable,
-		ForumPostVotesTable,
+		ForumCommentsTable,
+		ForumCommentVotesTable,
+		ForumTopicsTable,
+		ForumTopicVotesTable,
 		GroupsTable,
 		IdempotencyRecordsTable,
 		IdentityAdoptionDecisionsTable,
@@ -2110,15 +2194,25 @@ func init() {
 	ErrorPassthroughRulesTable.Annotation = &entsql.Annotation{
 		Table: "error_passthrough_rules",
 	}
-	ForumPostsTable.ForeignKeys[0].RefTable = ForumPostsTable
-	ForumPostsTable.ForeignKeys[1].RefTable = UsersTable
-	ForumPostsTable.Annotation = &entsql.Annotation{
-		Table: "forum_posts",
+	ForumCommentsTable.ForeignKeys[0].RefTable = ForumCommentsTable
+	ForumCommentsTable.ForeignKeys[1].RefTable = ForumTopicsTable
+	ForumCommentsTable.ForeignKeys[2].RefTable = UsersTable
+	ForumCommentsTable.Annotation = &entsql.Annotation{
+		Table: "forum_comments",
 	}
-	ForumPostVotesTable.ForeignKeys[0].RefTable = ForumPostsTable
-	ForumPostVotesTable.ForeignKeys[1].RefTable = UsersTable
-	ForumPostVotesTable.Annotation = &entsql.Annotation{
-		Table: "forum_post_votes",
+	ForumCommentVotesTable.ForeignKeys[0].RefTable = ForumCommentsTable
+	ForumCommentVotesTable.ForeignKeys[1].RefTable = UsersTable
+	ForumCommentVotesTable.Annotation = &entsql.Annotation{
+		Table: "forum_comment_votes",
+	}
+	ForumTopicsTable.ForeignKeys[0].RefTable = UsersTable
+	ForumTopicsTable.Annotation = &entsql.Annotation{
+		Table: "forum_topics",
+	}
+	ForumTopicVotesTable.ForeignKeys[0].RefTable = ForumTopicsTable
+	ForumTopicVotesTable.ForeignKeys[1].RefTable = UsersTable
+	ForumTopicVotesTable.Annotation = &entsql.Annotation{
+		Table: "forum_topic_votes",
 	}
 	GroupsTable.Annotation = &entsql.Annotation{
 		Table: "groups",

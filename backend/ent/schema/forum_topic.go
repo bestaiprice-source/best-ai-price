@@ -12,35 +12,35 @@ import (
 	"entgo.io/ent/schema/index"
 )
 
-// ForumPost holds the schema definition for the ForumPost entity.
-type ForumPost struct {
+// ForumTopic holds the schema definition for the ForumTopic entity.
+type ForumTopic struct {
 	ent.Schema
 }
 
-func (ForumPost) Annotations() []schema.Annotation {
+func (ForumTopic) Annotations() []schema.Annotation {
 	return []schema.Annotation{
-		entsql.Annotation{Table: "forum_posts"},
+		entsql.Annotation{Table: "forum_topics"},
 	}
 }
 
-func (ForumPost) Mixin() []ent.Mixin {
+func (ForumTopic) Mixin() []ent.Mixin {
 	return []ent.Mixin{
 		mixins.TimeMixin{},
 	}
 }
 
-func (ForumPost) Fields() []ent.Field {
+func (ForumTopic) Fields() []ent.Field {
 	return []ent.Field{
 		field.Int64("user_id").
 			Comment("Author user ID"),
-		field.Int64("parent_id").
-			Optional().
-			Nillable().
-			Comment("Parent post ID for replies, null for root forum posts"),
+		field.String("title").
+			MaxLen(255).
+			NotEmpty().
+			Comment("Topic title"),
 		field.String("content").
 			SchemaType(map[string]string{dialect.Postgres: "text"}).
 			NotEmpty().
-			Comment("Post text content"),
+			Comment("Topic description / content"),
 		field.String("status").
 			MaxLen(20).
 			Default("active").
@@ -51,31 +51,27 @@ func (ForumPost) Fields() []ent.Field {
 		field.Int("dislike_count").
 			Default(0).
 			Comment("Total dislikes count"),
-		field.Int("reply_count").
+		field.Int("comment_count").
 			Default(0).
-			Comment("Total replies count"),
+			Comment("Total comments count"),
 	}
 }
 
-func (ForumPost) Edges() []ent.Edge {
+func (ForumTopic) Edges() []ent.Edge {
 	return []ent.Edge{
 		edge.From("user", User.Type).
-			Ref("forum_posts").
+			Ref("forum_topics").
 			Field("user_id").
 			Unique().
 			Required(),
-		edge.To("replies", ForumPost.Type).
-			From("parent").
-			Field("parent_id").
-			Unique(),
-		edge.To("votes", ForumPostVote.Type),
+		edge.To("comments", ForumComment.Type),
+		edge.To("votes", ForumTopicVote.Type),
 	}
 }
 
-func (ForumPost) Indexes() []ent.Index {
+func (ForumTopic) Indexes() []ent.Index {
 	return []ent.Index{
 		index.Fields("status", "created_at"),
-		index.Fields("parent_id"),
 		index.Fields("user_id"),
 	}
 }

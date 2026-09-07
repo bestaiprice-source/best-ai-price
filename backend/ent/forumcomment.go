@@ -9,12 +9,13 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
-	"github.com/Wei-Shaw/sub2api/ent/forumpost"
+	"github.com/Wei-Shaw/sub2api/ent/forumcomment"
+	"github.com/Wei-Shaw/sub2api/ent/forumtopic"
 	"github.com/Wei-Shaw/sub2api/ent/user"
 )
 
-// ForumPost is the model entity for the ForumPost schema.
-type ForumPost struct {
+// ForumComment is the model entity for the ForumComment schema.
+type ForumComment struct {
 	config `json:"-"`
 	// ID of the ent.
 	ID int64 `json:"id,omitempty"`
@@ -22,11 +23,13 @@ type ForumPost struct {
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// UpdatedAt holds the value of the "updated_at" field.
 	UpdatedAt time.Time `json:"updated_at,omitempty"`
+	// Target forum topic ID
+	TopicID int64 `json:"topic_id,omitempty"`
 	// Author user ID
 	UserID int64 `json:"user_id,omitempty"`
-	// Parent post ID for replies, null for root forum posts
+	// Parent comment ID for replies, null for root topic comments
 	ParentID *int64 `json:"parent_id,omitempty"`
-	// Post text content
+	// Comment text content
 	Content string `json:"content,omitempty"`
 	// Status: active, hidden
 	Status string `json:"status,omitempty"`
@@ -37,32 +40,45 @@ type ForumPost struct {
 	// Total replies count
 	ReplyCount int `json:"reply_count,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
-	// The values are being populated by the ForumPostQuery when eager-loading is set.
-	Edges        ForumPostEdges `json:"edges"`
+	// The values are being populated by the ForumCommentQuery when eager-loading is set.
+	Edges        ForumCommentEdges `json:"edges"`
 	selectValues sql.SelectValues
 }
 
-// ForumPostEdges holds the relations/edges for other nodes in the graph.
-type ForumPostEdges struct {
+// ForumCommentEdges holds the relations/edges for other nodes in the graph.
+type ForumCommentEdges struct {
+	// Topic holds the value of the topic edge.
+	Topic *ForumTopic `json:"topic,omitempty"`
 	// User holds the value of the user edge.
 	User *User `json:"user,omitempty"`
 	// Parent holds the value of the parent edge.
-	Parent *ForumPost `json:"parent,omitempty"`
+	Parent *ForumComment `json:"parent,omitempty"`
 	// Replies holds the value of the replies edge.
-	Replies []*ForumPost `json:"replies,omitempty"`
+	Replies []*ForumComment `json:"replies,omitempty"`
 	// Votes holds the value of the votes edge.
-	Votes []*ForumPostVote `json:"votes,omitempty"`
+	Votes []*ForumCommentVote `json:"votes,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [4]bool
+	loadedTypes [5]bool
+}
+
+// TopicOrErr returns the Topic value or an error if the edge
+// was not loaded in eager-loading, or loaded but was not found.
+func (e ForumCommentEdges) TopicOrErr() (*ForumTopic, error) {
+	if e.Topic != nil {
+		return e.Topic, nil
+	} else if e.loadedTypes[0] {
+		return nil, &NotFoundError{label: forumtopic.Label}
+	}
+	return nil, &NotLoadedError{edge: "topic"}
 }
 
 // UserOrErr returns the User value or an error if the edge
 // was not loaded in eager-loading, or loaded but was not found.
-func (e ForumPostEdges) UserOrErr() (*User, error) {
+func (e ForumCommentEdges) UserOrErr() (*User, error) {
 	if e.User != nil {
 		return e.User, nil
-	} else if e.loadedTypes[0] {
+	} else if e.loadedTypes[1] {
 		return nil, &NotFoundError{label: user.Label}
 	}
 	return nil, &NotLoadedError{edge: "user"}
@@ -70,19 +86,19 @@ func (e ForumPostEdges) UserOrErr() (*User, error) {
 
 // ParentOrErr returns the Parent value or an error if the edge
 // was not loaded in eager-loading, or loaded but was not found.
-func (e ForumPostEdges) ParentOrErr() (*ForumPost, error) {
+func (e ForumCommentEdges) ParentOrErr() (*ForumComment, error) {
 	if e.Parent != nil {
 		return e.Parent, nil
-	} else if e.loadedTypes[1] {
-		return nil, &NotFoundError{label: forumpost.Label}
+	} else if e.loadedTypes[2] {
+		return nil, &NotFoundError{label: forumcomment.Label}
 	}
 	return nil, &NotLoadedError{edge: "parent"}
 }
 
 // RepliesOrErr returns the Replies value or an error if the edge
 // was not loaded in eager-loading.
-func (e ForumPostEdges) RepliesOrErr() ([]*ForumPost, error) {
-	if e.loadedTypes[2] {
+func (e ForumCommentEdges) RepliesOrErr() ([]*ForumComment, error) {
+	if e.loadedTypes[3] {
 		return e.Replies, nil
 	}
 	return nil, &NotLoadedError{edge: "replies"}
@@ -90,23 +106,23 @@ func (e ForumPostEdges) RepliesOrErr() ([]*ForumPost, error) {
 
 // VotesOrErr returns the Votes value or an error if the edge
 // was not loaded in eager-loading.
-func (e ForumPostEdges) VotesOrErr() ([]*ForumPostVote, error) {
-	if e.loadedTypes[3] {
+func (e ForumCommentEdges) VotesOrErr() ([]*ForumCommentVote, error) {
+	if e.loadedTypes[4] {
 		return e.Votes, nil
 	}
 	return nil, &NotLoadedError{edge: "votes"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
-func (*ForumPost) scanValues(columns []string) ([]any, error) {
+func (*ForumComment) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case forumpost.FieldID, forumpost.FieldUserID, forumpost.FieldParentID, forumpost.FieldLikeCount, forumpost.FieldDislikeCount, forumpost.FieldReplyCount:
+		case forumcomment.FieldID, forumcomment.FieldTopicID, forumcomment.FieldUserID, forumcomment.FieldParentID, forumcomment.FieldLikeCount, forumcomment.FieldDislikeCount, forumcomment.FieldReplyCount:
 			values[i] = new(sql.NullInt64)
-		case forumpost.FieldContent, forumpost.FieldStatus:
+		case forumcomment.FieldContent, forumcomment.FieldStatus:
 			values[i] = new(sql.NullString)
-		case forumpost.FieldCreatedAt, forumpost.FieldUpdatedAt:
+		case forumcomment.FieldCreatedAt, forumcomment.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -116,69 +132,75 @@ func (*ForumPost) scanValues(columns []string) ([]any, error) {
 }
 
 // assignValues assigns the values that were returned from sql.Rows (after scanning)
-// to the ForumPost fields.
-func (_m *ForumPost) assignValues(columns []string, values []any) error {
+// to the ForumComment fields.
+func (_m *ForumComment) assignValues(columns []string, values []any) error {
 	if m, n := len(values), len(columns); m < n {
 		return fmt.Errorf("mismatch number of scan values: %d != %d", m, n)
 	}
 	for i := range columns {
 		switch columns[i] {
-		case forumpost.FieldID:
+		case forumcomment.FieldID:
 			value, ok := values[i].(*sql.NullInt64)
 			if !ok {
 				return fmt.Errorf("unexpected type %T for field id", value)
 			}
 			_m.ID = int64(value.Int64)
-		case forumpost.FieldCreatedAt:
+		case forumcomment.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
 			} else if value.Valid {
 				_m.CreatedAt = value.Time
 			}
-		case forumpost.FieldUpdatedAt:
+		case forumcomment.FieldUpdatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_at", values[i])
 			} else if value.Valid {
 				_m.UpdatedAt = value.Time
 			}
-		case forumpost.FieldUserID:
+		case forumcomment.FieldTopicID:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field topic_id", values[i])
+			} else if value.Valid {
+				_m.TopicID = value.Int64
+			}
+		case forumcomment.FieldUserID:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field user_id", values[i])
 			} else if value.Valid {
 				_m.UserID = value.Int64
 			}
-		case forumpost.FieldParentID:
+		case forumcomment.FieldParentID:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field parent_id", values[i])
 			} else if value.Valid {
 				_m.ParentID = new(int64)
 				*_m.ParentID = value.Int64
 			}
-		case forumpost.FieldContent:
+		case forumcomment.FieldContent:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field content", values[i])
 			} else if value.Valid {
 				_m.Content = value.String
 			}
-		case forumpost.FieldStatus:
+		case forumcomment.FieldStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field status", values[i])
 			} else if value.Valid {
 				_m.Status = value.String
 			}
-		case forumpost.FieldLikeCount:
+		case forumcomment.FieldLikeCount:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field like_count", values[i])
 			} else if value.Valid {
 				_m.LikeCount = int(value.Int64)
 			}
-		case forumpost.FieldDislikeCount:
+		case forumcomment.FieldDislikeCount:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field dislike_count", values[i])
 			} else if value.Valid {
 				_m.DislikeCount = int(value.Int64)
 			}
-		case forumpost.FieldReplyCount:
+		case forumcomment.FieldReplyCount:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field reply_count", values[i])
 			} else if value.Valid {
@@ -191,60 +213,68 @@ func (_m *ForumPost) assignValues(columns []string, values []any) error {
 	return nil
 }
 
-// Value returns the ent.Value that was dynamically selected and assigned to the ForumPost.
+// Value returns the ent.Value that was dynamically selected and assigned to the ForumComment.
 // This includes values selected through modifiers, order, etc.
-func (_m *ForumPost) Value(name string) (ent.Value, error) {
+func (_m *ForumComment) Value(name string) (ent.Value, error) {
 	return _m.selectValues.Get(name)
 }
 
-// QueryUser queries the "user" edge of the ForumPost entity.
-func (_m *ForumPost) QueryUser() *UserQuery {
-	return NewForumPostClient(_m.config).QueryUser(_m)
+// QueryTopic queries the "topic" edge of the ForumComment entity.
+func (_m *ForumComment) QueryTopic() *ForumTopicQuery {
+	return NewForumCommentClient(_m.config).QueryTopic(_m)
 }
 
-// QueryParent queries the "parent" edge of the ForumPost entity.
-func (_m *ForumPost) QueryParent() *ForumPostQuery {
-	return NewForumPostClient(_m.config).QueryParent(_m)
+// QueryUser queries the "user" edge of the ForumComment entity.
+func (_m *ForumComment) QueryUser() *UserQuery {
+	return NewForumCommentClient(_m.config).QueryUser(_m)
 }
 
-// QueryReplies queries the "replies" edge of the ForumPost entity.
-func (_m *ForumPost) QueryReplies() *ForumPostQuery {
-	return NewForumPostClient(_m.config).QueryReplies(_m)
+// QueryParent queries the "parent" edge of the ForumComment entity.
+func (_m *ForumComment) QueryParent() *ForumCommentQuery {
+	return NewForumCommentClient(_m.config).QueryParent(_m)
 }
 
-// QueryVotes queries the "votes" edge of the ForumPost entity.
-func (_m *ForumPost) QueryVotes() *ForumPostVoteQuery {
-	return NewForumPostClient(_m.config).QueryVotes(_m)
+// QueryReplies queries the "replies" edge of the ForumComment entity.
+func (_m *ForumComment) QueryReplies() *ForumCommentQuery {
+	return NewForumCommentClient(_m.config).QueryReplies(_m)
 }
 
-// Update returns a builder for updating this ForumPost.
-// Note that you need to call ForumPost.Unwrap() before calling this method if this ForumPost
+// QueryVotes queries the "votes" edge of the ForumComment entity.
+func (_m *ForumComment) QueryVotes() *ForumCommentVoteQuery {
+	return NewForumCommentClient(_m.config).QueryVotes(_m)
+}
+
+// Update returns a builder for updating this ForumComment.
+// Note that you need to call ForumComment.Unwrap() before calling this method if this ForumComment
 // was returned from a transaction, and the transaction was committed or rolled back.
-func (_m *ForumPost) Update() *ForumPostUpdateOne {
-	return NewForumPostClient(_m.config).UpdateOne(_m)
+func (_m *ForumComment) Update() *ForumCommentUpdateOne {
+	return NewForumCommentClient(_m.config).UpdateOne(_m)
 }
 
-// Unwrap unwraps the ForumPost entity that was returned from a transaction after it was closed,
+// Unwrap unwraps the ForumComment entity that was returned from a transaction after it was closed,
 // so that all future queries will be executed through the driver which created the transaction.
-func (_m *ForumPost) Unwrap() *ForumPost {
+func (_m *ForumComment) Unwrap() *ForumComment {
 	_tx, ok := _m.config.driver.(*txDriver)
 	if !ok {
-		panic("ent: ForumPost is not a transactional entity")
+		panic("ent: ForumComment is not a transactional entity")
 	}
 	_m.config.driver = _tx.drv
 	return _m
 }
 
 // String implements the fmt.Stringer.
-func (_m *ForumPost) String() string {
+func (_m *ForumComment) String() string {
 	var builder strings.Builder
-	builder.WriteString("ForumPost(")
+	builder.WriteString("ForumComment(")
 	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
 	builder.WriteString("created_at=")
 	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("updated_at=")
 	builder.WriteString(_m.UpdatedAt.Format(time.ANSIC))
+	builder.WriteString(", ")
+	builder.WriteString("topic_id=")
+	builder.WriteString(fmt.Sprintf("%v", _m.TopicID))
 	builder.WriteString(", ")
 	builder.WriteString("user_id=")
 	builder.WriteString(fmt.Sprintf("%v", _m.UserID))
@@ -272,5 +302,5 @@ func (_m *ForumPost) String() string {
 	return builder.String()
 }
 
-// ForumPosts is a parsable slice of ForumPost.
-type ForumPosts []*ForumPost
+// ForumComments is a parsable slice of ForumComment.
+type ForumComments []*ForumComment

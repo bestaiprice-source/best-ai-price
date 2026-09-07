@@ -9,13 +9,13 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
-	"github.com/Wei-Shaw/sub2api/ent/forumpost"
-	"github.com/Wei-Shaw/sub2api/ent/forumpostvote"
+	"github.com/Wei-Shaw/sub2api/ent/forumcomment"
+	"github.com/Wei-Shaw/sub2api/ent/forumcommentvote"
 	"github.com/Wei-Shaw/sub2api/ent/user"
 )
 
-// ForumPostVote is the model entity for the ForumPostVote schema.
-type ForumPostVote struct {
+// ForumCommentVote is the model entity for the ForumCommentVote schema.
+type ForumCommentVote struct {
 	config `json:"-"`
 	// ID of the ent.
 	ID int64 `json:"id,omitempty"`
@@ -23,22 +23,22 @@ type ForumPostVote struct {
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// UpdatedAt holds the value of the "updated_at" field.
 	UpdatedAt time.Time `json:"updated_at,omitempty"`
-	// Target forum post ID
-	PostID int64 `json:"post_id,omitempty"`
+	// Target forum comment ID
+	CommentID int64 `json:"comment_id,omitempty"`
 	// Voting user ID
 	UserID int64 `json:"user_id,omitempty"`
 	// Vote type: like or dislike
 	VoteType string `json:"vote_type,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
-	// The values are being populated by the ForumPostVoteQuery when eager-loading is set.
-	Edges        ForumPostVoteEdges `json:"edges"`
+	// The values are being populated by the ForumCommentVoteQuery when eager-loading is set.
+	Edges        ForumCommentVoteEdges `json:"edges"`
 	selectValues sql.SelectValues
 }
 
-// ForumPostVoteEdges holds the relations/edges for other nodes in the graph.
-type ForumPostVoteEdges struct {
-	// Post holds the value of the post edge.
-	Post *ForumPost `json:"post,omitempty"`
+// ForumCommentVoteEdges holds the relations/edges for other nodes in the graph.
+type ForumCommentVoteEdges struct {
+	// Comment holds the value of the comment edge.
+	Comment *ForumComment `json:"comment,omitempty"`
 	// User holds the value of the user edge.
 	User *User `json:"user,omitempty"`
 	// loadedTypes holds the information for reporting if a
@@ -46,20 +46,20 @@ type ForumPostVoteEdges struct {
 	loadedTypes [2]bool
 }
 
-// PostOrErr returns the Post value or an error if the edge
+// CommentOrErr returns the Comment value or an error if the edge
 // was not loaded in eager-loading, or loaded but was not found.
-func (e ForumPostVoteEdges) PostOrErr() (*ForumPost, error) {
-	if e.Post != nil {
-		return e.Post, nil
+func (e ForumCommentVoteEdges) CommentOrErr() (*ForumComment, error) {
+	if e.Comment != nil {
+		return e.Comment, nil
 	} else if e.loadedTypes[0] {
-		return nil, &NotFoundError{label: forumpost.Label}
+		return nil, &NotFoundError{label: forumcomment.Label}
 	}
-	return nil, &NotLoadedError{edge: "post"}
+	return nil, &NotLoadedError{edge: "comment"}
 }
 
 // UserOrErr returns the User value or an error if the edge
 // was not loaded in eager-loading, or loaded but was not found.
-func (e ForumPostVoteEdges) UserOrErr() (*User, error) {
+func (e ForumCommentVoteEdges) UserOrErr() (*User, error) {
 	if e.User != nil {
 		return e.User, nil
 	} else if e.loadedTypes[1] {
@@ -69,15 +69,15 @@ func (e ForumPostVoteEdges) UserOrErr() (*User, error) {
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
-func (*ForumPostVote) scanValues(columns []string) ([]any, error) {
+func (*ForumCommentVote) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case forumpostvote.FieldID, forumpostvote.FieldPostID, forumpostvote.FieldUserID:
+		case forumcommentvote.FieldID, forumcommentvote.FieldCommentID, forumcommentvote.FieldUserID:
 			values[i] = new(sql.NullInt64)
-		case forumpostvote.FieldVoteType:
+		case forumcommentvote.FieldVoteType:
 			values[i] = new(sql.NullString)
-		case forumpostvote.FieldCreatedAt, forumpostvote.FieldUpdatedAt:
+		case forumcommentvote.FieldCreatedAt, forumcommentvote.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -87,44 +87,44 @@ func (*ForumPostVote) scanValues(columns []string) ([]any, error) {
 }
 
 // assignValues assigns the values that were returned from sql.Rows (after scanning)
-// to the ForumPostVote fields.
-func (_m *ForumPostVote) assignValues(columns []string, values []any) error {
+// to the ForumCommentVote fields.
+func (_m *ForumCommentVote) assignValues(columns []string, values []any) error {
 	if m, n := len(values), len(columns); m < n {
 		return fmt.Errorf("mismatch number of scan values: %d != %d", m, n)
 	}
 	for i := range columns {
 		switch columns[i] {
-		case forumpostvote.FieldID:
+		case forumcommentvote.FieldID:
 			value, ok := values[i].(*sql.NullInt64)
 			if !ok {
 				return fmt.Errorf("unexpected type %T for field id", value)
 			}
 			_m.ID = int64(value.Int64)
-		case forumpostvote.FieldCreatedAt:
+		case forumcommentvote.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
 			} else if value.Valid {
 				_m.CreatedAt = value.Time
 			}
-		case forumpostvote.FieldUpdatedAt:
+		case forumcommentvote.FieldUpdatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_at", values[i])
 			} else if value.Valid {
 				_m.UpdatedAt = value.Time
 			}
-		case forumpostvote.FieldPostID:
+		case forumcommentvote.FieldCommentID:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
-				return fmt.Errorf("unexpected type %T for field post_id", values[i])
+				return fmt.Errorf("unexpected type %T for field comment_id", values[i])
 			} else if value.Valid {
-				_m.PostID = value.Int64
+				_m.CommentID = value.Int64
 			}
-		case forumpostvote.FieldUserID:
+		case forumcommentvote.FieldUserID:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field user_id", values[i])
 			} else if value.Valid {
 				_m.UserID = value.Int64
 			}
-		case forumpostvote.FieldVoteType:
+		case forumcommentvote.FieldVoteType:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field vote_type", values[i])
 			} else if value.Valid {
@@ -137,44 +137,44 @@ func (_m *ForumPostVote) assignValues(columns []string, values []any) error {
 	return nil
 }
 
-// Value returns the ent.Value that was dynamically selected and assigned to the ForumPostVote.
+// Value returns the ent.Value that was dynamically selected and assigned to the ForumCommentVote.
 // This includes values selected through modifiers, order, etc.
-func (_m *ForumPostVote) Value(name string) (ent.Value, error) {
+func (_m *ForumCommentVote) Value(name string) (ent.Value, error) {
 	return _m.selectValues.Get(name)
 }
 
-// QueryPost queries the "post" edge of the ForumPostVote entity.
-func (_m *ForumPostVote) QueryPost() *ForumPostQuery {
-	return NewForumPostVoteClient(_m.config).QueryPost(_m)
+// QueryComment queries the "comment" edge of the ForumCommentVote entity.
+func (_m *ForumCommentVote) QueryComment() *ForumCommentQuery {
+	return NewForumCommentVoteClient(_m.config).QueryComment(_m)
 }
 
-// QueryUser queries the "user" edge of the ForumPostVote entity.
-func (_m *ForumPostVote) QueryUser() *UserQuery {
-	return NewForumPostVoteClient(_m.config).QueryUser(_m)
+// QueryUser queries the "user" edge of the ForumCommentVote entity.
+func (_m *ForumCommentVote) QueryUser() *UserQuery {
+	return NewForumCommentVoteClient(_m.config).QueryUser(_m)
 }
 
-// Update returns a builder for updating this ForumPostVote.
-// Note that you need to call ForumPostVote.Unwrap() before calling this method if this ForumPostVote
+// Update returns a builder for updating this ForumCommentVote.
+// Note that you need to call ForumCommentVote.Unwrap() before calling this method if this ForumCommentVote
 // was returned from a transaction, and the transaction was committed or rolled back.
-func (_m *ForumPostVote) Update() *ForumPostVoteUpdateOne {
-	return NewForumPostVoteClient(_m.config).UpdateOne(_m)
+func (_m *ForumCommentVote) Update() *ForumCommentVoteUpdateOne {
+	return NewForumCommentVoteClient(_m.config).UpdateOne(_m)
 }
 
-// Unwrap unwraps the ForumPostVote entity that was returned from a transaction after it was closed,
+// Unwrap unwraps the ForumCommentVote entity that was returned from a transaction after it was closed,
 // so that all future queries will be executed through the driver which created the transaction.
-func (_m *ForumPostVote) Unwrap() *ForumPostVote {
+func (_m *ForumCommentVote) Unwrap() *ForumCommentVote {
 	_tx, ok := _m.config.driver.(*txDriver)
 	if !ok {
-		panic("ent: ForumPostVote is not a transactional entity")
+		panic("ent: ForumCommentVote is not a transactional entity")
 	}
 	_m.config.driver = _tx.drv
 	return _m
 }
 
 // String implements the fmt.Stringer.
-func (_m *ForumPostVote) String() string {
+func (_m *ForumCommentVote) String() string {
 	var builder strings.Builder
-	builder.WriteString("ForumPostVote(")
+	builder.WriteString("ForumCommentVote(")
 	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
 	builder.WriteString("created_at=")
 	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))
@@ -182,8 +182,8 @@ func (_m *ForumPostVote) String() string {
 	builder.WriteString("updated_at=")
 	builder.WriteString(_m.UpdatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
-	builder.WriteString("post_id=")
-	builder.WriteString(fmt.Sprintf("%v", _m.PostID))
+	builder.WriteString("comment_id=")
+	builder.WriteString(fmt.Sprintf("%v", _m.CommentID))
 	builder.WriteString(", ")
 	builder.WriteString("user_id=")
 	builder.WriteString(fmt.Sprintf("%v", _m.UserID))
@@ -194,5 +194,5 @@ func (_m *ForumPostVote) String() string {
 	return builder.String()
 }
 
-// ForumPostVotes is a parsable slice of ForumPostVote.
-type ForumPostVotes []*ForumPostVote
+// ForumCommentVotes is a parsable slice of ForumCommentVote.
+type ForumCommentVotes []*ForumCommentVote

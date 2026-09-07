@@ -11,53 +11,53 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/Wei-Shaw/sub2api/ent/forumpost"
-	"github.com/Wei-Shaw/sub2api/ent/forumpostvote"
+	"github.com/Wei-Shaw/sub2api/ent/forumtopic"
+	"github.com/Wei-Shaw/sub2api/ent/forumtopicvote"
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
 	"github.com/Wei-Shaw/sub2api/ent/user"
 )
 
-// ForumPostVoteUpdate is the builder for updating ForumPostVote entities.
-type ForumPostVoteUpdate struct {
+// ForumTopicVoteUpdate is the builder for updating ForumTopicVote entities.
+type ForumTopicVoteUpdate struct {
 	config
 	hooks    []Hook
-	mutation *ForumPostVoteMutation
+	mutation *ForumTopicVoteMutation
 }
 
-// Where appends a list predicates to the ForumPostVoteUpdate builder.
-func (_u *ForumPostVoteUpdate) Where(ps ...predicate.ForumPostVote) *ForumPostVoteUpdate {
+// Where appends a list predicates to the ForumTopicVoteUpdate builder.
+func (_u *ForumTopicVoteUpdate) Where(ps ...predicate.ForumTopicVote) *ForumTopicVoteUpdate {
 	_u.mutation.Where(ps...)
 	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (_u *ForumPostVoteUpdate) SetUpdatedAt(v time.Time) *ForumPostVoteUpdate {
+func (_u *ForumTopicVoteUpdate) SetUpdatedAt(v time.Time) *ForumTopicVoteUpdate {
 	_u.mutation.SetUpdatedAt(v)
 	return _u
 }
 
-// SetPostID sets the "post_id" field.
-func (_u *ForumPostVoteUpdate) SetPostID(v int64) *ForumPostVoteUpdate {
-	_u.mutation.SetPostID(v)
+// SetTopicID sets the "topic_id" field.
+func (_u *ForumTopicVoteUpdate) SetTopicID(v int64) *ForumTopicVoteUpdate {
+	_u.mutation.SetTopicID(v)
 	return _u
 }
 
-// SetNillablePostID sets the "post_id" field if the given value is not nil.
-func (_u *ForumPostVoteUpdate) SetNillablePostID(v *int64) *ForumPostVoteUpdate {
+// SetNillableTopicID sets the "topic_id" field if the given value is not nil.
+func (_u *ForumTopicVoteUpdate) SetNillableTopicID(v *int64) *ForumTopicVoteUpdate {
 	if v != nil {
-		_u.SetPostID(*v)
+		_u.SetTopicID(*v)
 	}
 	return _u
 }
 
 // SetUserID sets the "user_id" field.
-func (_u *ForumPostVoteUpdate) SetUserID(v int64) *ForumPostVoteUpdate {
+func (_u *ForumTopicVoteUpdate) SetUserID(v int64) *ForumTopicVoteUpdate {
 	_u.mutation.SetUserID(v)
 	return _u
 }
 
 // SetNillableUserID sets the "user_id" field if the given value is not nil.
-func (_u *ForumPostVoteUpdate) SetNillableUserID(v *int64) *ForumPostVoteUpdate {
+func (_u *ForumTopicVoteUpdate) SetNillableUserID(v *int64) *ForumTopicVoteUpdate {
 	if v != nil {
 		_u.SetUserID(*v)
 	}
@@ -65,54 +65,54 @@ func (_u *ForumPostVoteUpdate) SetNillableUserID(v *int64) *ForumPostVoteUpdate 
 }
 
 // SetVoteType sets the "vote_type" field.
-func (_u *ForumPostVoteUpdate) SetVoteType(v string) *ForumPostVoteUpdate {
+func (_u *ForumTopicVoteUpdate) SetVoteType(v string) *ForumTopicVoteUpdate {
 	_u.mutation.SetVoteType(v)
 	return _u
 }
 
 // SetNillableVoteType sets the "vote_type" field if the given value is not nil.
-func (_u *ForumPostVoteUpdate) SetNillableVoteType(v *string) *ForumPostVoteUpdate {
+func (_u *ForumTopicVoteUpdate) SetNillableVoteType(v *string) *ForumTopicVoteUpdate {
 	if v != nil {
 		_u.SetVoteType(*v)
 	}
 	return _u
 }
 
-// SetPost sets the "post" edge to the ForumPost entity.
-func (_u *ForumPostVoteUpdate) SetPost(v *ForumPost) *ForumPostVoteUpdate {
-	return _u.SetPostID(v.ID)
+// SetTopic sets the "topic" edge to the ForumTopic entity.
+func (_u *ForumTopicVoteUpdate) SetTopic(v *ForumTopic) *ForumTopicVoteUpdate {
+	return _u.SetTopicID(v.ID)
 }
 
 // SetUser sets the "user" edge to the User entity.
-func (_u *ForumPostVoteUpdate) SetUser(v *User) *ForumPostVoteUpdate {
+func (_u *ForumTopicVoteUpdate) SetUser(v *User) *ForumTopicVoteUpdate {
 	return _u.SetUserID(v.ID)
 }
 
-// Mutation returns the ForumPostVoteMutation object of the builder.
-func (_u *ForumPostVoteUpdate) Mutation() *ForumPostVoteMutation {
+// Mutation returns the ForumTopicVoteMutation object of the builder.
+func (_u *ForumTopicVoteUpdate) Mutation() *ForumTopicVoteMutation {
 	return _u.mutation
 }
 
-// ClearPost clears the "post" edge to the ForumPost entity.
-func (_u *ForumPostVoteUpdate) ClearPost() *ForumPostVoteUpdate {
-	_u.mutation.ClearPost()
+// ClearTopic clears the "topic" edge to the ForumTopic entity.
+func (_u *ForumTopicVoteUpdate) ClearTopic() *ForumTopicVoteUpdate {
+	_u.mutation.ClearTopic()
 	return _u
 }
 
 // ClearUser clears the "user" edge to the User entity.
-func (_u *ForumPostVoteUpdate) ClearUser() *ForumPostVoteUpdate {
+func (_u *ForumTopicVoteUpdate) ClearUser() *ForumTopicVoteUpdate {
 	_u.mutation.ClearUser()
 	return _u
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
-func (_u *ForumPostVoteUpdate) Save(ctx context.Context) (int, error) {
+func (_u *ForumTopicVoteUpdate) Save(ctx context.Context) (int, error) {
 	_u.defaults()
 	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (_u *ForumPostVoteUpdate) SaveX(ctx context.Context) int {
+func (_u *ForumTopicVoteUpdate) SaveX(ctx context.Context) int {
 	affected, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
@@ -121,47 +121,47 @@ func (_u *ForumPostVoteUpdate) SaveX(ctx context.Context) int {
 }
 
 // Exec executes the query.
-func (_u *ForumPostVoteUpdate) Exec(ctx context.Context) error {
+func (_u *ForumTopicVoteUpdate) Exec(ctx context.Context) error {
 	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (_u *ForumPostVoteUpdate) ExecX(ctx context.Context) {
+func (_u *ForumTopicVoteUpdate) ExecX(ctx context.Context) {
 	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (_u *ForumPostVoteUpdate) defaults() {
+func (_u *ForumTopicVoteUpdate) defaults() {
 	if _, ok := _u.mutation.UpdatedAt(); !ok {
-		v := forumpostvote.UpdateDefaultUpdatedAt()
+		v := forumtopicvote.UpdateDefaultUpdatedAt()
 		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (_u *ForumPostVoteUpdate) check() error {
+func (_u *ForumTopicVoteUpdate) check() error {
 	if v, ok := _u.mutation.VoteType(); ok {
-		if err := forumpostvote.VoteTypeValidator(v); err != nil {
-			return &ValidationError{Name: "vote_type", err: fmt.Errorf(`ent: validator failed for field "ForumPostVote.vote_type": %w`, err)}
+		if err := forumtopicvote.VoteTypeValidator(v); err != nil {
+			return &ValidationError{Name: "vote_type", err: fmt.Errorf(`ent: validator failed for field "ForumTopicVote.vote_type": %w`, err)}
 		}
 	}
-	if _u.mutation.PostCleared() && len(_u.mutation.PostIDs()) > 0 {
-		return errors.New(`ent: clearing a required unique edge "ForumPostVote.post"`)
+	if _u.mutation.TopicCleared() && len(_u.mutation.TopicIDs()) > 0 {
+		return errors.New(`ent: clearing a required unique edge "ForumTopicVote.topic"`)
 	}
 	if _u.mutation.UserCleared() && len(_u.mutation.UserIDs()) > 0 {
-		return errors.New(`ent: clearing a required unique edge "ForumPostVote.user"`)
+		return errors.New(`ent: clearing a required unique edge "ForumTopicVote.user"`)
 	}
 	return nil
 }
 
-func (_u *ForumPostVoteUpdate) sqlSave(ctx context.Context) (_node int, err error) {
+func (_u *ForumTopicVoteUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if err := _u.check(); err != nil {
 		return _node, err
 	}
-	_spec := sqlgraph.NewUpdateSpec(forumpostvote.Table, forumpostvote.Columns, sqlgraph.NewFieldSpec(forumpostvote.FieldID, field.TypeInt64))
+	_spec := sqlgraph.NewUpdateSpec(forumtopicvote.Table, forumtopicvote.Columns, sqlgraph.NewFieldSpec(forumtopicvote.FieldID, field.TypeInt64))
 	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
@@ -170,33 +170,33 @@ func (_u *ForumPostVoteUpdate) sqlSave(ctx context.Context) (_node int, err erro
 		}
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
-		_spec.SetField(forumpostvote.FieldUpdatedAt, field.TypeTime, value)
+		_spec.SetField(forumtopicvote.FieldUpdatedAt, field.TypeTime, value)
 	}
 	if value, ok := _u.mutation.VoteType(); ok {
-		_spec.SetField(forumpostvote.FieldVoteType, field.TypeString, value)
+		_spec.SetField(forumtopicvote.FieldVoteType, field.TypeString, value)
 	}
-	if _u.mutation.PostCleared() {
+	if _u.mutation.TopicCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
 			Inverse: true,
-			Table:   forumpostvote.PostTable,
-			Columns: []string{forumpostvote.PostColumn},
+			Table:   forumtopicvote.TopicTable,
+			Columns: []string{forumtopicvote.TopicColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(forumpost.FieldID, field.TypeInt64),
+				IDSpec: sqlgraph.NewFieldSpec(forumtopic.FieldID, field.TypeInt64),
 			},
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := _u.mutation.PostIDs(); len(nodes) > 0 {
+	if nodes := _u.mutation.TopicIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
 			Inverse: true,
-			Table:   forumpostvote.PostTable,
-			Columns: []string{forumpostvote.PostColumn},
+			Table:   forumtopicvote.TopicTable,
+			Columns: []string{forumtopicvote.TopicColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(forumpost.FieldID, field.TypeInt64),
+				IDSpec: sqlgraph.NewFieldSpec(forumtopic.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {
@@ -208,8 +208,8 @@ func (_u *ForumPostVoteUpdate) sqlSave(ctx context.Context) (_node int, err erro
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
 			Inverse: true,
-			Table:   forumpostvote.UserTable,
-			Columns: []string{forumpostvote.UserColumn},
+			Table:   forumtopicvote.UserTable,
+			Columns: []string{forumtopicvote.UserColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(user.FieldID, field.TypeInt64),
@@ -221,8 +221,8 @@ func (_u *ForumPostVoteUpdate) sqlSave(ctx context.Context) (_node int, err erro
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
 			Inverse: true,
-			Table:   forumpostvote.UserTable,
-			Columns: []string{forumpostvote.UserColumn},
+			Table:   forumtopicvote.UserTable,
+			Columns: []string{forumtopicvote.UserColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(user.FieldID, field.TypeInt64),
@@ -235,7 +235,7 @@ func (_u *ForumPostVoteUpdate) sqlSave(ctx context.Context) (_node int, err erro
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
-			err = &NotFoundError{forumpostvote.Label}
+			err = &NotFoundError{forumtopicvote.Label}
 		} else if sqlgraph.IsConstraintError(err) {
 			err = &ConstraintError{msg: err.Error(), wrap: err}
 		}
@@ -245,42 +245,42 @@ func (_u *ForumPostVoteUpdate) sqlSave(ctx context.Context) (_node int, err erro
 	return _node, nil
 }
 
-// ForumPostVoteUpdateOne is the builder for updating a single ForumPostVote entity.
-type ForumPostVoteUpdateOne struct {
+// ForumTopicVoteUpdateOne is the builder for updating a single ForumTopicVote entity.
+type ForumTopicVoteUpdateOne struct {
 	config
 	fields   []string
 	hooks    []Hook
-	mutation *ForumPostVoteMutation
+	mutation *ForumTopicVoteMutation
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (_u *ForumPostVoteUpdateOne) SetUpdatedAt(v time.Time) *ForumPostVoteUpdateOne {
+func (_u *ForumTopicVoteUpdateOne) SetUpdatedAt(v time.Time) *ForumTopicVoteUpdateOne {
 	_u.mutation.SetUpdatedAt(v)
 	return _u
 }
 
-// SetPostID sets the "post_id" field.
-func (_u *ForumPostVoteUpdateOne) SetPostID(v int64) *ForumPostVoteUpdateOne {
-	_u.mutation.SetPostID(v)
+// SetTopicID sets the "topic_id" field.
+func (_u *ForumTopicVoteUpdateOne) SetTopicID(v int64) *ForumTopicVoteUpdateOne {
+	_u.mutation.SetTopicID(v)
 	return _u
 }
 
-// SetNillablePostID sets the "post_id" field if the given value is not nil.
-func (_u *ForumPostVoteUpdateOne) SetNillablePostID(v *int64) *ForumPostVoteUpdateOne {
+// SetNillableTopicID sets the "topic_id" field if the given value is not nil.
+func (_u *ForumTopicVoteUpdateOne) SetNillableTopicID(v *int64) *ForumTopicVoteUpdateOne {
 	if v != nil {
-		_u.SetPostID(*v)
+		_u.SetTopicID(*v)
 	}
 	return _u
 }
 
 // SetUserID sets the "user_id" field.
-func (_u *ForumPostVoteUpdateOne) SetUserID(v int64) *ForumPostVoteUpdateOne {
+func (_u *ForumTopicVoteUpdateOne) SetUserID(v int64) *ForumTopicVoteUpdateOne {
 	_u.mutation.SetUserID(v)
 	return _u
 }
 
 // SetNillableUserID sets the "user_id" field if the given value is not nil.
-func (_u *ForumPostVoteUpdateOne) SetNillableUserID(v *int64) *ForumPostVoteUpdateOne {
+func (_u *ForumTopicVoteUpdateOne) SetNillableUserID(v *int64) *ForumTopicVoteUpdateOne {
 	if v != nil {
 		_u.SetUserID(*v)
 	}
@@ -288,67 +288,67 @@ func (_u *ForumPostVoteUpdateOne) SetNillableUserID(v *int64) *ForumPostVoteUpda
 }
 
 // SetVoteType sets the "vote_type" field.
-func (_u *ForumPostVoteUpdateOne) SetVoteType(v string) *ForumPostVoteUpdateOne {
+func (_u *ForumTopicVoteUpdateOne) SetVoteType(v string) *ForumTopicVoteUpdateOne {
 	_u.mutation.SetVoteType(v)
 	return _u
 }
 
 // SetNillableVoteType sets the "vote_type" field if the given value is not nil.
-func (_u *ForumPostVoteUpdateOne) SetNillableVoteType(v *string) *ForumPostVoteUpdateOne {
+func (_u *ForumTopicVoteUpdateOne) SetNillableVoteType(v *string) *ForumTopicVoteUpdateOne {
 	if v != nil {
 		_u.SetVoteType(*v)
 	}
 	return _u
 }
 
-// SetPost sets the "post" edge to the ForumPost entity.
-func (_u *ForumPostVoteUpdateOne) SetPost(v *ForumPost) *ForumPostVoteUpdateOne {
-	return _u.SetPostID(v.ID)
+// SetTopic sets the "topic" edge to the ForumTopic entity.
+func (_u *ForumTopicVoteUpdateOne) SetTopic(v *ForumTopic) *ForumTopicVoteUpdateOne {
+	return _u.SetTopicID(v.ID)
 }
 
 // SetUser sets the "user" edge to the User entity.
-func (_u *ForumPostVoteUpdateOne) SetUser(v *User) *ForumPostVoteUpdateOne {
+func (_u *ForumTopicVoteUpdateOne) SetUser(v *User) *ForumTopicVoteUpdateOne {
 	return _u.SetUserID(v.ID)
 }
 
-// Mutation returns the ForumPostVoteMutation object of the builder.
-func (_u *ForumPostVoteUpdateOne) Mutation() *ForumPostVoteMutation {
+// Mutation returns the ForumTopicVoteMutation object of the builder.
+func (_u *ForumTopicVoteUpdateOne) Mutation() *ForumTopicVoteMutation {
 	return _u.mutation
 }
 
-// ClearPost clears the "post" edge to the ForumPost entity.
-func (_u *ForumPostVoteUpdateOne) ClearPost() *ForumPostVoteUpdateOne {
-	_u.mutation.ClearPost()
+// ClearTopic clears the "topic" edge to the ForumTopic entity.
+func (_u *ForumTopicVoteUpdateOne) ClearTopic() *ForumTopicVoteUpdateOne {
+	_u.mutation.ClearTopic()
 	return _u
 }
 
 // ClearUser clears the "user" edge to the User entity.
-func (_u *ForumPostVoteUpdateOne) ClearUser() *ForumPostVoteUpdateOne {
+func (_u *ForumTopicVoteUpdateOne) ClearUser() *ForumTopicVoteUpdateOne {
 	_u.mutation.ClearUser()
 	return _u
 }
 
-// Where appends a list predicates to the ForumPostVoteUpdate builder.
-func (_u *ForumPostVoteUpdateOne) Where(ps ...predicate.ForumPostVote) *ForumPostVoteUpdateOne {
+// Where appends a list predicates to the ForumTopicVoteUpdate builder.
+func (_u *ForumTopicVoteUpdateOne) Where(ps ...predicate.ForumTopicVote) *ForumTopicVoteUpdateOne {
 	_u.mutation.Where(ps...)
 	return _u
 }
 
 // Select allows selecting one or more fields (columns) of the returned entity.
 // The default is selecting all fields defined in the entity schema.
-func (_u *ForumPostVoteUpdateOne) Select(field string, fields ...string) *ForumPostVoteUpdateOne {
+func (_u *ForumTopicVoteUpdateOne) Select(field string, fields ...string) *ForumTopicVoteUpdateOne {
 	_u.fields = append([]string{field}, fields...)
 	return _u
 }
 
-// Save executes the query and returns the updated ForumPostVote entity.
-func (_u *ForumPostVoteUpdateOne) Save(ctx context.Context) (*ForumPostVote, error) {
+// Save executes the query and returns the updated ForumTopicVote entity.
+func (_u *ForumTopicVoteUpdateOne) Save(ctx context.Context) (*ForumTopicVote, error) {
 	_u.defaults()
 	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (_u *ForumPostVoteUpdateOne) SaveX(ctx context.Context) *ForumPostVote {
+func (_u *ForumTopicVoteUpdateOne) SaveX(ctx context.Context) *ForumTopicVote {
 	node, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
@@ -357,60 +357,60 @@ func (_u *ForumPostVoteUpdateOne) SaveX(ctx context.Context) *ForumPostVote {
 }
 
 // Exec executes the query on the entity.
-func (_u *ForumPostVoteUpdateOne) Exec(ctx context.Context) error {
+func (_u *ForumTopicVoteUpdateOne) Exec(ctx context.Context) error {
 	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (_u *ForumPostVoteUpdateOne) ExecX(ctx context.Context) {
+func (_u *ForumTopicVoteUpdateOne) ExecX(ctx context.Context) {
 	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (_u *ForumPostVoteUpdateOne) defaults() {
+func (_u *ForumTopicVoteUpdateOne) defaults() {
 	if _, ok := _u.mutation.UpdatedAt(); !ok {
-		v := forumpostvote.UpdateDefaultUpdatedAt()
+		v := forumtopicvote.UpdateDefaultUpdatedAt()
 		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (_u *ForumPostVoteUpdateOne) check() error {
+func (_u *ForumTopicVoteUpdateOne) check() error {
 	if v, ok := _u.mutation.VoteType(); ok {
-		if err := forumpostvote.VoteTypeValidator(v); err != nil {
-			return &ValidationError{Name: "vote_type", err: fmt.Errorf(`ent: validator failed for field "ForumPostVote.vote_type": %w`, err)}
+		if err := forumtopicvote.VoteTypeValidator(v); err != nil {
+			return &ValidationError{Name: "vote_type", err: fmt.Errorf(`ent: validator failed for field "ForumTopicVote.vote_type": %w`, err)}
 		}
 	}
-	if _u.mutation.PostCleared() && len(_u.mutation.PostIDs()) > 0 {
-		return errors.New(`ent: clearing a required unique edge "ForumPostVote.post"`)
+	if _u.mutation.TopicCleared() && len(_u.mutation.TopicIDs()) > 0 {
+		return errors.New(`ent: clearing a required unique edge "ForumTopicVote.topic"`)
 	}
 	if _u.mutation.UserCleared() && len(_u.mutation.UserIDs()) > 0 {
-		return errors.New(`ent: clearing a required unique edge "ForumPostVote.user"`)
+		return errors.New(`ent: clearing a required unique edge "ForumTopicVote.user"`)
 	}
 	return nil
 }
 
-func (_u *ForumPostVoteUpdateOne) sqlSave(ctx context.Context) (_node *ForumPostVote, err error) {
+func (_u *ForumTopicVoteUpdateOne) sqlSave(ctx context.Context) (_node *ForumTopicVote, err error) {
 	if err := _u.check(); err != nil {
 		return _node, err
 	}
-	_spec := sqlgraph.NewUpdateSpec(forumpostvote.Table, forumpostvote.Columns, sqlgraph.NewFieldSpec(forumpostvote.FieldID, field.TypeInt64))
+	_spec := sqlgraph.NewUpdateSpec(forumtopicvote.Table, forumtopicvote.Columns, sqlgraph.NewFieldSpec(forumtopicvote.FieldID, field.TypeInt64))
 	id, ok := _u.mutation.ID()
 	if !ok {
-		return nil, &ValidationError{Name: "id", err: errors.New(`ent: missing "ForumPostVote.id" for update`)}
+		return nil, &ValidationError{Name: "id", err: errors.New(`ent: missing "ForumTopicVote.id" for update`)}
 	}
 	_spec.Node.ID.Value = id
 	if fields := _u.fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
-		_spec.Node.Columns = append(_spec.Node.Columns, forumpostvote.FieldID)
+		_spec.Node.Columns = append(_spec.Node.Columns, forumtopicvote.FieldID)
 		for _, f := range fields {
-			if !forumpostvote.ValidColumn(f) {
+			if !forumtopicvote.ValidColumn(f) {
 				return nil, &ValidationError{Name: f, err: fmt.Errorf("ent: invalid field %q for query", f)}
 			}
-			if f != forumpostvote.FieldID {
+			if f != forumtopicvote.FieldID {
 				_spec.Node.Columns = append(_spec.Node.Columns, f)
 			}
 		}
@@ -423,33 +423,33 @@ func (_u *ForumPostVoteUpdateOne) sqlSave(ctx context.Context) (_node *ForumPost
 		}
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
-		_spec.SetField(forumpostvote.FieldUpdatedAt, field.TypeTime, value)
+		_spec.SetField(forumtopicvote.FieldUpdatedAt, field.TypeTime, value)
 	}
 	if value, ok := _u.mutation.VoteType(); ok {
-		_spec.SetField(forumpostvote.FieldVoteType, field.TypeString, value)
+		_spec.SetField(forumtopicvote.FieldVoteType, field.TypeString, value)
 	}
-	if _u.mutation.PostCleared() {
+	if _u.mutation.TopicCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
 			Inverse: true,
-			Table:   forumpostvote.PostTable,
-			Columns: []string{forumpostvote.PostColumn},
+			Table:   forumtopicvote.TopicTable,
+			Columns: []string{forumtopicvote.TopicColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(forumpost.FieldID, field.TypeInt64),
+				IDSpec: sqlgraph.NewFieldSpec(forumtopic.FieldID, field.TypeInt64),
 			},
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := _u.mutation.PostIDs(); len(nodes) > 0 {
+	if nodes := _u.mutation.TopicIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
 			Inverse: true,
-			Table:   forumpostvote.PostTable,
-			Columns: []string{forumpostvote.PostColumn},
+			Table:   forumtopicvote.TopicTable,
+			Columns: []string{forumtopicvote.TopicColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(forumpost.FieldID, field.TypeInt64),
+				IDSpec: sqlgraph.NewFieldSpec(forumtopic.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {
@@ -461,8 +461,8 @@ func (_u *ForumPostVoteUpdateOne) sqlSave(ctx context.Context) (_node *ForumPost
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
 			Inverse: true,
-			Table:   forumpostvote.UserTable,
-			Columns: []string{forumpostvote.UserColumn},
+			Table:   forumtopicvote.UserTable,
+			Columns: []string{forumtopicvote.UserColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(user.FieldID, field.TypeInt64),
@@ -474,8 +474,8 @@ func (_u *ForumPostVoteUpdateOne) sqlSave(ctx context.Context) (_node *ForumPost
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
 			Inverse: true,
-			Table:   forumpostvote.UserTable,
-			Columns: []string{forumpostvote.UserColumn},
+			Table:   forumtopicvote.UserTable,
+			Columns: []string{forumtopicvote.UserColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(user.FieldID, field.TypeInt64),
@@ -486,12 +486,12 @@ func (_u *ForumPostVoteUpdateOne) sqlSave(ctx context.Context) (_node *ForumPost
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
-	_node = &ForumPostVote{config: _u.config}
+	_node = &ForumTopicVote{config: _u.config}
 	_spec.Assign = _node.assignValues
 	_spec.ScanValues = _node.scanValues
 	if err = sqlgraph.UpdateNode(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
-			err = &NotFoundError{forumpostvote.Label}
+			err = &NotFoundError{forumtopicvote.Label}
 		} else if sqlgraph.IsConstraintError(err) {
 			err = &ConstraintError{msg: err.Error(), wrap: err}
 		}
