@@ -362,7 +362,7 @@ export const useAppStore = defineStore('app', () => {
         return { ...cachedPublicSettings.value }
       }
       return {
-        registration_enabled: false,
+        registration_enabled: true,
         email_verify_enabled: false,
         registration_email_suffix_whitelist: [],
         promo_code_enabled: true,
