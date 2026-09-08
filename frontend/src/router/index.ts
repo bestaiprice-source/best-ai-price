@@ -48,7 +48,13 @@ const routes: RouteRecordRaw[] = [
   },
   {
     path: '/register',
-    redirect: '/login'
+    name: 'Register',
+    component: () => import('@/views/auth/RegisterView.vue'),
+    meta: {
+      requiresAuth: false,
+      title: 'Register',
+      titleKey: 'auth.createAccount'
+    }
   },
   {
     path: '/email-verify',

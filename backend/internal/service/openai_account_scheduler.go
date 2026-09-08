@@ -602,6 +602,9 @@ func openAIAccountReadyTier(account *Account, loadInfo *AccountLoadInfo) (tier i
 	if slotFree < 0 {
 		slotFree = 0
 	}
+	if loadInfo.LoadRate >= 100 {
+		slotFree = 0
+	}
 	switch {
 	case slotFree > 0 && loadInfo.WaitingCount <= 0:
 		return 0, slotCap, slotFree

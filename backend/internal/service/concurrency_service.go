@@ -93,6 +93,7 @@ var accountWaitCountCacheTTL = 250 * time.Millisecond
 type cachedAccountLoadSnapshot struct {
 	CurrentConcurrency int
 	WaitingCount       int
+	LoadRate           int
 	ExpiresAtUnixNano  int64
 }
 
@@ -104,6 +105,7 @@ type cachedAccountWaitCountSnapshot struct {
 type cachedUserLoadSnapshot struct {
 	CurrentConcurrency int
 	WaitingCount       int
+	LoadRate           int
 	ExpiresAtUnixNano  int64
 }
 
@@ -662,7 +664,7 @@ func (s *ConcurrencyService) getCachedUserLoadSnapshot(userID int64, now time.Ti
 	return snapshot, true
 }
 
-func (s *ConcurrencyService) storeCachedUserLoadSnapshot(userID int64, currentConcurrency int, waitingCount int, now time.Time) {
+func (s *ConcurrencyService) storeCachedUserLoadSnapshot(userID int64, currentConcurrency int, waitingCount int, loadRate int, now time.Time) {
 	if s == nil || userID <= 0 {
 		return
 	}
@@ -673,6 +675,7 @@ func (s *ConcurrencyService) storeCachedUserLoadSnapshot(userID int64, currentCo
 	s.userLoadCache.Store(userID, cachedUserLoadSnapshot{
 		CurrentConcurrency: currentConcurrency,
 		WaitingCount:       waitingCount,
+		LoadRate:           loadRate,
 		ExpiresAtUnixNano:  now.Add(ttl).UnixNano(),
 	})
 }
@@ -768,7 +771,7 @@ func (s *ConcurrencyService) getCachedAccountLoadSnapshot(accountID int64, now t
 	return snapshot, true
 }
 
-func (s *ConcurrencyService) storeCachedAccountLoadSnapshot(accountID int64, currentConcurrency int, waitingCount int, now time.Time) {
+func (s *ConcurrencyService) storeCachedAccountLoadSnapshot(accountID int64, currentConcurrency int, waitingCount int, loadRate int, now time.Time) {
 	if s == nil || accountID <= 0 {
 		return
 	}
@@ -779,6 +782,7 @@ func (s *ConcurrencyService) storeCachedAccountLoadSnapshot(accountID int64, cur
 	s.accountLoadCache.Store(accountID, cachedAccountLoadSnapshot{
 		CurrentConcurrency: currentConcurrency,
 		WaitingCount:       waitingCount,
+		LoadRate:           loadRate,
 		ExpiresAtUnixNano:  now.Add(ttl).UnixNano(),
 	})
 }
@@ -802,11 +806,15 @@ func (s *ConcurrencyService) GetAccountsLoadBatch(ctx context.Context, accounts 
 			continue
 		}
 		if snapshot, ok := s.getCachedAccountLoadSnapshot(account.ID, now); ok {
+			loadRate := snapshot.LoadRate
+			if loadRate == 0 && (snapshot.CurrentConcurrency > 0 || snapshot.WaitingCount > 0) {
+				loadRate = accountLoadRate(snapshot.CurrentConcurrency, snapshot.WaitingCount, account.MaxConcurrency)
+			}
 			result[account.ID] = &AccountLoadInfo{
 				AccountID:          account.ID,
 				CurrentConcurrency: snapshot.CurrentConcurrency,
 				WaitingCount:       snapshot.WaitingCount,
-				LoadRate:           accountLoadRate(snapshot.CurrentConcurrency, snapshot.WaitingCount, account.MaxConcurrency),
+				LoadRate:           loadRate,
 			}
 			continue
 		}
@@ -838,13 +846,17 @@ func (s *ConcurrencyService) GetAccountsLoadBatch(ctx context.Context, accounts 
 		if info == nil {
 			info = &AccountLoadInfo{AccountID: account.ID}
 		}
+		loadRate := info.LoadRate
+		if loadRate == 0 && (info.CurrentConcurrency > 0 || info.WaitingCount > 0) {
+			loadRate = accountLoadRate(info.CurrentConcurrency, info.WaitingCount, account.MaxConcurrency)
+		}
 		s.storeCachedAccountWaitCount(account.ID, info.WaitingCount, refreshAt)
-		s.storeCachedAccountLoadSnapshot(account.ID, info.CurrentConcurrency, info.WaitingCount, refreshAt)
+		s.storeCachedAccountLoadSnapshot(account.ID, info.CurrentConcurrency, info.WaitingCount, loadRate, refreshAt)
 		result[account.ID] = &AccountLoadInfo{
 			AccountID:          account.ID,
 			CurrentConcurrency: info.CurrentConcurrency,
 			WaitingCount:       info.WaitingCount,
-			LoadRate:           accountLoadRate(info.CurrentConcurrency, info.WaitingCount, account.MaxConcurrency),
+			LoadRate:           loadRate,
 		}
 	}
 
@@ -870,11 +882,15 @@ func (s *ConcurrencyService) GetUsersLoadBatch(ctx context.Context, users []User
 			continue
 		}
 		if snapshot, ok := s.getCachedUserLoadSnapshot(user.ID, now); ok {
+			loadRate := snapshot.LoadRate
+			if loadRate == 0 && (snapshot.CurrentConcurrency > 0 || snapshot.WaitingCount > 0) {
+				loadRate = accountLoadRate(snapshot.CurrentConcurrency, snapshot.WaitingCount, user.MaxConcurrency)
+			}
 			result[user.ID] = &UserLoadInfo{
 				UserID:             user.ID,
 				CurrentConcurrency: snapshot.CurrentConcurrency,
 				WaitingCount:       snapshot.WaitingCount,
-				LoadRate:           accountLoadRate(snapshot.CurrentConcurrency, snapshot.WaitingCount, user.MaxConcurrency),
+				LoadRate:           loadRate,
 			}
 			continue
 		}
@@ -906,13 +922,17 @@ func (s *ConcurrencyService) GetUsersLoadBatch(ctx context.Context, users []User
 		if info == nil {
 			info = &UserLoadInfo{UserID: user.ID}
 		}
+		loadRate := info.LoadRate
+		if loadRate == 0 && (info.CurrentConcurrency > 0 || info.WaitingCount > 0) {
+			loadRate = accountLoadRate(info.CurrentConcurrency, info.WaitingCount, user.MaxConcurrency)
+		}
 		s.storeCachedUserWaitCount(user.ID, info.WaitingCount, refreshAt)
-		s.storeCachedUserLoadSnapshot(user.ID, info.CurrentConcurrency, info.WaitingCount, refreshAt)
+		s.storeCachedUserLoadSnapshot(user.ID, info.CurrentConcurrency, info.WaitingCount, loadRate, refreshAt)
 		result[user.ID] = &UserLoadInfo{
 			UserID:             user.ID,
 			CurrentConcurrency: info.CurrentConcurrency,
 			WaitingCount:       info.WaitingCount,
-			LoadRate:           accountLoadRate(info.CurrentConcurrency, info.WaitingCount, user.MaxConcurrency),
+			LoadRate:           loadRate,
 		}
 	}
 

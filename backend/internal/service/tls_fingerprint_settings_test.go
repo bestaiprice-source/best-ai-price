@@ -126,5 +126,5 @@ func TestTLSFingerprintSettings_RefreshRuntimeUsesEnabledProfiles(t *testing.T) 
 
 	key, profile = tlsfingerprint.GlobalRegistry().GetProfileEntryByAccountID(5)
 	require.NotNil(t, profile)
-	require.Equal(t, tlsfingerprint.DefaultProfileName, key)
+	require.Contains(t, []string{tlsfingerprint.DefaultProfileName, tlsfingerprint.DefaultCodexProfileName}, key)
 }

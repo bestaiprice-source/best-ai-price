@@ -276,26 +276,32 @@ sub2api/
 - `POST /api/v1/ash/admin/yunwu/nodes/:id/sync`: Trigger manual credit balance synchronization for a Yunwu node.
 
 ### Server Binding & Security Defaults
-- **Localhost Binding**: By default, `server.host` and `BIND_HOST` default to `127.0.0.1` across `config.go`, setup wizards, and systemd service. Docker compose configurations (`docker-compose.yml`, `docker-compose.local.yml`) expose port 8080 directly (`8080:8080`).
+- **Localhost Binding**: By default, `server.host` and `BIND_HOST` default to `127.0.0.1` across `config.go`, setup wizards, and systemd service. Docker compose configuration `deploy/docker-compose.local.yml` supports configurable host port mapping via `${HOST_PORT:-8000}:${SERVER_PORT:-8080}` to avoid port collisions on Windows Hyper-V / WSL reserved ranges.
+- **Frontend Registration Route**: The `/register` route maps to `RegisterView.vue` with a sign-up link rendered on `LoginView.vue` (when `backend_mode_enabled` is disabled).
+- **Concurrency & Load Rate Scheduler Behavior**:
+  - `ConcurrencyService`: `cachedAccountLoadSnapshot` and `cachedUserLoadSnapshot` store and preserve precomputed `LoadRate`. Upstream or mock-provided load rates are retained when concurrency and waiting counters are zero, rather than resetting to 0.
+  - `gatewayAccountReadyTier` & `openAIAccountReadyTier`: Accounts with `LoadRate >= 100` are explicitly marked with `slotFree = 0` (ReadyTier 2 / saturated), ensuring tiered schedulers properly prioritize accounts with available capacity over saturated accounts.
 
 ---
 
 ## 🧪 10. Testing & Development Rules
 
 ### Workspace Rules (`.agents/AGENTS.md`)
-1. **80% Unit Test Coverage Rule**: Modules in `pkg/hypervisor/...` MUST maintain at least 80% unit test coverage.
-2. **Clean Test Suite**: All unit tests must pass before pushing (`git push`).
+1. **80% Unit Test Coverage Rule**: Modules in `pkg/hypervisor/...` and packages across the repository MUST maintain at least 80% unit test coverage.
+2. **Clean Test Suite**: All unit tests must pass cleanly before pushing (`git push`).
 3. **Pre-Push Documentation Rule**: You MUST update `CLAUDE.md` with any architectural changes, endpoints, or fixes before pushing.
 
 ### Running Backend Tests & Build Verification
 ```bash
 cd backend
-go test -cover ./pkg/hypervisor/...
+go test -tags=unit ./...
 go build ./...
 ```
 
 ### Running Frontend Verification
 ```bash
 cd frontend
-npm run lint
+npm run lint:check
+npm run typecheck
 ```
+
