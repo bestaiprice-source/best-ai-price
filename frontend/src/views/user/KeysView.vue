@@ -41,8 +41,17 @@
         >
           <Icon name="refresh" size="md" :class="loading ? 'animate-spin' : ''" />
         </button>
-        <button @click="showCreateModal = true" class="btn btn-primary" data-tour="keys-create-btn">
-          <Icon name="plus" size="md" class="mr-2" />
+        <button
+          @click="handleCreateKeyClick"
+          :disabled="creatingQuickKey"
+          class="btn btn-primary"
+          data-tour="keys-create-btn"
+        >
+          <Icon
+            :name="creatingQuickKey ? 'refresh' : 'plus'"
+            size="md"
+            :class="[creatingQuickKey ? 'animate-spin' : '', 'mr-2']"
+          />
           {{ t('keys.createKey') }}
         </button>
       </div>
@@ -388,7 +397,7 @@
               :title="t('keys.noKeysYet')"
               :description="t('keys.createFirstKey')"
               :action-text="t('keys.createKey')"
-              @action="showCreateModal = true"
+              @action="handleCreateKeyClick"
             />
           </template>
         </DataTable>
@@ -1734,6 +1743,57 @@ const handleSubmit = async () => {
     // Don't advance tour on error
   } finally {
     submitting.value = false
+  }
+}
+
+const creatingQuickKey = ref(false)
+
+const handleCreateKeyClick = async () => {
+  if (isAdmin.value) {
+    showCreateModal.value = true
+    return
+  }
+  await createQuickYunwuKey()
+}
+
+const createQuickYunwuKey = async () => {
+  if (creatingQuickKey.value) return
+  creatingQuickKey.value = true
+  try {
+    if (!groups.value || groups.value.length === 0) {
+      await loadGroups()
+    }
+
+    const yunwuGroup =
+      groups.value.find((g) => g.name.toLowerCase() === 'yunwu') ||
+      groups.value.find((g) => g.name.toLowerCase().includes('yunwu')) ||
+      groups.value[0]
+
+    const targetGroupId = yunwuGroup ? yunwuGroup.id : null
+    const targetGroupIds = targetGroupId ? [targetGroupId] : []
+    const keyName = t('keys.namePlaceholder') || 'My API Key'
+
+    const newKey = await keysAPI.create(
+      keyName,
+      targetGroupId,
+      targetGroupIds,
+      [],
+      undefined,
+      [],
+      [],
+      0,
+      undefined,
+      { rate_limit_5h: 0, rate_limit_1d: 0, rate_limit_7d: 0 }
+    )
+
+    createdKey.value = newKey.key
+    appStore.showSuccess(t('keys.keyCreatedSuccess'))
+    await loadApiKeys()
+  } catch (error: any) {
+    const errorMsg = error.response?.data?.detail || error.message || t('keys.failedToSave')
+    appStore.showError(errorMsg)
+  } finally {
+    creatingQuickKey.value = false
   }
 }
 

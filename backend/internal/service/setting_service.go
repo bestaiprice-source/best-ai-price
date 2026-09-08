@@ -384,7 +384,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		RegistrationEnabled:                  settings[SettingKeyRegistrationEnabled] == "true",
 		EmailVerifyEnabled:                   emailVerifyEnabled,
 		RegistrationEmailSuffixWhitelist:     registrationEmailSuffixWhitelist,
-		PromoCodeEnabled:                     settings[SettingKeyPromoCodeEnabled] != "false", // 默认启用
+		PromoCodeEnabled:                     settings[SettingKeyPromoCodeEnabled] == "true",
 		PasswordResetEnabled:                 passwordResetEnabled,
 		InvitationCodeEnabled:                settings[SettingKeyInvitationCodeEnabled] == "true",
 		TotpEnabled:                          settings[SettingKeyTotpEnabled] == "true",
@@ -1098,7 +1098,7 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeyRegistrationEnabled:              "true",
 		SettingKeyEmailVerifyEnabled:               "false",
 		SettingKeyRegistrationEmailSuffixWhitelist: "[]",
-		SettingKeyPromoCodeEnabled:                 "true", // 默认启用优惠码功能
+		SettingKeyPromoCodeEnabled:                 "false", // 默认禁用优惠码功能
 		SettingKeySiteName:                         "Sub2API",
 		SettingKeySiteLogo:                         "",
 		SettingKeyPurchaseSubscriptionEnabled:      "false",
@@ -1152,7 +1152,7 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 		RegistrationEnabled:              settings[SettingKeyRegistrationEnabled] == "true",
 		EmailVerifyEnabled:               emailVerifyEnabled,
 		RegistrationEmailSuffixWhitelist: ParseRegistrationEmailSuffixWhitelist(settings[SettingKeyRegistrationEmailSuffixWhitelist]),
-		PromoCodeEnabled:                 settings[SettingKeyPromoCodeEnabled] != "false", // 默认启用
+		PromoCodeEnabled:                 settings[SettingKeyPromoCodeEnabled] == "true",
 		PasswordResetEnabled:             emailVerifyEnabled && settings[SettingKeyPasswordResetEnabled] == "true",
 		FrontendURL:                      settings[SettingKeyFrontendURL],
 		InvitationCodeEnabled:            settings[SettingKeyInvitationCodeEnabled] == "true",

@@ -92,10 +92,12 @@ Administrators can view, copy, edit, and delete all API keys across all users in
 - **Admin Read Endpoints**: `GET /api/v1/admin/data/auth-providers`, `GET /api/v1/admin/auth-providers`, `GET /api/v1/admin/data/auth_providers.json` (requires admin credentials).
 - **Authentication**: Requires header `x-api-key: <admin-api-key>` or Bearer JWT token with admin role.
 
-### Frontend Integration (`frontend/src/views/user/KeysView.vue`)
+### Frontend Integration (`frontend/src/views/user/KeysView.vue` & `RegisterView.vue`)
 - **Admin Detection**: Automatically calls `listAdmin`, `updateAdmin`, and `removeAdmin` when `isAdmin` is true.
 - **Owner Column**: Displays the owner's username, email, and User ID in the table for admins.
 - **User Filter**: Adds a user selection dropdown for filtering keys by owner.
+- **Non-Admin Direct Key Creation**: For non-admin users, clicking "Create API Key" bypasses the configuration modal and directly creates a key bound to the `yunwu` group, automatically popping up the key token modal for one-time copying. Admin users retain the modal for full customization (owner, quota, custom key, expiration, rate limits, model restrictions).
+- **Promo Code Disablement**: Promo code input has been removed from user registration (`frontend/src/views/auth/RegisterView.vue`) and `promo_code_enabled` defaults to `false` in backend system settings.
 
 ---
 
