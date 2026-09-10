@@ -550,6 +550,18 @@ const routes: RouteRecordRaw[] = [
       requiresPayment: true
     }
   },
+  {
+    path: '/admin/orders/providers',
+    name: 'AdminPaymentProviders',
+    component: () => import('@/views/admin/orders/AdminPaymentProvidersView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Payment Providers',
+      titleKey: 'nav.paymentProviders',
+      requiresPayment: true
+    }
+  },
 
   // ==================== 404 Not Found ====================
   {

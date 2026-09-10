@@ -261,6 +261,10 @@ sub2api/
   - `POST /api/v1/payment/orders`: Create payment order (balance recharge or subscription).
   - `POST /api/v1/payment/orders/verify`: Verify payment order status.
   - `POST /api/v1/payment/webhook/nowpayments`: Public webhook callback verifying `x-nowpayments-sig` HMAC-SHA512 signature over alphabetically sorted JSON payload keys and idempotently fulfilling balances.
+  - `GET/POST /api/v1/admin/payment/providers`: Manage payment gateway provider instances (NOWPayments, Stripe, Alipay, WeChat Pay, EasyPay).
+  - `PUT/DELETE /api/v1/admin/payment/providers/:id`: Update credentials/status/limits or delete gateway provider instance.
+- **Admin Panel UI Integration**:
+  - Admin view `/admin/orders/providers` (`AdminPaymentProvidersView.vue`) integrated into sidebar navigation under Payment & Orders. Provides visual provider registration, modal credential configuration (API keys, IPN secrets, sandbox mode, currency, limits), drag-and-drop ordering, and quick enable/refund toggles.
 - **Platform Currency & Settlement**:
   - Standard payment currency across frontend UI and international gateways is USD (`$`).
   - Stripe initializes `PaymentIntent` in `usd`.

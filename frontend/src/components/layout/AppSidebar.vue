@@ -671,9 +671,10 @@ const adminNavItems = computed((): NavItem[] => {
     { path: '/admin/promo-codes', label: t('nav.promoCodes'), icon: GiftIcon, hideInSimpleMode: true },
     ...(paymentEnabled.value
       ? [
-          { path: '/admin/orders/dashboard', label: 'Payment Dashboard', icon: ChartIcon, hideInSimpleMode: true },
-          { path: '/admin/orders', label: 'Order Management', icon: OrderIcon, hideInSimpleMode: true },
-          { path: '/admin/orders/plans', label: 'Payment Plans', icon: OrderListIcon, hideInSimpleMode: true }
+          { path: '/admin/orders/dashboard', label: t('nav.paymentDashboard'), icon: ChartIcon, hideInSimpleMode: true },
+          { path: '/admin/orders', label: t('nav.orderManagement'), icon: OrderIcon, hideInSimpleMode: true },
+          { path: '/admin/orders/plans', label: t('nav.paymentPlans'), icon: OrderListIcon, hideInSimpleMode: true },
+          { path: '/admin/orders/providers', label: t('nav.paymentProviders'), icon: CreditCardIcon, hideInSimpleMode: true }
         ]
       : []),
     { path: '/admin/usage', label: t('nav.usage'), icon: ChartIcon }
