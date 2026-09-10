@@ -61,6 +61,7 @@ func ExecutablePaymentRoutes(h *handler.Handlers) []gatewayctx.RouteDef {
 			gatewayctx.RouteDef{Method: http.MethodPost, Path: "/api/v1/payment/webhook/alipay", Handler: h.PaymentWebhook.AlipayNotifyGateway, Middleware: publicMW},
 			gatewayctx.RouteDef{Method: http.MethodPost, Path: "/api/v1/payment/webhook/wxpay", Handler: h.PaymentWebhook.WxpayNotifyGateway, Middleware: publicMW},
 			gatewayctx.RouteDef{Method: http.MethodPost, Path: "/api/v1/payment/webhook/stripe", Handler: h.PaymentWebhook.StripeWebhookGateway, Middleware: publicMW},
+			gatewayctx.RouteDef{Method: http.MethodPost, Path: "/api/v1/payment/webhook/nowpayments", Handler: h.PaymentWebhook.NowPaymentsWebhookGateway, Middleware: publicMW},
 		)
 	}
 

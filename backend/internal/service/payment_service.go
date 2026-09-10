@@ -43,7 +43,8 @@ const (
 	defaultPageSize    = 20
 	maxPageSize        = 100
 	topUsersLimit      = 10
-	amountToleranceCNY = 0.01
+	amountToleranceCurrency = 0.01
+	amountToleranceCNY      = amountToleranceCurrency
 
 	orderIDPrefix = "sub2_"
 )

@@ -141,6 +141,12 @@
     @apply dark:shadow-amber-500/20;
   }
 
+  .btn-nowpayments {
+    @apply bg-gradient-to-r from-blue-600 to-emerald-500;
+    @apply text-white shadow-md shadow-blue-500/25;
+    @apply hover:from-blue-700 hover:to-emerald-600 hover:shadow-lg hover:shadow-blue-500/30;
+  }
+
   .btn-sm {
     @apply rounded-lg px-3 py-1.5 text-xs;
   }

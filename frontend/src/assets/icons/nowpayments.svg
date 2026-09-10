@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none">
+  <defs>
+    <linearGradient id="np-grad" x1="4" y1="4" x2="44" y2="44" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0052FE"/>
+      <stop offset="100%" stop-color="#00C076"/>
+    </linearGradient>
+    <filter id="np-shadow" x="0" y="2" width="48" height="48" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#0052FE" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+  <!-- Background Circle -->
+  <circle cx="24" cy="24" r="20" fill="url(#np-grad)"/>
+  <!-- NOWPayments Stylized Geometric N & Arrow -->
+  <path d="M16 33V15L24 25V15L32 25V33L24 23V33L16 33Z" fill="white" fill-opacity="0.95"/>
+  <circle cx="32" cy="15" r="2.5" fill="#FFD700"/>
+</svg>
