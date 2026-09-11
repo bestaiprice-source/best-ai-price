@@ -31,11 +31,12 @@ function createOrderResult(overrides: Partial<CreateOrderResult> = {}): CreateOr
 }
 
 describe('getVisibleMethods', () => {
-  it('normalizes provider aliases and keeps stripe as a top-level method', () => {
+  it('normalizes provider aliases and keeps stripe and nowpayments as top-level methods', () => {
     const visible = getVisibleMethods({
       alipay_direct: methodLimit({ single_min: 5 }),
       wxpay: methodLimit({ single_max: 100 }),
       stripe: methodLimit({ fee_rate: 3 }),
+      nowpayments: methodLimit({ fee_rate: 1 }),
       easypay: methodLimit({ fee_rate: 9 }),
     })
 
@@ -43,11 +44,25 @@ describe('getVisibleMethods', () => {
       alipay: methodLimit({ single_min: 5 }),
       wxpay: methodLimit({ single_max: 100 }),
       stripe: methodLimit({ fee_rate: 3 }),
+      nowpayments: methodLimit({ fee_rate: 1 }),
     })
   })
 })
 
 describe('decidePaymentLaunch', () => {
+  it('routes nowpayments with invoice pay_url to redirect_waiting', () => {
+    const decision = decidePaymentLaunch(createOrderResult({
+      pay_url: 'https://nowpayments.io/payment/?iid=inv-12345',
+    }), {
+      visibleMethod: 'nowpayments',
+      orderType: 'balance',
+      isMobile: false,
+    })
+
+    expect(decision.kind).toBe('redirect_waiting')
+    expect(decision.paymentState.payUrl).toBe('https://nowpayments.io/payment/?iid=inv-12345')
+  })
+
   it('routes dedicated Stripe button clicks to the full Payment Element without a preselected sub-method', () => {
     const decision = decidePaymentLaunch(createOrderResult({
       client_secret: 'cs_test',

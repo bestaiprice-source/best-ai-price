@@ -15,9 +15,10 @@ const VISIBLE_METHOD_ALIASES = {
   wxpay: 'wxpay',
   wxpay_direct: 'wxpay',
   stripe: 'stripe',
+  nowpayments: 'nowpayments',
 } as const
 
-export type VisiblePaymentMethod = 'alipay' | 'wxpay' | 'stripe'
+export type VisiblePaymentMethod = 'alipay' | 'wxpay' | 'stripe' | 'nowpayments'
 export type StripeVisibleMethod = 'alipay' | 'wechat_pay'
 export type PaymentLaunchKind =
   | 'qr_waiting'
