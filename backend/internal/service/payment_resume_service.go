@@ -248,8 +248,7 @@ func CanonicalizeReturnURL(raw string, srcHost string, srcURL string) (string, e
 	if parsed.Path == "" {
 		parsed.Path = "/"
 	}
-	cleanPath := strings.TrimSuffix(parsed.Path, "/")
-	if cleanPath != paymentResultReturnPath && !strings.HasSuffix(cleanPath, paymentResultReturnPath) {
+	if parsed.Path != paymentResultReturnPath {
 		return "", infraerrors.BadRequest("INVALID_RETURN_URL", "return_url must target the canonical internal payment result page")
 	}
 	if !allowedReturnURLHost(parsed.Host, srcHost, srcURL) {
