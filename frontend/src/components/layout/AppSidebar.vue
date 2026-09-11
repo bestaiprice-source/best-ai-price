@@ -552,7 +552,6 @@ const userNavItems = computed((): NavItem[] => {
     ...(channelMonitorEnabled.value
       ? [{ path: '/monitor', label: 'Channel Status', icon: SignalIcon }]
       : []),
-    { path: '/subscriptions', label: t('nav.mySubscriptions'), icon: CreditCardIcon, hideInSimpleMode: true },
     ...(appStore.cachedPublicSettings?.sora_client_enabled
       ? [{ path: '/sora', label: t('nav.sora'), icon: SoraIcon }]
       : []),
@@ -560,7 +559,7 @@ const userNavItems = computed((): NavItem[] => {
       ? [
           {
             path: '/purchase',
-            label: t('nav.buySubscription'),
+            label: t('nav.recharge'),
             icon: RechargeSubscriptionIcon,
             hideInSimpleMode: true
           }
@@ -592,7 +591,6 @@ const personalNavItems = computed((): NavItem[] => {
     ...(channelMonitorEnabled.value
       ? [{ path: '/monitor', label: 'Channel Status', icon: SignalIcon }]
       : []),
-    { path: '/subscriptions', label: t('nav.mySubscriptions'), icon: CreditCardIcon, hideInSimpleMode: true },
     ...(appStore.cachedPublicSettings?.sora_client_enabled
       ? [{ path: '/sora', label: t('nav.sora'), icon: SoraIcon }]
       : []),
@@ -600,7 +598,7 @@ const personalNavItems = computed((): NavItem[] => {
       ? [
           {
             path: '/purchase',
-            label: t('nav.buySubscription'),
+            label: t('nav.recharge'),
             icon: RechargeSubscriptionIcon,
             hideInSimpleMode: true
           }
@@ -649,7 +647,6 @@ const adminNavItems = computed((): NavItem[] => {
     ...(channelMonitorEnabled.value
       ? [{ path: '/admin/channels/monitor', label: 'Channel Monitor', icon: SignalIcon, hideInSimpleMode: true }]
       : []),
-    { path: '/admin/subscriptions', label: t('nav.subscriptions'), icon: CreditCardIcon, hideInSimpleMode: true },
     { path: '/admin/accounts', label: t('nav.accounts'), icon: GlobeIcon },
     { path: '/admin/announcements', label: t('nav.announcements'), icon: BellIcon },
     { path: '/admin/proxies', label: t('nav.proxies'), icon: ServerIcon },

@@ -221,13 +221,17 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/payment',
+    redirect: '/purchase'
+  },
+  {
     path: '/purchase',
     name: 'PurchaseSubscription',
     component: () => import('@/views/user/PurchaseRouteView.vue'),
     meta: {
       requiresAuth: true,
       requiresAdmin: false,
-      title: 'Purchase Subscription',
+      title: 'Recharge',
       titleKey: 'purchase.title',
       descriptionKey: 'purchase.description'
     }

@@ -41,16 +41,15 @@
         <!-- Language Switcher -->
         <LocaleSwitcher />
 
-        <!-- Subscription Progress (for users with active subscriptions) -->
-        <SubscriptionProgressMini v-if="user" />
-
-        <!-- Balance Display -->
-        <div
+        <!-- Balance Display (Click to Recharge) -->
+        <router-link
           v-if="user"
-          class="hidden items-center gap-2 rounded-xl bg-primary-50 px-3 py-1.5 dark:bg-primary-900/20 sm:flex"
+          to="/purchase"
+          class="group hidden items-center gap-2 rounded-xl bg-primary-50 px-3 py-1.5 transition-all hover:bg-primary-100 hover:shadow-sm dark:bg-primary-900/20 dark:hover:bg-primary-900/40 sm:flex cursor-pointer"
+          :title="t('nav.recharge')"
         >
           <svg
-            class="h-4 w-4 text-primary-600 dark:text-primary-400"
+            class="h-4 w-4 text-primary-600 transition-transform group-hover:scale-110 dark:text-primary-400"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -65,7 +64,12 @@
           <span class="text-sm font-semibold text-primary-700 dark:text-primary-300">
             ${{ user.balance?.toFixed(2) || '0.00' }}
           </span>
-        </div>
+          <span class="flex h-4 w-4 items-center justify-center rounded-full bg-primary-200/60 text-primary-700 transition-colors group-hover:bg-primary-600 group-hover:text-white dark:bg-primary-800/60 dark:text-primary-300 dark:group-hover:bg-primary-500">
+            <svg class="h-2.5 w-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="3">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+          </span>
+        </router-link>
 
         <!-- User Dropdown -->
         <div v-if="user" class="relative" ref="dropdownRef">
@@ -101,15 +105,20 @@
                 <div class="text-xs text-gray-500 dark:text-dark-400">{{ user.email }}</div>
               </div>
 
-              <!-- Balance (mobile only) -->
-              <div class="border-b border-gray-100 px-4 py-2 dark:border-dark-700 sm:hidden">
-                <div class="text-xs text-gray-500 dark:text-dark-400">
-                  {{ t('common.balance') }}
+              <!-- Balance (mobile only, click to recharge) -->
+              <router-link
+                to="/purchase"
+                @click="closeDropdown"
+                class="flex items-center justify-between border-b border-gray-100 px-4 py-2 hover:bg-gray-50 dark:border-dark-700 dark:hover:bg-dark-800 sm:hidden"
+              >
+                <div class="flex items-center gap-1.5 text-xs text-gray-500 dark:text-dark-400">
+                  <span>{{ t('common.balance') }}</span>
+                  <span class="text-primary-600 dark:text-primary-400 font-medium">({{ t('nav.recharge') }})</span>
                 </div>
                 <div class="text-sm font-semibold text-primary-600 dark:text-primary-400">
                   ${{ user.balance?.toFixed(2) || '0.00' }}
                 </div>
-              </div>
+              </router-link>
 
               <div class="py-1">
                 <router-link to="/profile" @click="closeDropdown" class="dropdown-item">
@@ -215,7 +224,6 @@ import { useI18n } from 'vue-i18n'
 import { useAppStore, useAuthStore, useOnboardingStore } from '@/stores'
 import { useAdminSettingsStore } from '@/stores/adminSettings'
 import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
-import SubscriptionProgressMini from '@/components/common/SubscriptionProgressMini.vue'
 import AnnouncementBell from '@/components/common/AnnouncementBell.vue'
 import Icon from '@/components/icons/Icon.vue'
 
