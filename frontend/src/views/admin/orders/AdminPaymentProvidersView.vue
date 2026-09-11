@@ -1,6 +1,39 @@
 <template>
   <AppLayout>
     <div class="space-y-4">
+      <!-- Master Payment System Toggle Card -->
+      <div class="card p-4">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div class="space-y-1">
+            <div class="flex items-center gap-2">
+              <h3 class="text-sm font-semibold text-gray-900 dark:text-white">
+                {{ t('admin.settings.payment.globalPaymentEnabled') }}
+              </h3>
+              <span
+                :class="[
+                  'badge text-xs',
+                  paymentConfig?.enabled ? 'badge-success' : 'badge-warning'
+                ]"
+              >
+                {{ paymentConfig?.enabled ? t('admin.settings.payment.systemActive') : t('admin.settings.payment.systemInactive') }}
+              </span>
+            </div>
+            <p class="text-xs text-gray-500 dark:text-gray-400">
+              {{ t('admin.settings.payment.globalPaymentEnabledHint') }}
+            </p>
+          </div>
+          <div class="flex items-center gap-2">
+            <ToggleSwitch
+              :label="t('common.enabled')"
+              :checked="!!paymentConfig?.enabled"
+              :disabled="updatingGlobalConfig || !paymentConfig"
+              @toggle="toggleGlobalPayment"
+            />
+          </div>
+        </div>
+      </div>
+
+      <!-- Payment Providers List -->
       <PaymentProviderList
         :providers="providers"
         :loading="loading"
@@ -8,7 +41,7 @@
         :enabled-payment-types="enabledPaymentTypes"
         :all-payment-types="allPaymentTypes"
         :redirect-label="redirectLabel"
-        @refresh="loadProviders"
+        @refresh="refreshAll"
         @create="openCreate"
         @edit="openEdit"
         @delete="confirmDelete"
@@ -48,7 +81,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
-import { adminPaymentAPI } from '@/api/admin/payment'
+import { adminPaymentAPI, type AdminPaymentConfig } from '@/api/admin/payment'
 import { extractI18nErrorMessage } from '@/utils/apiError'
 import type { ProviderInstance } from '@/types/payment'
 import type { TypeOption } from '@/components/payment/providerConfig'
@@ -56,6 +89,7 @@ import AppLayout from '@/components/layout/AppLayout.vue'
 import PaymentProviderList from '@/components/payment/PaymentProviderList.vue'
 import PaymentProviderDialog from '@/components/payment/PaymentProviderDialog.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
+import ToggleSwitch from '@/components/payment/ToggleSwitch.vue'
 
 const { t } = useI18n()
 const appStore = useAppStore()
@@ -63,6 +97,9 @@ const appStore = useAppStore()
 const loading = ref(false)
 const saving = ref(false)
 const providers = ref<ProviderInstance[]>([])
+
+const paymentConfig = ref<AdminPaymentConfig | null>(null)
+const updatingGlobalConfig = ref(false)
 
 const showDialog = ref(false)
 const editingProvider = ref<ProviderInstance | null>(null)
@@ -90,13 +127,37 @@ const allPaymentTypes = computed<TypeOption[]>(() => [
 
 const redirectLabel = computed(() => t('payment.modes.redirect', 'Redirect'))
 
-const enabledPaymentTypes = computed(() => [
-  'nowpayments',
-  'stripe',
-  'easypay',
-  'alipay',
-  'wxpay',
-])
+const enabledPaymentTypes = computed(() => {
+  if (paymentConfig.value?.enabled_payment_types && paymentConfig.value.enabled_payment_types.length > 0) {
+    return paymentConfig.value.enabled_payment_types
+  }
+  return ['nowpayments', 'stripe', 'easypay', 'alipay', 'wxpay']
+})
+
+async function loadPaymentConfig() {
+  try {
+    const res = await adminPaymentAPI.getConfig()
+    paymentConfig.value = res.data
+  } catch {
+    // Ignore if not yet configured
+  }
+}
+
+async function toggleGlobalPayment() {
+  if (!paymentConfig.value) return
+  updatingGlobalConfig.value = true
+  try {
+    const nextEnabled = !paymentConfig.value.enabled
+    await adminPaymentAPI.updateConfig({ enabled: nextEnabled })
+    paymentConfig.value.enabled = nextEnabled
+    await appStore.fetchPublicSettings()
+    appStore.showSuccess(t('common.saved'))
+  } catch (err: unknown) {
+    appStore.showError(extractI18nErrorMessage(err, t, 'payment.errors', t('common.error')))
+  } finally {
+    updatingGlobalConfig.value = false
+  }
+}
 
 async function loadProviders() {
   loading.value = true
@@ -108,6 +169,10 @@ async function loadProviders() {
   } finally {
     loading.value = false
   }
+}
+
+async function refreshAll() {
+  await Promise.all([loadProviders(), loadPaymentConfig()])
 }
 
 function openCreate() {
@@ -206,6 +271,6 @@ async function handleSave(payload: {
 }
 
 onMounted(() => {
-  loadProviders()
+  refreshAll()
 })
 </script>
