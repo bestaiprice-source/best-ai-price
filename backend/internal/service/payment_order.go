@@ -412,7 +412,11 @@ func (s *PaymentService) invokeProvider(ctx context.Context, order *dbent.Paymen
 	}
 	if notifyURL == "" && canonicalReturnURL != "" {
 		if parsed, err := url.Parse(canonicalReturnURL); err == nil && parsed.Scheme != "" && parsed.Host != "" {
-			notifyURL = fmt.Sprintf("%s://%s/api/v1/payment/webhook/%s", parsed.Scheme, parsed.Host, sel.ProviderKey)
+			prefix := ""
+			if idx := strings.Index(parsed.Path, "/payment/result"); idx > 0 {
+				prefix = strings.TrimSuffix(parsed.Path[:idx], "/")
+			}
+			notifyURL = fmt.Sprintf("%s://%s%s/api/v1/payment/webhook/%s", parsed.Scheme, parsed.Host, prefix, sel.ProviderKey)
 		}
 	}
 	providerReq := buildProviderCreatePaymentRequest(CreateOrderRequest{
