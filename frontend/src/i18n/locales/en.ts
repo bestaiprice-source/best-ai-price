@@ -5456,6 +5456,8 @@ export default {
       easypay: 'EasyPay',
       nowpayments: 'Crypto (NOWPayments)',
     },
+    quickAmounts: 'Quick Amounts',
+    customAmount: 'Custom Amount',
     fee: 'Fee',
     paymentAmount: 'Payment Amount',
     actualPay: 'Actual Pay',

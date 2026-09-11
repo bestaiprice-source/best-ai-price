@@ -5645,6 +5645,8 @@ export default {
       easypay: '易支付',
       nowpayments: '加密货币 (NOWPayments)',
     },
+    quickAmounts: '快捷金额',
+    customAmount: '自定义金额',
     fee: '手续费',
     paymentAmount: '支付金额',
     actualPay: '实付金额',

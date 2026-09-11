@@ -410,6 +410,7 @@ async function saveSettings() {
     const configData: Record<string, string> = {
       sandbox: form.sandbox ? 'true' : 'false',
       currency: (form.currency.trim() || 'USD').toUpperCase(),
+      notifyUrl: webhookUrl.value,
     }
 
     // Only send keys if entered; empty values on existing provider will preserve secrets

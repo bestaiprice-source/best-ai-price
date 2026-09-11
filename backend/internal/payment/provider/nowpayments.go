@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -32,6 +33,7 @@ type NowPayments struct {
 	ipnSecret  string
 	baseURL    string
 	currency   string
+	notifyURL  string
 	httpClient *http.Client
 }
 
@@ -41,6 +43,7 @@ type NowPayments struct {
 // - ipnSecret / ipnsecret (required)
 // - sandbox: "true" for sandbox API, "false" for production (default false)
 // - currency: base price currency, e.g. "usd" (default "usd")
+// - notifyUrl / notify_url: default IPN callback URL (optional)
 func NewNowPayments(instanceID string, config map[string]string) (*NowPayments, error) {
 	apiKey := strings.TrimSpace(config["apiKey"])
 	if apiKey == "" {
@@ -68,12 +71,18 @@ func NewNowPayments(instanceID string, config map[string]string) (*NowPayments, 
 		currency = "usd"
 	}
 
+	notifyURL := strings.TrimSpace(config["notifyUrl"])
+	if notifyURL == "" {
+		notifyURL = strings.TrimSpace(config["notify_url"])
+	}
+
 	return &NowPayments{
 		instanceID: instanceID,
 		apiKey:     apiKey,
 		ipnSecret:  ipnSecret,
 		baseURL:    baseURL,
 		currency:   currency,
+		notifyURL:  notifyURL,
 		httpClient: &http.Client{Timeout: nowpaymentsHTTPTimeout},
 	}, nil
 }
@@ -101,9 +110,25 @@ func (n *NowPayments) CreatePayment(ctx context.Context, req payment.CreatePayme
 		"price_currency":    n.currency,
 		"order_id":          req.OrderID,
 		"order_description": orderDesc,
-		"ipn_callback_url":  req.NotifyURL,
-		"success_url":       req.ReturnURL,
-		"cancel_url":        req.ReturnURL,
+	}
+
+	notifyURL := strings.TrimSpace(req.NotifyURL)
+	if notifyURL == "" {
+		notifyURL = strings.TrimSpace(n.notifyURL)
+	}
+	if notifyURL == "" && req.ReturnURL != "" {
+		if parsed, err := url.Parse(req.ReturnURL); err == nil && parsed.Scheme != "" && parsed.Host != "" {
+			notifyURL = fmt.Sprintf("%s://%s/api/v1/payment/webhook/nowpayments", parsed.Scheme, parsed.Host)
+		}
+	}
+	if notifyURL != "" {
+		bodyMap["ipn_callback_url"] = notifyURL
+	}
+
+	returnURL := strings.TrimSpace(req.ReturnURL)
+	if returnURL != "" {
+		bodyMap["success_url"] = returnURL
+		bodyMap["cancel_url"] = returnURL
 	}
 
 	reqBytes, err := json.Marshal(bodyMap)

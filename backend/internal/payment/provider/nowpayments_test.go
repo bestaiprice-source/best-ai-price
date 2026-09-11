@@ -101,6 +101,76 @@ func TestNowPayments_CreatePayment(t *testing.T) {
 	assert.Equal(t, payment.CreatePaymentResultOrderCreated, resp.ResultType)
 }
 
+func TestNowPayments_CreatePayment_OptionalURLs(t *testing.T) {
+	t.Run("omits empty URLs so nowpayments API does not reject empty string", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			var req map[string]any
+			err := json.NewDecoder(r.Body).Decode(&req)
+			assert.NoError(t, err)
+			assert.Nil(t, req["ipn_callback_url"])
+			assert.Nil(t, req["success_url"])
+			assert.Nil(t, req["cancel_url"])
+
+			resp := map[string]any{
+				"id":          "inv-111",
+				"invoice_url": "https://nowpayments.io/payment/?iid=inv-111",
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(resp)
+		}))
+		defer server.Close()
+
+		np, err := NewNowPayments("np-1", map[string]string{
+			"apiKey":    "test-api-key",
+			"ipnSecret": "test-secret",
+		})
+		require.NoError(t, err)
+		np.baseURL = server.URL
+
+		resp, err := np.CreatePayment(context.Background(), payment.CreatePaymentRequest{
+			OrderID: "order-empty-urls",
+			Amount:  "15.00",
+		})
+		require.NoError(t, err)
+		assert.Equal(t, "inv-111", resp.TradeNo)
+		assert.Equal(t, "https://nowpayments.io/payment/?iid=inv-111", resp.PayURL)
+	})
+
+	t.Run("derives ipn_callback_url from return URL origin when notify URL is not provided", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			var req map[string]any
+			err := json.NewDecoder(r.Body).Decode(&req)
+			assert.NoError(t, err)
+			assert.Equal(t, "https://sub2api.example.com/api/v1/payment/webhook/nowpayments", req["ipn_callback_url"])
+			assert.Equal(t, "https://sub2api.example.com/payment/result", req["success_url"])
+			assert.Equal(t, "https://sub2api.example.com/payment/result", req["cancel_url"])
+
+			resp := map[string]any{
+				"id":          "inv-222",
+				"invoice_url": "https://nowpayments.io/payment/?iid=inv-222",
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(resp)
+		}))
+		defer server.Close()
+
+		np, err := NewNowPayments("np-1", map[string]string{
+			"apiKey":    "test-api-key",
+			"ipnSecret": "test-secret",
+		})
+		require.NoError(t, err)
+		np.baseURL = server.URL
+
+		resp, err := np.CreatePayment(context.Background(), payment.CreatePaymentRequest{
+			OrderID:   "order-derived-webhook",
+			Amount:    "20.00",
+			ReturnURL: "https://sub2api.example.com/payment/result",
+		})
+		require.NoError(t, err)
+		assert.Equal(t, "inv-222", resp.TradeNo)
+	})
+}
+
 func TestNowPayments_CreatePayment_Error(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)

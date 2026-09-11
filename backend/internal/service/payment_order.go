@@ -403,13 +403,25 @@ func (s *PaymentService) invokeProvider(ctx context.Context, order *dbent.Paymen
 	if err != nil {
 		return nil, err
 	}
+	notifyURL := ""
+	if sel.Config != nil {
+		notifyURL = strings.TrimSpace(sel.Config["notifyUrl"])
+		if notifyURL == "" {
+			notifyURL = strings.TrimSpace(sel.Config["notify_url"])
+		}
+	}
+	if notifyURL == "" && canonicalReturnURL != "" {
+		if parsed, err := url.Parse(canonicalReturnURL); err == nil && parsed.Scheme != "" && parsed.Host != "" {
+			notifyURL = fmt.Sprintf("%s://%s/api/v1/payment/webhook/%s", parsed.Scheme, parsed.Host, sel.ProviderKey)
+		}
+	}
 	providerReq := buildProviderCreatePaymentRequest(CreateOrderRequest{
 		PaymentType: req.PaymentType,
 		OpenID:      req.OpenID,
 		ClientIP:    req.ClientIP,
 		IsMobile:    req.IsMobile,
 		ReturnURL:   providerReturnURL,
-	}, sel, outTradeNo, payAmountStr, subject)
+	}, sel, outTradeNo, payAmountStr, subject, notifyURL)
 	pr, err := prov.CreatePayment(ctx, providerReq)
 	if err != nil {
 		slog.Error("[PaymentService] CreatePayment failed", "provider", sel.ProviderKey, "instance", sel.InstanceID, "error", err)
@@ -445,13 +457,14 @@ func (s *PaymentService) invokeProvider(ctx context.Context, order *dbent.Paymen
 	return resp, nil
 }
 
-func buildProviderCreatePaymentRequest(req CreateOrderRequest, sel *payment.InstanceSelection, orderID, amount, subject string) payment.CreatePaymentRequest {
+func buildProviderCreatePaymentRequest(req CreateOrderRequest, sel *payment.InstanceSelection, orderID, amount, subject, notifyURL string) payment.CreatePaymentRequest {
 	return payment.CreatePaymentRequest{
 		OrderID:            orderID,
 		Amount:             amount,
 		PaymentType:        req.PaymentType,
 		Subject:            subject,
 		ReturnURL:          req.ReturnURL,
+		NotifyURL:          notifyURL,
 		OpenID:             strings.TrimSpace(req.OpenID),
 		ClientIP:           req.ClientIP,
 		IsMobile:           req.IsMobile,
