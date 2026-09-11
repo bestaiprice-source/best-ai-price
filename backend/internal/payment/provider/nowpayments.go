@@ -100,32 +100,40 @@ func (n *NowPayments) CreatePayment(ctx context.Context, req payment.CreatePayme
 		return nil, fmt.Errorf("invalid amount: %w", err)
 	}
 
-	orderDesc := req.Subject
+	orderID := strings.TrimSpace(req.OrderID)
+	if len(orderID) > 255 {
+		orderID = orderID[:255]
+	}
+
+	orderDesc := strings.TrimSpace(req.Subject)
 	if orderDesc == "" {
-		orderDesc = fmt.Sprintf("Order %s", req.OrderID)
+		orderDesc = fmt.Sprintf("Order %s", orderID)
+	}
+	if len(orderDesc) > 255 {
+		orderDesc = orderDesc[:255]
 	}
 
 	bodyMap := map[string]any{
 		"price_amount":      amountFloat,
 		"price_currency":    n.currency,
-		"order_id":          req.OrderID,
+		"order_id":          orderID,
 		"order_description": orderDesc,
 	}
 
-	notifyURL := strings.TrimSpace(req.NotifyURL)
+	notifyURL := sanitizeURLForNOWPayments(req.NotifyURL)
 	if notifyURL == "" {
-		notifyURL = strings.TrimSpace(n.notifyURL)
+		notifyURL = sanitizeURLForNOWPayments(n.notifyURL)
 	}
 	if notifyURL == "" && req.ReturnURL != "" {
 		if parsed, err := url.Parse(req.ReturnURL); err == nil && parsed.Scheme != "" && parsed.Host != "" {
-			notifyURL = fmt.Sprintf("%s://%s/api/v1/payment/webhook/nowpayments", parsed.Scheme, parsed.Host)
+			notifyURL = sanitizeURLForNOWPayments(fmt.Sprintf("%s://%s/api/v1/payment/webhook/nowpayments", parsed.Scheme, parsed.Host))
 		}
 	}
 	if notifyURL != "" {
 		bodyMap["ipn_callback_url"] = notifyURL
 	}
 
-	returnURL := strings.TrimSpace(req.ReturnURL)
+	returnURL := sanitizeURLForNOWPayments(req.ReturnURL)
 	if returnURL != "" {
 		bodyMap["success_url"] = returnURL
 		bodyMap["cancel_url"] = returnURL
@@ -181,6 +189,57 @@ func (n *NowPayments) CreatePayment(ctx context.Context, req payment.CreatePayme
 		PayURL:     invoiceResp.InvoiceURL,
 		ResultType: payment.CreatePaymentResultOrderCreated,
 	}, nil
+}
+
+// sanitizeURLForNOWPayments ensures the URL fits within NOWPayments' 255-character DB column limit.
+// NOWPayments stores invoice URLs in varchar(255) columns. Large URLs (e.g. containing JWT resume tokens)
+// cause PostgreSQL "value too long for type character varying(255)" HTTP 500 errors.
+func sanitizeURLForNOWPayments(rawURL string) string {
+	rawURL = strings.TrimSpace(rawURL)
+	if rawURL == "" {
+		return ""
+	}
+
+	parsed, err := url.Parse(rawURL)
+	if err != nil || !parsed.IsAbs() || parsed.Host == "" {
+		if len(rawURL) <= 255 {
+			return rawURL
+		}
+		return ""
+	}
+
+	// Always strip large JWT resume tokens as NOWPayments does not use them
+	q := parsed.Query()
+	if q.Has("resume_token") {
+		q.Del("resume_token")
+		parsed.RawQuery = q.Encode()
+	}
+
+	if len(parsed.String()) <= 255 {
+		return parsed.String()
+	}
+
+	// If still too long, keep only order_id & status
+	cleanQuery := url.Values{}
+	if orderID := q.Get("order_id"); orderID != "" {
+		cleanQuery.Set("order_id", orderID)
+	}
+	if status := q.Get("status"); status != "" {
+		cleanQuery.Set("status", status)
+	}
+	parsed.RawQuery = cleanQuery.Encode()
+	if len(parsed.String()) <= 255 {
+		return parsed.String()
+	}
+
+	// Strip query parameters completely
+	parsed.RawQuery = ""
+	if len(parsed.String()) <= 255 {
+		return parsed.String()
+	}
+
+	// If base URL itself exceeds 255 chars, omit to avoid HTTP 500
+	return ""
 }
 
 // QueryOrder queries payment status by payment ID or invoice ID.

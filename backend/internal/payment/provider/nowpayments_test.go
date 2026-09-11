@@ -6,6 +6,7 @@ import (
 	"crypto/sha512"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -168,6 +169,46 @@ func TestNowPayments_CreatePayment_OptionalURLs(t *testing.T) {
 		})
 		require.NoError(t, err)
 		assert.Equal(t, "inv-222", resp.TradeNo)
+	})
+
+	t.Run("strips resume_token and keeps URL under 255 chars", func(t *testing.T) {
+		hugeToken := strings.Repeat("abcde12345", 30) // 300 chars
+		rawURL := fmt.Sprintf("https://sub2api.example.com/payment/result?order_id=999&out_trade_no=202609111855&resume_token=%s&status=success", hugeToken)
+		assert.Greater(t, len(rawURL), 255)
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			var req map[string]any
+			err := json.NewDecoder(r.Body).Decode(&req)
+			assert.NoError(t, err)
+
+			successURL := req["success_url"].(string)
+			assert.LessOrEqual(t, len(successURL), 255)
+			assert.NotContains(t, successURL, "resume_token")
+			assert.Contains(t, successURL, "order_id=999")
+
+			resp := map[string]any{
+				"id":          "inv-333",
+				"invoice_url": "https://nowpayments.io/payment/?iid=inv-333",
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(resp)
+		}))
+		defer server.Close()
+
+		np, err := NewNowPayments("np-1", map[string]string{
+			"apiKey":    "test-api-key",
+			"ipnSecret": "test-secret",
+		})
+		require.NoError(t, err)
+		np.baseURL = server.URL
+
+		resp, err := np.CreatePayment(context.Background(), payment.CreatePaymentRequest{
+			OrderID:   "order-huge-url",
+			Amount:    "30.00",
+			ReturnURL: rawURL,
+		})
+		require.NoError(t, err)
+		assert.Equal(t, "inv-333", resp.TradeNo)
 	})
 }
 
