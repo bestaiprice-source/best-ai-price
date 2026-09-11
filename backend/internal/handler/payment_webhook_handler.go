@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -75,6 +76,16 @@ func (h *PaymentWebhookHandler) StripeWebhook(c *gin.Context) {
 
 func (h *PaymentWebhookHandler) StripeWebhookGateway(c gatewayctx.GatewayContext) {
 	h.handleNotifyGateway(c, payment.TypeStripe)
+}
+
+// NowPaymentsWebhook handles NOWPayments payment notifications.
+// POST /api/v1/payment/webhook/nowpayments
+func (h *PaymentWebhookHandler) NowPaymentsWebhook(c *gin.Context) {
+	h.NowPaymentsWebhookGateway(gatewayctx.FromGin(c))
+}
+
+func (h *PaymentWebhookHandler) NowPaymentsWebhookGateway(c gatewayctx.GatewayContext) {
+	h.handleNotifyGateway(c, payment.TypeNowPayments)
 }
 
 // handleNotify is the shared logic for all provider webhook handlers.
@@ -167,6 +178,13 @@ func extractOutTradeNo(rawBody, providerKey string) string {
 		if err == nil {
 			return values.Get("out_trade_no")
 		}
+	case payment.TypeNowPayments:
+		var payload struct {
+			OrderID string `json:"order_id"`
+		}
+		if err := json.Unmarshal([]byte(rawBody), &payload); err == nil {
+			return payload.OrderID
+		}
 	}
 	// For other providers (Stripe, Alipay direct, WxPay direct), the registry
 	// typically has only one instance, so no instance lookup is needed.
@@ -217,6 +235,8 @@ func writeSuccessResponseGateway(c gatewayctx.GatewayContext, providerKey string
 		c.WriteJSON(http.StatusOK, wxpaySuccessResponse{Code: wxpaySuccessCode, Message: wxpaySuccessMessage})
 	case payment.TypeStripe:
 		writeGatewayString(c, http.StatusOK, "")
+	case payment.TypeNowPayments:
+		writeGatewayString(c, http.StatusOK, "OK")
 	default:
 		writeGatewayString(c, http.StatusOK, "success")
 	}

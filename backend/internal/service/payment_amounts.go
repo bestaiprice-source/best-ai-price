@@ -26,7 +26,7 @@ func calculateGatewayRefundAmount(orderAmount, payAmount, refundAmount float64) 
 	if orderAmount <= 0 || payAmount <= 0 || refundAmount <= 0 {
 		return 0
 	}
-	if math.Abs(refundAmount-orderAmount) <= amountToleranceCNY {
+	if math.Abs(refundAmount-orderAmount) <= amountToleranceCurrency {
 		return decimal.NewFromFloat(payAmount).Round(2).InexactFloat64()
 	}
 	return decimal.NewFromFloat(payAmount).

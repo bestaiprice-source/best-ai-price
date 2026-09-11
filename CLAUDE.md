@@ -248,6 +248,34 @@ sub2api/
 - `GET /api/v1/admin/provider-comments`: Admin moderation list with provider, status, and sentiment filters.
 - `PUT /api/v1/admin/provider-comments/:id/status`: Admin status toggle (`active` / `hidden`).
 
+### Payment System & Gateway Providers (`/api/v1/payment/*` & `/api/v1/admin/payment/*`)
+- **Supported Payment Types**:
+  - `alipay`: Alipay aggregation / direct.
+  - `wxpay`: WeChat Pay direct (native & JSAPI).
+  - `stripe`: Stripe credit cards and alternative methods.
+  - `easypay`: EasyPay aggregation platform.
+  - `nowpayments`: NOWPayments cryptocurrency payment gateway (accepts 300+ cryptocurrencies with automated blockchain confirmations).
+- **Core Endpoints**:
+  - `GET /api/v1/payment/config`: User checkout configuration.
+  - `GET /api/v1/payment/checkout-info`: Single-call payment page bootstrap data.
+  - `POST /api/v1/payment/orders`: Create payment order (balance recharge or subscription).
+  - `POST /api/v1/payment/orders/verify`: Verify payment order status.
+  - `POST /api/v1/payment/webhook/nowpayments`: Public webhook callback verifying `x-nowpayments-sig` HMAC-SHA512 signature over alphabetically sorted JSON payload keys and idempotently fulfilling balances.
+  - `GET/POST /api/v1/admin/payment/providers`: Manage payment gateway provider instances (NOWPayments, Stripe, Alipay, WeChat Pay, EasyPay).
+  - `PUT/DELETE /api/v1/admin/payment/providers/:id`: Update credentials/status/limits or delete gateway provider instance.
+- **Admin Panel UI Integration**:
+  - Admin view `/admin/orders/providers` (`AdminPaymentProvidersView.vue`) integrated into sidebar navigation under Payment & Orders. Provides visual provider registration, modal credential configuration (API keys, IPN secrets, sandbox mode, currency, limits), drag-and-drop ordering, and quick enable/refund toggles.
+- **Platform Currency & Settlement**:
+  - Standard payment currency across frontend UI and international gateways is USD (`$`).
+  - Stripe initializes `PaymentIntent` in `usd`.
+  - NOWPayments creates invoices in `usd` (matching system order `pay_amount`).
+- **NOWPayments Provider Specs (`backend/internal/payment/provider/nowpayments.go`)**:
+  - Configuration keys: `apiKey` (sensitive), `ipnSecret` (sensitive), `sandbox` (`true`/`false`, optional), `currency` (default `usd`, optional).
+  - Host resolution: `https://api.nowpayments.io/v1` in production, `https://api-sandbox.nowpayments.io/v1` when `sandbox=true`.
+  - Order creation: calls `POST /v1/invoice`, returns hosted `invoice_url` for customer redirection and coin selection.
+  - Order query: maps `finished`, `confirmed`, and `sending` to `ProviderStatusPaid` (prioritizes successful payments in invoice transaction lists).
+  - Security & Webhooks: Alphabetical key sorting with `json.Number` preservation and unescaped HTML characters (`SetEscapeHTML(false)`) to guarantee HMAC-SHA512 verification fidelity.
+
 ### Forum APIs (`/api/v1/forum/*` & `/api/v1/admin/forum/*`)
 - `GET /api/v1/forum/topics`: Paginated list of forum topics with sort options (`latest`, `top_liked`, `most_comments`), keyword `search`, and `user_vote` for authenticated viewers.
 - `POST /api/v1/forum/topics`: Creates a new forum topic with `title` (up to 255 chars) and `content`/description (up to 10000 chars).
