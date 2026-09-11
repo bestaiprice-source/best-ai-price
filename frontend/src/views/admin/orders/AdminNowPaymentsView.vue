@@ -311,7 +311,6 @@ import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { adminPaymentAPI } from '@/api/admin/payment'
 import { extractI18nErrorMessage } from '@/utils/apiError'
-import { getPublicAppBaseUrl } from '@/utils/url'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
 
@@ -340,7 +339,7 @@ const form = reactive({
 
 const webhookUrl = computed(() => {
   if (typeof window !== 'undefined') {
-    return `${getPublicAppBaseUrl()}/api/v1/payment/webhook/nowpayments`
+    return `${window.location.origin}/api/v1/payment/webhook/nowpayments`
   }
   return '/api/v1/payment/webhook/nowpayments'
 })

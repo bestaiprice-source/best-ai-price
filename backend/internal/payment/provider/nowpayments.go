@@ -126,11 +126,7 @@ func (n *NowPayments) CreatePayment(ctx context.Context, req payment.CreatePayme
 	}
 	if notifyURL == "" && req.ReturnURL != "" {
 		if parsed, err := url.Parse(req.ReturnURL); err == nil && parsed.Scheme != "" && parsed.Host != "" {
-			prefix := ""
-			if idx := strings.Index(parsed.Path, "/payment/result"); idx > 0 {
-				prefix = strings.TrimSuffix(parsed.Path[:idx], "/")
-			}
-			notifyURL = sanitizeURLForNOWPayments(fmt.Sprintf("%s://%s%s/api/v1/payment/webhook/nowpayments", parsed.Scheme, parsed.Host, prefix))
+			notifyURL = sanitizeURLForNOWPayments(fmt.Sprintf("%s://%s/api/v1/payment/webhook/nowpayments", parsed.Scheme, parsed.Host))
 		}
 	}
 	if notifyURL != "" {
