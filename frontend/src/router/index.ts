@@ -548,15 +548,19 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
-    path: '/admin/orders/providers',
-    name: 'AdminPaymentProviders',
-    component: () => import('@/views/admin/orders/AdminPaymentProvidersView.vue'),
+    path: '/admin/nowpayments',
+    name: 'AdminNowPayments',
+    component: () => import('@/views/admin/orders/AdminNowPaymentsView.vue'),
     meta: {
       requiresAuth: true,
       requiresAdmin: true,
-      title: 'Payment Providers',
-      titleKey: 'nav.paymentProviders'
+      title: 'NOWPayments',
+      titleKey: 'nowpayments.title'
     }
+  },
+  {
+    path: '/admin/orders/providers',
+    redirect: '/admin/nowpayments'
   },
 
   // ==================== 404 Not Found ====================

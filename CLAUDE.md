@@ -264,7 +264,7 @@ sub2api/
   - `GET/POST /api/v1/admin/payment/providers`: Manage payment gateway provider instances (NOWPayments, Stripe, Alipay, WeChat Pay, EasyPay).
   - `PUT/DELETE /api/v1/admin/payment/providers/:id`: Update credentials/status/limits or delete gateway provider instance.
 - **Admin Panel UI Integration**:
-  - Admin view `/admin/orders/providers` (`AdminPaymentProvidersView.vue`) integrated into sidebar navigation under Payment & Orders. Provides visual provider registration, modal credential configuration (API keys, IPN secrets, sandbox mode, currency, limits), drag-and-drop ordering, and quick enable/refund toggles.
+  - Dedicated admin view `/admin/nowpayments` (`AdminNowPaymentsView.vue`) integrated into sidebar navigation as "NOWPayments" (replaces legacy multi-item payment menus with a single streamlined configuration view). Provides master toggle (syncs `payment_enabled` setting), sandbox mode switch, API key and IPN secret configuration with visibility toggles, currency override, and 1-click IPN webhook URL copy. Legacy `/admin/orders/providers` automatically redirects to `/admin/nowpayments`.
 - **Platform Currency & Settlement**:
   - Standard payment currency across frontend UI and international gateways is USD (`$`).
   - Stripe initializes `PaymentIntent` in `usd`.
