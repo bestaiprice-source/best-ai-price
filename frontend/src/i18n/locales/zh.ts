@@ -303,6 +303,7 @@ export default {
     balance: '余额',
     available: '可用',
     copiedToClipboard: '已复制到剪贴板',
+    copy: '复制',
     copied: '已复制',
     copyFailed: '复制失败',
     verifying: '验证中...',
@@ -5687,5 +5688,13 @@ export default {
     ipnCallbackUrlDesc: '请将此地址配置到 NOWPayments 控制台的 Store Settings -> Instant Payment Notifications 中：',
     openDashboard: '打开 NOWPayments 控制台',
     savedSuccess: 'NOWPayments 配置已成功保存！',
+    keyConfigured: '已保存在数据库中',
+    leaveEmptyToKeep: '留空则保持当前密钥',
+    apiKeyConfiguredHint: 'API Key 已安全保存在数据库中。留空则继续使用现有密钥，输入新值可进行覆盖更换。',
+    ipnSecretConfiguredHint: 'IPN Secret 已安全保存在数据库中。留空则继续使用现有密钥，输入新值可进行覆盖更换。',
+    keysRequired: '首次配置请输入 API Key 和 IPN Secret Key',
+    bannerActive: 'NOWPayments 支付已启用。用户现可使用加密货币进行充值和订阅。',
+    bannerSavedDisabled: 'NOWPayments 凭证已保存在数据库中，但支付通道当前为禁用状态。请开启上方的开关并保存以激活。',
+    bannerNotConfigured: 'NOWPayments 尚未配置。请在下方填写 API 密钥与回调密钥后点击保存。',
   }
 }

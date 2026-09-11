@@ -8,11 +8,14 @@
             <span>NOWPayments</span>
             <span
               :class="[
-                'badge text-xs',
+                'badge text-xs font-semibold',
                 form.enabled ? 'badge-success' : 'badge-neutral'
               ]"
             >
               {{ form.enabled ? t('nowpayments.statusActive') : t('nowpayments.statusDisabled') }}
+            </span>
+            <span v-if="form.sandbox" class="badge badge-warning text-[11px] font-semibold">
+              TESTNET / SANDBOX
             </span>
           </h1>
           <p class="text-sm text-gray-500 dark:text-gray-400">
@@ -40,46 +43,119 @@
 
       <!-- Form Card -->
       <form v-else @submit.prevent="saveSettings" class="card divide-y divide-gray-100 dark:divide-dark-700">
-        <!-- Main Toggle Section -->
+        <!-- Status Banner -->
+        <div
+          v-if="providerId && form.enabled"
+          class="p-4 bg-emerald-50 dark:bg-emerald-900/20 border-b border-emerald-100 dark:border-emerald-800/40 flex items-start gap-3"
+        >
+          <div class="mt-0.5 text-emerald-600 dark:text-emerald-400">
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          </div>
+          <div>
+            <h4 class="text-sm font-semibold text-emerald-900 dark:text-emerald-200">
+              {{ t('nowpayments.statusActive') }}
+            </h4>
+            <p class="text-xs text-emerald-700 dark:text-emerald-300 mt-0.5">
+              {{ t('nowpayments.bannerActive') }}
+            </p>
+          </div>
+        </div>
+
+        <div
+          v-else-if="providerId && !form.enabled"
+          class="p-4 bg-amber-50 dark:bg-amber-900/20 border-b border-amber-100 dark:border-amber-800/40 flex items-start gap-3"
+        >
+          <div class="mt-0.5 text-amber-600 dark:text-amber-400">
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+          </div>
+          <div>
+            <h4 class="text-sm font-semibold text-amber-900 dark:text-amber-200">
+              {{ t('nowpayments.statusDisabled') }}
+            </h4>
+            <p class="text-xs text-amber-700 dark:text-amber-300 mt-0.5">
+              {{ t('nowpayments.bannerSavedDisabled') }}
+            </p>
+          </div>
+        </div>
+
+        <!-- Main Toggles Section -->
         <div class="p-6 space-y-4">
-          <div class="flex items-center justify-between">
-            <div>
-              <label class="font-medium text-gray-900 dark:text-white">
-                {{ t('nowpayments.enablePayment') }}
-              </label>
-              <p class="text-xs text-gray-500 dark:text-gray-400">
+          <!-- Enable Toggle -->
+          <div class="flex items-center justify-between cursor-pointer py-1" @click="form.enabled = !form.enabled">
+            <div class="pr-4">
+              <div class="flex items-center gap-2">
+                <span class="font-medium text-gray-900 dark:text-white">
+                  {{ t('nowpayments.enablePayment') }}
+                </span>
+                <span
+                  :class="[
+                    'badge text-xs font-semibold',
+                    form.enabled ? 'badge-success' : 'badge-neutral'
+                  ]"
+                >
+                  {{ form.enabled ? t('nowpayments.statusActive') : t('nowpayments.statusDisabled') }}
+                </span>
+              </div>
+              <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                 {{ t('nowpayments.enablePaymentHint') }}
               </p>
             </div>
-            <ToggleSwitch
-              :label="t('common.enabled')"
-              :checked="form.enabled"
-              @toggle="form.enabled = !form.enabled"
-            />
+            <button
+              type="button"
+              role="switch"
+              :aria-checked="form.enabled"
+              @click.stop="form.enabled = !form.enabled"
+              :class="[
+                'relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none',
+                form.enabled ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dark-600'
+              ]"
+            >
+              <span
+                :class="[
+                  'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out',
+                  form.enabled ? 'translate-x-5' : 'translate-x-0'
+                ]"
+              />
+            </button>
           </div>
 
           <!-- Sandbox Toggle -->
-          <div class="flex items-center justify-between pt-3 border-t border-gray-100 dark:border-dark-700">
-            <div>
+          <div class="flex items-center justify-between cursor-pointer pt-3 border-t border-gray-100 dark:border-dark-700" @click="form.sandbox = !form.sandbox">
+            <div class="pr-4">
               <div class="flex items-center gap-2">
-                <label class="font-medium text-gray-900 dark:text-white">
+                <span class="font-medium text-gray-900 dark:text-white">
                   {{ t('nowpayments.sandboxMode') }}
-                </label>
-                <span v-if="form.sandbox" class="badge badge-warning text-[11px]">
+                </span>
+                <span v-if="form.sandbox" class="badge badge-warning text-[11px] font-semibold">
                   TESTNET / SANDBOX
                 </span>
+                <span v-else class="badge badge-info text-[11px] font-semibold">
+                  PRODUCTION
+                </span>
               </div>
-              <p class="text-xs text-gray-500 dark:text-gray-400">
+              <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                 {{ form.sandbox
                   ? t('nowpayments.sandboxActiveHint')
                   : t('nowpayments.productionActiveHint') }}
               </p>
             </div>
-            <ToggleSwitch
-              :label="t('nowpayments.sandbox')"
-              :checked="form.sandbox"
-              @toggle="form.sandbox = !form.sandbox"
-            />
+            <button
+              type="button"
+              role="switch"
+              :aria-checked="form.sandbox"
+              @click.stop="form.sandbox = !form.sandbox"
+              :class="[
+                'relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none',
+                form.sandbox ? 'bg-amber-500' : 'bg-gray-200 dark:bg-dark-600'
+              ]"
+            >
+              <span
+                :class="[
+                  'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out',
+                  form.sandbox ? 'translate-x-5' : 'translate-x-0'
+                ]"
+              />
+            </button>
           </div>
         </div>
 
@@ -91,17 +167,23 @@
 
           <!-- API Key -->
           <div>
-            <label class="input-label">
-              {{ t('nowpayments.apiKey') }}
-              <span class="text-red-500">*</span>
-            </label>
+            <div class="flex items-center justify-between">
+              <label class="input-label mb-0">
+                {{ t('nowpayments.apiKey') }}
+                <span v-if="!hasApiKey" class="text-red-500">*</span>
+              </label>
+              <span v-if="hasApiKey" class="badge badge-success text-[11px] gap-1 flex items-center">
+                <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                {{ t('nowpayments.keyConfigured') }}
+              </span>
+            </div>
             <div class="relative mt-1">
               <input
                 v-model="form.apiKey"
                 :type="showApiKey ? 'text' : 'password'"
                 class="input pr-10 font-mono text-xs"
-                :placeholder="t('nowpayments.apiKeyPlaceholder')"
-                required
+                :placeholder="hasApiKey ? '•••••••••••••••••••••••••••••••• (' + t('nowpayments.leaveEmptyToKeep') + ')' : t('nowpayments.apiKeyPlaceholder')"
+                :required="!hasApiKey"
                 autocomplete="off"
               />
               <button
@@ -113,23 +195,29 @@
               </button>
             </div>
             <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              {{ t('nowpayments.apiKeyHint') }}
+              {{ hasApiKey ? t('nowpayments.apiKeyConfiguredHint') : t('nowpayments.apiKeyHint') }}
             </p>
           </div>
 
           <!-- IPN Secret Key -->
           <div>
-            <label class="input-label">
-              {{ t('nowpayments.ipnSecret') }}
-              <span class="text-red-500">*</span>
-            </label>
+            <div class="flex items-center justify-between">
+              <label class="input-label mb-0">
+                {{ t('nowpayments.ipnSecret') }}
+                <span v-if="!hasIpnSecret" class="text-red-500">*</span>
+              </label>
+              <span v-if="hasIpnSecret" class="badge badge-success text-[11px] gap-1 flex items-center">
+                <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                {{ t('nowpayments.keyConfigured') }}
+              </span>
+            </div>
             <div class="relative mt-1">
               <input
                 v-model="form.ipnSecret"
                 :type="showIpnSecret ? 'text' : 'password'"
                 class="input pr-10 font-mono text-xs"
-                :placeholder="t('nowpayments.ipnSecretPlaceholder')"
-                required
+                :placeholder="hasIpnSecret ? '•••••••••••••••••••••••••••••••• (' + t('nowpayments.leaveEmptyToKeep') + ')' : t('nowpayments.ipnSecretPlaceholder')"
+                :required="!hasIpnSecret"
                 autocomplete="off"
               />
               <button
@@ -141,7 +229,7 @@
               </button>
             </div>
             <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              {{ t('nowpayments.ipnSecretHint') }}
+              {{ hasIpnSecret ? t('nowpayments.ipnSecretConfiguredHint') : t('nowpayments.ipnSecretHint') }}
             </p>
           </div>
 
@@ -193,9 +281,10 @@
             <button
               type="button"
               @click="copyWebhookUrl"
-              class="btn btn-secondary whitespace-nowrap text-xs"
+              class="btn btn-secondary whitespace-nowrap text-xs flex items-center gap-1.5"
             >
-              {{ copied ? t('common.copied') : t('common.copy') }}
+              <svg v-if="copied" class="h-3.5 w-3.5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+              <span>{{ copied ? t('common.copied') : t('common.copy') }}</span>
             </button>
           </div>
         </div>
@@ -205,7 +294,7 @@
           <button
             type="submit"
             :disabled="saving"
-            class="btn btn-primary"
+            class="btn btn-primary min-w-[100px]"
           >
             <Icon v-if="saving" name="refresh" size="sm" class="animate-spin" />
             <span>{{ saving ? t('common.saving') : t('common.save') }}</span>
@@ -224,7 +313,6 @@ import { adminPaymentAPI } from '@/api/admin/payment'
 import { extractI18nErrorMessage } from '@/utils/apiError'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
-import ToggleSwitch from '@/components/payment/ToggleSwitch.vue'
 
 const { t } = useI18n()
 const appStore = useAppStore()
@@ -238,6 +326,8 @@ const showApiKey = ref(false)
 const showIpnSecret = ref(false)
 
 const providerId = ref<number | null>(null)
+const hasApiKey = ref(false)
+const hasIpnSecret = ref(false)
 
 const form = reactive({
   enabled: false,
@@ -270,10 +360,14 @@ async function loadData() {
     if (np) {
       providerId.value = np.id
       form.enabled = np.enabled
-      form.apiKey = np.config?.apiKey || ''
-      form.ipnSecret = np.config?.ipnSecret || ''
       form.sandbox = np.config?.sandbox === 'true' || np.config?.sandbox === '1'
       form.currency = np.config?.currency || 'USD'
+      // Backend omits secrets in responses for security.
+      // If the provider exists in DB, keys are already securely stored.
+      hasApiKey.value = true
+      hasIpnSecret.value = true
+      form.apiKey = ''
+      form.ipnSecret = ''
     } else {
       providerId.value = null
       form.enabled = false
@@ -281,6 +375,8 @@ async function loadData() {
       form.apiKey = ''
       form.ipnSecret = ''
       form.currency = 'USD'
+      hasApiKey.value = false
+      hasIpnSecret.value = false
     }
     loaded.value = true
   } catch (err: unknown) {
@@ -298,18 +394,35 @@ async function copyWebhookUrl() {
       copied.value = false
     }, 2000)
   } catch {
-    // Fallback
+    // Clipboard permission fallback
   }
 }
 
 async function saveSettings() {
+  // If first-time creation, both keys are required
+  if (!providerId.value && (!form.apiKey.trim() || !form.ipnSecret.trim())) {
+    appStore.showError(t('nowpayments.keysRequired'))
+    return
+  }
+
   saving.value = true
   try {
     const configData: Record<string, string> = {
-      apiKey: form.apiKey.trim(),
-      ipnSecret: form.ipnSecret.trim(),
       sandbox: form.sandbox ? 'true' : 'false',
       currency: (form.currency.trim() || 'USD').toUpperCase(),
+    }
+
+    // Only send keys if entered; empty values on existing provider will preserve secrets
+    if (form.apiKey.trim()) {
+      configData.apiKey = form.apiKey.trim()
+    } else if (providerId.value) {
+      configData.apiKey = ''
+    }
+
+    if (form.ipnSecret.trim()) {
+      configData.ipnSecret = form.ipnSecret.trim()
+    } else if (providerId.value) {
+      configData.ipnSecret = ''
     }
 
     const payload = {

@@ -303,6 +303,7 @@ export default {
     balance: 'Balance',
     available: 'Available',
     copiedToClipboard: 'Copied to clipboard',
+    copy: 'Copy',
     copied: 'Copied',
     copyFailed: 'Failed to copy',
     verifying: 'Verifying...',
@@ -5498,5 +5499,13 @@ export default {
     ipnCallbackUrlDesc: 'Set this URL in your NOWPayments dashboard under Store Settings -> Instant Payment Notifications:',
     openDashboard: 'Open NOWPayments Dashboard',
     savedSuccess: 'NOWPayments settings saved successfully!',
+    keyConfigured: 'Saved in Database',
+    leaveEmptyToKeep: 'Leave empty to keep current key',
+    apiKeyConfiguredHint: 'API Key is securely stored in database. Leave empty to keep existing key, or enter a new one to replace.',
+    ipnSecretConfiguredHint: 'IPN Secret is securely stored in database. Leave empty to keep existing secret, or enter a new one to replace.',
+    keysRequired: 'Please enter both API Key and IPN Secret Key',
+    bannerActive: 'NOWPayments is ACTIVE. Users can now recharge balance and purchase plans with cryptocurrency.',
+    bannerSavedDisabled: 'NOWPayments credentials are saved in database, but the gateway is currently DISABLED. Toggle "Enable NOWPayments" and save to activate.',
+    bannerNotConfigured: 'NOWPayments is not configured yet. Enter your API Key and IPN Secret below to connect.',
   }
 }
