@@ -266,6 +266,7 @@ sub2api/
 - **User Payment UI Integration**:
   - Direct balance top-up flow: header user balance pill (`$0.00`) is an interactive button navigating directly to `/purchase` (`/payment`). Subscriptions mode and legacy plan tabs are removed from client payment views, focusing checkout exclusively on pure balance recharge.
   - Active payment method resolution: `paymentFlow.ts` recognizes `nowpayments` in `VISIBLE_METHOD_ALIASES` and `VisiblePaymentMethod`, mapping NOWPayments provider instances into active selectable recharge methods and launching checkout via `redirect_waiting` to the hosted invoice URL.
+  - Payment result view (`PaymentResultView.vue`): Resolves payment order verification via token or public out_trade_no, formats amounts safely (`Number(fee_rate) || 0`), handles popup window opener focus/close navigation, and displays complete translated order details and status badges (`payment.orders.*`, `payment.status.*`).
 - **Admin Panel UI Integration**:
   - Dedicated admin view `/admin/nowpayments` (`AdminNowPaymentsView.vue`) integrated into sidebar navigation as "NOWPayments" (replaces legacy multi-item payment menus with a single streamlined configuration view). Provides master toggle (syncs `payment_enabled` setting), sandbox mode switch, API key and IPN secret configuration with visibility toggles, currency override, and 1-click IPN webhook URL copy. Legacy `/admin/orders/providers` automatically redirects to `/admin/nowpayments`.
 - **Platform Currency & Settlement**:
