@@ -171,6 +171,40 @@ func TestNowPayments_CreatePayment_OptionalURLs(t *testing.T) {
 		assert.Equal(t, "inv-222", resp.TradeNo)
 	})
 
+	t.Run("derives ipn_callback_url preserving reverse-proxy subpath prefix", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			var req map[string]any
+			err := json.NewDecoder(r.Body).Decode(&req)
+			assert.NoError(t, err)
+			assert.Equal(t, "https://bestaiprice.com/gateway/api/v1/payment/webhook/nowpayments", req["ipn_callback_url"])
+			assert.Equal(t, "https://bestaiprice.com/gateway/payment/result", req["success_url"])
+			assert.Equal(t, "https://bestaiprice.com/gateway/payment/result", req["cancel_url"])
+
+			resp := map[string]any{
+				"id":          "inv-prefix-1",
+				"invoice_url": "https://nowpayments.io/payment/?iid=inv-prefix-1",
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(resp)
+		}))
+		defer server.Close()
+
+		np, err := NewNowPayments("np-1", map[string]string{
+			"apiKey":    "test-api-key",
+			"ipnSecret": "test-secret",
+		})
+		require.NoError(t, err)
+		np.baseURL = server.URL
+
+		resp, err := np.CreatePayment(context.Background(), payment.CreatePaymentRequest{
+			OrderID:   "order-derived-prefix-webhook",
+			Amount:    "25.00",
+			ReturnURL: "https://bestaiprice.com/gateway/payment/result",
+		})
+		require.NoError(t, err)
+		assert.Equal(t, "inv-prefix-1", resp.TradeNo)
+	})
+
 	t.Run("strips resume_token and keeps URL under 255 chars", func(t *testing.T) {
 		hugeToken := strings.Repeat("abcde12345", 30) // 300 chars
 		rawURL := fmt.Sprintf("https://sub2api.example.com/payment/result?order_id=999&out_trade_no=202609111855&resume_token=%s&status=success", hugeToken)
