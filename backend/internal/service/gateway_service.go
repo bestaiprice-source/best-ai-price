@@ -38,6 +38,7 @@ import (
 	"golang.org/x/sync/singleflight"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 )
 
 const (
@@ -8243,10 +8244,14 @@ func (s *GatewayService) RecordUsage(ctx context.Context, input *RecordUsageInpu
 			CacheCreation1hTokens: result.Usage.CacheCreation1hTokens,
 		}
 		var err error
-		cost, err = s.billingService.CalculateCost(billingModel, tokens, multiplier)
+		cost, err = s.billingService.CalculateCostWithContext(ctx, billingModel, tokens, multiplier, "")
 		if err != nil {
-			logger.LegacyPrintf("service.gateway", "Calculate cost failed: %v", err)
-			cost = &CostBreakdown{ActualCost: 0}
+			logger.L().With(
+				zap.String("component", "service.gateway"),
+				zap.String("model", billingModel),
+				zap.Error(err),
+			).Error("gateway.calculate_cost_failed_using_failsafe_pricing")
+			cost = s.billingService.CalculateFailSafeCost(billingModel, tokens, multiplier)
 		}
 	}
 
@@ -8433,8 +8438,12 @@ func (s *GatewayService) RecordUsageWithLongContext(ctx context.Context, input *
 		var err error
 		cost, err = s.billingService.CalculateCostWithLongContext(billingModel, tokens, multiplier, input.LongContextThreshold, input.LongContextMultiplier)
 		if err != nil {
-			logger.LegacyPrintf("service.gateway", "Calculate cost failed: %v", err)
-			cost = &CostBreakdown{ActualCost: 0}
+			logger.L().With(
+				zap.String("component", "service.gateway"),
+				zap.String("model", billingModel),
+				zap.Error(err),
+			).Error("gateway.calculate_cost_failed_using_failsafe_pricing")
+			cost = s.billingService.CalculateFailSafeCost(billingModel, tokens, multiplier)
 		}
 	}
 

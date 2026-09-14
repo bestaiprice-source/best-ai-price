@@ -53,6 +53,7 @@ type ModelPricing struct {
 	CacheCreation5mPrice           float64 // 5分钟缓存创建每token价格 (USD)
 	CacheCreation1hPrice           float64 // 1小时缓存创建每token价格 (USD)
 	ImageOutputPricePerToken       float64 // 图片输出 token 价格 (USD)
+	FixedPricePerRequest           float64 // 固定单次请求费用 (USD，若 >0 则按次收费)
 	SupportsCacheBreakdown         bool    // 是否支持详细的缓存分类
 	LongContextInputThreshold      int     // 超过阈值后按整次会话提升输入价格
 	LongContextInputMultiplier     float64 // 长上下文整次会话输入倍率
@@ -111,14 +112,16 @@ type CostBreakdown struct {
 type BillingService struct {
 	cfg            *config.Config
 	pricingService *PricingService
+	yunwuPricing   *YunwuPricingService
 	fallbackPrices map[string]*ModelPricing // 硬编码回退价格
 }
 
 // NewBillingService 创建计费服务实例
-func NewBillingService(cfg *config.Config, pricingService *PricingService) *BillingService {
+func NewBillingService(cfg *config.Config, pricingService *PricingService, yunwuPricing *YunwuPricingService) *BillingService {
 	s := &BillingService{
 		cfg:            cfg,
 		pricingService: pricingService,
+		yunwuPricing:   yunwuPricing,
 		fallbackPrices: make(map[string]*ModelPricing),
 	}
 
@@ -126,6 +129,11 @@ func NewBillingService(cfg *config.Config, pricingService *PricingService) *Bill
 	s.initFallbackPricing()
 
 	return s
+}
+
+// SetYunwuPricing 允许动态设置或注入 YunwuPricingService
+func (s *BillingService) SetYunwuPricing(yw *YunwuPricingService) {
+	s.yunwuPricing = yw
 }
 
 // initFallbackPricing 初始化硬编码回退价格（当动态价格不可用时使用）
@@ -335,10 +343,22 @@ func (s *BillingService) getFallbackPricing(model string) *ModelPricing {
 
 // GetModelPricing 获取模型价格配置
 func (s *BillingService) GetModelPricing(model string) (*ModelPricing, error) {
+	return s.GetModelPricingWithContext(context.Background(), model)
+}
+
+// GetModelPricingWithContext 获取模型价格配置（支持上下文传递）
+func (s *BillingService) GetModelPricingWithContext(ctx context.Context, model string) (*ModelPricing, error) {
 	// 标准化模型名称（转小写）
 	model = strings.ToLower(model)
 
-	// 1. 优先从动态价格服务获取
+	// 1. 优先从 Yunwu / OpenLux 实时动态价格获取
+	if s.yunwuPricing != nil {
+		if ywPricing, ok := s.yunwuPricing.GetModelPricing(ctx, model); ok && ywPricing != nil {
+			return s.applyModelSpecificPricingPolicy(model, ywPricing), nil
+		}
+	}
+
+	// 2. 其次从 LiteLLM 动态价格服务获取
 	if s.pricingService != nil {
 		litellmPricing := s.pricingService.GetModelPricing(model)
 		if litellmPricing != nil {
@@ -366,7 +386,7 @@ func (s *BillingService) GetModelPricing(model string) (*ModelPricing, error) {
 		}
 	}
 
-	// 2. 使用硬编码回退价格
+	// 3. 使用硬编码回退价格
 	fallback := s.getFallbackPricing(model)
 	if fallback != nil {
 		log.Printf("[Billing] Using fallback pricing for model: %s", model)
@@ -378,16 +398,32 @@ func (s *BillingService) GetModelPricing(model string) (*ModelPricing, error) {
 
 // CalculateCost 计算使用费用
 func (s *BillingService) CalculateCost(model string, tokens UsageTokens, rateMultiplier float64) (*CostBreakdown, error) {
-	return s.CalculateCostWithServiceTier(model, tokens, rateMultiplier, "")
+	return s.CalculateCostWithContext(context.Background(), model, tokens, rateMultiplier, "")
 }
 
 func (s *BillingService) CalculateCostWithServiceTier(model string, tokens UsageTokens, rateMultiplier float64, serviceTier string) (*CostBreakdown, error) {
-	pricing, err := s.GetModelPricing(model)
+	return s.CalculateCostWithContext(context.Background(), model, tokens, rateMultiplier, serviceTier)
+}
+
+// CalculateCostWithContext 计算使用费用（支持请求上下文）
+func (s *BillingService) CalculateCostWithContext(ctx context.Context, model string, tokens UsageTokens, rateMultiplier float64, serviceTier string) (*CostBreakdown, error) {
+	pricing, err := s.GetModelPricingWithContext(ctx, model)
 	if err != nil {
 		return nil, err
 	}
 
 	breakdown := &CostBreakdown{}
+
+	// 如果模型配置了单次固定费用（如生图/生视频模型）
+	if pricing.FixedPricePerRequest > 0 {
+		breakdown.TotalCost = pricing.FixedPricePerRequest
+		if rateMultiplier <= 0 {
+			rateMultiplier = 1.0
+		}
+		breakdown.ActualCost = breakdown.TotalCost * rateMultiplier
+		return breakdown, nil
+	}
+
 	inputPricePerToken := pricing.InputPricePerToken
 	outputPricePerToken := pricing.OutputPricePerToken
 	cacheReadPricePerToken := pricing.CacheReadPricePerToken
@@ -782,3 +818,44 @@ func (s *BillingService) getDefaultImagePrice(model string, imageSize string) fl
 
 	return basePrice
 }
+
+// GetFailSafePricing returns conservative default pricing for models where no pricing could be resolved.
+// This prevents unpriced models from being billed at $0.00 (which gives away free upstream tokens).
+func (s *BillingService) GetFailSafePricing(model string) *ModelPricing {
+	if s != nil {
+		if fallback := s.getFallbackPricing(model); fallback != nil {
+			return fallback
+		}
+		if p, ok := s.fallbackPrices["claude-sonnet-4"]; ok && p != nil {
+			return p
+		}
+	}
+	return &ModelPricing{
+		InputPricePerToken:     3e-6,
+		OutputPricePerToken:    15e-6,
+		CacheReadPricePerToken: 0.3e-6,
+	}
+}
+
+// CalculateFailSafeCost computes conservative non-zero cost when pricing lookup fails,
+// protecting the platform from bleeding balance on unknown/misconfigured models.
+func (s *BillingService) CalculateFailSafeCost(model string, tokens UsageTokens, rateMultiplier float64) *CostBreakdown {
+	pricing := s.GetFailSafePricing(model)
+	breakdown := &CostBreakdown{
+		InputCost:  float64(tokens.InputTokens) * pricing.InputPricePerToken,
+		OutputCost: float64(tokens.OutputTokens) * pricing.OutputPricePerToken,
+	}
+	if tokens.CacheCreationTokens > 0 {
+		breakdown.CacheCreationCost = float64(tokens.CacheCreationTokens) * pricing.InputPricePerToken
+	}
+	if tokens.CacheReadTokens > 0 {
+		breakdown.CacheReadCost = float64(tokens.CacheReadTokens) * pricing.CacheReadPricePerToken
+	}
+	breakdown.TotalCost = breakdown.InputCost + breakdown.OutputCost + breakdown.CacheCreationCost + breakdown.CacheReadCost
+	if rateMultiplier <= 0 {
+		rateMultiplier = 1.0
+	}
+	breakdown.ActualCost = breakdown.TotalCost * rateMultiplier
+	return breakdown
+}
+

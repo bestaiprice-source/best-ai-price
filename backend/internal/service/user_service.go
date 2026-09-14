@@ -54,6 +54,9 @@ type UserRepository interface {
 	UpdateTotpSecret(ctx context.Context, userID int64, encryptedSecret *string) error
 	EnableTotp(ctx context.Context, userID int64) error
 	DisableTotp(ctx context.Context, userID int64) error
+
+	// 欠费统计
+	GetOverdraftStats(ctx context.Context) (totalOverdraftUSD float64, count int64, err error)
 }
 
 // UpdateProfileRequest 更新用户资料请求
@@ -247,4 +250,9 @@ func (s *UserService) Delete(ctx context.Context, userID int64) error {
 		return fmt.Errorf("delete user: %w", err)
 	}
 	return nil
+}
+
+// GetOverdraftStats 获取系统欠费统计信息
+func (s *UserService) GetOverdraftStats(ctx context.Context) (totalOverdraftUSD float64, count int64, err error) {
+	return s.userRepo.GetOverdraftStats(ctx)
 }

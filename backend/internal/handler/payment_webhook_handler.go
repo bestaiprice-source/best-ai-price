@@ -111,12 +111,21 @@ func (h *PaymentWebhookHandler) handleNotifyGateway(c gatewayctx.GatewayContext,
 	// Extract out_trade_no to look up the order's specific provider instance.
 	// This is needed when multiple instances of the same provider exist (e.g. multiple EasyPay accounts).
 	outTradeNo := extractOutTradeNo(rawBody, providerKey)
+	if outTradeNo != "" && !isValidOutTradeNo(outTradeNo) {
+		slog.Warn("[Payment Webhook] invalid outTradeNo format", "provider", providerKey, "outTradeNo", outTradeNo)
+		writeGatewayString(c, http.StatusBadRequest, "invalid order id")
+		return
+	}
 
 	providers, err := h.paymentService.GetWebhookProviders(c.Request().Context(), providerKey, outTradeNo)
 	if err != nil {
 		slog.Warn("[Payment Webhook] provider not found", "provider", providerKey, "outTradeNo", outTradeNo, "error", err)
 		if providerKey == payment.TypeWxpay {
 			writeGatewayString(c, http.StatusBadRequest, "verify failed")
+			return
+		}
+		if providerKey == payment.TypeStripe {
+			writeGatewayString(c, http.StatusInternalServerError, "provider resolution failed")
 			return
 		}
 		writeSuccessResponseGateway(c, providerKey)
@@ -185,10 +194,51 @@ func extractOutTradeNo(rawBody, providerKey string) string {
 		if err := json.Unmarshal([]byte(rawBody), &payload); err == nil {
 			return payload.OrderID
 		}
+	case payment.TypeStripe:
+		var payload struct {
+			Data struct {
+				Object struct {
+					ClientReferenceID string            `json:"client_reference_id"`
+					Metadata          map[string]string `json:"metadata"`
+				} `json:"object"`
+			} `json:"data"`
+		}
+		if err := json.Unmarshal([]byte(rawBody), &payload); err == nil {
+			meta := payload.Data.Object.Metadata
+			if id := meta["orderId"]; id != "" {
+				return id
+			}
+			if id := meta["order_id"]; id != "" {
+				return id
+			}
+			if id := meta["out_trade_no"]; id != "" {
+				return id
+			}
+			if payload.Data.Object.ClientReferenceID != "" {
+				return payload.Data.Object.ClientReferenceID
+			}
+		}
 	}
-	// For other providers (Stripe, Alipay direct, WxPay direct), the registry
-	// typically has only one instance, so no instance lookup is needed.
+	// For other providers, the registry typically has only one instance.
 	return ""
+}
+
+// isValidOutTradeNo checks whether outTradeNo contains only safe alphanumeric/hyphen/underscore characters and valid length.
+func isValidOutTradeNo(outTradeNo string) bool {
+	if outTradeNo == "" || len(outTradeNo) > 64 {
+		return false
+	}
+	for _, ch := range outTradeNo {
+		switch {
+		case ch >= 'a' && ch <= 'z':
+		case ch >= 'A' && ch <= 'Z':
+		case ch >= '0' && ch <= '9':
+		case ch == '_' || ch == '-':
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 func verifyNotificationWithProviders(ctx context.Context, providers []payment.Provider, rawBody string, headers map[string]string) (string, *payment.PaymentNotification, error) {

@@ -182,3 +182,97 @@ func TestSoraGatewayHandlerSubmitUsageRecordTask_WithoutPool_TaskPanicRecovered(
 	})
 	require.True(t, called.Load(), "panic 后后续任务应仍可执行")
 }
+
+func TestGatewayHandlerSubmitUsageRecordTask_PoolFullGuaranteesExecution(t *testing.T) {
+	pool := service.NewUsageRecordWorkerPoolWithOptions(service.UsageRecordWorkerPoolOptions{
+		WorkerCount:      1,
+		QueueSize:        1,
+		TaskTimeout:      time.Second,
+		OverflowPolicy:   "drop",
+		AutoScaleEnabled: false,
+	})
+	defer pool.Stop()
+
+	// Block worker
+	workerBlocked := make(chan struct{})
+	releaseWorker := make(chan struct{})
+	require.Equal(t, service.UsageRecordSubmitModeEnqueued, pool.Submit(func(ctx context.Context) {
+		close(workerBlocked)
+		<-releaseWorker
+	}))
+	<-workerBlocked
+
+	// Fill queue
+	require.Equal(t, service.UsageRecordSubmitModeEnqueued, pool.Submit(func(ctx context.Context) {}))
+
+	// Handler submit with full pool must execute synchronously, never drop
+	h := &GatewayHandler{usageRecordWorkerPool: pool}
+	var executed atomic.Bool
+	h.submitUsageRecordTask(func(ctx context.Context) {
+		executed.Store(true)
+	})
+	require.True(t, executed.Load(), "GatewayHandler must execute task even when pool queue is full")
+
+	close(releaseWorker)
+}
+
+func TestOpenAIGatewayHandlerSubmitUsageRecordTask_PoolFullGuaranteesExecution(t *testing.T) {
+	pool := service.NewUsageRecordWorkerPoolWithOptions(service.UsageRecordWorkerPoolOptions{
+		WorkerCount:      1,
+		QueueSize:        1,
+		TaskTimeout:      time.Second,
+		OverflowPolicy:   "drop",
+		AutoScaleEnabled: false,
+	})
+	defer pool.Stop()
+
+	workerBlocked := make(chan struct{})
+	releaseWorker := make(chan struct{})
+	require.Equal(t, service.UsageRecordSubmitModeEnqueued, pool.Submit(func(ctx context.Context) {
+		close(workerBlocked)
+		<-releaseWorker
+	}))
+	<-workerBlocked
+
+	require.Equal(t, service.UsageRecordSubmitModeEnqueued, pool.Submit(func(ctx context.Context) {}))
+
+	h := &OpenAIGatewayHandler{usageRecordWorkerPool: pool}
+	var executed atomic.Bool
+	h.submitUsageRecordTask(func(ctx context.Context) {
+		executed.Store(true)
+	})
+	require.True(t, executed.Load(), "OpenAIGatewayHandler must execute task even when pool queue is full")
+
+	close(releaseWorker)
+}
+
+func TestSoraGatewayHandlerSubmitUsageRecordTask_PoolFullGuaranteesExecution(t *testing.T) {
+	pool := service.NewUsageRecordWorkerPoolWithOptions(service.UsageRecordWorkerPoolOptions{
+		WorkerCount:      1,
+		QueueSize:        1,
+		TaskTimeout:      time.Second,
+		OverflowPolicy:   "drop",
+		AutoScaleEnabled: false,
+	})
+	defer pool.Stop()
+
+	workerBlocked := make(chan struct{})
+	releaseWorker := make(chan struct{})
+	require.Equal(t, service.UsageRecordSubmitModeEnqueued, pool.Submit(func(ctx context.Context) {
+		close(workerBlocked)
+		<-releaseWorker
+	}))
+	<-workerBlocked
+
+	require.Equal(t, service.UsageRecordSubmitModeEnqueued, pool.Submit(func(ctx context.Context) {}))
+
+	h := &SoraGatewayHandler{usageRecordWorkerPool: pool}
+	var executed atomic.Bool
+	h.submitUsageRecordTask(func(ctx context.Context) {
+		executed.Store(true)
+	})
+	require.True(t, executed.Load(), "SoraGatewayHandler must execute task even when pool queue is full")
+
+	close(releaseWorker)
+}
+

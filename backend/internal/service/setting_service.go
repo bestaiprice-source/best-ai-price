@@ -130,6 +130,7 @@ var settingHotKeys = map[string]struct{}{
 	SettingKeyFrontendURL:                  {},
 	SettingKeyAPIBaseURL:                   {},
 	SettingKeyAffiliateEnabled:             {},
+	SettingKeyDefaultRateMultiplier:        {},
 }
 
 // DefaultSubscriptionGroupReader validates group references used by default subscriptions.
@@ -737,6 +738,13 @@ func (s *SettingService) UpdateSettings(ctx context.Context, settings *SystemSet
 	// 默认配置
 	updates[SettingKeyDefaultConcurrency] = strconv.Itoa(settings.DefaultConcurrency)
 	updates[SettingKeyDefaultBalance] = strconv.FormatFloat(settings.DefaultBalance, 'f', 8, 64)
+	if settings.DefaultRateMultiplier <= 0 {
+		settings.DefaultRateMultiplier = 1.10
+	}
+	updates[SettingKeyDefaultRateMultiplier] = strconv.FormatFloat(settings.DefaultRateMultiplier, 'f', 4, 64)
+	if s.cfg != nil {
+		s.cfg.Default.RateMultiplier = settings.DefaultRateMultiplier
+	}
 	settings.AffiliateRebateRate = clampAffiliateRebateRate(settings.AffiliateRebateRate)
 	updates[SettingKeyAffiliateRebateRate] = strconv.FormatFloat(settings.AffiliateRebateRate, 'f', 8, 64)
 	if settings.AffiliateRebateFreezeHours < 0 {
@@ -1072,6 +1080,24 @@ func (s *SettingService) GetDefaultBalance(ctx context.Context) float64 {
 	return s.cfg.Default.UserBalance
 }
 
+// GetDefaultRateMultiplier 获取默认加价倍率
+func (s *SettingService) GetDefaultRateMultiplier(ctx context.Context) float64 {
+	value, err := s.getSettingValueCached(ctx, SettingKeyDefaultRateMultiplier)
+	if err != nil {
+		if s.cfg != nil && s.cfg.Default.RateMultiplier > 0 {
+			return s.cfg.Default.RateMultiplier
+		}
+		return 1.10
+	}
+	if v, err := strconv.ParseFloat(value, 64); err == nil && v > 0 {
+		return v
+	}
+	if s.cfg != nil && s.cfg.Default.RateMultiplier > 0 {
+		return s.cfg.Default.RateMultiplier
+	}
+	return 1.10
+}
+
 // GetDefaultSubscriptions 获取新用户默认订阅配置列表。
 func (s *SettingService) GetDefaultSubscriptions(ctx context.Context) []DefaultSubscriptionSetting {
 	value, err := s.settingRepo.GetValue(ctx, SettingKeyDefaultSubscriptions)
@@ -1107,6 +1133,7 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeyCustomMenuItems:                  "[]",
 		SettingKeyDefaultConcurrency:               strconv.Itoa(s.cfg.Default.UserConcurrency),
 		SettingKeyDefaultBalance:                   strconv.FormatFloat(s.cfg.Default.UserBalance, 'f', 8, 64),
+		SettingKeyDefaultRateMultiplier:            strconv.FormatFloat(s.cfg.Default.RateMultiplier, 'f', 4, 64),
 		SettingKeyAffiliateRebateRate:              strconv.FormatFloat(AffiliateRebateRateDefault, 'f', 8, 64),
 		SettingKeyAffiliateRebateFreezeHours:       strconv.Itoa(AffiliateRebateFreezeHoursDefault),
 		SettingKeyAffiliateRebateDurationDays:      strconv.Itoa(AffiliateRebateDurationDaysDefault),
@@ -1199,6 +1226,13 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 		result.DefaultBalance = balance
 	} else {
 		result.DefaultBalance = s.cfg.Default.UserBalance
+	}
+	if rateMultiplier, err := strconv.ParseFloat(settings[SettingKeyDefaultRateMultiplier], 64); err == nil && rateMultiplier > 0 {
+		result.DefaultRateMultiplier = rateMultiplier
+	} else if s.cfg != nil && s.cfg.Default.RateMultiplier > 0 {
+		result.DefaultRateMultiplier = s.cfg.Default.RateMultiplier
+	} else {
+		result.DefaultRateMultiplier = 1.10
 	}
 	if rebateRate, err := strconv.ParseFloat(settings[SettingKeyAffiliateRebateRate], 64); err == nil {
 		result.AffiliateRebateRate = clampAffiliateRebateRate(rebateRate)

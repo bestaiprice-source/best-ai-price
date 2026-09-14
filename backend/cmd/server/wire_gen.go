@@ -158,7 +158,8 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	if err != nil {
 		return nil, err
 	}
-	billingService := service.NewBillingService(configConfig, pricingService)
+	yunwuPricingService := service.NewYunwuPricingService()
+	billingService := service.NewBillingService(configConfig, pricingService, yunwuPricingService)
 	deferredService := service.ProvideDeferredService(accountRepository, timingWheelService)
 	openAIGatewayService := service.NewOpenAIGatewayService(accountRepository, groupRepository, usageLogRepository, usageBillingRepository, userRepository, userSubscriptionRepository, userGroupRateRepository, gatewayCache, configConfig, schedulerSnapshotService, concurrencyService, billingService, rateLimitService, billingCacheService, httpUpstream, deferredService, openAITokenProvider)
 	accountTestService := service.NewAccountTestService(accountRepository, geminiTokenProvider, openAITokenProvider, antigravityGatewayService, openAIGatewayService, httpUpstream, configConfig)
@@ -370,7 +371,8 @@ func initializeCoordinatorApplication(buildInfo handler.BuildInfo) (*Coordinator
 	if err != nil {
 		return nil, err
 	}
-	billingService := service.NewBillingService(configConfig, pricingService)
+	yunwuPricingService := service.NewYunwuPricingService()
+	billingService := service.NewBillingService(configConfig, pricingService, yunwuPricingService)
 	billingCache := repository.NewBillingCache(redisClient)
 	apiKeyRepository := repository.NewAPIKeyRepository(client, db)
 	billingCacheService := service.NewBillingCacheService(billingCache, userRepository, userSubscriptionRepository, apiKeyRepository, configConfig)

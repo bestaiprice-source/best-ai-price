@@ -494,10 +494,12 @@ func (h *SoraGatewayHandler) submitUsageRecordTask(task service.UsageRecordTask)
 		return
 	}
 	if h.usageRecordWorkerPool != nil {
-		h.usageRecordWorkerPool.Submit(task)
-		return
+		mode := h.usageRecordWorkerPool.SubmitGuaranteed(task)
+		if mode != service.UsageRecordSubmitModeDropped {
+			return
+		}
 	}
-	// 回退路径：worker 池未注入时同步执行，避免退回到无界 goroutine 模式。
+	// 回退路径：worker 池未注入或异常时同步执行，避免丢失计费记录或退回到无界 goroutine 模式。
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	defer func() {

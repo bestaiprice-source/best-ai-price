@@ -18,7 +18,7 @@ const (
 	defaultUsageRecordWorkerCount          = 128
 	defaultUsageRecordQueueSize            = 16384
 	defaultUsageRecordTaskTimeoutSeconds   = 5
-	defaultUsageRecordOverflowPolicy       = config.UsageRecordOverflowPolicySample
+	defaultUsageRecordOverflowPolicy       = config.UsageRecordOverflowPolicySync
 	defaultUsageRecordOverflowSampleRatio  = 10
 	defaultUsageRecordAutoScaleEnabled     = true
 	defaultUsageRecordAutoScaleMinWorkers  = 128
@@ -181,6 +181,22 @@ func (p *UsageRecordWorkerPool) Submit(task UsageRecordTask) UsageRecordSubmitMo
 	p.droppedQueueFull.Add(1)
 	p.logDrop("full")
 	return UsageRecordSubmitModeDropped
+}
+
+// SubmitGuaranteed ensures that a billable usage record task is never dropped.
+// If the worker pool is full, stopped, or if normal submission drops the task,
+// it executes the task synchronously as a fail-safe fallback.
+func (p *UsageRecordWorkerPool) SubmitGuaranteed(task UsageRecordTask) UsageRecordSubmitMode {
+	if p == nil || task == nil {
+		return UsageRecordSubmitModeDropped
+	}
+	mode := p.Submit(task)
+	if mode == UsageRecordSubmitModeDropped {
+		p.syncFallback.Add(1)
+		p.execute(task)
+		return UsageRecordSubmitModeSync
+	}
+	return mode
 }
 
 // Stats 返回当前池状态与计数器。

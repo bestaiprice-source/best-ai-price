@@ -202,3 +202,27 @@ func TestParseDefaultSubscriptions_NormalizesValues(t *testing.T) {
 		{GroupID: 12, ValidityDays: MaxValidityDays},
 	}, got)
 }
+
+func TestSettingService_DefaultRateMultiplier(t *testing.T) {
+	repo := &settingUpdateRepoStub{}
+	cfg := &config.Config{}
+	cfg.Default.RateMultiplier = 1.10
+	svc := NewSettingService(repo, cfg)
+
+	// Test UpdateSettings with custom rate multiplier
+	err := svc.UpdateSettings(context.Background(), &SystemSettings{
+		DefaultRateMultiplier: 1.25,
+	})
+	require.NoError(t, err)
+	require.Equal(t, "1.2500", repo.updates[SettingKeyDefaultRateMultiplier])
+	require.Equal(t, 1.25, cfg.Default.RateMultiplier)
+
+	// Test UpdateSettings with zero/negative defaults to 1.10
+	err = svc.UpdateSettings(context.Background(), &SystemSettings{
+		DefaultRateMultiplier: -1,
+	})
+	require.NoError(t, err)
+	require.Equal(t, "1.1000", repo.updates[SettingKeyDefaultRateMultiplier])
+	require.Equal(t, 1.10, cfg.Default.RateMultiplier)
+}
+

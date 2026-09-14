@@ -4611,6 +4611,8 @@ export default {
         defaultBalanceHint: 'Initial balance for new users',
         defaultConcurrency: 'Default Concurrency',
         defaultConcurrencyHint: 'Maximum concurrent requests for new users',
+        defaultRateMultiplier: 'Default Rate Multiplier (Markup)',
+        defaultRateMultiplierHint: 'Default billing multiplier for groups and requests (e.g. 1.10 = 10% markup over upstream prices)',
         defaultSubscriptions: 'Default Subscriptions',
         defaultSubscriptionsHint: 'Auto-assign these subscriptions when a new user is created or registered',
         addDefaultSubscription: 'Add Default Subscription',

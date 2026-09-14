@@ -147,9 +147,10 @@ const (
 	SettingKeyCustomMenuItems             = "custom_menu_items"             // 自定义菜单项（JSON 数组）
 
 	// 默认配置
-	SettingKeyDefaultConcurrency   = "default_concurrency"   // 新用户默认并发量
-	SettingKeyDefaultBalance       = "default_balance"       // 新用户默认余额
-	SettingKeyDefaultSubscriptions = "default_subscriptions" // 新用户默认订阅列表（JSON）
+	SettingKeyDefaultConcurrency    = "default_concurrency"      // 新用户默认并发量
+	SettingKeyDefaultBalance        = "default_balance"          // 新用户默认余额
+	SettingKeyDefaultRateMultiplier = "default_rate_multiplier"   // 默认倍率/加价 (例如 1.10 表示 10% 加价)
+	SettingKeyDefaultSubscriptions  = "default_subscriptions"    // 新用户默认订阅列表（JSON）
 
 	// 管理员 API Key
 	SettingKeyAdminAPIKey = "admin_api_key" // 全局管理员 API Key（用于外部系统集成）
@@ -280,3 +281,18 @@ const (
 const AdminAPIKeyPrefix = "admin-"
 
 const featureKeyWebSearchEmulation = "web_search_emulation"
+
+// Operational balance thresholds
+const (
+	// MinOperationalBalance is the minimal USD balance required to initiate a request in balance-billed mode ($0.002).
+	// Requests below this threshold are rejected upfront before reaching upstream providers.
+	MinOperationalBalance = 0.002
+
+	// LowBalanceConcurrencyThreshold is the USD balance below which a user's concurrent request limit
+	// is clamped to 1 to prevent parallel overdraft exploitation ($0.10).
+	LowBalanceConcurrencyThreshold = 0.10
+
+	// MaxAllowableOverdraftUSD is the maximum negative balance (overdraft) allowed during usage billing ($0.50).
+	// Once reached, all further deductions are clamped to prevent runaway negative balances.
+	MaxAllowableOverdraftUSD = 0.50
+)

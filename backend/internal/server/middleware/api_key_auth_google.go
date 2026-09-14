@@ -79,9 +79,11 @@ func ApplyAPIKeyAuthWithSubscriptionGoogleContext(apiKeyService *service.APIKeyS
 		return true
 	}
 
+	var subscription *service.UserSubscription
 	isSubscriptionType := apiKey.Group != nil && apiKey.Group.IsSubscriptionType()
 	if isSubscriptionType && subscriptionService != nil {
-		subscription, err := subscriptionService.GetActiveSubscription(
+		var err error
+		subscription, err = subscriptionService.GetActiveSubscription(
 			c.Request().Context(),
 			apiKey.User.ID,
 			apiKey.Group.ID,
@@ -109,15 +111,19 @@ func ApplyAPIKeyAuthWithSubscriptionGoogleContext(apiKeyService *service.APIKeyS
 			maintenanceCopy := *subscription
 			subscriptionService.DoWindowMaintenance(&maintenanceCopy)
 		}
-	} else if apiKey.User.Balance <= 0 {
+	} else if apiKey.User.Balance < service.MinOperationalBalance {
 		abortWithGoogleErrorContext(c, 403, "Insufficient account balance")
 		return false
 	}
 
 	c.SetValue(string(ContextKeyAPIKey), apiKey)
+	effectiveConcurrency := apiKey.User.Concurrency
+	if subscription == nil && apiKey.User.Balance < service.LowBalanceConcurrencyThreshold {
+		effectiveConcurrency = 1
+	}
 	c.SetValue(string(ContextKeyUser), AuthSubject{
 		UserID:      apiKey.User.ID,
-		Concurrency: apiKey.User.Concurrency,
+		Concurrency: effectiveConcurrency,
 	})
 	c.SetValue(string(ContextKeyUserRole), apiKey.User.Role)
 	setGroupContextGateway(c, apiKey.Group)

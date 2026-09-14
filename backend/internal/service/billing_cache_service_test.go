@@ -1,3 +1,5 @@
+//go:build unit
+
 package service
 
 import (
@@ -102,3 +104,62 @@ func TestBillingCacheServiceEnqueueAfterStopReturnsFalse(t *testing.T) {
 	})
 	require.False(t, enqueued)
 }
+
+type balanceEligibilityUserRepoStub struct {
+	mockUserRepo
+	balance float64
+}
+
+func (b *balanceEligibilityUserRepoStub) GetByID(ctx context.Context, id int64) (*User, error) {
+	return &User{ID: id, Balance: b.balance}, nil
+}
+
+func TestBillingCacheService_CheckBalanceEligibility(t *testing.T) {
+	tests := []struct {
+		name    string
+		balance float64
+		wantErr error
+	}{
+		{
+			name:    "balance below min operational balance rejected",
+			balance: 0.0019,
+			wantErr: ErrInsufficientBalance,
+		},
+		{
+			name:    "balance exactly zero rejected",
+			balance: 0,
+			wantErr: ErrInsufficientBalance,
+		},
+		{
+			name:    "negative balance rejected",
+			balance: -1.0,
+			wantErr: ErrInsufficientBalance,
+		},
+		{
+			name:    "balance at min operational balance accepted",
+			balance: MinOperationalBalance,
+			wantErr: nil,
+		},
+		{
+			name:    "balance above min operational balance accepted",
+			balance: 5.0,
+			wantErr: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			userRepo := &balanceEligibilityUserRepoStub{balance: tt.balance}
+			svc := NewBillingCacheService(nil, userRepo, nil, nil, &config.Config{})
+			t.Cleanup(svc.Stop)
+
+			err := svc.checkBalanceEligibility(context.Background(), 1)
+			if tt.wantErr != nil {
+				require.ErrorIs(t, err, tt.wantErr)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+

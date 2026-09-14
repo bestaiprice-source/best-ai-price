@@ -94,6 +94,7 @@ describe('admin SettingsView', () => {
       totp_encryption_key_configured: false,
       default_balance: 0,
       default_concurrency: 1,
+      default_rate_multiplier: 1.10,
       default_subscriptions: [],
       site_name: 'Sub2API',
       site_logo: '',

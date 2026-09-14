@@ -134,6 +134,10 @@ func (s *authHandlerUserRepoStub) UpdateTotpSecret(context.Context, int64, *stri
 }
 func (s *authHandlerUserRepoStub) EnableTotp(context.Context, int64) error  { panic("unexpected") }
 func (s *authHandlerUserRepoStub) DisableTotp(context.Context, int64) error { panic("unexpected") }
+func (s *authHandlerUserRepoStub) GetOverdraftStats(context.Context) (float64, int64, error) {
+	return 0, 0, nil
+}
+
 
 type authHandlerTotpCacheStub struct {
 	loginSessions map[string]*service.TotpLoginSession

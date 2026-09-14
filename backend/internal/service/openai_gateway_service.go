@@ -5934,7 +5934,12 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		var err error
 		cost, err = s.billingService.CalculateCostWithServiceTier(billingModel, tokens, multiplier, serviceTier)
 		if err != nil {
-			cost = &CostBreakdown{ActualCost: 0}
+			logger.L().With(
+				zap.String("component", "service.openai_gateway"),
+				zap.String("model", billingModel),
+				zap.Error(err),
+			).Error("openai.calculate_cost_failed_using_failsafe_pricing")
+			cost = s.billingService.CalculateFailSafeCost(billingModel, tokens, multiplier)
 		}
 	}
 
@@ -6545,4 +6550,13 @@ func normalizeOpenAIReasoningEffort(raw string) string {
 		// Only store known effort levels for now to keep UI consistent.
 		return ""
 	}
+}
+
+// CheckModelPricingAvailable 检查指定模型当前是否可以成功获取定价配置
+func (s *OpenAIGatewayService) CheckModelPricingAvailable(ctx context.Context, model string) error {
+	if s.billingService == nil {
+		return nil
+	}
+	_, err := s.billingService.GetModelPricingWithContext(ctx, model)
+	return err
 }

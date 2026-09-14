@@ -52,6 +52,9 @@ func (m *mockUserRepo) RemoveGroupFromUserAllowedGroups(context.Context, int64, 
 func (m *mockUserRepo) UpdateTotpSecret(context.Context, int64, *string) error { return nil }
 func (m *mockUserRepo) EnableTotp(context.Context, int64) error                { return nil }
 func (m *mockUserRepo) DisableTotp(context.Context, int64) error               { return nil }
+func (m *mockUserRepo) GetOverdraftStats(context.Context) (float64, int64, error) {
+	return 12.34, 3, nil
+}
 
 // --- mock: APIKeyAuthCacheInvalidator ---
 
@@ -199,4 +202,14 @@ func TestNewUserService_FieldsAssignment(t *testing.T) {
 	require.Equal(t, repo, svc.userRepo)
 	require.Equal(t, auth, svc.authCacheInvalidator)
 	require.Equal(t, cache, svc.billingCache)
+}
+
+func TestGetOverdraftStats(t *testing.T) {
+	repo := &mockUserRepo{}
+	svc := NewUserService(repo, nil, nil)
+
+	total, count, err := svc.GetOverdraftStats(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, 12.34, total)
+	require.Equal(t, int64(3), count)
 }

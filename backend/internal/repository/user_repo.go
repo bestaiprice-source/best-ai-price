@@ -620,3 +620,23 @@ func (r *userRepository) DisableTotp(ctx context.Context, userID int64) error {
 	}
 	return nil
 }
+
+// GetOverdraftStats 查询系统中所有欠费用户的总欠费金额和欠费人数
+func (r *userRepository) GetOverdraftStats(ctx context.Context) (float64, int64, error) {
+	var (
+		total float64
+		count int64
+	)
+	query := `
+		SELECT
+			COALESCE(ABS(SUM(balance)), 0),
+			COUNT(*)
+		FROM users
+		WHERE balance < 0 AND deleted_at IS NULL
+	`
+	if err := scanSingleRow(ctx, r.sql, query, nil, &total, &count); err != nil {
+		return 0, 0, err
+	}
+	return total, count, nil
+}
+

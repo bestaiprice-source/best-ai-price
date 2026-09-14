@@ -260,6 +260,10 @@ func (h *GroupHandler) CreateGateway(c gatewayctx.GatewayContext) {
 		return
 	}
 
+	if req.RateMultiplier <= 0 {
+		req.RateMultiplier = 1.10
+	}
+
 	group, err := h.adminService.CreateGroup(c.Request().Context(), &service.CreateGroupInput{
 		Name:                            req.Name,
 		Description:                     req.Description,

@@ -34,6 +34,10 @@ type DashboardStats struct {
 	// 小时活跃用户数（UTC 当前小时）
 	HourlyActiveUsers int64 `json:"hourly_active_users"`
 
+	// 欠费用户统计
+	TotalOverdraftUSD  float64 `json:"total_overdraft_usd"`  // 累计透支金额(USD)
+	OverdraftUserCount int64   `json:"overdraft_user_count"` // 透支用户数
+
 	// 预聚合新鲜度
 	StatsUpdatedAt string `json:"stats_updated_at"`
 	StatsStale     bool   `json:"stats_stale"`

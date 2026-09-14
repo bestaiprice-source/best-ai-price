@@ -434,7 +434,7 @@ func TestSoraGatewayHandler_ChatCompletions(t *testing.T) {
 
 	usageLogRepo := &stubUsageLogRepo{}
 	deferredService := service.NewDeferredService(accountRepo, nil, 0)
-	billingService := service.NewBillingService(cfg, nil)
+	billingService := service.NewBillingService(cfg, nil, nil)
 	concurrencyService := service.NewConcurrencyService(testutil.StubConcurrencyCache{})
 	billingCacheService := service.NewBillingCacheService(nil, nil, nil, nil, cfg)
 	t.Cleanup(func() {

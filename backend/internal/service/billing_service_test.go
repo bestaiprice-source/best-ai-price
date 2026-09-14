@@ -11,7 +11,7 @@ import (
 )
 
 func newTestBillingService() *BillingService {
-	return NewBillingService(&config.Config{}, nil)
+	return NewBillingService(&config.Config{}, nil, nil)
 }
 
 func TestCalculateCost_BasicComputation(t *testing.T) {
@@ -408,7 +408,7 @@ func TestCalculateCost_ZeroTokens(t *testing.T) {
 func TestCalculateCostWithConfig(t *testing.T) {
 	cfg := &config.Config{}
 	cfg.Default.RateMultiplier = 1.5
-	svc := NewBillingService(cfg, nil)
+	svc := NewBillingService(cfg, nil, nil)
 
 	tokens := UsageTokens{InputTokens: 1000, OutputTokens: 500}
 	cost, err := svc.CalculateCostWithConfig("claude-sonnet-4", tokens)
@@ -421,7 +421,7 @@ func TestCalculateCostWithConfig(t *testing.T) {
 func TestCalculateCostWithConfig_ZeroMultiplier(t *testing.T) {
 	cfg := &config.Config{}
 	cfg.Default.RateMultiplier = 0
-	svc := NewBillingService(cfg, nil)
+	svc := NewBillingService(cfg, nil, nil)
 
 	tokens := UsageTokens{InputTokens: 1000}
 	cost, err := svc.CalculateCostWithConfig("claude-sonnet-4", tokens)
@@ -658,7 +658,7 @@ func TestBillingServiceGetModelPricing_UsesDynamicPriorityFields(t *testing.T) {
 			},
 		},
 	}
-	svc := NewBillingService(&config.Config{}, pricingSvc)
+	svc := NewBillingService(&config.Config{}, pricingSvc, nil)
 
 	pricing, err := svc.GetModelPricing("gpt-5.4")
 	require.NoError(t, err)
@@ -700,7 +700,7 @@ func TestCalculateCostWithServiceTier_PriorityFallsBackToTierMultiplierWhenExpli
 				CacheReadInputTokenCost:     0.25e-6,
 			},
 		},
-	})
+	}, nil)
 	tokens := UsageTokens{InputTokens: 100, OutputTokens: 50, CacheCreationTokens: 40, CacheReadTokens: 20}
 
 	baseCost, err := svc.CalculateCost("custom-no-priority", tokens, 1.0)
@@ -751,7 +751,7 @@ func TestGetModelPricing_MapsDynamicPriorityFieldsIntoBillingPricing(t *testing.
 				LongContextOutputCostMultiplier:     1.25,
 			},
 		},
-	})
+	}, nil)
 
 	pricing, err := svc.GetModelPricing("dynamic-tier-model")
 	require.NoError(t, err)
@@ -768,3 +768,33 @@ func TestGetModelPricing_MapsDynamicPriorityFieldsIntoBillingPricing(t *testing.
 	require.InDelta(t, 1.5, pricing.LongContextInputMultiplier, 1e-12)
 	require.InDelta(t, 1.25, pricing.LongContextOutputMultiplier, 1e-12)
 }
+
+func TestBillingService_CalculateFailSafeCost(t *testing.T) {
+	svc := newTestBillingService()
+
+	// 1. Verify unknown model produces positive fail-safe pricing
+	failsafePricing := svc.GetFailSafePricing("completely-unknown-ai-model")
+	require.NotNil(t, failsafePricing)
+	require.Greater(t, failsafePricing.InputPricePerToken, 0.0)
+	require.Greater(t, failsafePricing.OutputPricePerToken, 0.0)
+
+	// 2. Verify fail-safe cost calculation for unknown model is non-zero
+	tokens := UsageTokens{
+		InputTokens:         1000,
+		OutputTokens:        500,
+		CacheCreationTokens: 200,
+		CacheReadTokens:     300,
+	}
+	cost := svc.CalculateFailSafeCost("completely-unknown-ai-model", tokens, 1.5)
+	require.NotNil(t, cost)
+	require.Greater(t, cost.InputCost, 0.0)
+	require.Greater(t, cost.OutputCost, 0.0)
+	require.Greater(t, cost.TotalCost, 0.0)
+	require.Greater(t, cost.ActualCost, cost.TotalCost) // Multiplier 1.5 applied
+
+	// 3. Zero tokens should yield zero cost
+	zeroCost := svc.CalculateFailSafeCost("completely-unknown-ai-model", UsageTokens{}, 1.0)
+	require.NotNil(t, zeroCost)
+	require.Equal(t, 0.0, zeroCost.ActualCost)
+}
+

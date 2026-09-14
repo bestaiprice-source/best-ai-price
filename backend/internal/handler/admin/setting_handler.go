@@ -130,6 +130,7 @@ func (h *SettingHandler) buildSystemSettingsDTO(settings *service.SystemSettings
 		CustomMenuItems:                      dto.ParseCustomMenuItems(settings.CustomMenuItems),
 		DefaultConcurrency:                   settings.DefaultConcurrency,
 		DefaultBalance:                       settings.DefaultBalance,
+		DefaultRateMultiplier:                settings.DefaultRateMultiplier,
 		DefaultSubscriptions:                 defaultSubscriptions,
 		EnableModelFallback:                  settings.EnableModelFallback,
 		FallbackModelAnthropic:               settings.FallbackModelAnthropic,
@@ -201,6 +202,7 @@ type UpdateSettingsRequest struct {
 	// 默认配置
 	DefaultConcurrency   int                              `json:"default_concurrency"`
 	DefaultBalance       float64                          `json:"default_balance"`
+	DefaultRateMultiplier float64                         `json:"default_rate_multiplier"`
 	DefaultSubscriptions []dto.DefaultSubscriptionSetting `json:"default_subscriptions"`
 
 	// Model fallback configuration
@@ -259,6 +261,9 @@ func (h *SettingHandler) UpdateSettingsGateway(c gatewayctx.GatewayContext) {
 	}
 	if req.DefaultBalance < 0 {
 		req.DefaultBalance = 0
+	}
+	if req.DefaultRateMultiplier <= 0 {
+		req.DefaultRateMultiplier = 1.10
 	}
 	if req.SMTPPort <= 0 {
 		req.SMTPPort = 587
@@ -526,6 +531,7 @@ func (h *SettingHandler) UpdateSettingsGateway(c gatewayctx.GatewayContext) {
 		CustomMenuItems:                  customMenuJSON,
 		DefaultConcurrency:               req.DefaultConcurrency,
 		DefaultBalance:                   req.DefaultBalance,
+		DefaultRateMultiplier:            req.DefaultRateMultiplier,
 		DefaultSubscriptions:             defaultSubscriptions,
 		EnableModelFallback:              req.EnableModelFallback,
 		FallbackModelAnthropic:           req.FallbackModelAnthropic,
@@ -694,6 +700,9 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	}
 	if before.DefaultBalance != after.DefaultBalance {
 		changed = append(changed, "default_balance")
+	}
+	if before.DefaultRateMultiplier != after.DefaultRateMultiplier {
+		changed = append(changed, "default_rate_multiplier")
 	}
 	if !equalDefaultSubscriptions(before.DefaultSubscriptions, after.DefaultSubscriptions) {
 		changed = append(changed, "default_subscriptions")

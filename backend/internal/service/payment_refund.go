@@ -340,10 +340,11 @@ func (s *PaymentService) gwRefund(ctx context.Context, p *RefundPlan) error {
 		return err
 	}
 	_, err = prov.Refund(ctx, payment.RefundRequest{
-		TradeNo: p.Order.PaymentTradeNo,
-		OrderID: p.Order.OutTradeNo,
-		Amount:  strconv.FormatFloat(p.GatewayAmount, 'f', 2, 64),
-		Reason:  p.Reason,
+		TradeNo:  p.Order.PaymentTradeNo,
+		OrderID:  p.Order.OutTradeNo,
+		Amount:   strconv.FormatFloat(p.GatewayAmount, 'f', 2, 64),
+		Reason:   p.Reason,
+		RefundID: fmt.Sprintf("rf_%s", p.Order.OutTradeNo),
 	})
 	return err
 }

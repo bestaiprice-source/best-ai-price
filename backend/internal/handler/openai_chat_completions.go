@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"time"
@@ -85,6 +86,16 @@ func (h *OpenAIGatewayHandler) ChatCompletionsGateway(c gatewayctx.GatewayContex
 		h.errorResponseGateway(c, http.StatusBadRequest, "invalid_request_error", apiKeyModelNotAllowedMessage(reqModel))
 		return
 	}
+
+	// 校验模型定价配置：若无法获取价格，则请求直接拒绝，不发送至上游，不扣除用户余额
+	if err := h.gatewayService.CheckModelPricingAvailable(c.Context(), reqModel); err != nil {
+		fallbackModel := resolveOpenAISelectionFallbackModel(apiKey, reqModel)
+		if fallbackModel == "" || fallbackModel == reqModel || h.gatewayService.CheckModelPricingAvailable(c.Context(), fallbackModel) != nil {
+			h.errorResponseGateway(c, http.StatusBadRequest, "invalid_request_error", fmt.Sprintf("Model pricing is not available for model '%s'", reqModel))
+			return
+		}
+	}
+
 	reqStream := gjson.GetBytes(body, "stream").Bool()
 
 	reqLog = reqLog.With(zap.String("model", reqModel), zap.Bool("stream", reqStream))

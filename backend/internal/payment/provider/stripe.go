@@ -197,6 +197,9 @@ func (s *Stripe) Refund(ctx context.Context, req payment.RefundRequest) (*paymen
 		Amount:        stripe.Int64(amountInCents),
 		Reason:        stripe.String(string(stripe.RefundReasonRequestedByCustomer)),
 	}
+	if req.RefundID != "" {
+		params.IdempotencyKey = stripe.String(req.RefundID)
+	}
 	params.Context = ctx
 
 	r, err := s.sc.V1Refunds.Create(ctx, params)

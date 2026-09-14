@@ -9,6 +9,7 @@ import (
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/service"
+	"go.uber.org/zap"
 )
 
 type usageBillingRepository struct {
@@ -170,12 +171,13 @@ func incrementUsageBillingSubscription(ctx context.Context, tx *sql.Tx, subscrip
 }
 
 func deductUsageBillingBalance(ctx context.Context, tx *sql.Tx, userID int64, amount float64) error {
+	maxOverdraft := service.MaxAllowableOverdraftUSD
 	res, err := tx.ExecContext(ctx, `
 		UPDATE users
 		SET balance = balance - $1,
 			updated_at = NOW()
-		WHERE id = $2 AND deleted_at IS NULL
-	`, amount, userID)
+		WHERE id = $2 AND deleted_at IS NULL AND (balance - $1 >= -$3)
+	`, amount, userID, maxOverdraft)
 	if err != nil {
 		return err
 	}
@@ -186,7 +188,37 @@ func deductUsageBillingBalance(ctx context.Context, tx *sql.Tx, userID int64, am
 	if affected > 0 {
 		return nil
 	}
-	return service.ErrUserNotFound
+
+	// If no rows updated, check if user exists or overdraft limit was reached
+	var exists bool
+	var currentBalance float64
+	err = tx.QueryRowContext(ctx, `
+		SELECT true, balance FROM users WHERE id = $1 AND deleted_at IS NULL
+	`, userID).Scan(&exists, &currentBalance)
+	if errors.Is(err, sql.ErrNoRows) || !exists {
+		return service.ErrUserNotFound
+	}
+	if err != nil {
+		return err
+	}
+
+	// User exists, but deduction exceeds allowable overdraft floor.
+	// Clamp user balance to -MaxAllowableOverdraftUSD and log alert.
+	_, _ = tx.ExecContext(ctx, `
+		UPDATE users
+		SET balance = -$1,
+			updated_at = NOW()
+		WHERE id = $2 AND deleted_at IS NULL
+	`, maxOverdraft, userID)
+
+	logger.L().With(
+		zap.Int64("user_id", userID),
+		zap.Float64("current_balance", currentBalance),
+		zap.Float64("attempted_deduction", amount),
+		zap.Float64("max_overdraft", maxOverdraft),
+	).Warn("billing.overdraft_limit_reached_clamped")
+
+	return nil
 }
 
 func incrementUsageBillingAPIKeyQuota(ctx context.Context, tx *sql.Tx, apiKeyID int64, amount float64) (bool, error) {

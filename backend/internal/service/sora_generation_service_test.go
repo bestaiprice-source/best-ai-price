@@ -171,6 +171,10 @@ func (r *stubUserRepoForQuota) DisableTotp(context.Context, int64) error        
 func (r *stubUserRepoForQuota) AddGroupToAllowedGroups(context.Context, int64, int64) error {
 	return nil
 }
+func (r *stubUserRepoForQuota) GetOverdraftStats(context.Context) (float64, int64, error) {
+	return 0, 0, nil
+}
+
 
 // ==================== 辅助函数：构造带 CDN 缓存的 SoraS3Storage ====================
 

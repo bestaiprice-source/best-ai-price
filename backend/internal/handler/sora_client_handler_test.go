@@ -951,6 +951,10 @@ func (r *stubUserRepoForHandler) DisableTotp(context.Context, int64) error      
 func (r *stubUserRepoForHandler) AddGroupToAllowedGroups(context.Context, int64, int64) error {
 	return nil
 }
+func (r *stubUserRepoForHandler) GetOverdraftStats(context.Context) (float64, int64, error) {
+	return 0, 0, nil
+}
+
 
 // ==================== NewSoraClientHandler ====================
 

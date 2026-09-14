@@ -150,7 +150,7 @@ func ApplyAPIKeyAuthWithSubscriptionContext(apiKeyService *service.APIKeyService
 				maintenanceCopy := *subscription
 				subscriptionService.DoWindowMaintenance(&maintenanceCopy)
 			}
-		} else if apiKey.User.Balance <= 0 {
+		} else if apiKey.User.Balance < service.MinOperationalBalance {
 			abortWithErrorContext(c, 403, "INSUFFICIENT_BALANCE", "Insufficient account balance")
 			return false
 		}
@@ -191,9 +191,13 @@ func setAPIKeyAuthContextValues(c gatewayctx.GatewayContext, apiKey *service.API
 		c.SetValue(string(ContextKeySubscription), subscription)
 	}
 	c.SetValue(string(ContextKeyAPIKey), apiKey)
+	effectiveConcurrency := apiKey.User.Concurrency
+	if subscription == nil && apiKey.User.Balance < service.LowBalanceConcurrencyThreshold {
+		effectiveConcurrency = 1
+	}
 	c.SetValue(string(ContextKeyUser), AuthSubject{
 		UserID:      apiKey.User.ID,
-		Concurrency: apiKey.User.Concurrency,
+		Concurrency: effectiveConcurrency,
 	})
 	c.SetValue(string(ContextKeyUserRole), apiKey.User.Role)
 	setGroupContextGateway(c, apiKey.Group)

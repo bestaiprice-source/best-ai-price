@@ -93,6 +93,10 @@ func (s *authSessionUserRepoStub) EnableTotp(context.Context, int64) error { pan
 func (s *authSessionUserRepoStub) DisableTotp(context.Context, int64) error {
 	panic("unexpected")
 }
+func (s *authSessionUserRepoStub) GetOverdraftStats(context.Context) (float64, int64, error) {
+	return 0, 0, nil
+}
+
 
 type memoryRefreshTokenCache struct {
 	live                 map[string]*RefreshTokenData

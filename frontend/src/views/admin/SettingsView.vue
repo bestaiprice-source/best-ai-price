@@ -1203,7 +1203,7 @@
             </p>
           </div>
           <div class="space-y-6 p-6">
-            <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
+            <div class="grid grid-cols-1 gap-6 md:grid-cols-3">
               <div>
                 <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
                   {{ t('admin.settings.defaults.defaultBalance') }}
@@ -1233,6 +1233,22 @@
                 />
                 <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
                   {{ t('admin.settings.defaults.defaultConcurrencyHint') }}
+                </p>
+              </div>
+              <div>
+                <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  {{ t('admin.settings.defaults.defaultRateMultiplier') }}
+                </label>
+                <input
+                  v-model.number="form.default_rate_multiplier"
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  class="input"
+                  placeholder="1.10"
+                />
+                <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                  {{ t('admin.settings.defaults.defaultRateMultiplierHint') }}
                 </p>
               </div>
             </div>
@@ -2237,6 +2253,7 @@ const form = reactive<SettingsForm>({
   totp_encryption_key_configured: false,
   default_balance: 0,
   default_concurrency: 1,
+  default_rate_multiplier: 1.10,
   default_subscriptions: [],
   site_name: 'Sub2API',
   site_logo: '',
@@ -2615,6 +2632,7 @@ async function saveSettings() {
       totp_enabled: form.totp_enabled,
       default_balance: form.default_balance,
       default_concurrency: form.default_concurrency,
+      default_rate_multiplier: form.default_rate_multiplier,
       default_subscriptions: normalizedDefaultSubscriptions,
       site_name: form.site_name,
       site_logo: form.site_logo,

@@ -475,8 +475,9 @@ func TestAPIContracts(t *testing.T) {
 					service.SettingKeyContactInfo:  "support",
 					service.SettingKeyDocURL:       "https://docs.example.com",
 
-					service.SettingKeyDefaultConcurrency: "5",
-					service.SettingKeyDefaultBalance:     "1.25",
+					service.SettingKeyDefaultConcurrency:    "5",
+					service.SettingKeyDefaultBalance:        "1.25",
+					service.SettingKeyDefaultRateMultiplier: "1.10",
 
 					service.SettingKeyOpsMonitoringEnabled:         "false",
 					service.SettingKeyOpsRealtimeMonitoringEnabled: "true",
@@ -525,6 +526,7 @@ func TestAPIContracts(t *testing.T) {
 					"doc_url": "https://docs.example.com",
 					"default_concurrency": 5,
 					"default_balance": 1.25,
+					"default_rate_multiplier": 1.1,
 					"default_subscriptions": [],
 					"enable_model_fallback": false,
 					"fallback_model_anthropic": "claude-3-5-sonnet-20241022",
@@ -838,6 +840,11 @@ func (r *stubUserRepo) EnableTotp(ctx context.Context, userID int64) error {
 func (r *stubUserRepo) DisableTotp(ctx context.Context, userID int64) error {
 	return errors.New("not implemented")
 }
+
+func (r *stubUserRepo) GetOverdraftStats(ctx context.Context) (float64, int64, error) {
+	return 0, 0, nil
+}
+
 
 type stubApiKeyCache struct{}
 

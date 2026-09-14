@@ -367,8 +367,10 @@ func (n *NowPayments) queryPaymentByInvoiceID(ctx context.Context, invoiceID str
 
 func mapNowPaymentsStatus(status string) string {
 	switch strings.ToLower(status) {
-	case "finished", "confirmed", "sending":
+	case "finished", "confirmed":
 		return payment.ProviderStatusPaid
+	case "sending", "confirming", "waiting":
+		return payment.ProviderStatusPending
 	case "failed", "expired":
 		return payment.ProviderStatusFailed
 	case "refunded":
@@ -439,10 +441,14 @@ func (n *NowPayments) VerifyNotification(_ context.Context, rawBody string, head
 
 	notificationStatus := payment.ProviderStatusPending
 	switch strings.ToLower(paymentStatus) {
-	case "finished", "confirmed", "sending":
+	case "finished", "confirmed":
 		notificationStatus = payment.NotificationStatusSuccess
 	case "failed", "expired":
 		notificationStatus = payment.ProviderStatusFailed
+	case "refunded":
+		notificationStatus = payment.ProviderStatusRefunded
+	default:
+		notificationStatus = payment.ProviderStatusPending
 	}
 
 	return &payment.PaymentNotification{

@@ -1395,7 +1395,9 @@ func (r *usageLogRepository) fillDashboardEntityStats(ctx context.Context, stats
 	userStatsQuery := `
 		SELECT
 			COUNT(*) as total_users,
-			COUNT(CASE WHEN created_at >= $1 THEN 1 END) as today_new_users
+			COUNT(CASE WHEN created_at >= $1 THEN 1 END) as today_new_users,
+			COALESCE(SUM(CASE WHEN balance < 0 THEN ABS(balance) ELSE 0 END), 0) as total_overdraft_usd,
+			COUNT(CASE WHEN balance < 0 THEN 1 END) as overdraft_user_count
 		FROM users
 		WHERE deleted_at IS NULL
 	`
@@ -1406,6 +1408,8 @@ func (r *usageLogRepository) fillDashboardEntityStats(ctx context.Context, stats
 		[]any{todayUTC},
 		&stats.TotalUsers,
 		&stats.TodayNewUsers,
+		&stats.TotalOverdraftUSD,
+		&stats.OverdraftUserCount,
 	); err != nil {
 		return err
 	}

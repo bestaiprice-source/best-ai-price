@@ -492,6 +492,118 @@ func TestAPIKeyAuthTouchesLastUsedInStandardMode(t *testing.T) {
 	require.Equal(t, 1, touchCalls)
 }
 
+func TestAPIKeyAuth_MinOperationalBalance(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	user := &service.User{
+		ID:          10,
+		Role:        service.RoleUser,
+		Status:      service.StatusActive,
+		Balance:     0.0019, // Below MinOperationalBalance (0.002)
+		Concurrency: 2,
+	}
+	apiKey := &service.APIKey{
+		ID:     200,
+		UserID: user.ID,
+		Key:    "low-balance-key",
+		Status: service.StatusActive,
+		User:   user,
+	}
+
+	apiKeyRepo := &stubApiKeyRepo{
+		getByKey: func(ctx context.Context, key string) (*service.APIKey, error) {
+			if key != apiKey.Key {
+				return nil, service.ErrAPIKeyNotFound
+			}
+			clone := *apiKey
+			return &clone, nil
+		},
+	}
+
+	cfg := &config.Config{RunMode: config.RunModeStandard}
+	apiKeyService := service.NewAPIKeyService(apiKeyRepo, nil, nil, nil, nil, nil, cfg)
+	router := newAuthTestRouter(apiKeyService, nil, cfg)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/t", nil)
+	req.Header.Set("x-api-key", apiKey.Key)
+	router.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusForbidden, w.Code)
+	require.Contains(t, w.Body.String(), "INSUFFICIENT_BALANCE")
+}
+
+func TestAPIKeyAuth_LowBalanceConcurrency(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	tests := []struct {
+		name                string
+		balance             float64
+		userConcurrency     int
+		expectedConcurrency int
+	}{
+		{
+			name:                "balance < 0.10 clamps concurrency to 1",
+			balance:             0.05,
+			userConcurrency:     5,
+			expectedConcurrency: 1,
+		},
+		{
+			name:                "balance >= 0.10 keeps user concurrency",
+			balance:             0.50,
+			userConcurrency:     5,
+			expectedConcurrency: 5,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			user := &service.User{
+				ID:          11,
+				Role:        service.RoleUser,
+				Status:      service.StatusActive,
+				Balance:     tt.balance,
+				Concurrency: tt.userConcurrency,
+			}
+			apiKey := &service.APIKey{
+				ID:     201,
+				UserID: user.ID,
+				Key:    "test-concurrency-key",
+				Status: service.StatusActive,
+				User:   user,
+			}
+
+			apiKeyRepo := &stubApiKeyRepo{
+				getByKey: func(ctx context.Context, key string) (*service.APIKey, error) {
+					clone := *apiKey
+					return &clone, nil
+				},
+			}
+
+			cfg := &config.Config{RunMode: config.RunModeStandard}
+			apiKeyService := service.NewAPIKeyService(apiKeyRepo, nil, nil, nil, nil, nil, cfg)
+
+			var capturedSubject AuthSubject
+			router := gin.New()
+			router.Use(gin.HandlerFunc(NewAPIKeyAuthMiddleware(apiKeyService, nil, cfg)))
+			router.GET("/t", func(c *gin.Context) {
+				subj, _ := c.Get(string(ContextKeyUser))
+				capturedSubject = subj.(AuthSubject)
+				c.JSON(http.StatusOK, gin.H{"ok": true})
+			})
+
+			w := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodGet, "/t", nil)
+			req.Header.Set("x-api-key", apiKey.Key)
+			router.ServeHTTP(w, req)
+
+			require.Equal(t, http.StatusOK, w.Code)
+			require.Equal(t, tt.expectedConcurrency, capturedSubject.Concurrency)
+		})
+	}
+}
+
+
 func newAuthTestRouter(apiKeyService *service.APIKeyService, subscriptionService *service.SubscriptionService, cfg *config.Config) *gin.Engine {
 	router := gin.New()
 	router.Use(gin.HandlerFunc(NewAPIKeyAuthMiddleware(apiKeyService, subscriptionService, cfg)))

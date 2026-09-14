@@ -429,7 +429,7 @@ func TestNowPayments_Refund(t *testing.T) {
 func TestNowPayments_MapStatus(t *testing.T) {
 	assert.Equal(t, payment.ProviderStatusPaid, mapNowPaymentsStatus("finished"))
 	assert.Equal(t, payment.ProviderStatusPaid, mapNowPaymentsStatus("confirmed"))
-	assert.Equal(t, payment.ProviderStatusPaid, mapNowPaymentsStatus("sending"))
+	assert.Equal(t, payment.ProviderStatusPending, mapNowPaymentsStatus("sending"))
 	assert.Equal(t, payment.ProviderStatusFailed, mapNowPaymentsStatus("failed"))
 	assert.Equal(t, payment.ProviderStatusFailed, mapNowPaymentsStatus("expired"))
 	assert.Equal(t, payment.ProviderStatusRefunded, mapNowPaymentsStatus("refunded"))

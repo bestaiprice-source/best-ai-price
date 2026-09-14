@@ -4777,6 +4777,8 @@ export default {
         defaultBalanceHint: '新用户的初始余额',
         defaultConcurrency: '默认并发数',
         defaultConcurrencyHint: '新用户的最大并发请求数',
+        defaultRateMultiplier: '默认费率倍率 (加价)',
+        defaultRateMultiplierHint: '分组和请求的默认计费倍率（例如 1.10 代表在上游价格基础上加价 10%）',
         defaultSubscriptions: '默认订阅列表',
         defaultSubscriptionsHint: '新用户创建或注册时自动分配这些订阅',
         addDefaultSubscription: '添加默认订阅',

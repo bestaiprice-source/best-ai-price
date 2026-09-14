@@ -113,6 +113,11 @@ func (s *userRepoStub) DisableTotp(ctx context.Context, userID int64) error {
 	panic("unexpected DisableTotp call")
 }
 
+func (s *userRepoStub) GetOverdraftStats(ctx context.Context) (float64, int64, error) {
+	return 0, 0, nil
+}
+
+
 type groupRepoStub struct {
 	affectedUserIDs []int64
 	deleteErr       error

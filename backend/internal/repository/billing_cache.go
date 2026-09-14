@@ -77,6 +77,12 @@ var (
 			return 0
 		end
 		local newVal = tonumber(current) - tonumber(ARGV[1])
+		if ARGV[3] then
+			local maxOverdraft = tonumber(ARGV[3])
+			if maxOverdraft and newVal < -maxOverdraft then
+				newVal = -maxOverdraft
+			end
+		end
 		redis.call('SET', KEYS[1], newVal)
 		redis.call('EXPIRE', KEYS[1], ARGV[2])
 		return 1
@@ -158,7 +164,7 @@ func (c *billingCache) SetUserBalance(ctx context.Context, userID int64, balance
 
 func (c *billingCache) DeductUserBalance(ctx context.Context, userID int64, amount float64) error {
 	key := billingBalanceKey(userID)
-	_, err := deductBalanceScript.Run(ctx, c.rdb, []string{key}, amount, int(jitteredTTL().Seconds())).Result()
+	_, err := deductBalanceScript.Run(ctx, c.rdb, []string{key}, amount, int(jitteredTTL().Seconds()), service.MaxAllowableOverdraftUSD).Result()
 	if err != nil && !errors.Is(err, redis.Nil) {
 		log.Printf("Warning: deduct balance cache failed for user %d: %v", userID, err)
 		return err

@@ -311,6 +311,11 @@ func (s *stubUserRepo) DisableTotp(ctx context.Context, userID int64) error {
 	panic("unexpected DisableTotp call")
 }
 
+func (s *stubUserRepo) GetOverdraftStats(ctx context.Context) (float64, int64, error) {
+	return 0, 0, nil
+}
+
+
 type settingRepoStub struct {
 	values map[string]string
 }

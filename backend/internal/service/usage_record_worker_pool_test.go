@@ -486,3 +486,39 @@ func TestUsageRecordWorkerPool_ResizeAndLogDropBranches(t *testing.T) {
 		pool.logDrop("full")
 	})
 }
+
+func TestUsageRecordWorkerPool_SubmitGuaranteed_ZeroLoss(t *testing.T) {
+	pool := NewUsageRecordWorkerPoolWithOptions(UsageRecordWorkerPoolOptions{
+		WorkerCount:      1,
+		QueueSize:        1,
+		TaskTimeout:      time.Second,
+		OverflowPolicy:   config.UsageRecordOverflowPolicyDrop,
+		AutoScaleEnabled: false,
+	})
+	defer pool.Stop()
+
+	workerBlocked := make(chan struct{})
+	releaseWorker := make(chan struct{})
+	require.Equal(t, UsageRecordSubmitModeEnqueued, pool.Submit(func(ctx context.Context) {
+		close(workerBlocked)
+		<-releaseWorker
+	}))
+	<-workerBlocked
+
+	// Fill queue with task 2
+	require.Equal(t, UsageRecordSubmitModeEnqueued, pool.Submit(func(ctx context.Context) {}))
+
+	// Normal submit on full queue should drop
+	require.Equal(t, UsageRecordSubmitModeDropped, pool.Submit(func(ctx context.Context) {}))
+
+	// Guaranteed submit on full queue must execute synchronously
+	var executed atomic.Bool
+	mode := pool.SubmitGuaranteed(func(ctx context.Context) {
+		executed.Store(true)
+	})
+	require.Equal(t, UsageRecordSubmitModeSync, mode)
+	require.True(t, executed.Load(), "SubmitGuaranteed must execute task synchronously when pool drops")
+
+	close(releaseWorker)
+}
+
