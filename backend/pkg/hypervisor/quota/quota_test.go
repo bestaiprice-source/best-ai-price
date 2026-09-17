@@ -457,4 +457,12 @@ func TestQuotaManagerUnlimitedPolicy(t *testing.T) {
 	ok, err := qm.ReserveQuotaTokens(ctx, ownerID, "req-1", "standard", 1000000, time.Minute)
 	require.NoError(t, err)
 	require.True(t, ok, "unlimited policy should never be blocked by quota reservation")
+
+	// Reconcile and Release must succeed cleanly without "token reservation not found" error
+	require.NoError(t, qm.ReconcileQuotaTokens(ctx, ownerID, "req-1", "standard", 50000))
+	require.NoError(t, qm.ReleaseQuotaTokens(ctx, ownerID, "req-1", "standard"))
+
+	used, err := qm.store.Redis().Get(ctx, usageKey(ownerID, "standard")).Int64()
+	require.NoError(t, err)
+	assert.Equal(t, int64(50000), used)
 }

@@ -225,6 +225,14 @@ func (qm *QuotaManager) ReleaseQuotaTokens(ctx context.Context, ownerID, request
 	if len(scope) > len("standard:") && scope[:len("standard:")] == "standard:" {
 		poolType = "standard"
 	}
+	if poolType == "yunwu" {
+		return nil
+	}
+	if ua, err := qm.GetUserAccess(ctx, ownerID, poolType); err == nil && ua != nil {
+		if poolType == "standard" && (ua.MonthlyLimit <= 0 || ua.PlanID == "unlimited") {
+			return nil
+		}
+	}
 	const script = `
 local amount = tonumber(redis.call('HGET', KEYS[1], ARGV[1]) or '0')
 if amount <= 0 then return 0 end
@@ -259,6 +267,23 @@ func (qm *QuotaManager) ReconcileQuotaTokens(ctx context.Context, ownerID, reque
 	poolType := scope
 	if len(scope) > len("standard:") && scope[:len("standard:")] == "standard:" {
 		poolType = "standard"
+	}
+	if poolType == "yunwu" {
+		return nil
+	}
+	if ua, err := qm.GetUserAccess(ctx, ownerID, poolType); err == nil && ua != nil {
+		if poolType == "standard" && (ua.MonthlyLimit <= 0 || ua.PlanID == "unlimited") {
+			if billedUnits > 0 {
+				_ = qm.store.Redis().IncrBy(ctx, usageKey(ownerID, scope), billedUnits).Err()
+				if scope != poolType {
+					_ = qm.store.Redis().IncrBy(ctx, usageKey(ownerID, poolType), billedUnits).Err()
+				}
+				today := time.Now().UTC().Format("2006-01-02")
+				dailyUsageKey := fmt.Sprintf("ash:daily_usage:%s:%s:%s", ownerID, poolType, today)
+				_ = qm.store.Redis().IncrBy(ctx, dailyUsageKey, billedUnits).Err()
+			}
+			return nil
+		}
 	}
 	const script = `
 local estimate = tonumber(redis.call('HGET', KEYS[1], ARGV[2]) or '0')
@@ -302,7 +327,18 @@ return billed`
 		return err
 	}
 	if result < 0 {
-		return fmt.Errorf("token reservation not found")
+		// Reservation not found or expired during long in-flight execution:
+		// record actual billed usage so counters remain completely accurate without failing request.
+		if billedUnits > 0 {
+			_ = qm.store.Redis().IncrBy(ctx, usageKey(ownerID, scope), billedUnits).Err()
+			if scope != poolType {
+				_ = qm.store.Redis().IncrBy(ctx, usageKey(ownerID, poolType), billedUnits).Err()
+			}
+			today := time.Now().UTC().Format("2006-01-02")
+			dailyUsageKey := fmt.Sprintf("ash:daily_usage:%s:%s:%s", ownerID, poolType, today)
+			_ = qm.store.Redis().IncrBy(ctx, dailyUsageKey, billedUnits).Err()
+		}
+		return nil
 	}
 	return nil
 }
