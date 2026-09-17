@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"math"
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
@@ -16,9 +17,9 @@ func TestDeductUsageBillingBalance_NormalDeduction(t *testing.T) {
 	defer db.Close()
 
 	mock.ExpectBegin()
-	mock.ExpectExec("UPDATE users SET balance = balance - \\$1").
-		WithArgs(0.05, int64(101), service.MaxAllowableOverdraftUSD).
-		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery("UPDATE users SET balance = balance - \\$1").
+		WithArgs(0.05, int64(101)).
+		WillReturnRows(sqlmock.NewRows([]string{"balance"}).AddRow(9.95))
 	mock.ExpectCommit()
 
 	tx, err := db.BeginTx(context.Background(), nil)
@@ -31,27 +32,17 @@ func TestDeductUsageBillingBalance_NormalDeduction(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
-func TestDeductUsageBillingBalance_ExceedsOverdraftClamps(t *testing.T) {
+func TestDeductUsageBillingBalance_ExceedsOverdraftThreshold_NoDebtForgiveness(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer db.Close()
 
 	mock.ExpectBegin()
-	// First update matches 0 rows because (balance - $1 >= -$3) is false
-	mock.ExpectExec("UPDATE users SET balance = balance - \\$1").
-		WithArgs(10.0, int64(102), service.MaxAllowableOverdraftUSD).
-		WillReturnResult(sqlmock.NewResult(0, 0))
-
-	// Second query checks if user exists
-	mock.ExpectQuery("SELECT true, balance FROM users WHERE id = \\$1").
-		WithArgs(int64(102)).
-		WillReturnRows(sqlmock.NewRows([]string{"exists", "balance"}).AddRow(true, -0.10))
-
-	// Third update clamps to -MaxAllowableOverdraftUSD
-	mock.ExpectExec("UPDATE users SET balance = -\\$1").
-		WithArgs(service.MaxAllowableOverdraftUSD, int64(102)).
-		WillReturnResult(sqlmock.NewResult(0, 1))
-
+	// Deduction of $10 when balance was $0 leads to -$10, which exceeds -$0.50 threshold.
+	// It must record the full negative balance -$10 (no clamp, no debt forgiveness) and succeed.
+	mock.ExpectQuery("UPDATE users SET balance = balance - \\$1").
+		WithArgs(10.0, int64(102)).
+		WillReturnRows(sqlmock.NewRows([]string{"balance"}).AddRow(-10.0))
 	mock.ExpectCommit()
 
 	tx, err := db.BeginTx(context.Background(), nil)
@@ -70,12 +61,8 @@ func TestDeductUsageBillingBalance_UserNotFound(t *testing.T) {
 	defer db.Close()
 
 	mock.ExpectBegin()
-	mock.ExpectExec("UPDATE users SET balance = balance - \\$1").
-		WithArgs(5.0, int64(999), service.MaxAllowableOverdraftUSD).
-		WillReturnResult(sqlmock.NewResult(0, 0))
-
-	mock.ExpectQuery("SELECT true, balance FROM users WHERE id = \\$1").
-		WithArgs(int64(999)).
+	mock.ExpectQuery("UPDATE users SET balance = balance - \\$1").
+		WithArgs(5.0, int64(999)).
 		WillReturnError(sql.ErrNoRows)
 
 	mock.ExpectRollback()
@@ -88,4 +75,43 @@ func TestDeductUsageBillingBalance_UserNotFound(t *testing.T) {
 
 	require.NoError(t, tx.Rollback())
 	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestDeductUsageBillingBalance_DatabaseError(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	mock.ExpectBegin()
+	mock.ExpectQuery("UPDATE users SET balance = balance - \\$1").
+		WithArgs(5.0, int64(103)).
+		WillReturnError(sql.ErrConnDone)
+
+	mock.ExpectRollback()
+
+	tx, err := db.BeginTx(context.Background(), nil)
+	require.NoError(t, err)
+
+	err = deductUsageBillingBalance(context.Background(), tx, 103, 5.0)
+	require.ErrorIs(t, err, sql.ErrConnDone)
+
+	require.NoError(t, tx.Rollback())
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestDeductUsageBillingBalance_InvalidMonetaryAmounts(t *testing.T) {
+	invalidAmounts := []float64{
+		0.0,
+		-0.01,
+		-100.0,
+		math.NaN(),
+		math.Inf(1),
+		math.Inf(-1),
+	}
+
+	for _, amt := range invalidAmounts {
+		err := deductUsageBillingBalance(context.Background(), nil, 104, amt)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "invalid deduction amount")
+	}
 }

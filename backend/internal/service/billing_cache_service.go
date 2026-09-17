@@ -41,6 +41,7 @@ const (
 	cacheWriteUpdateSubscriptionUsage
 	cacheWriteDeductBalance
 	cacheWriteUpdateRateLimitUsage
+	cacheWriteResetRateLimit
 )
 
 // 异步缓存写入工作池配置
@@ -71,6 +72,7 @@ type cacheWriteTask struct {
 	groupID          int64
 	apiKeyID         int64
 	balance          float64
+	version          int64
 	amount           float64
 	subscriptionData *subscriptionCacheData
 }
@@ -182,7 +184,7 @@ func (s *BillingCacheService) cacheWriteWorker(ch <-chan cacheWriteTask) {
 		ctx, cancel := context.WithTimeout(context.Background(), cacheWriteTimeout)
 		switch task.kind {
 		case cacheWriteSetBalance:
-			s.setBalanceCache(ctx, task.userID, task.balance)
+			s.setBalanceCache(ctx, task.userID, task.balance, task.version)
 		case cacheWriteSetSubscription:
 			s.setSubscriptionCache(ctx, task.userID, task.groupID, task.subscriptionData)
 		case cacheWriteUpdateSubscriptionUsage:
@@ -203,6 +205,21 @@ func (s *BillingCacheService) cacheWriteWorker(ch <-chan cacheWriteTask) {
 					logger.LegacyPrintf("service.billing_cache", "Warning: update rate limit usage cache failed for api key %d: %v", task.apiKeyID, err)
 				}
 			}
+		case cacheWriteResetRateLimit:
+			if s.apiKeyRateLimitLoader != nil {
+				if loader, ok := s.apiKeyRateLimitLoader.(interface {
+					ResetRateLimitWindows(ctx context.Context, id int64) error
+				}); ok {
+					if err := loader.ResetRateLimitWindows(ctx, task.apiKeyID); err != nil {
+						logger.LegacyPrintf("service.billing_cache", "Warning: reset rate limit windows failed for api key %d: %v", task.apiKeyID, err)
+					}
+				}
+			}
+			if s.cache != nil {
+				if err := s.cache.InvalidateAPIKeyRateLimit(ctx, task.apiKeyID); err != nil {
+					logger.LegacyPrintf("service.billing_cache", "Warning: invalidate rate limit cache failed for api key %d: %v", task.apiKeyID, err)
+				}
+			}
 		}
 		cancel()
 	}
@@ -221,6 +238,8 @@ func cacheWriteKindName(kind cacheWriteKind) string {
 		return "deduct_balance"
 	case cacheWriteUpdateRateLimitUsage:
 		return "update_rate_limit_usage"
+	case cacheWriteResetRateLimit:
+		return "reset_rate_limit"
 	default:
 		return "unknown"
 	}
@@ -274,7 +293,8 @@ func (s *BillingCacheService) logCacheWriteDrop(task cacheWriteTask, reason stri
 func (s *BillingCacheService) GetUserBalance(ctx context.Context, userID int64) (float64, error) {
 	if s.cache == nil {
 		// Redis不可用，直接查询数据库
-		return s.getUserBalanceFromDB(ctx, userID)
+		bal, _, err := s.getUserBalanceFromDB(ctx, userID)
+		return bal, err
 	}
 
 	// 尝试从缓存读取
@@ -288,16 +308,17 @@ func (s *BillingCacheService) GetUserBalance(ctx context.Context, userID int64) 
 		loadCtx, cancel := context.WithTimeout(context.Background(), balanceLoadTimeout)
 		defer cancel()
 
-		balance, err := s.getUserBalanceFromDB(loadCtx, userID)
+		balance, ver, err := s.getUserBalanceFromDB(loadCtx, userID)
 		if err != nil {
 			return nil, err
 		}
 
-		// 异步建立缓存
+		// 异步建立缓存（带版本号，防止覆盖并发扣减）
 		_ = s.enqueueCacheWrite(cacheWriteTask{
 			kind:    cacheWriteSetBalance,
 			userID:  userID,
 			balance: balance,
+			version: ver,
 		})
 		return balance, nil
 	})
@@ -311,21 +332,25 @@ func (s *BillingCacheService) GetUserBalance(ctx context.Context, userID int64) 
 	return balance, nil
 }
 
-// getUserBalanceFromDB 从数据库获取用户余额
-func (s *BillingCacheService) getUserBalanceFromDB(ctx context.Context, userID int64) (float64, error) {
+// getUserBalanceFromDB 从数据库获取用户余额及更新时间版本
+func (s *BillingCacheService) getUserBalanceFromDB(ctx context.Context, userID int64) (float64, int64, error) {
 	user, err := s.userRepo.GetByID(ctx, userID)
 	if err != nil {
-		return 0, fmt.Errorf("get user balance: %w", err)
+		return 0, 0, fmt.Errorf("get user balance: %w", err)
 	}
-	return user.Balance, nil
+	var ver int64
+	if !user.UpdatedAt.IsZero() {
+		ver = user.UpdatedAt.UnixNano()
+	}
+	return user.Balance, ver, nil
 }
 
 // setBalanceCache 设置余额缓存
-func (s *BillingCacheService) setBalanceCache(ctx context.Context, userID int64, balance float64) {
+func (s *BillingCacheService) setBalanceCache(ctx context.Context, userID int64, balance float64, version ...int64) {
 	if s.cache == nil {
 		return
 	}
-	if err := s.cache.SetUserBalance(ctx, userID, balance); err != nil {
+	if err := s.cache.SetUserBalance(ctx, userID, balance, version...); err != nil {
 		logger.LegacyPrintf("service.billing_cache", "Warning: set balance cache failed for user %d: %v", userID, err)
 	}
 }
@@ -509,6 +534,7 @@ func (s *BillingCacheService) checkAPIKeyRateLimits(ctx context.Context, apiKey 
 		}
 		data, err := s.apiKeyRateLimitLoader.GetRateLimitData(ctx, apiKey.ID)
 		if err != nil {
+			logger.LegacyPrintf("service.billing_cache", "Warning: rate limit DB check failed for api key %d: %v; failing open", apiKey.ID, err)
 			return nil // Don't block requests on DB errors
 		}
 		return s.evaluateRateLimits(ctx, apiKey, data.Usage5h, data.Usage1d, data.Usage7d,
@@ -523,6 +549,7 @@ func (s *BillingCacheService) checkAPIKeyRateLimits(ctx context.Context, apiKey 
 		}
 		dbData, dbErr := s.apiKeyRateLimitLoader.GetRateLimitData(ctx, apiKey.ID)
 		if dbErr != nil {
+			logger.LegacyPrintf("service.billing_cache", "Warning: rate limit DB check on cache miss failed for api key %d: %v; failing open", apiKey.ID, dbErr)
 			return nil // Don't block requests on DB errors
 		}
 		// Build cache entry from DB data
@@ -578,29 +605,12 @@ func (s *BillingCacheService) evaluateRateLimits(ctx context.Context, apiKey *AP
 		needsReset = true
 	}
 
-	// Trigger async DB reset if any window expired
+	// Trigger async DB reset via worker pool if any window expired (bounded, prevents goroutine leaks)
 	if needsReset {
-		keyID := apiKey.ID
-		go func() {
-			resetCtx, cancel := context.WithTimeout(context.Background(), cacheWriteTimeout)
-			defer cancel()
-			if s.apiKeyRateLimitLoader != nil {
-				// Use the repo directly - reset then reload cache
-				if loader, ok := s.apiKeyRateLimitLoader.(interface {
-					ResetRateLimitWindows(ctx context.Context, id int64) error
-				}); ok {
-					if err := loader.ResetRateLimitWindows(resetCtx, keyID); err != nil {
-						logger.LegacyPrintf("service.billing_cache", "Warning: reset rate limit windows failed for api key %d: %v", keyID, err)
-					}
-				}
-			}
-			// Invalidate cache so next request loads fresh data
-			if s.cache != nil {
-				if err := s.cache.InvalidateAPIKeyRateLimit(resetCtx, keyID); err != nil {
-					logger.LegacyPrintf("service.billing_cache", "Warning: invalidate rate limit cache failed for api key %d: %v", keyID, err)
-				}
-			}
-		}()
+		_ = s.enqueueCacheWrite(cacheWriteTask{
+			kind:     cacheWriteResetRateLimit,
+			apiKeyID: apiKey.ID,
+		})
 	}
 
 	// Check limits

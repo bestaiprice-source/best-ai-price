@@ -328,7 +328,7 @@ func (s *billingCacheStub) GetUserBalance(ctx context.Context, userID int64) (fl
 	panic("unexpected GetUserBalance call")
 }
 
-func (s *billingCacheStub) SetUserBalance(ctx context.Context, userID int64, balance float64) error {
+func (s *billingCacheStub) SetUserBalance(ctx context.Context, userID int64, balance float64, version ...int64) error {
 	panic("unexpected SetUserBalance call")
 }
 

@@ -22,9 +22,12 @@ import (
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/storage"
 )
 
-type mockYunwuRuntime struct{}
+type mockYunwuRuntime struct {
+	lastNodeID string
+}
 
 func (m *mockYunwuRuntime) Execute(ctx context.Context, nodeID string, reqPayload []byte, stream io.Writer) (*runtime.ResponseMetadata, error) {
+	m.lastNodeID = nodeID
 	return &runtime.ResponseMetadata{
 		StatusCode:   200,
 		InputTokens:  150,
@@ -430,22 +433,31 @@ func TestYunwuReconcileHealthAndErrorRebinding(t *testing.T) {
 	assert.NotNil(t, meta)
 }
 
-func TestYunwuQuotaExceeded(t *testing.T) {
+func TestYunwuBypassesHypervisorQuota(t *testing.T) {
+	t.Setenv("ASH_YUNWU_TEST_MODE", "true")
 	store := setupTestYunwuStore(t)
 	ctx := context.Background()
+	nm := health.NewNodeManager(store)
+	node := &health.ExecutionNode{NodeID: "yw-quota-node", AccountName: "Quota Node", Provider: "yunwu", State: "healthy"}
+	_ = nm.SaveNode(ctx, node)
+	setTestBalance(t, store, node.NodeID, 10_000_000)
+	_ = store.Redis().SAdd(ctx, "ash:yunwu:nodes", "yw-quota-node").Err()
+
 	yh := NewYunwuHypervisor(store, &mockYunwuRuntime{})
 
-	// User exceeding quota
+	// User exceeding quota in QuotaManager should NOT be blocked in Yunwu
 	_ = yh.qm.SaveUserAccess(ctx, &quota.UserAccess{OwnerID: "u-exceeded", IsActive: true, MonthlyLimitMicroUSD: 100, UsedMicroUSD: 150}, "yunwu")
 
 	var buf bytes.Buffer
-	_, err := yh.HandleRequest(ctx, "u-exceeded", "conv-1", []byte(`{"model":"claude"}`), &buf, "yunwu")
-	require.ErrorIs(t, err, quota.ErrQuotaExceeded)
+	meta, err := yh.HandleRequest(ctx, "u-exceeded", "conv-1", []byte(`{"model":"claude"}`), &buf, "yunwu")
+	require.NoError(t, err)
+	assert.NotNil(t, meta)
 
-	// Inactive user
+	// Inactive user in QuotaManager should also NOT be blocked in Yunwu (billing/auth handled at gateway layer)
 	_ = yh.qm.SaveUserAccess(ctx, &quota.UserAccess{OwnerID: "u-inactive", IsActive: false}, "yunwu")
-	_, err = yh.HandleRequest(ctx, "u-inactive", "conv-1", []byte(`{"model":"claude"}`), &buf, "yunwu")
-	require.ErrorIs(t, err, quota.ErrUserInactive)
+	meta, err = yh.HandleRequest(ctx, "u-inactive", "conv-2", []byte(`{"model":"claude"}`), &buf, "yunwu")
+	require.NoError(t, err)
+	assert.NotNil(t, meta)
 }
 
 func TestYunwuGetHealthStatusWithCooldown(t *testing.T) {
@@ -585,3 +597,70 @@ func TestToolCallsToString(t *testing.T) {
 	assert.Contains(t, result, "call_1")
 	assert.Contains(t, result, "call_2")
 }
+
+func TestYunwuModelFamilyRouting(t *testing.T) {
+	t.Setenv("ASH_YUNWU_TEST_MODE", "true")
+
+	store := setupTestYunwuStore(t)
+	rt := &mockYunwuRuntime{}
+	yh := NewYunwuHypervisor(store, rt)
+	nm := health.NewNodeManager(store)
+	ctx := context.Background()
+
+	// Node 1: Claude only
+	err := nm.SaveNode(ctx, &health.ExecutionNode{
+		NodeID:       "node-claude",
+		AccountName:  "Claude Node",
+		Provider:     "openlux",
+		State:        "healthy",
+		Capabilities: []string{FamilyClaude},
+	})
+	require.NoError(t, err)
+	err = store.Redis().SAdd(ctx, "ash:yunwu:nodes", "node-claude").Err()
+	require.NoError(t, err)
+	setTestBalance(t, store, "node-claude", 10_000_000)
+
+	// Node 2: GPT only
+	err = nm.SaveNode(ctx, &health.ExecutionNode{
+		NodeID:       "node-gpt",
+		AccountName:  "GPT Node",
+		Provider:     "openlux",
+		State:        "healthy",
+		Capabilities: []string{FamilyGPT},
+	})
+	require.NoError(t, err)
+	err = store.Redis().SAdd(ctx, "ash:yunwu:nodes", "node-gpt").Err()
+	require.NoError(t, err)
+	setTestBalance(t, store, "node-gpt", 10_000_000)
+
+	// Register user access
+	err = yh.qm.SaveUserAccess(ctx, &quota.UserAccess{
+		OwnerID:      "test-user",
+		PlanID:       "basic",
+		MonthlyLimit: 1_000_000,
+		UsedUnits:    0,
+		Priority:     1,
+		IsActive:     true,
+	}, "yunwu")
+	require.NoError(t, err)
+
+	// 1. Request a Claude model -> must route to node-claude
+	claudePayload := []byte(`{"model": "claude-3-5-sonnet-20241022", "messages": [{"role": "user", "content": "hi"}]}`)
+	resp, err := yh.HandleRequest(ctx, "test-user", "conv-claude", claudePayload, io.Discard, "yunwu")
+	require.NoError(t, err)
+	assert.NotNil(t, resp)
+	assert.Equal(t, "node-claude", rt.lastNodeID)
+
+	// 2. Request a GPT model -> must route to node-gpt
+	gptPayload := []byte(`{"model": "gpt-4o", "messages": [{"role": "user", "content": "hi"}]}`)
+	resp, err = yh.HandleRequest(ctx, "test-user", "conv-gpt", gptPayload, io.Discard, "yunwu")
+	require.NoError(t, err)
+	assert.NotNil(t, resp)
+	assert.Equal(t, "node-gpt", rt.lastNodeID)
+
+	// 3. Request a Gemini model -> no compatible node, returns ErrNoCompatibleNodes
+	geminiPayload := []byte(`{"model": "gemini-2.5-flash", "messages": [{"role": "user", "content": "hi"}]}`)
+	_, err = yh.HandleRequest(ctx, "test-user", "conv-gemini", geminiPayload, io.Discard, "yunwu")
+	require.ErrorIs(t, err, ErrNoCompatibleNodes)
+}
+

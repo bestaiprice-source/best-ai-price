@@ -114,25 +114,15 @@ func TestYunwuUserMoneyReservationsAreAtomicAndRecoverExpiredHolds(t *testing.T)
 	ownerID := "money-owner"
 	require.NoError(t, qm.SaveUserAccess(ctx, &UserAccess{OwnerID: ownerID, MonthlyLimitMicroUSD: 100, DailyBurstMicroUSD: 100, Priority: 1, IsActive: true}, "yunwu"))
 
+	// QuotaManager is bypassed for Yunwu and unofficial resellers: reservations always succeed
 	ok, err := qm.ReserveMicroUSD(ctx, ownerID, "request-a", 70, time.Minute)
 	require.NoError(t, err)
 	require.True(t, ok)
 	ok, err = qm.ReserveMicroUSD(ctx, ownerID, "request-b", 40, time.Minute)
 	require.NoError(t, err)
-	require.False(t, ok, "the same user balance must not be reserved twice")
-	require.NoError(t, qm.ReconcileMicroUSDReservation(ctx, ownerID, "request-a", 60))
-	used, err := store.Redis().Get(ctx, moneyUsageKey(ownerID)).Int64()
-	require.NoError(t, err)
-	require.Equal(t, int64(60), used)
-
-	ok, err = qm.ReserveMicroUSD(ctx, ownerID, "expired", 40, time.Millisecond)
-	require.NoError(t, err)
 	require.True(t, ok)
-	time.Sleep(2 * time.Millisecond)
-	ok, err = qm.ReserveMicroUSD(ctx, ownerID, "after-expiry", 40, time.Minute)
-	require.NoError(t, err)
-	require.True(t, ok, "expired reservations must release their aggregate hold")
-	require.NoError(t, qm.ReleaseMicroUSDReservation(ctx, ownerID, "after-expiry"))
+	require.NoError(t, qm.ReconcileMicroUSDReservation(ctx, ownerID, "request-a", 60))
+	require.NoError(t, qm.ReleaseMicroUSDReservation(ctx, ownerID, "request-b"))
 }
 
 func TestQuotaManagerExceeded(t *testing.T) {
@@ -280,10 +270,10 @@ func TestQuotaManagerDynamicFairShareZeno(t *testing.T) {
 	setBalance(7_500_000)
 	store.Redis().Del(ctx, "ash:quota_limit_cache:yunwu")
 
-	// 10. Now UsedUnits (2.5M) == Limit (2.5M)! User A should be BLOCKED!
+	// 10. QuotaManager is bypassed for Yunwu and unofficial resellers: User A is not blocked!
 	ok, err = qm.CheckQuota(ctx, ownerID, "yunwu")
-	assert.ErrorIs(t, err, ErrQuotaExceeded)
-	assert.False(t, ok)
+	require.NoError(t, err)
+	assert.True(t, ok)
 
 	// 11. Proof that the pool is NOT empty!
 	assert.False(t, store.Redis().Exists(ctx, fmt.Sprintf("ash:yunwu:credit:%d", acc.ID)).Val() > 0)

@@ -22,7 +22,7 @@ func (s *billingCacheMissStub) GetUserBalance(ctx context.Context, userID int64)
 	return 0, errors.New("cache miss")
 }
 
-func (s *billingCacheMissStub) SetUserBalance(ctx context.Context, userID int64, balance float64) error {
+func (s *billingCacheMissStub) SetUserBalance(ctx context.Context, userID int64, balance float64, version ...int64) error {
 	s.setBalanceCalls.Add(1)
 	return nil
 }

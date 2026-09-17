@@ -22,7 +22,7 @@ func (b *billingCacheWorkerStub) GetUserBalance(ctx context.Context, userID int6
 	return 0, errors.New("not implemented")
 }
 
-func (b *billingCacheWorkerStub) SetUserBalance(ctx context.Context, userID int64, balance float64) error {
+func (b *billingCacheWorkerStub) SetUserBalance(ctx context.Context, userID int64, balance float64, version ...int64) error {
 	atomic.AddInt64(&b.balanceUpdates, 1)
 	return nil
 }

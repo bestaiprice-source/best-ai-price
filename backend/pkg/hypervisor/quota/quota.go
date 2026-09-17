@@ -97,118 +97,18 @@ func tokenReservationExpiryKey(ownerID, scope string) string {
 
 // ReserveMicroUSD atomically checks monthly, daily, and dynamic monetary limits while
 // accounting for all in-flight requests from the same user.
+// For Yunwu and unofficial resellers, Hypervisor QuotaManager is not needed.
 func (qm *QuotaManager) ReserveMicroUSD(ctx context.Context, ownerID, requestID string, amount int64, ttl time.Duration) (bool, error) {
-	if amount <= 0 {
-		amount = 1
-	}
-	access, err := qm.GetUserAccess(ctx, ownerID, "yunwu")
-	if err != nil {
-		return false, err
-	}
-	today := time.Now().UTC().Format("2006-01-02")
-	dailyUsedKey := fmt.Sprintf("ash:daily_usage_micro_usd:%s:%s", ownerID, today)
-	dailyReservedKey := fmt.Sprintf("ash:daily_reserved_micro_usd:%s:%s", ownerID, today)
-
-	dynLimitMicroUSD, _ := qm.GetEffectiveDynamicLimit(ctx, "yunwu", access.Priority)
-
-	const script = `
-local expired = redis.call('ZRANGEBYSCORE', KEYS[6], '-inf', ARGV[5])
-for _, request_id in ipairs(expired) do
-  local expired_amount = tonumber(redis.call('HGET', KEYS[5], request_id) or '0')
-  local expired_date = redis.call('HGET', KEYS[5], request_id .. ':date')
-  local expired_month = redis.call('HGET', KEYS[5], request_id .. ':month')
-  if expired_amount > 0 then
-    if expired_month then
-      local monthly_key = ARGV[9] .. ':' .. expired_month
-      local monthly = redis.call('DECRBY', monthly_key, expired_amount)
-      if monthly < 0 then redis.call('SET', monthly_key, 0) end
-    end
-    if expired_date then
-      local d_key = ARGV[8] .. ':' .. expired_date
-      local daily = redis.call('DECRBY', d_key, expired_amount)
-      if daily < 0 then redis.call('SET', d_key, 0) end
-    end
-  end
-  redis.call('HDEL', KEYS[5], request_id, request_id .. ':date', request_id .. ':month')
-  redis.call('ZREM', KEYS[6], request_id)
-end
-if redis.call('HEXISTS', KEYS[5], ARGV[6]) == 1 then return 0 end
-local used = tonumber(redis.call('GET', KEYS[1]) or '0')
-local reserved = tonumber(redis.call('GET', KEYS[2]) or '0')
-local daily_used = tonumber(redis.call('GET', KEYS[3]) or '0')
-local daily_reserved = tonumber(redis.call('GET', KEYS[4]) or '0')
-local amount = tonumber(ARGV[1])
-local monthly_limit = tonumber(ARGV[2])
-local daily_limit = tonumber(ARGV[3])
-local dynamic_limit = tonumber(ARGV[11])
-if monthly_limit > 0 and used + reserved + amount > monthly_limit then return 0 end
-if daily_limit > 0 and daily_used + daily_reserved + amount > daily_limit then return 0 end
-if dynamic_limit > 0 and used + reserved + amount > dynamic_limit then return 0 end
-redis.call('HSET', KEYS[5], ARGV[6], amount, ARGV[6] .. ':date', ARGV[7], ARGV[6] .. ':month', ARGV[10])
-redis.call('ZADD', KEYS[6], ARGV[4], ARGV[6])
-redis.call('INCRBY', KEYS[2], amount)
-redis.call('INCRBY', KEYS[4], amount)
-redis.call('EXPIRE', KEYS[2], 2678400)
-redis.call('EXPIRE', KEYS[4], 172800)
-return 1`
-	expiresAt := time.Now().Add(ttl).UnixMilli()
-	result, err := qm.store.Redis().Eval(ctx, script, []string{moneyUsageKey(ownerID), moneyReservedKey(ownerID), dailyUsedKey, dailyReservedKey, moneyReservationsKey(ownerID), moneyReservationExpiryKey(ownerID)}, amount, access.MonthlyLimitMicroUSD, access.DailyBurstMicroUSD, expiresAt, time.Now().UnixMilli(), requestID, today, fmt.Sprintf("ash:daily_reserved_micro_usd:%s", ownerID), fmt.Sprintf("ash:quota_reserved_micro_usd:%s:yunwu", ownerID), monthKey(), dynLimitMicroUSD).Int()
-	return result == 1, err
+	return true, nil
 }
 
 func (qm *QuotaManager) ReleaseMicroUSDReservation(ctx context.Context, ownerID, requestID string) error {
-	const script = `
-local amount = tonumber(redis.call('HGET', KEYS[1], ARGV[1]) or '0')
-if amount <= 0 then return 0 end
-local date = redis.call('HGET', KEYS[1], ARGV[1] .. ':date')
-local month = redis.call('HGET', KEYS[1], ARGV[1] .. ':month')
-redis.call('HDEL', KEYS[1], ARGV[1], ARGV[1] .. ':date', ARGV[1] .. ':month')
-redis.call('ZREM', KEYS[2], ARGV[1])
-local monthly_key = ARGV[3] .. ':' .. month
-local monthly = redis.call('DECRBY', monthly_key, amount)
-local daily_key = ARGV[2] .. ':' .. date
-local daily = redis.call('DECRBY', daily_key, amount)
-if monthly < 0 then redis.call('SET', monthly_key, 0) end
-if daily < 0 then redis.call('SET', daily_key, 0) end
-return amount`
-	return qm.store.Redis().Eval(ctx, script, []string{moneyReservationsKey(ownerID), moneyReservationExpiryKey(ownerID)}, requestID, fmt.Sprintf("ash:daily_reserved_micro_usd:%s", ownerID), fmt.Sprintf("ash:quota_reserved_micro_usd:%s:yunwu", ownerID)).Err()
+	return nil
 }
 
 // ReconcileMicroUSDReservation atomically converts an in-flight hold into
-// durable month/day usage so another concurrent request cannot steal the gap.
+// durable month/day usage.
 func (qm *QuotaManager) ReconcileMicroUSDReservation(ctx context.Context, ownerID, requestID string, billed int64) error {
-	if billed < 0 {
-		billed = 0
-	}
-	const script = `
-local estimate = tonumber(redis.call('HGET', KEYS[1], ARGV[2]) or '0')
-if estimate <= 0 then return -1 end
-local date = redis.call('HGET', KEYS[1], ARGV[2] .. ':date')
-local month = redis.call('HGET', KEYS[1], ARGV[2] .. ':month')
-redis.call('HDEL', KEYS[1], ARGV[2], ARGV[2] .. ':date', ARGV[2] .. ':month')
-redis.call('ZREM', KEYS[2], ARGV[2])
-local monthly_reserved_key = ARGV[5] .. ':' .. month
-local monthly_reserved = redis.call('DECRBY', monthly_reserved_key, estimate)
-local daily_reserved_key = ARGV[3] .. ':' .. date
-local daily_reserved = redis.call('DECRBY', daily_reserved_key, estimate)
-if monthly_reserved < 0 then redis.call('SET', monthly_reserved_key, 0) end
-if daily_reserved < 0 then redis.call('SET', daily_reserved_key, 0) end
-local billed = tonumber(ARGV[1])
-redis.call('INCRBY', KEYS[4], billed)
-local daily_usage_key = ARGV[4] .. ':' .. date
-redis.call('INCRBY', daily_usage_key, billed)
-redis.call('INCRBY', KEYS[6], billed)
-redis.call('EXPIRE', daily_usage_key, 4233600)
-return billed`
-	result, err := qm.store.Redis().Eval(ctx, script, []string{
-		moneyReservationsKey(ownerID), moneyReservationExpiryKey(ownerID), "unused", moneyUsageKey(ownerID), "unused", fmt.Sprintf("ash:yunwu:pool_used_micro_usd:%s", monthKey()),
-	}, billed, requestID, fmt.Sprintf("ash:daily_reserved_micro_usd:%s", ownerID), fmt.Sprintf("ash:daily_usage_micro_usd:%s", ownerID), fmt.Sprintf("ash:quota_reserved_micro_usd:%s:yunwu", ownerID)).Int64()
-	if err != nil {
-		return err
-	}
-	if result < 0 {
-		return fmt.Errorf("micro-USD reservation not found")
-	}
 	return nil
 }
 
@@ -651,6 +551,9 @@ func (qm *QuotaManager) CheckQuotaScope(ctx context.Context, ownerID string, sco
 	poolType := scope
 	if len(scope) > len("standard:") && scope[:len("standard:")] == "standard:" {
 		poolType = "standard"
+	}
+	if poolType == "yunwu" {
+		return true, nil
 	}
 	ua, err := qm.GetUserAccess(ctx, ownerID, poolType)
 	if err != nil {

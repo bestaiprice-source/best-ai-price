@@ -746,14 +746,20 @@ func TestApiKeyAuthWithSubscriptionGoogle_LowBalanceConcurrencyClamping(t *testi
 		expectedConcurrency int
 	}{
 		{
-			name:                "low balance clamps concurrency to 1",
-			balance:             0.05,
+			name:                "low balance < 1.00 clamps concurrency to 1",
+			balance:             0.50,
 			userConcurrency:     5,
 			expectedConcurrency: 1,
 		},
 		{
-			name:                "sufficient balance keeps user concurrency",
-			balance:             0.50,
+			name:                "balance 1.00 limits concurrency to 2 slots",
+			balance:             1.00,
+			userConcurrency:     5,
+			expectedConcurrency: 2,
+		},
+		{
+			name:                "sufficient balance >= 2.50 keeps user concurrency 5",
+			balance:             2.50,
 			userConcurrency:     5,
 			expectedConcurrency: 5,
 		},

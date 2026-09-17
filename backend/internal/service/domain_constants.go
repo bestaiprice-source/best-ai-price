@@ -289,10 +289,41 @@ const (
 	MinOperationalBalance = 0.002
 
 	// LowBalanceConcurrencyThreshold is the USD balance below which a user's concurrent request limit
-	// is clamped to 1 to prevent parallel overdraft exploitation ($0.10).
-	LowBalanceConcurrencyThreshold = 0.10
+	// is clamped to 1 to prevent parallel overdraft exploitation ($1.00).
+	LowBalanceConcurrencyThreshold = 1.00
 
-	// MaxAllowableOverdraftUSD is the maximum negative balance (overdraft) allowed during usage billing ($0.50).
-	// Once reached, all further deductions are clamped to prevent runaway negative balances.
+	// MinBalancePerConcurrentSlot is the minimal USD balance required per concurrent request slot ($0.50).
+	// When balance is above LowBalanceConcurrencyThreshold, effective concurrency is capped at
+	// floor(balance / MinBalancePerConcurrentSlot), clamped between 1 and user.Concurrency.
+	MinBalancePerConcurrentSlot = 0.50
+
+	// MaxAllowableOverdraftUSD is the maximum negative balance (overdraft) threshold during usage billing ($0.50).
+	// When exceeded, an alert log is emitted to notify operators of abnormal overdraft.
 	MaxAllowableOverdraftUSD = 0.50
 )
+
+// CalculateEffectiveConcurrency returns the concurrency limit enforced for a user.
+// If hasSubscription is true, the configured concurrency is returned unchanged.
+// For pay-as-you-go (balance-based), concurrency is clamped to prevent parallel overdraft:
+// - Balance < LowBalanceConcurrencyThreshold ($1.00) => concurrency 1
+// - Otherwise => min(configuredConcurrency, max(1, int(balance / MinBalancePerConcurrentSlot)))
+func CalculateEffectiveConcurrency(configuredConcurrency int, balance float64, hasSubscription bool) int {
+	if configuredConcurrency <= 0 {
+		configuredConcurrency = 1
+	}
+	if hasSubscription {
+		return configuredConcurrency
+	}
+	if balance < LowBalanceConcurrencyThreshold {
+		return 1
+	}
+	maxSlots := int(balance / MinBalancePerConcurrentSlot)
+	if maxSlots < 1 {
+		maxSlots = 1
+	}
+	if configuredConcurrency < maxSlots {
+		return configuredConcurrency
+	}
+	return maxSlots
+}
+

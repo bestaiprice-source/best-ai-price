@@ -169,6 +169,17 @@ func (s *Stripe) VerifyNotification(_ context.Context, rawBody string, headers m
 	return nil, nil
 }
 
+func extractStripeOrderID(pi *stripe.PaymentIntent) string {
+	if pi.Metadata != nil {
+		for _, key := range []string{"orderId", "order_id", "out_trade_no", "outTradeNo", "orderNo", "client_reference_id"} {
+			if val := strings.TrimSpace(pi.Metadata[key]); val != "" {
+				return val
+			}
+		}
+	}
+	return ""
+}
+
 func parseStripePaymentIntent(event *stripe.Event, status string, rawBody string) (*payment.PaymentNotification, error) {
 	var pi stripe.PaymentIntent
 	if err := json.Unmarshal(event.Data.Raw, &pi); err != nil {
@@ -176,7 +187,7 @@ func parseStripePaymentIntent(event *stripe.Event, status string, rawBody string
 	}
 	return &payment.PaymentNotification{
 		TradeNo: pi.ID,
-		OrderID: pi.Metadata["orderId"],
+		OrderID: extractStripeOrderID(&pi),
 		Amount:  payment.FenToYuan(pi.Amount),
 		Status:  status,
 		RawData: rawBody,

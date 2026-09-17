@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
+	"math"
 	"strings"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
@@ -171,52 +173,32 @@ func incrementUsageBillingSubscription(ctx context.Context, tx *sql.Tx, subscrip
 }
 
 func deductUsageBillingBalance(ctx context.Context, tx *sql.Tx, userID int64, amount float64) error {
-	maxOverdraft := service.MaxAllowableOverdraftUSD
-	res, err := tx.ExecContext(ctx, `
+	if math.IsNaN(amount) || math.IsInf(amount, 0) || amount <= 0 {
+		return fmt.Errorf("invalid deduction amount: %v", amount)
+	}
+	var newBalance float64
+	err := tx.QueryRowContext(ctx, `
 		UPDATE users
 		SET balance = balance - $1,
 			updated_at = NOW()
-		WHERE id = $2 AND deleted_at IS NULL AND (balance - $1 >= -$3)
-	`, amount, userID, maxOverdraft)
-	if err != nil {
-		return err
-	}
-	affected, err := res.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if affected > 0 {
-		return nil
-	}
-
-	// If no rows updated, check if user exists or overdraft limit was reached
-	var exists bool
-	var currentBalance float64
-	err = tx.QueryRowContext(ctx, `
-		SELECT true, balance FROM users WHERE id = $1 AND deleted_at IS NULL
-	`, userID).Scan(&exists, &currentBalance)
-	if errors.Is(err, sql.ErrNoRows) || !exists {
+		WHERE id = $2 AND deleted_at IS NULL
+		RETURNING balance
+	`, amount, userID).Scan(&newBalance)
+	if errors.Is(err, sql.ErrNoRows) {
 		return service.ErrUserNotFound
 	}
 	if err != nil {
 		return err
 	}
 
-	// User exists, but deduction exceeds allowable overdraft floor.
-	// Clamp user balance to -MaxAllowableOverdraftUSD and log alert.
-	_, _ = tx.ExecContext(ctx, `
-		UPDATE users
-		SET balance = -$1,
-			updated_at = NOW()
-		WHERE id = $2 AND deleted_at IS NULL
-	`, maxOverdraft, userID)
-
-	logger.L().With(
-		zap.Int64("user_id", userID),
-		zap.Float64("current_balance", currentBalance),
-		zap.Float64("attempted_deduction", amount),
-		zap.Float64("max_overdraft", maxOverdraft),
-	).Warn("billing.overdraft_limit_reached_clamped")
+	if newBalance < -service.MaxAllowableOverdraftUSD {
+		logger.L().With(
+			zap.Int64("user_id", userID),
+			zap.Float64("new_balance", newBalance),
+			zap.Float64("deducted_amount", amount),
+			zap.Float64("max_overdraft_threshold", service.MaxAllowableOverdraftUSD),
+		).Warn("billing.overdraft_threshold_exceeded")
+	}
 
 	return nil
 }

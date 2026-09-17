@@ -139,7 +139,53 @@
                       : 'sk-ant-...'
             "
           />
-          <p class="input-hint">{{ t('admin.accounts.leaveEmptyToKeep') }}</p>
+        </div>
+
+        <!-- Unofficial Provider Node Configuration (for yunwu platform) -->
+        <div
+          v-if="account.platform === 'yunwu'"
+          class="space-y-4 rounded-lg border border-emerald-200 bg-emerald-50/60 p-4 dark:border-emerald-900/40 dark:bg-emerald-950/20"
+        >
+          <div>
+            <label class="input-label">Provider</label>
+            <select v-model="yunwuProvider" class="input">
+              <option value="openlux">OpenLux (Yunwu)</option>
+              <option value="custom">Custom Upstream Provider</option>
+            </select>
+          </div>
+          <div v-if="yunwuProvider === 'custom'">
+            <label class="input-label">Provider Name / Key</label>
+            <input
+              v-model="yunwuCustomProvider"
+              type="text"
+              class="input font-mono"
+              placeholder="e.g. openlux, custom-vendor"
+            />
+          </div>
+          <div>
+            <label class="input-label">Supported Model Families</label>
+            <p class="mb-2 text-xs text-gray-500 dark:text-gray-400">
+              Select which neural network families route to this node:
+            </p>
+            <div class="grid grid-cols-2 gap-2">
+              <label
+                v-for="family in availableModelFamilies"
+                :key="family.id"
+                class="flex items-center gap-2 rounded border border-gray-200 p-2.5 text-xs bg-white dark:border-dark-600 dark:bg-dark-700 cursor-pointer hover:border-emerald-400"
+              >
+                <input
+                  type="checkbox"
+                  :value="family.id"
+                  v-model="yunwuSupportedFamilies"
+                  class="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 dark:border-dark-500"
+                />
+                <div>
+                  <span class="font-medium text-gray-800 dark:text-gray-200">{{ family.name }}</span>
+                  <span class="block text-[11px] text-gray-500 dark:text-gray-400">{{ family.desc }}</span>
+                </div>
+              </label>
+            </div>
+          </div>
         </div>
 
         <!-- Model Restriction Section (不适用于 Antigravity) -->
@@ -1911,6 +1957,16 @@ const interceptWarmupRequests = ref(false)
 const autoPauseOnExpired = ref(false)
 const mixedScheduling = ref(false) // For antigravity accounts: enable mixed scheduling
 const allowOverages = ref(false) // For antigravity accounts: enable AI Credits overages
+// Unofficial Provider (Yunwu / OpenLux) Node Settings
+const yunwuProvider = ref('openlux')
+const yunwuCustomProvider = ref('')
+const yunwuSupportedFamilies = ref<string[]>(['claude', 'gpt', 'gemini', 'other'])
+const availableModelFamilies = [
+  { id: 'claude', name: 'Claude', desc: 'claude-3-5-sonnet, claude-3-7-sonnet, opus...' },
+  { id: 'gpt', name: 'GPT', desc: 'gpt-4o, o1, o3, chatgpt...' },
+  { id: 'gemini', name: 'Gemini', desc: 'gemini-1.5, gemini-2.5, live, imagen...' },
+  { id: 'other', name: 'Other', desc: 'deepseek, qwen, llama, grok, mistral...' }
+]
 const antigravityModelRestrictionMode = ref<'whitelist' | 'mapping'>('whitelist')
 const antigravityWhitelistModels = ref<string[]>([])
 const antigravityModelMappings = ref<ModelMapping[]>([])
@@ -2138,6 +2194,28 @@ const syncFormFromAccount = (newAccount: Account | null) => {
   const extra = newAccount.extra as Record<string, unknown> | undefined
   mixedScheduling.value = extra?.mixed_scheduling === true
   allowOverages.value = extra?.allow_overages === true
+
+  // Load unofficial provider settings (for yunwu platform)
+  if (newAccount.platform === 'yunwu') {
+    const rawProv = (extra?.provider as string) || 'openlux'
+    if (rawProv === 'openlux' || rawProv === 'yunwu') {
+      yunwuProvider.value = 'openlux'
+      yunwuCustomProvider.value = ''
+    } else {
+      yunwuProvider.value = 'custom'
+      yunwuCustomProvider.value = rawProv
+    }
+    const families = extra?.supported_model_families
+    if (Array.isArray(families) && families.length > 0) {
+      yunwuSupportedFamilies.value = [...(families as string[])]
+    } else {
+      yunwuSupportedFamilies.value = ['claude', 'gpt', 'gemini', 'other']
+    }
+  } else {
+    yunwuProvider.value = 'openlux'
+    yunwuCustomProvider.value = ''
+    yunwuSupportedFamilies.value = ['claude', 'gpt', 'gemini', 'other']
+  }
 
   // Load OpenAI passthrough toggle (OpenAI OAuth/API Key)
   openaiPassthroughEnabled.value = false
@@ -3257,6 +3335,21 @@ const handleSubmit = async () => {
       } else {
         delete newExtra.quota_reset_timezone
       }
+      updatePayload.extra = applyIgnorePauseSchedulingErrorsUpdate(newExtra)
+    }
+
+    // For yunwu accounts, handle provider and supported_model_families in extra
+    if (props.account.platform === 'yunwu') {
+      const currentExtra = (updatePayload.extra as Record<string, unknown>) ||
+        (props.account.extra as Record<string, unknown>) || {}
+      const newExtra: Record<string, unknown> = { ...currentExtra }
+      const finalProvider = (yunwuProvider.value === 'custom' && yunwuCustomProvider.value.trim())
+        ? yunwuCustomProvider.value.trim().toLowerCase()
+        : (yunwuProvider.value || 'openlux')
+      newExtra.provider = finalProvider
+      newExtra.supported_model_families = yunwuSupportedFamilies.value.length > 0
+        ? yunwuSupportedFamilies.value
+        : ['claude', 'gpt', 'gemini', 'other']
       updatePayload.extra = applyIgnorePauseSchedulingErrorsUpdate(newExtra)
     }
 

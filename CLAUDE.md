@@ -39,8 +39,25 @@ Welcome to **sub2api** and the **AI Session Hypervisor (ASH / Yunwu Engine)** re
 - **Payload Normalization**: Includes `constructMessagesFromResponsesPayload` in `pkg/hypervisor/runtime` to handle structured message arrays from Codex CLI.
 - **SSE Transformer Bypass**: Direct `/responses` API calls bypass `responsesSSETransformer` to prevent truncated or empty responses when streaming native OpenAI/Codex format.
 
-### 2.3 Yunwu Engine (`pkg/hypervisor/yunwu`)
-- **Target**: Yunwu multi-channel provider API accounts.
+### 2.3 Unofficial Providers Engine (`pkg/hypervisor/yunwu`)
+- **Target**: Multi-channel third-party provider accounts (OpenLux / Yunwu, extensible to arbitrary upstream aggregators).
+- **General Hub for Unofficial Providers**:
+  - The `yunwu` platform serves as the unified general hub for unofficial / third-party AI providers and aggregators.
+  - Upstream provider identifier is stored per-node in `account.Extra["provider"]` (defaults to `"openlux"`).
+  - Admin UI (`EditAccountModal.vue`, `CreateAccountModal.vue`, `GroupsView.vue`) exposes provider configuration and model family routing.
+- **Per-Node Model Family Routing (`pkg/hypervisor/yunwu/model_family.go`)**:
+  - Each node can be independently configured in Admin UI to route any subset of four primary model families:
+    1. `claude`: Claude models (`claude-3-5-sonnet`, `claude-3-7-sonnet`, `claude-3-opus`, etc., Anthropic messages protocol).
+    2. `gpt`: OpenAI models (`gpt-4o`, `gpt-4o-mini`, `o1`, `o3`, `chatgpt`, etc., OpenAI chat completions protocol).
+    3. `gemini`: Google models (`gemini-1.5`, `gemini-2.0`, `gemini-2.5-flash`, `imagen`, `veo`, `lyria-realtime`, etc.).
+    4. `other`: Alternative and open-source models (`deepseek-chat`, `qwen-2.5`, `llama-3.3`, `mistral`, `grok`, etc.).
+  - Persisted in `account.Extra["supported_model_families"]` as `[]string`. Defaults to all four families if unset for 100% backward compatibility.
+  - `YunwuHypervisor.HandleRequest` classifies incoming requests via `ClassifyModelFamily(requestedModel)` and filters execution nodes with `NodeSupportsFamily(node.Capabilities, family)`.
+  - If no candidate nodes support the requested family, returns `ErrNoCompatibleNodes` (HTTP 400).
+  - Session affinity / leases seamlessly respect family filtering: switching model families mid-session invalidates incompatible node leases and binds to a compatible node.
+  - `HandleLiveWebSocket` automatically filters candidates to the `gemini` family.
+  - Real-time balance deduction and pricing (`/api/pricing`) operate identically across all routed model families.
+  - **Hypervisor QuotaManager Bypass**: For Yunwu and unofficial resellers, Hypervisor `QuotaManager` fair-share capacity limits, concurrency slots, and micro-USD reservations are bypassed. User balance validation, admission guards, and concurrency limits for unofficial providers are handled exclusively at the gateway level (`BillingService`, `MinOperationalBalance = $0.002`, and `CalculateEffectiveConcurrency`).
 - **Dedicated Subsystems**:
   - `YunwuScheduler`: Tailored node selection for Yunwu execution nodes based on node health, queue depth, latency, and `UsedTokens` organic load balancing penalty (ensuring fair traffic distribution across active channels even when balance APIs are untracked). `YunwuRequireFreshBalance` defaults to `false` so nodes without balance API endpoints are not excluded.
   - `YunwuRebindingManager`: Handles failover and node cooldown transitions specifically for Yunwu provider clusters, enforcing Redis session-scoped distributed lock (`SETNX`) and running `YunwuScheduler` with user priority, credits, and system state during rebinding.
@@ -49,10 +66,24 @@ Welcome to **sub2api** and the **AI Session Hypervisor (ASH / Yunwu Engine)** re
   - Runtime credentials: `AnthropicRuntime.Execute` attaches `Authorization: Bearer <api_key>` headers for Yunwu platform accounts.
   - **Dynamic Real-Time Pricing (`YunwuPricingService`) & Gateway Pre-Admission**: Resolves model pricing on-demand from `https://api.openlux.ai/api/pricing` (One-API/New-API standard pricing format: base rate $0.002/1k tokens, `model_ratio`, `completion_ratio`, `cache_ratio`, `model_price`). Employs `singleflight.Group` to prevent redundant parallel HTTP requests and caches snapshots in-memory as a fallback against upstream network drops. Integrated into `BillingService` so gateway usage logs (`RecordUsage`) accurately calculate costs and deduct funds from user balances for Yunwu and Gemini models (`gemini-3.8-flash`, `gemini-3.5-flash`, `gemini-3-pro-preview`, etc.). Enforces pre-routing admission guard (`CheckModelPricingAvailable`): if pricing cannot be resolved for a model, the request is rejected immediately with HTTP 400 without forwarding to upstream and without touching user balance.
   - **Configurable Pricing Markup (Default 10% / 1.10x)**: Supports global and per-group markup multipliers. System-wide default rate multiplier is set to `1.10` (+10% margin over base USD prices). Configurable in Admin Settings -> Defaults (`default_rate_multiplier`), in group creation forms (defaults to `1.1`), and stored in DB settings (`SettingKeyDefaultRateMultiplier = "default_rate_multiplier"`). Deductions calculate as `TotalCost * RateMultiplier`.
-  - **Operational Balance Thresholds & Anti-Overdraft Guard**:
+  - **Operational Balance Thresholds, Concurrency Clamping & Anti-Overdraft Guard**:
     - `MinOperationalBalance = 0.002` (USD): Minimum account balance required to initiate requests in balance-billed mode. Enforced in `billing_cache_service.go` (`checkBalanceEligibility`), `api_key_auth.go`, and `api_key_auth_google.go`. Requests from accounts below $0.002 are rejected upfront with HTTP 403 / "Insufficient account balance" before reaching upstream providers.
-    - `LowBalanceConcurrencyThreshold = 0.10` (USD): For balance-billed users, when balance drops below $0.10, effective user concurrency is dynamically clamped to `1` in `api_key_auth.go` and `api_key_auth_google.go`. Combined with slot acquisition in `ConcurrencyHelper`, this completely prevents parallel request fan-out race conditions that could exploit post-payment billing to drive user balances deeply negative.
-    - `MaxAllowableOverdraftUSD = 0.50` (USD): Hard limit on negative balance during in-flight usage deductions. `deductUsageBillingBalance` in `usage_billing_repo.go` conditionally enforces `(balance - $1 >= -$3)`. If the overdraft limit is exceeded, the balance is clamped to `-MaxAllowableOverdraftUSD` and a critical warning alert is logged. The Redis balance cache in `billingCache.DeductUserBalance` is similarly clamped via atomic Lua script.
+    - `LowBalanceConcurrencyThreshold = 1.00` (USD) & `MinBalancePerConcurrentSlot = 0.50` (USD): For balance-billed (pay-as-you-go) users without an active subscription, concurrency is dynamically clamped via `CalculateEffectiveConcurrency(concurrency, balance, hasSub)`:
+      - Balance < $1.00 => effective concurrency is strictly clamped to `1`.
+      - Balance >= $1.00 => effective concurrency is capped at `min(user.Concurrency, max(1, int(balance / 0.50)))` (e.g. $1.00-$1.49 allows 2 slots; $2.50+ allows 5 slots). Subscription users always retain their configured concurrency.
+      - Combined with slot acquisition in `ConcurrencyHelper`, this completely prevents parallel request fan-out race conditions (e.g. concurrent Opus/GPT-5 bursts) that could exploit post-payment billing to drive user balances deeply negative.
+    - **No Debt Forgiveness & Atomic Overdraft Tracking**:
+      - `deductUsageBillingBalance` in `usage_billing_repo.go` uses atomic `UPDATE users SET balance = balance - $1, updated_at = NOW() WHERE id = $2 AND deleted_at IS NULL RETURNING balance`. Debt forgiveness (clamping balance to -$0.50) has been eliminated; the full real negative balance is accurately recorded in `users.balance` to be recovered upon user recharge.
+      - If balance drops below `-MaxAllowableOverdraftUSD` (-$0.50), a warning alert (`billing.overdraft_threshold_exceeded`) is emitted for operator awareness.
+      - Float64 monetary precision guards reject NaN, Inf, and non-positive deduction amounts upfront.
+    - **Redis Billing Cache CAS Versioning**:
+      - `billing:balance:<userID>` in Redis is stored as a hash with `balance` and `version` (nanoseconds timestamp from `user.UpdatedAt.UnixNano()`).
+      - Atomic Lua scripts enforce Compare-And-Swap: `setUserBalanceScript` only overwrites if `incoming_version >= current_version`, completely preventing stale DB reads on cache miss from overwriting newer balance deductions.
+      - `deductBalanceScript` atomically deducts balance, bumps `version` to the current timestamp, and returns no-op on non-existent keys.
+      - Transparent on-the-fly migration safely handles legacy string keys (`WRONGTYPE` fallback).
+    - **Bounded Rate Limit Resets & Error Alerting**:
+      - Expired rate limit window resets and cache invalidations in `evaluateRateLimits` are enqueued into the bounded worker pool (`cacheWriteResetRateLimit`), eliminating unbounded goroutine spawning.
+      - Database query failures in `checkAPIKeyRateLimits` emit structured warning logs before failing open.
     - **Overdraft Monitoring**: `UserRepository.GetOverdraftStats` and `UserService.GetOverdraftStats` query real-time negative balances across the system (`SELECT COALESCE(ABS(SUM(balance)), 0), COUNT(*) FROM users WHERE balance < 0 AND deleted_at IS NULL`). Integrated directly into `usagestats.DashboardStats` (`total_overdraft_usd`, `overdraft_user_count`) for instant administrative visibility.
   - **Guaranteed Billable Task Worker Pool**:
     - `gateway.usage_record.overflow_policy` defaults to `sync` (instead of `sample`).
@@ -62,7 +93,8 @@ Welcome to **sub2api** and the **AI Session Hypervisor (ASH / Yunwu Engine)** re
     - `BillingService.CalculateFailSafeCost` and `GetFailSafePricing` guarantee that unpriced or misconfigured models never receive $0.00 free upstream access. If dynamic LiteLLM or DB pricing lookups fail during `RecordUsage`, conservative baseline pricing is applied alongside high-priority error logging.
   - **Payment Webhook Ingress & Resolution Hardening**:
     - `PaymentWebhookHandler` enforces strict order number format validation (`isValidOutTradeNo`) prior to executing database queries or provider candidate lookups. Rejects empty, over-length (>64 chars), or malformed inputs with HTTP 400 immediately.
-    - Stripe multi-instance resolution extracts `metadata.orderId`, `metadata.order_id`, `metadata.out_trade_no`, and `client_reference_id` from the Stripe webhook payload. If instance resolution fails, returns HTTP 500 (retryable) instead of silently acknowledging with 200 OK.
+    - Stripe multi-instance resolution and event parsing extracts `orderId`, `order_id`, `out_trade_no`, `outTradeNo`, `orderNo`, and `client_reference_id` from metadata. If instance resolution fails, returns HTTP 500 (retryable) instead of silently acknowledging with 200 OK. Missing order IDs log explicit warnings before acking to prevent provider retry floods.
+    - `checkCancelRateLimit` in `payment_order_lifecycle.go` fails closed with HTTP 500 on database error rather than bypassing rate limiting.
     - NOWPayments status mapping: `sending`, `confirming`, and `waiting` map to `ProviderStatusPending`. Only `finished` and `confirmed` mark orders as paid.
   - **Deterministic & Idempotent Refund Operations**:
     - `payment.RefundRequest` includes `RefundID string` (set to deterministic `rf_<out_trade_no>` by `PaymentService.gwRefund`).

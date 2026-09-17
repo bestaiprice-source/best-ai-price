@@ -117,10 +117,7 @@ func ApplyAPIKeyAuthWithSubscriptionGoogleContext(apiKeyService *service.APIKeyS
 	}
 
 	c.SetValue(string(ContextKeyAPIKey), apiKey)
-	effectiveConcurrency := apiKey.User.Concurrency
-	if subscription == nil && apiKey.User.Balance < service.LowBalanceConcurrencyThreshold {
-		effectiveConcurrency = 1
-	}
+	effectiveConcurrency := service.CalculateEffectiveConcurrency(apiKey.User.Concurrency, apiKey.User.Balance, subscription != nil)
 	c.SetValue(string(ContextKeyUser), AuthSubject{
 		UserID:      apiKey.User.ID,
 		Concurrency: effectiveConcurrency,

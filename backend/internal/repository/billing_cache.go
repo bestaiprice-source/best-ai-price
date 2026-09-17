@@ -7,6 +7,7 @@ import (
 	"log"
 	"math/rand/v2"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -71,19 +72,31 @@ const (
 )
 
 var (
+	setUserBalanceScript = redis.NewScript(`
+		local current_ver = tonumber(redis.call('HGET', KEYS[1], 'version') or 0)
+		local incoming_ver = tonumber(ARGV[2] or 0)
+		if current_ver == 0 or incoming_ver == 0 or incoming_ver >= current_ver then
+			redis.call('HSET', KEYS[1], 'balance', ARGV[1], 'version', ARGV[2])
+			redis.call('EXPIRE', KEYS[1], ARGV[3])
+			return 1
+		end
+		return 0
+	`)
+
 	deductBalanceScript = redis.NewScript(`
-		local current = redis.call('GET', KEYS[1])
-		if current == false then
+		local current_bal = redis.call('HGET', KEYS[1], 'balance')
+		if not current_bal then
 			return 0
 		end
-		local newVal = tonumber(current) - tonumber(ARGV[1])
-		if ARGV[3] then
-			local maxOverdraft = tonumber(ARGV[3])
-			if maxOverdraft and newVal < -maxOverdraft then
-				newVal = -maxOverdraft
+		local newVal = tonumber(current_bal) - tonumber(ARGV[1])
+		redis.call('HSET', KEYS[1], 'balance', tostring(newVal))
+		if ARGV[3] and ARGV[3] ~= '' then
+			local current_ver = tonumber(redis.call('HGET', KEYS[1], 'version') or 0)
+			local deduct_ver = tonumber(ARGV[3])
+			if deduct_ver > current_ver then
+				redis.call('HSET', KEYS[1], 'version', ARGV[3])
 			end
 		end
-		redis.call('SET', KEYS[1], newVal)
 		redis.call('EXPIRE', KEYS[1], ARGV[2])
 		return 1
 	`)
@@ -150,22 +163,51 @@ func NewBillingCache(rdb *redis.Client) service.BillingCache {
 
 func (c *billingCache) GetUserBalance(ctx context.Context, userID int64) (float64, error) {
 	key := billingBalanceKey(userID)
-	val, err := c.rdb.Get(ctx, key).Result()
+	val, err := c.rdb.HGet(ctx, key, "balance").Result()
 	if err != nil {
+		if errors.Is(err, redis.Nil) {
+			return 0, redis.Nil
+		}
+		if strings.Contains(err.Error(), "WRONGTYPE") {
+			_ = c.rdb.Del(ctx, key).Err()
+			return 0, redis.Nil
+		}
 		return 0, err
 	}
 	return strconv.ParseFloat(val, 64)
 }
 
-func (c *billingCache) SetUserBalance(ctx context.Context, userID int64, balance float64) error {
+func (c *billingCache) SetUserBalance(ctx context.Context, userID int64, balance float64, version ...int64) error {
 	key := billingBalanceKey(userID)
-	return c.rdb.Set(ctx, key, balance, jitteredTTL()).Err()
+	var ver int64
+	if len(version) > 0 {
+		ver = version[0]
+	}
+	ttlSec := int(jitteredTTL().Seconds())
+	balStr := strconv.FormatFloat(balance, 'f', -1, 64)
+	_, err := setUserBalanceScript.Run(ctx, c.rdb, []string{key}, balStr, ver, ttlSec).Result()
+	if err != nil && !errors.Is(err, redis.Nil) {
+		if strings.Contains(err.Error(), "WRONGTYPE") {
+			_ = c.rdb.Del(ctx, key).Err()
+			_, err = setUserBalanceScript.Run(ctx, c.rdb, []string{key}, balStr, ver, ttlSec).Result()
+		}
+		if err != nil && !errors.Is(err, redis.Nil) {
+			return err
+		}
+	}
+	return nil
 }
 
 func (c *billingCache) DeductUserBalance(ctx context.Context, userID int64, amount float64) error {
 	key := billingBalanceKey(userID)
-	_, err := deductBalanceScript.Run(ctx, c.rdb, []string{key}, amount, int(jitteredTTL().Seconds()), service.MaxAllowableOverdraftUSD).Result()
+	ttlSec := int(jitteredTTL().Seconds())
+	nowNano := time.Now().UnixNano()
+	_, err := deductBalanceScript.Run(ctx, c.rdb, []string{key}, amount, ttlSec, nowNano).Result()
 	if err != nil && !errors.Is(err, redis.Nil) {
+		if strings.Contains(err.Error(), "WRONGTYPE") {
+			_ = c.rdb.Del(ctx, key).Err()
+			return nil
+		}
 		log.Printf("Warning: deduct balance cache failed for user %d: %v", userID, err)
 		return err
 	}

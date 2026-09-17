@@ -155,6 +155,15 @@ func (h *PaymentWebhookHandler) handleNotifyGateway(c gatewayctx.GatewayContext,
 		return
 	}
 
+	if notification.OrderID == "" {
+		slog.Warn("[Payment Webhook] notification missing order ID, acking to stop retries",
+			"provider", resolvedProviderKey,
+			"tradeNo", notification.TradeNo,
+		)
+		writeSuccessResponseGateway(c, resolvedProviderKey)
+		return
+	}
+
 	if err := h.paymentService.HandlePaymentNotification(c.Request().Context(), notification, resolvedProviderKey); err != nil {
 		// Unknown order: ack with 2xx so the provider stops retrying. This
 		// guards against foreign environments whose webhook endpoints are

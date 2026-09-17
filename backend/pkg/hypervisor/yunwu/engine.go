@@ -164,33 +164,13 @@ func (yh *YunwuHypervisor) HandleRequest(
 		"payload_size", len(reqPayload),
 	)
 
-	// 0. Resolve Priority and Register User
+	// 0. Resolve Priority
 	userPriority := 1
-	if ua, err := yh.qm.GetUserAccess(ctx, ownerID, "yunwu"); err == nil && ua != nil {
-		userPriority = ua.Priority
+	if yh.qm != nil {
+		if ua, err := yh.qm.GetUserAccess(ctx, ownerID, "yunwu"); err == nil && ua != nil {
+			userPriority = ua.Priority
+		}
 	}
-	_ = yh.qm.RegisterActiveUser(ctx, ownerID, "yunwu", userPriority)
-
-	// 1. Quota Check
-	allowed, err := yh.qm.CheckQuota(ctx, ownerID, "yunwu")
-	if err != nil {
-		slog.Error("[YunwuHypervisor] Quota check failed", "owner_id", ownerID, "error", err)
-		return nil, err
-	}
-	if !allowed {
-		slog.Warn("[YunwuHypervisor] User quota exceeded", "owner_id", ownerID)
-		_, _ = yh.store.LogEvent(ctx, ownerID, nil, nil, "QuotaExceeded", map[string]any{"pool_type": "yunwu"})
-		return nil, quota.ErrQuotaExceeded
-	}
-
-	// 1.5. Check Concurrent Slot
-	if err := yh.qm.AcquireConcurrentSlot(ctx, ownerID, "yunwu"); err != nil {
-		slog.Warn("[YunwuHypervisor] Concurrent limit exceeded", "owner_id", ownerID)
-		return nil, err
-	}
-	defer yh.qm.ReleaseConcurrentSlot(context.Background(), ownerID, "yunwu")
-
-	slog.Debug("[YunwuHypervisor] Quota check passed", "owner_id", ownerID)
 
 	// 2. Resolve VirtualSession
 	if conversationID == "" {
@@ -254,6 +234,38 @@ func (yh *YunwuHypervisor) HandleRequest(
 		slog.Error("[YunwuHypervisor] Failed to fetch Yunwu nodes", "error", err)
 		return nil, err
 	}
+
+	// 4.1 Filter nodes by requested model family
+	requestedFamily := ClassifyModelFamily(requestedModel)
+	var compatibleNodes []health.ExecutionNode
+	for _, node := range nodes {
+		if NodeSupportsFamily(node.Capabilities, requestedFamily) {
+			compatibleNodes = append(compatibleNodes, node)
+		}
+	}
+	if len(compatibleNodes) == 0 {
+		slog.Warn("[YunwuHypervisor] No candidate nodes support requested model family",
+			"requested_model", requestedModel,
+			"family", requestedFamily,
+			"total_nodes", len(nodes),
+		)
+		return nil, ErrNoCompatibleNodes
+	}
+	nodes = compatibleNodes
+
+	if activeLeaseNodeID != "" {
+		leaseValid := false
+		for _, n := range nodes {
+			if n.NodeID == activeLeaseNodeID {
+				leaseValid = true
+				break
+			}
+		}
+		if !leaseValid {
+			activeLeaseNodeID = ""
+		}
+	}
+
 	if operationNodeID != "" {
 		bound := nodes[:0]
 		for _, node := range nodes {
@@ -297,19 +309,6 @@ func (yh *YunwuHypervisor) HandleRequest(
 		reservationEstimate = 1
 	}
 	requestID := fmt.Sprintf("%s-%d", sess.ID, time.Now().UnixNano())
-	userReserved, userReserveErr := yh.qm.ReserveMicroUSD(ctx, ownerID, requestID, reservationEstimate, 10*time.Minute)
-	if userReserveErr != nil {
-		return nil, userReserveErr
-	}
-	if !userReserved {
-		return nil, quota.ErrQuotaExceeded
-	}
-	userReservationOpen := true
-	defer func() {
-		if userReservationOpen {
-			_ = yh.qm.ReleaseMicroUSDReservation(context.Background(), ownerID, requestID)
-		}
-	}()
 	reserved := false
 	if yh.cfg.YunwuRequireFreshBalance {
 		var reserveErr error
@@ -485,9 +484,6 @@ func (yh *YunwuHypervisor) HandleRequest(
 		if media.Kind != "" {
 			_, _ = yh.sw.ReconcileReservation(ctx, reservationNodeID, requestID, estimatedMicroUSD)
 			reservationOpen = false
-			if yh.qm.ReconcileMicroUSDReservation(ctx, ownerID, requestID, estimatedMicroUSD) == nil {
-				userReservationOpen = false
-			}
 			if estimatedMicroUSD > 0 {
 				_, _ = yh.store.RecordUsageDetails(ctx, ownerID, &sess.ID, &selectedNode.NodeID, 0, 0, media.Units, "yunwu", "yunwu", modelName, media.Kind, estimatedMicroUSD)
 				observability.Default.AddUsage(media.Units)
@@ -497,10 +493,6 @@ func (yh *YunwuHypervisor) HandleRequest(
 			billedMicroUSD := CalculateBilledMicroUSD(meta.InputTokens, meta.OutputTokens, inputPrice, outputPrice)
 			_, _ = yh.sw.ReconcileReservation(ctx, reservationNodeID, requestID, billedMicroUSD)
 			reservationOpen = false
-			_ = yh.qm.ConsumeQuota(ctx, ownerID, "yunwu", int64(costUnits))
-			if yh.qm.ReconcileMicroUSDReservation(ctx, ownerID, requestID, billedMicroUSD) == nil {
-				userReservationOpen = false
-			}
 			_, _ = yh.store.RecordUsageDetails(ctx, ownerID, &sess.ID, &selectedNode.NodeID, meta.InputTokens, meta.OutputTokens, int64(costUnits), "yunwu", "yunwu", modelName, "micro_usd", billedMicroUSD)
 			observability.Default.AddUsage(int64(costUnits))
 			_, _ = yh.store.LogEvent(ctx, ownerID, &sess.ID, &selectedNode.NodeID, "UsageRecorded", map[string]any{"input_tokens": meta.InputTokens, "output_tokens": meta.OutputTokens, "cost_units": costUnits, "pool_type": "yunwu"})
@@ -518,9 +510,6 @@ func (yh *YunwuHypervisor) HandleRequest(
 			// become free: settle the conservative reservation estimate.
 			_, _ = yh.sw.ReconcileReservation(ctx, reservationNodeID, requestID, estimatedMicroUSD)
 			reservationOpen = false
-			if yh.qm.ReconcileMicroUSDReservation(ctx, ownerID, requestID, estimatedMicroUSD) == nil {
-				userReservationOpen = false
-			}
 			_, _ = yh.store.RecordUsageDetails(ctx, ownerID, &sess.ID, &selectedNode.NodeID, 0, 0, 0, "yunwu", "yunwu", modelName, "estimated_micro_usd", estimatedMicroUSD)
 		}
 	}
@@ -567,25 +556,24 @@ func (yh *YunwuHypervisor) HandleEphemeralLive(ctx context.Context, gatewayToken
 
 func (yh *YunwuHypervisor) handleLive(ctx context.Context, ownerID, conversationID, path string, headers http.Header, peer runtime.WebSocketPeer, forcedNodeID string) error {
 	userPriority := 1
-	if access, err := yh.qm.GetUserAccess(ctx, ownerID, "yunwu"); err == nil && access != nil {
-		userPriority = access.Priority
+	if yh.qm != nil {
+		if access, err := yh.qm.GetUserAccess(ctx, ownerID, "yunwu"); err == nil && access != nil {
+			userPriority = access.Priority
+		}
 	}
-	_ = yh.qm.RegisterActiveUser(ctx, ownerID, "yunwu", userPriority)
-	allowed, err := yh.qm.CheckQuota(ctx, ownerID, "yunwu")
-	if err != nil {
-		return err
-	}
-	if !allowed {
-		return quota.ErrQuotaExceeded
-	}
-	if err := yh.qm.AcquireConcurrentSlot(ctx, ownerID, "yunwu"); err != nil {
-		return err
-	}
-	defer yh.qm.ReleaseConcurrentSlot(context.Background(), ownerID, "yunwu")
 
 	nodes, err := yh.getAllYunwuNodes(ctx)
 	if err != nil {
 		return err
+	}
+	var geminiNodes []health.ExecutionNode
+	for _, node := range nodes {
+		if NodeSupportsFamily(node.Capabilities, FamilyGemini) {
+			geminiNodes = append(geminiNodes, node)
+		}
+	}
+	if len(geminiNodes) > 0 {
+		nodes = geminiNodes
 	}
 	states := yh.getAllYunwuNodeStates(ctx, nodes)
 	credits := yh.getAllYunwuNodeCredits(ctx, nodes)
@@ -607,19 +595,6 @@ func (yh *YunwuHypervisor) handleLive(ctx context.Context, ownerID, conversation
 	}
 	estimated := pricePerMinute * maxMinutes
 	requestID := fmt.Sprintf("live-%s-%d", ownerID, time.Now().UnixNano())
-	userReserved, err := yh.qm.ReserveMicroUSD(ctx, ownerID, requestID, max64(1, estimated), time.Duration(maxMinutes+2)*time.Minute)
-	if err != nil {
-		return err
-	}
-	if !userReserved {
-		return quota.ErrQuotaExceeded
-	}
-	userReservationOpen := true
-	defer func() {
-		if userReservationOpen {
-			_ = yh.qm.ReleaseMicroUSDReservation(context.Background(), ownerID, requestID)
-		}
-	}()
 	reserved := false
 	if yh.cfg.YunwuRequireFreshBalance {
 		reserved, err = yh.sw.Reserve(ctx, selected.NodeID, requestID, max64(1, estimated), time.Duration(maxMinutes+2)*time.Minute)
@@ -659,9 +634,6 @@ func (yh *YunwuHypervisor) handleLive(ctx context.Context, ownerID, conversation
 	if duration >= time.Second || err == nil {
 		_, _ = yh.sw.ReconcileReservation(context.Background(), selected.NodeID, requestID, billed)
 		reservationOpen = false
-		if yh.qm.ReconcileMicroUSDReservation(context.Background(), ownerID, requestID, billed) == nil {
-			userReservationOpen = false
-		}
 		if billed > 0 {
 			_, _ = yh.store.RecordUsageDetails(context.Background(), ownerID, nil, &selected.NodeID, 0, 0, minutes, "yunwu", "yunwu", liveModel, usageUnit, billed)
 			_, _ = yh.store.LogEvent(context.Background(), ownerID, nil, &selected.NodeID, "UsageRecorded", map[string]any{"usage_unit": usageUnit, "units": minutes, "billed_micro_usd": billed, "pool_type": "yunwu"})
@@ -1048,17 +1020,24 @@ func (yh *YunwuHypervisor) getAllYunwuNodes(ctx context.Context) ([]health.Execu
 	for _, acc := range dbAccounts {
 		nodeID := fmt.Sprintf("%d", acc.ID)
 		node, err := yh.nm.GetNode(ctx, nodeID)
+		families := ParseNodeModelFamilies(acc.Extra)
+		provider := ParseNodeProvider(acc.Extra)
 		if err != nil || node == nil {
 			node = &health.ExecutionNode{
 				NodeID:       nodeID,
 				AccountName:  acc.Name,
-				Provider:     "yunwu",
+				Provider:     provider,
 				State:        "healthy",
-				Capabilities: []string{"anthropic", "openai"},
+				Capabilities: families,
 				Priority:     acc.Priority,
 				UpdatedAt:    time.Now(),
 			}
 			_ = yh.nm.SaveNode(ctx, node)
+		} else {
+			node.AccountName = acc.Name
+			node.Capabilities = families
+			node.Provider = provider
+			node.Priority = acc.Priority
 		}
 		list = append(list, *node)
 	}

@@ -11,6 +11,7 @@ import (
 
 var (
 	ErrNoYunwuNodesAvailable = errors.New("no Yunwu execution nodes available")
+	ErrNoCompatibleNodes     = errors.New("no execution nodes configured for model family")
 )
 
 const (
