@@ -317,7 +317,7 @@ func (yh *YunwuHypervisor) HandleRequest(
 			return nil, reserveErr
 		}
 		if !reserved {
-			return nil, quota.ErrQuotaExceeded
+			return nil, ErrNodeBalanceExhausted
 		}
 	}
 	reservationNodeID := selectedNode.NodeID
@@ -602,7 +602,7 @@ func (yh *YunwuHypervisor) handleLive(ctx context.Context, ownerID, conversation
 			return err
 		}
 		if !reserved {
-			return quota.ErrQuotaExceeded
+			return ErrNodeBalanceExhausted
 		}
 	}
 	reservationOpen := reserved
