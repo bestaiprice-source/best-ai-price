@@ -682,3 +682,65 @@ func TestProviderPriceManager_Sub2APIChannelsAvailableFormat(t *testing.T) {
 	assert.Equal(t, 0.0, freeMod.InputPricePer1k)
 }
 
+func TestProviderPriceManager_PortdanEndpointSoleSource(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/channels/available" {
+			http.NotFound(w, r)
+			return
+		}
+		payload := []map[string]any{
+			{
+				"id": 1,
+				"platforms": []map[string]any{
+					{
+						"supported_models": []map[string]any{
+							{
+								"name": "claude-3-7-sonnet-20250219",
+								"pricing": map[string]any{
+									"input_price":  0.003,
+									"output_price": 0.015,
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(payload)
+	}))
+	defer server.Close()
+
+	ctx := context.Background()
+	ppm := NewProviderPriceManager(nil, nil, server.Client())
+
+	node := &health.ExecutionNode{
+		NodeID:   "portdan-node-1",
+		Provider: "portdan",
+	}
+
+	// 1. In test mode, Portdan does NOT get default benchmark fallback ($0.003/$0.015)
+	t.Setenv("ASH_YUNWU_TEST_MODE", "true")
+	in, out, found := ppm.ResolveNodePrice(ctx, node, "claude-3-7-sonnet")
+	assert.False(t, found, "Portdan must not receive generic benchmark price fallback")
+	assert.Equal(t, 0.0, in)
+	assert.Equal(t, 0.0, out)
+
+	// 2. In live mode with Portdan pricing URL overridden to test server
+	t.Setenv("ASH_YUNWU_TEST_MODE", "false")
+	KnownProviderPricingURLs[ProviderPortdan] = server.URL + "/api/v1/channels/available"
+	defer func() {
+		KnownProviderPricingURLs[ProviderPortdan] = "https://portdan.com/api/v1/channels/available"
+	}()
+
+	in, out, found = ppm.ResolveNodePrice(ctx, node, "claude-3-7-sonnet")
+	assert.True(t, found, "Portdan endpoint /api/v1/channels/available must resolve pricing")
+	assert.Equal(t, 0.003, in)
+	assert.Equal(t, 0.015, out)
+
+	// 3. Unlisted model on Portdan returns false (sole source)
+	_, _, unlistedFound := ppm.ResolveNodePrice(ctx, node, "unsupported-model")
+	assert.False(t, unlistedFound, "Models not in Portdan /channels/available must not resolve")
+}
+
+

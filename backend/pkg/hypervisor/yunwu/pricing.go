@@ -293,7 +293,7 @@ func (ppm *ProviderPriceManager) ResolveNodePrice(ctx context.Context, node *hea
 		ppm.mu.RLock()
 		hasCustom := len(ppm.cache) > 0
 		ppm.mu.RUnlock()
-		if hasCustom {
+		if hasCustom || canonicalProv == ProviderPortdan {
 			return 0, 0, false
 		}
 		norm := strings.ToLower(strings.TrimSpace(model))
@@ -308,14 +308,16 @@ func (ppm *ProviderPriceManager) ResolveNodePrice(ctx context.Context, node *hea
 		return 0, 0, false
 	}
 
-	// 2. Check Database (ash_vendor_models and account extras) if DB is available
+	// 2. Check Database (ash_vendor_models and account extras) if DB is available.
+	// NOTE: For Portdan, the /api/v1/channels/available endpoint is the SOLE method of pricing truth;
+	// static ash_vendor_models lookups are strictly bypassed for Portdan.
 	var baseURL string
 	var apiKey string
 	if ppm.store != nil && ppm.store.DB() != nil && node.NodeID != "" {
 		if accID, parseErr := strconv.ParseInt(node.NodeID, 10, 64); parseErr == nil {
 			if acc, err := ppm.store.DB().Account.Get(ctx, accID); err == nil && acc != nil {
-				// 2a. Check account vendor_id in ash_vendor_models
-				if acc.Extra != nil {
+				// 2a. Check account vendor_id in ash_vendor_models (bypassed for Portdan)
+				if canonicalProv != ProviderPortdan && acc.Extra != nil {
 					if vendorID, _ := acc.Extra["yunwu_vendor_id"].(string); vendorID != "" {
 						var in, out float64
 						if rows, err := ppm.store.DB().QueryContext(ctx, `SELECT input_price,output_price FROM ash_vendor_models WHERE vendor_id=$1 AND model_name=$2 AND is_available=true`, vendorID, model); err == nil {
@@ -335,7 +337,7 @@ func (ppm *ProviderPriceManager) ResolveNodePrice(ctx context.Context, node *hea
 					if k, ok := creds["api_key"].(string); ok && k != "" {
 						apiKey = k
 					}
-					if baseURL != "" {
+					if canonicalProv != ProviderPortdan && baseURL != "" {
 						var in, out float64
 						if rows, err := ppm.store.DB().QueryContext(ctx, `SELECT m.input_price,m.output_price FROM ash_vendor_models m JOIN ash_vendors v ON v.id=m.vendor_id WHERE rtrim(v.url,'/')=$1 AND m.model_name=$2 AND m.is_available=true`, baseURL, model); err == nil {
 							defer rows.Close()
