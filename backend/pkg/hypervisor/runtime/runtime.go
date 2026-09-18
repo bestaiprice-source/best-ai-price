@@ -450,6 +450,9 @@ func (r *AnthropicRuntime) Execute(ctx context.Context, nodeID string, reqPayloa
 
 	// 4. Create HTTP Request
 	customURL, _ := accountCredentials["base_url"].(string)
+	if customURL == "" && acc.Platform == "yunwu" {
+		customURL = defaultBaseURLForYunwu(acc.Extra)
+	}
 
 	isChatCompletions := false
 	if acc.Platform == "openai" {
@@ -627,7 +630,7 @@ func (r *AnthropicRuntime) Execute(ctx context.Context, nodeID string, reqPayloa
 		return nil, err
 	}
 
-	if isChatCompletions || acc.Platform == "openai" || acc.Platform == "yunwu" {
+	if isChatCompletions || acc.Platform == "openai" {
 		req.Header.Set("Authorization", "Bearer "+apiKey)
 		req.Header.Set("Content-Type", requestContentType)
 		if isOAuth && acc.Platform == "openai" {
@@ -638,6 +641,19 @@ func (r *AnthropicRuntime) Execute(ctx context.Context, nodeID string, reqPayloa
 			if chatgptAccID, ok := accountCredentials["chatgpt_account_id"].(string); ok && chatgptAccID != "" {
 				req.Header.Set("chatgpt-account-id", chatgptAccID)
 			}
+		}
+	} else if acc.Platform == "yunwu" {
+		req.Header.Set("Authorization", "Bearer "+apiKey)
+		req.Header.Set("x-api-key", apiKey)
+		req.Header.Set("Content-Type", requestContentType)
+		if strings.HasSuffix(apiURL, "/messages") {
+			req.Header.Set("anthropic-version", "2023-06-01")
+			req.Header.Set("anthropic-beta", claude.DefaultBetaHeader)
+		}
+		if isStream {
+			req.Header.Set("accept", "text/event-stream")
+		} else {
+			req.Header.Set("accept", "application/json")
 		}
 	} else {
 		// Use the exact Claude Code headers used by the admin account test.
@@ -1155,6 +1171,25 @@ func resolveUpstreamAPIURL(customURL string, platform string, isChatCompletions 
 		return customURL + "/messages"
 	}
 	return customURL + "/v1/messages"
+}
+
+func defaultBaseURLForYunwu(extra map[string]any) string {
+	provider := "openlux"
+	if extra != nil {
+		if p, ok := extra["provider"].(string); ok && strings.TrimSpace(p) != "" {
+			provider = strings.ToLower(strings.TrimSpace(p))
+		}
+	}
+	switch provider {
+	case "portdan", "portdan.com":
+		return "https://portdan.com/v1"
+	case "api-top", "api-top.com", "top-api":
+		return "https://api-top.com/v1"
+	case "yuanqiaoyun", "yuanqiaoyun.com":
+		return "https://yuanqiaoyun.com/v1"
+	default:
+		return "https://api.openlux.ai/v1"
+	}
 }
 
 func constructMessagesFromResponsesPayload(bodyMap map[string]any) []map[string]any {

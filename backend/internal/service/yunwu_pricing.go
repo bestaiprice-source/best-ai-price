@@ -19,7 +19,7 @@ const (
 	oneAPIBasePricePer1k   = 0.002 // Standard One-API / New-API base price per 1000 tokens ($2/1M tokens)
 )
 
-// DefaultPricingEndpoints lists the public pricing endpoints across unofficial providers (OpenLux, Top-API, Yuanqiaoyun)
+// DefaultPricingEndpoints lists the public pricing endpoints across unofficial New-API providers (OpenLux, Top-API, Yuanqiaoyun)
 var DefaultPricingEndpoints = []string{
 	"https://api.openlux.ai/api/pricing",
 	"https://api-top.com/api/pricing",
