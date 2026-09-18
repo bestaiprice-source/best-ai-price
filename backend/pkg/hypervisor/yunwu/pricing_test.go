@@ -643,6 +643,13 @@ func TestProviderPriceManager_Sub2APIChannelsAvailableFormat(t *testing.T) {
 									"output_price": 0.0,
 								},
 							},
+							{
+								"name": "claude-3-opus-per-token",
+								"pricing": map[string]any{
+									"input_price":  0.000015,
+									"output_price": 0.000075,
+								},
+							},
 						},
 					},
 				},
@@ -661,7 +668,7 @@ func TestProviderPriceManager_Sub2APIChannelsAvailableFormat(t *testing.T) {
 	prices, err := ppm.fetchProviderPrices(ctx, server.URL+"/api/v1/channels/available", "secret-user-token")
 	require.NoError(t, err)
 	assert.Equal(t, "Bearer secret-user-token", capturedAuthHeader)
-	assert.Len(t, prices, 3)
+	assert.Len(t, prices, 4)
 
 	// 2. Check parsed prices
 	sonnet, found := ppm.lookupModelInPrices(prices, "claude-3-7-sonnet-20250219")
@@ -674,6 +681,12 @@ func TestProviderPriceManager_Sub2APIChannelsAvailableFormat(t *testing.T) {
 	assert.True(t, found)
 	assert.Equal(t, 0.001, haiku.InputPricePer1k)
 	assert.Equal(t, 0.005, haiku.OutputPricePer1k)
+
+	// Per-token normalization (0.000015 -> 0.015)
+	opus, found := ppm.lookupModelInPrices(prices, "claude-3-opus-per-token")
+	assert.True(t, found)
+	assert.InDelta(t, 0.015, opus.InputPricePer1k, 0.000001)
+	assert.InDelta(t, 0.075, opus.OutputPricePer1k, 0.000001)
 
 	// Free tier model (pricing 0,0)
 	freeMod, found := ppm.lookupModelInPrices(prices, "free-tier-model")

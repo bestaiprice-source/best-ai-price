@@ -242,6 +242,13 @@ func (ppm *ProviderPriceManager) fetchProviderPrices(ctx context.Context, endpoi
 								outPrice = *m.Pricing.OutputPrice
 							}
 						}
+						// If prices are provided per-token (e.g. LiteLLM 3e-6 for $3/1M), convert to per-1k tokens
+						if inPrice > 0 && inPrice < 0.0001 {
+							inPrice *= 1000
+						}
+						if outPrice > 0 && outPrice < 0.0001 {
+							outPrice *= 1000
+						}
 						prices[k] = ProviderModelPrice{
 							InputPricePer1k:  inPrice,
 							OutputPricePer1k: outPrice,
