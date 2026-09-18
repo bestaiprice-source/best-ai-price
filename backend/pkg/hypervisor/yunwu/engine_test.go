@@ -664,3 +664,194 @@ func TestYunwuModelFamilyRouting(t *testing.T) {
 	require.ErrorIs(t, err, ErrNoCompatibleNodes)
 }
 
+func TestYunwuPriceFilteringAndFailover(t *testing.T) {
+	t.Setenv("ASH_YUNWU_TEST_MODE", "true")
+
+	store := setupTestYunwuStore(t)
+	rt := &mockYunwuRuntime{}
+	yh := NewYunwuHypervisor(store, rt)
+	nm := health.NewNodeManager(store)
+	ctx := context.Background()
+
+	// Node 1: Supports Claude, but has NO price for claude-3-7-sonnet
+	err := nm.SaveNode(ctx, &health.ExecutionNode{
+		NodeID:       "node-no-price",
+		AccountName:  "Claude Node Without Pricing",
+		Provider:     "openlux",
+		State:        "healthy",
+		Capabilities: []string{FamilyClaude},
+	})
+	require.NoError(t, err)
+	err = store.Redis().SAdd(ctx, "ash:yunwu:nodes", "node-no-price").Err()
+	require.NoError(t, err)
+	setTestBalance(t, store, "node-no-price", 10_000_000)
+
+	// Node 2: Supports Claude, AND has valid pricing for claude-3-7-sonnet
+	err = nm.SaveNode(ctx, &health.ExecutionNode{
+		NodeID:       "node-has-price",
+		AccountName:  "Claude Node With Pricing",
+		Provider:     "portdan",
+		State:        "healthy",
+		Capabilities: []string{FamilyClaude},
+	})
+	require.NoError(t, err)
+	err = store.Redis().SAdd(ctx, "ash:yunwu:nodes", "node-has-price").Err()
+	require.NoError(t, err)
+	setTestBalance(t, store, "node-has-price", 10_000_000)
+
+	// Configure price manager:
+	// "node-no-price" only has pricing for "other-model"
+	// "node-has-price" has pricing for "claude-3-7-sonnet"
+	ppm := yh.PriceManager()
+	require.NotNil(t, ppm)
+	ppm.SetProviderPrices("node-no-price", map[string]ProviderModelPrice{
+		"other-model": {InputPricePer1k: 0.001, OutputPricePer1k: 0.002, Available: true},
+	})
+	ppm.SetProviderPrices("node-has-price", map[string]ProviderModelPrice{
+		"claude-3-7-sonnet": {InputPricePer1k: 0.015, OutputPricePer1k: 0.075, Available: true},
+	})
+
+	// Register user access
+	err = yh.qm.SaveUserAccess(ctx, &quota.UserAccess{
+		OwnerID:      "user-price-test",
+		PlanID:       "basic",
+		MonthlyLimit: 1_000_000,
+		UsedUnits:    0,
+		Priority:     1,
+		IsActive:     true,
+	}, "yunwu")
+	require.NoError(t, err)
+
+	// 1. Request claude-3-7-sonnet:
+	// Node 1 (node-no-price) has NO pricing for claude-3-7-sonnet -> must be skipped.
+	// Node 2 (node-has-price) HAS pricing -> must be chosen.
+	claudePayload := []byte(`{"model": "claude-3-7-sonnet", "messages": [{"role": "user", "content": "hello"}]}`)
+	resp, err := yh.HandleRequest(ctx, "user-price-test", "conv-pricing", claudePayload, io.Discard, "yunwu")
+	require.NoError(t, err)
+	assert.NotNil(t, resp)
+	assert.Equal(t, "node-has-price", rt.lastNodeID)
+
+	// 2. Request an unpriced model:
+	// claude-unlisted has NO pricing on ANY compatible node in the pool.
+	// Request must fail immediately with ErrNoPricingAvailable without executing upstream or deducting units.
+	initialAccess, err := yh.qm.GetUserAccess(ctx, "user-price-test", "yunwu")
+	require.NoError(t, err)
+	initialUsed := initialAccess.UsedUnits
+
+	unpricedPayload := []byte(`{"model": "claude-unlisted", "messages": [{"role": "user", "content": "hello"}]}`)
+	_, err = yh.HandleRequest(ctx, "user-price-test", "conv-unpriced", unpricedPayload, io.Discard, "yunwu")
+	require.ErrorIs(t, err, ErrNoPricingAvailable)
+
+	// Verify no money / units were deducted
+	afterAccess, err := yh.qm.GetUserAccess(ctx, "user-price-test", "yunwu")
+	require.NoError(t, err)
+	assert.Equal(t, initialUsed, afterAccess.UsedUnits)
+}
+
+func TestYunwuRequireFreshBalanceAndExhaustion(t *testing.T) {
+	t.Setenv("ASH_YUNWU_TEST_MODE", "true")
+	t.Setenv("ASH_YUNWU_REQUIRE_FRESH_BALANCE", "true")
+
+	store := setupTestYunwuStore(t)
+	rt := &mockYunwuRuntime{}
+	yh := NewYunwuHypervisor(store, rt)
+	nm := health.NewNodeManager(store)
+	ctx := context.Background()
+
+	err := nm.SaveNode(ctx, &health.ExecutionNode{
+		NodeID:      "fresh-node-1",
+		AccountName: "Fresh Node",
+		Provider:    "yunwu",
+		State:       "healthy",
+	})
+	require.NoError(t, err)
+	err = store.Redis().SAdd(ctx, "ash:yunwu:nodes", "fresh-node-1").Err()
+	require.NoError(t, err)
+
+	// Set test balance
+	setTestBalance(t, store, "fresh-node-1", 10_000_000)
+
+	err = yh.qm.SaveUserAccess(ctx, &quota.UserAccess{
+		OwnerID:      "user-fresh",
+		PlanID:       "basic",
+		MonthlyLimit: 1_000_000,
+		UsedUnits:    0,
+		Priority:     1,
+		IsActive:     true,
+	}, "yunwu")
+	require.NoError(t, err)
+
+	// Request with balance available
+	payload := []byte(`{"model": "claude", "messages": [{"role": "user", "content": "hi"}]}`)
+	resp, err := yh.HandleRequest(ctx, "user-fresh", "conv-fresh-1", payload, io.Discard, "yunwu")
+	require.NoError(t, err)
+	assert.NotNil(t, resp)
+
+	// Deplete balance to 0 so Reserve fails
+	setTestBalance(t, store, "fresh-node-1", 0)
+	_, err = yh.HandleRequest(ctx, "user-fresh", "conv-fresh-2", payload, io.Discard, "yunwu")
+	require.ErrorIs(t, err, ErrNodeBalanceExhausted)
+}
+
+func TestYunwuAffinityAndMediaHandling(t *testing.T) {
+	t.Setenv("ASH_YUNWU_TEST_MODE", "true")
+
+	store := setupTestYunwuStore(t)
+	rt := &mockYunwuRuntime{}
+	yh := NewYunwuHypervisor(store, rt)
+	nm := health.NewNodeManager(store)
+	ctx := context.Background()
+
+	// 1. Add node
+	err := nm.SaveNode(ctx, &health.ExecutionNode{
+		NodeID:      "aff-node-1",
+		AccountName: "Affinity Node",
+		Provider:    "yunwu",
+		State:       "healthy",
+	})
+	require.NoError(t, err)
+	err = store.Redis().SAdd(ctx, "ash:yunwu:nodes", "aff-node-1").Err()
+	require.NoError(t, err)
+	setTestBalance(t, store, "aff-node-1", 10_000_000)
+
+	err = yh.qm.SaveUserAccess(ctx, &quota.UserAccess{
+		OwnerID:      "user-aff",
+		PlanID:       "basic",
+		MonthlyLimit: 1_000_000,
+		UsedUnits:    0,
+		Priority:     1,
+		IsActive:     true,
+	}, "yunwu")
+	require.NoError(t, err)
+
+	// Set operation affinity in Redis
+	err = store.Redis().Set(ctx, yunwuOperationNodeKey("operations/op-aff-123"), "aff-node-1", 0).Err()
+	require.NoError(t, err)
+
+	opCtx := runtime.WithUpstreamRequest(ctx, http.MethodGet, "/v1beta/operations/op-aff-123", "application/json")
+	payload := []byte(`{"model": "gemini-2.5-flash-image"}`)
+	resp, err := yh.HandleRequest(opCtx, "user-aff", "conv-aff-1", payload, io.Discard, "yunwu")
+	require.NoError(t, err)
+	assert.NotNil(t, resp)
+	assert.Equal(t, "aff-node-1", rt.lastNodeID)
+
+	// Test interaction affinity
+	err = store.Redis().Set(ctx, yunwuInteractionNodeKey("int-aff-456"), "aff-node-1", 0).Err()
+	require.NoError(t, err)
+	intCtx := runtime.WithUpstreamRequest(ctx, http.MethodGet, "/v1beta/interactions/int-aff-456", "application/json")
+	resp, err = yh.HandleRequest(intCtx, "user-aff", "conv-aff-2", payload, io.Discard, "yunwu")
+	require.NoError(t, err)
+	assert.NotNil(t, resp)
+
+	// Test stateful resource affinity
+	err = store.Redis().Set(ctx, yunwuResourceNodeKey("batches/batch-aff-789"), "aff-node-1", 0).Err()
+	require.NoError(t, err)
+	resCtx := runtime.WithUpstreamRequest(ctx, http.MethodGet, "/v1beta/batches/batch-aff-789", "application/json")
+	resp, err = yh.HandleRequest(resCtx, "user-aff", "conv-aff-3", payload, io.Discard, "yunwu")
+	require.NoError(t, err)
+	assert.NotNil(t, resp)
+}
+
+
+
+

@@ -32,6 +32,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/runtime"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/storage"
+	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/yunwu"
 	"github.com/redis/go-redis/v9"
 	"os"
 
@@ -200,6 +201,10 @@ func (h *GatewayHandler) handleHypervisorMessages(c *gin.Context) {
 
 	_, err = h.hypervisorEngine.HandleRequest(c.Request.Context(), ownerID, conversationID, body, c.Writer, platform)
 	if err != nil {
+		if errors.Is(err, yunwu.ErrNoPricingAvailable) || errors.Is(err, yunwu.ErrNoCompatibleNodes) {
+			h.errorResponseGateway(transportCtx, http.StatusBadRequest, "invalid_request_error", err.Error())
+			return
+		}
 		h.errorResponseGateway(transportCtx, http.StatusBadGateway, "api_error", err.Error())
 		return
 	}

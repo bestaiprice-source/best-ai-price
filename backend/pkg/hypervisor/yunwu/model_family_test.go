@@ -125,6 +125,11 @@ func TestParseNodeModelFamilies(t *testing.T) {
 		"supported_model_families": []any{"anthropic", "claude", "openai", "gpt"},
 	}
 	assert.Equal(t, []string{FamilyClaude, FamilyGPT}, ParseNodeModelFamilies(extraDup))
+
+	// Empty slices or invalid types
+	assert.Equal(t, DefaultModelFamilies(), ParseNodeModelFamilies(map[string]any{"supported_model_families": []string{}}))
+	assert.Equal(t, DefaultModelFamilies(), ParseNodeModelFamilies(map[string]any{"supported_model_families": []any{123, nil}}))
+	assert.Equal(t, DefaultModelFamilies(), ParseNodeModelFamilies(map[string]any{"supported_model_families": 42}))
 }
 
 func TestParseNodeProvider(t *testing.T) {
@@ -144,4 +149,6 @@ func TestParseNodeProvider(t *testing.T) {
 	assert.Equal(t, "https://portdan.com/v1", DefaultBaseURLForProvider("portdan"))
 	assert.Equal(t, "https://api-top.com/v1", DefaultBaseURLForProvider("api-top"))
 	assert.Equal(t, "https://yuanqiaoyun.com/v1", DefaultBaseURLForProvider("yuanqiaoyun"))
+	assert.Equal(t, "https://api.openlux.ai/v1", DefaultBaseURLForProvider("unknown-provider"))
+	assert.Equal(t, "openlux", CanonicalProvider(""))
 }

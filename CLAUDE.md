@@ -58,13 +58,24 @@ Welcome to **sub2api** and the **AI Session Hypervisor (ASH / Yunwu Engine)** re
     3. `gemini`: Google models (`gemini-1.5`, `gemini-2.0`, `gemini-2.5-flash`, `imagen`, `veo`, `lyria-realtime`, etc.).
     4. `other`: Alternative and open-source models (`deepseek-chat`, `qwen-2.5`, `llama-3.3`, `mistral`, `grok`, etc.).
   - Persisted in `account.Extra["supported_model_families"]` as `[]string`. Defaults to all four families if unset for 100% backward compatibility.
-  - `YunwuHypervisor.HandleRequest` classifies incoming requests via `ClassifyModelFamily(requestedModel)` and filters execution nodes with `NodeSupportsFamily(node.Capabilities, family)`.
-  - If no candidate nodes support the requested family, returns `ErrNoCompatibleNodes` (HTTP 400).
-  - Session affinity / leases seamlessly respect family filtering: switching model families mid-session invalidates incompatible node leases and binds to a compatible node.
+  - `YunwuHypervisor.HandleRequest` classifies incoming requests via `ClassifyModelFamily(requestedModel)` and filters execution nodes with BOTH `NodeSupportsFamily(node.Capabilities, family)` AND provider pricing availability (`ResolveNodePrice(ctx, node, requestedModel)`).
+  - **Per-Node Pricing Availability & Intelligent Failover Routing**:
+    - If a candidate node in the pool does not have pricing for the requested model on its upstream provider, that node is skipped during selection.
+    - The request is automatically directed to an alternative candidate node in the pool supporting the same model family that HAS valid pricing for the model.
+    - If no candidate node in the pool has pricing for the requested model, execution halts immediately: `ErrNoPricingAvailable` is returned (HTTP 400 `invalid_request_error`), no upstream request is sent, and zero funds/quota are deducted.
+    - During node error failover, `YunwuRebindingManager` only considers candidate nodes that have verified pricing for the active request model.
+    - When execution succeeds, user balance deduction is strictly calculated using the price resolved for that execution node's provider. Arbitrary default fallback prices (e.g. $0.003) are never charged if pricing was unresolvable.
+    - If no candidate nodes support the requested family, returns `ErrNoCompatibleNodes` (HTTP 400).
+  - Session affinity / leases seamlessly respect family filtering and pricing availability: switching model families or requesting unpriced models mid-session invalidates incompatible node leases and binds to a compatible node.
   - `HandleLiveWebSocket` automatically filters candidates to the `gemini` family.
   - Real-time balance deduction and pricing (`/api/pricing`) operate identically across all routed model families.
   - **Hypervisor QuotaManager Bypass**: For Yunwu and unofficial resellers, Hypervisor `QuotaManager` fair-share capacity limits, concurrency slots, and micro-USD reservations are bypassed. User balance validation, admission guards, and concurrency limits for unofficial providers are handled exclusively at the gateway level (`BillingService`, `MinOperationalBalance = $0.002`, and `CalculateEffectiveConcurrency`).
 - **Dedicated Subsystems**:
+  - `ProviderPriceManager` (`pkg/hypervisor/yunwu/pricing.go`): Manages multi-provider pricing resolution for unofficial nodes:
+    - Resolves from DB `ash_vendor_models` (via account vendor ID or credentials base URL).
+    - Fetches and caches live One-API / New-API `/api/pricing` endpoints (`api.openlux.ai`, `portdan.com`, `api-top.com`, `yuanqiaoyun.com`, or custom `<baseURL>/api/pricing`) with 5-minute TTL and `singleflight.Group` deduplication.
+    - Resolves model aliases (e.g., `claude-3-7-sonnet` -> `claude-3-7-sonnet-20250219`, `gemini-3-pro` -> `gemini-3-pro-preview`).
+    - Exposes `ResolveNodePrice(ctx, node, model) (in, out, found)` and `SetProviderPrices` for mock testing.
   - `YunwuScheduler`: Tailored node selection for Yunwu execution nodes based on node health, queue depth, latency, and `UsedTokens` organic load balancing penalty (ensuring fair traffic distribution across active channels even when balance APIs are untracked). `YunwuRequireFreshBalance` defaults to `false` so nodes without balance API endpoints are not excluded.
   - `YunwuRebindingManager`: Handles failover and node cooldown transitions specifically for Yunwu provider clusters, enforcing Redis session-scoped distributed lock (`SETNX`) and running `YunwuScheduler` with user priority, credits, and system state during rebinding.
   - `StatsWorker`: Syncs upstream credit balance from `/api/user/self`, `/dashboard/billing/subscription`, and credit grants across One-API/New-API compatible providers. In `/api/user/self`, `data.quota` is parsed directly as the current available balance (avoiding double-subtraction of `used_quota`).

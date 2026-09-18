@@ -50,6 +50,7 @@ type YunwuHypervisor struct {
 	sw        *StatsWorker
 	cfg       *config.HypervisorConfig
 	decryptor credentials.Cipher
+	pm        PriceResolver
 }
 
 type commitTrackingWriter struct {
@@ -123,6 +124,7 @@ func NewYunwuHypervisor(store *storage.Storage, rt runtime.Runtime, decryptors .
 		sw:        NewStatsWorker(store, cfg),
 		cfg:       cfg,
 		decryptor: decryptor,
+		pm:        NewProviderPriceManager(store, decryptor, nil),
 	}
 
 	yh.hc.Start(context.Background(), 10*time.Second, func(ctx context.Context) []health.ExecutionNode {
@@ -133,6 +135,29 @@ func NewYunwuHypervisor(store *storage.Storage, rt runtime.Runtime, decryptors .
 
 	slog.Info("[YunwuHypervisor] Initialized dedicated Yunwu Engine")
 	return yh
+}
+
+// SetPriceResolver allows injecting or replacing the pricing resolver
+func (yh *YunwuHypervisor) SetPriceResolver(pr PriceResolver) {
+	yh.pm = pr
+}
+
+// PriceManager returns the underlying ProviderPriceManager if configured
+func (yh *YunwuHypervisor) PriceManager() *ProviderPriceManager {
+	if ppm, ok := yh.pm.(*ProviderPriceManager); ok {
+		return ppm
+	}
+	return nil
+}
+
+func (yh *YunwuHypervisor) resolveNodePrice(ctx context.Context, node *health.ExecutionNode, model string) (float64, float64, bool) {
+	if node == nil {
+		return 0, 0, false
+	}
+	if yh.pm != nil {
+		return yh.pm.ResolveNodePrice(ctx, node, model)
+	}
+	return yh.resolvePrice(ctx, node.NodeID, model)
 }
 
 func (yh *YunwuHypervisor) HandleRequest(
@@ -235,21 +260,45 @@ func (yh *YunwuHypervisor) HandleRequest(
 		return nil, err
 	}
 
-	// 4.1 Filter nodes by requested model family
+	// 4.1 Filter nodes by requested model family AND pricing availability
 	requestedFamily := ClassifyModelFamily(requestedModel)
 	var compatibleNodes []health.ExecutionNode
+	familyMatchedNodes := 0
+
 	for _, node := range nodes {
-		if NodeSupportsFamily(node.Capabilities, requestedFamily) {
-			compatibleNodes = append(compatibleNodes, node)
+		if !NodeSupportsFamily(node.Capabilities, requestedFamily) {
+			continue
 		}
+		familyMatchedNodes++
+		nodeCopy := node
+		_, _, hasPrice := yh.resolveNodePrice(ctx, &nodeCopy, requestedModel)
+		if !hasPrice {
+			slog.Debug("[YunwuHypervisor] Candidate node skipped: no pricing found on provider",
+				"node_id", node.NodeID,
+				"account_name", node.AccountName,
+				"provider", node.Provider,
+				"model", requestedModel,
+			)
+			continue
+		}
+		compatibleNodes = append(compatibleNodes, node)
 	}
+
 	if len(compatibleNodes) == 0 {
-		slog.Warn("[YunwuHypervisor] No candidate nodes support requested model family",
+		if familyMatchedNodes == 0 {
+			slog.Warn("[YunwuHypervisor] No candidate nodes support requested model family",
+				"requested_model", requestedModel,
+				"family", requestedFamily,
+				"total_nodes", len(nodes),
+			)
+			return nil, ErrNoCompatibleNodes
+		}
+		slog.Warn("[YunwuHypervisor] No candidate nodes offer pricing for requested model",
 			"requested_model", requestedModel,
 			"family", requestedFamily,
-			"total_nodes", len(nodes),
+			"family_nodes", familyMatchedNodes,
 		)
-		return nil, ErrNoCompatibleNodes
+		return nil, ErrNoPricingAvailable
 	}
 	nodes = compatibleNodes
 
@@ -292,15 +341,15 @@ func (yh *YunwuHypervisor) HandleRequest(
 		return nil, err
 	}
 	media := classifyMediaRequest(ctx, requestedModel, reqPayload)
-	inputPrice, outputPrice, fallbackPrice := yh.resolvePrice(ctx, selectedNode.NodeID, requestedModel)
+	inputPrice, outputPrice, hasPrice := yh.resolveNodePrice(ctx, selectedNode, requestedModel)
+	if !hasPrice {
+		return nil, ErrNoPricingAvailable
+	}
 	estimatedMicroUSD := int64(0)
 	if media.Kind != "" {
-		estimatedMicroUSD, fallbackPrice = yh.resolveMediaPrice(ctx, selectedNode.NodeID, requestedModel, media)
+		estimatedMicroUSD, _ = yh.resolveMediaPrice(ctx, selectedNode.NodeID, requestedModel, media)
 	} else {
 		estimatedMicroUSD = estimateRequestMicroUSD(reqPayload, inputPrice, outputPrice)
-	}
-	if fallbackPrice {
-		observability.Default.YunwuFallbackPricing()
 	}
 	// Even non-billable control-plane calls atomically validate that the chosen
 	// node still has allocatable balance. The 1 micro-USD hold is refunded.
@@ -474,43 +523,46 @@ func (yh *YunwuHypervisor) HandleRequest(
 			modelName = requestedModel
 		}
 
-		inputPrice, outputPrice, fallback := yh.resolvePrice(ctx, selectedNode.NodeID, modelName)
-		if fallback {
-			observability.Default.YunwuFallbackPricing()
-		}
-
-		totalTokens := meta.InputTokens + meta.OutputTokens
-		costUnits := totalTokens
-		if media.Kind != "" {
-			_, _ = yh.sw.ReconcileReservation(ctx, reservationNodeID, requestID, estimatedMicroUSD)
-			reservationOpen = false
-			if estimatedMicroUSD > 0 {
-				_, _ = yh.store.RecordUsageDetails(ctx, ownerID, &sess.ID, &selectedNode.NodeID, 0, 0, media.Units, "yunwu", "yunwu", modelName, media.Kind, estimatedMicroUSD)
-				observability.Default.AddUsage(media.Units)
-				_, _ = yh.store.LogEvent(ctx, ownerID, &sess.ID, &selectedNode.NodeID, "UsageRecorded", map[string]any{"usage_unit": media.Kind, "units": media.Units, "billed_micro_usd": estimatedMicroUSD, "pool_type": "yunwu"})
-			}
-		} else if totalTokens > 0 {
-			billedMicroUSD := CalculateBilledMicroUSD(meta.InputTokens, meta.OutputTokens, inputPrice, outputPrice)
-			_, _ = yh.sw.ReconcileReservation(ctx, reservationNodeID, requestID, billedMicroUSD)
-			reservationOpen = false
-			_, _ = yh.store.RecordUsageDetails(ctx, ownerID, &sess.ID, &selectedNode.NodeID, meta.InputTokens, meta.OutputTokens, int64(costUnits), "yunwu", "yunwu", modelName, "micro_usd", billedMicroUSD)
-			observability.Default.AddUsage(int64(costUnits))
-			_, _ = yh.store.LogEvent(ctx, ownerID, &sess.ID, &selectedNode.NodeID, "UsageRecorded", map[string]any{"input_tokens": meta.InputTokens, "output_tokens": meta.OutputTokens, "cost_units": costUnits, "pool_type": "yunwu"})
-			slog.Info("[YunwuHypervisor] Recorded Yunwu request usage",
-				"hypervisor_mode", "yunwu",
-				"owner_id", ownerID,
-				"session_id", sess.ID,
+		inputPrice, outputPrice, hasPrice := yh.resolveNodePrice(ctx, selectedNode, modelName)
+		if !hasPrice {
+			slog.Warn("[YunwuHypervisor] Warning: price not found after execution, skipping user charge",
 				"node_id", selectedNode.NodeID,
-				"input_tokens", meta.InputTokens,
-				"output_tokens", meta.OutputTokens,
-				"cost_units", costUnits,
+				"model", modelName,
 			)
 		} else {
-			// A successful token-priced request without usage metadata must not
-			// become free: settle the conservative reservation estimate.
-			_, _ = yh.sw.ReconcileReservation(ctx, reservationNodeID, requestID, estimatedMicroUSD)
-			reservationOpen = false
-			_, _ = yh.store.RecordUsageDetails(ctx, ownerID, &sess.ID, &selectedNode.NodeID, 0, 0, 0, "yunwu", "yunwu", modelName, "estimated_micro_usd", estimatedMicroUSD)
+			totalTokens := meta.InputTokens + meta.OutputTokens
+			costUnits := totalTokens
+			if media.Kind != "" {
+				_, _ = yh.sw.ReconcileReservation(ctx, reservationNodeID, requestID, estimatedMicroUSD)
+				reservationOpen = false
+				if estimatedMicroUSD > 0 {
+					_, _ = yh.store.RecordUsageDetails(ctx, ownerID, &sess.ID, &selectedNode.NodeID, 0, 0, media.Units, "yunwu", "yunwu", modelName, media.Kind, estimatedMicroUSD)
+					observability.Default.AddUsage(media.Units)
+					_, _ = yh.store.LogEvent(ctx, ownerID, &sess.ID, &selectedNode.NodeID, "UsageRecorded", map[string]any{"usage_unit": media.Kind, "units": media.Units, "billed_micro_usd": estimatedMicroUSD, "pool_type": "yunwu"})
+				}
+			} else if totalTokens > 0 {
+				billedMicroUSD := CalculateBilledMicroUSD(meta.InputTokens, meta.OutputTokens, inputPrice, outputPrice)
+				_, _ = yh.sw.ReconcileReservation(ctx, reservationNodeID, requestID, billedMicroUSD)
+				reservationOpen = false
+				_, _ = yh.store.RecordUsageDetails(ctx, ownerID, &sess.ID, &selectedNode.NodeID, meta.InputTokens, meta.OutputTokens, int64(costUnits), "yunwu", "yunwu", modelName, "micro_usd", billedMicroUSD)
+				observability.Default.AddUsage(int64(costUnits))
+				_, _ = yh.store.LogEvent(ctx, ownerID, &sess.ID, &selectedNode.NodeID, "UsageRecorded", map[string]any{"input_tokens": meta.InputTokens, "output_tokens": meta.OutputTokens, "cost_units": costUnits, "billed_micro_usd": billedMicroUSD, "pool_type": "yunwu"})
+				slog.Info("[YunwuHypervisor] Recorded Yunwu request usage",
+					"hypervisor_mode", "yunwu",
+					"owner_id", ownerID,
+					"session_id", sess.ID,
+					"node_id", selectedNode.NodeID,
+					"input_tokens", meta.InputTokens,
+					"output_tokens", meta.OutputTokens,
+					"cost_units", costUnits,
+					"billed_micro_usd", billedMicroUSD,
+				)
+			} else {
+				// Settle reservation without charging token overage
+				_, _ = yh.sw.ReconcileReservation(ctx, reservationNodeID, requestID, estimatedMicroUSD)
+				reservationOpen = false
+				_, _ = yh.store.RecordUsageDetails(ctx, ownerID, &sess.ID, &selectedNode.NodeID, 0, 0, 0, "yunwu", "yunwu", modelName, "estimated_micro_usd", estimatedMicroUSD)
+			}
 		}
 	}
 
@@ -1148,39 +1200,19 @@ func (yh *YunwuHypervisor) startBalanceSync(ctx context.Context) {
 }
 
 func (yh *YunwuHypervisor) resolvePrice(ctx context.Context, nodeID, model string) (float64, float64, bool) {
-	in, out := yh.cfg.YunwuDefaultInputUSDPer1K, yh.cfg.YunwuDefaultOutputUSDPer1K
-	if yh.store.DB() == nil || model == "" {
-		return in, out, true
-	}
-	accID, _ := strconv.ParseInt(nodeID, 10, 64)
-	acc, err := yh.store.DB().Account.Get(ctx, accID)
-	if err != nil {
-		return in, out, true
-	}
-	var vendorID string
-	if acc.Extra != nil {
-		vendorID, _ = acc.Extra["yunwu_vendor_id"].(string)
-	}
-	if vendorID != "" {
-		if rows, err := yh.store.DB().QueryContext(ctx, `SELECT input_price,output_price FROM ash_vendor_models WHERE vendor_id=$1 AND model_name=$2 AND is_available=true`, vendorID, model); err == nil {
-			defer rows.Close()
-			if rows.Next() && rows.Scan(&in, &out) == nil {
-				return in, out, false
-			}
+	node := health.ExecutionNode{NodeID: nodeID}
+	if yh.nm != nil {
+		if n, err := yh.nm.GetNode(ctx, nodeID); err == nil && n != nil {
+			node = *n
 		}
 	}
-	creds, _ := credentials.DecryptMap(acc.Credentials, yh.decryptor)
-	base, _ := creds["base_url"].(string)
-	base = strings.TrimRight(base, "/")
-	if base != "" {
-		if rows, err := yh.store.DB().QueryContext(ctx, `SELECT m.input_price,m.output_price FROM ash_vendor_models m JOIN ash_vendors v ON v.id=m.vendor_id WHERE rtrim(v.url,'/')=$1 AND m.model_name=$2 AND m.is_available=true`, base, model); err == nil {
-			defer rows.Close()
-			if rows.Next() && rows.Scan(&in, &out) == nil {
-				return in, out, false
-			}
+	if yh.pm != nil {
+		in, out, found := yh.pm.ResolveNodePrice(ctx, &node, model)
+		if found {
+			return in, out, false
 		}
 	}
-	return in, out, true
+	return yh.cfg.YunwuDefaultInputUSDPer1K, yh.cfg.YunwuDefaultOutputUSDPer1K, true
 }
 
 // GetHealthStatus returns the status summary of Yunwu Hypervisor Engine
@@ -1228,6 +1260,9 @@ func (yh *YunwuHypervisor) SyncNodeBalance(ctx context.Context, nodeID string, a
 		id, parseErr := strconv.ParseInt(nodeID, 10, 64)
 		if parseErr != nil {
 			return nil, parseErr
+		}
+		if yh.store == nil || yh.store.DB() == nil {
+			return nil, fmt.Errorf("database unavailable")
 		}
 		acc, getErr := yh.store.DB().Account.Get(ctx, id)
 		if getErr != nil {

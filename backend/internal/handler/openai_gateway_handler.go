@@ -26,6 +26,7 @@ import (
 	"github.com/tidwall/gjson"
 	"go.uber.org/zap"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor"
+	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/yunwu"
 )
 
 // OpenAIGatewayHandler handles OpenAI API gateway requests
@@ -417,6 +418,10 @@ func (h *OpenAIGatewayHandler) handleHypervisorChatCompletions(c *gin.Context) {
 
 	_, err = h.hypervisorEngine.HandleRequest(c.Request.Context(), ownerID, conversationID, body, c.Writer, platform)
 	if err != nil {
+		if errors.Is(err, yunwu.ErrNoPricingAvailable) || errors.Is(err, yunwu.ErrNoCompatibleNodes) {
+			h.errorResponseGateway(transportCtx, http.StatusBadRequest, "invalid_request_error", err.Error())
+			return
+		}
 		h.errorResponseGateway(transportCtx, http.StatusBadGateway, "api_error", err.Error())
 		return
 	}
