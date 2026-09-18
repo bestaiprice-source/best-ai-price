@@ -132,5 +132,16 @@ func TestParseNodeProvider(t *testing.T) {
 	assert.Equal(t, "openlux", ParseNodeProvider(map[string]any{}))
 	assert.Equal(t, "openlux", ParseNodeProvider(map[string]any{"provider": "yunwu"}))
 	assert.Equal(t, "openlux", ParseNodeProvider(map[string]any{"provider": "OpenLux"}))
+	assert.Equal(t, "portdan", ParseNodeProvider(map[string]any{"provider": "portdan"}))
+	assert.Equal(t, "portdan", ParseNodeProvider(map[string]any{"provider": "portdan.com"}))
+	assert.Equal(t, "api-top", ParseNodeProvider(map[string]any{"provider": "api-top"}))
+	assert.Equal(t, "api-top", ParseNodeProvider(map[string]any{"provider": "apitop"}))
+	assert.Equal(t, "yuanqiaoyun", ParseNodeProvider(map[string]any{"provider": "yuanqiaoyun"}))
+	assert.Equal(t, "yuanqiaoyun", ParseNodeProvider(map[string]any{"provider": "yuanqiaoyun.com"}))
 	assert.Equal(t, "custom-upstream", ParseNodeProvider(map[string]any{"provider": "custom-upstream"}))
+
+	assert.Equal(t, "https://api.openlux.ai/v1", DefaultBaseURLForProvider("openlux"))
+	assert.Equal(t, "https://portdan.com/v1", DefaultBaseURLForProvider("portdan"))
+	assert.Equal(t, "https://api-top.com/v1", DefaultBaseURLForProvider("api-top"))
+	assert.Equal(t, "https://yuanqiaoyun.com/v1", DefaultBaseURLForProvider("yuanqiaoyun"))
 }

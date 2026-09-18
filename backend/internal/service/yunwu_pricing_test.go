@@ -310,4 +310,44 @@ func TestOpenAIGatewayService_CheckModelPricingAvailable(t *testing.T) {
 	require.Contains(t, err.Error(), "pricing not found for model")
 }
 
+func TestYunwuPricingService_MultiEndpointAggregation(t *testing.T) {
+	// Endpoint 1: OpenLux-like
+	ts1 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(YunwuPricingResponse{
+			Data: []YunwuPricingRawItem{
+				{ModelName: "gemini-3.8-flash", ModelRatio: 0.375, CompletionRatio: 5},
+			},
+		})
+	}))
+	defer ts1.Close()
+
+	// Endpoint 2: Top-API-like (has extra model)
+	ts2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(YunwuPricingResponse{
+			Data: []YunwuPricingRawItem{
+				{ModelName: "claude-haiku-4-5", ModelRatio: 1.25, CompletionRatio: 4},
+			},
+		})
+	}))
+	defer ts2.Close()
+
+	svc := &YunwuPricingService{
+		pricingURLs: []string{ts1.URL, ts2.URL},
+		httpClient:  ts1.Client(),
+		lastPricing: make(map[string]*YunwuPricingRawItem),
+		aliases:     make(map[string]string),
+	}
+
+	prices, err := svc.FetchPricing(context.Background())
+	require.NoError(t, err)
+	require.Len(t, prices, 2)
+	require.Contains(t, prices, "gemini-3.8-flash")
+	require.Contains(t, prices, "claude-haiku-4-5")
+	require.Equal(t, 0.375, prices["gemini-3.8-flash"].ModelRatio)
+	require.Equal(t, 1.25, prices["claude-haiku-4-5"].ModelRatio)
+}
+
+
 

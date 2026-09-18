@@ -148,8 +148,11 @@
         >
           <div>
             <label class="input-label">Provider</label>
-            <select v-model="yunwuProvider" class="input">
-              <option value="openlux">OpenLux (Yunwu)</option>
+            <select v-model="yunwuProvider" class="input" @change="onYunwuProviderChange">
+              <option value="openlux">OpenLux (api.openlux.ai)</option>
+              <option value="portdan">Portdan AI (portdan.com)</option>
+              <option value="api-top">Top-API (api-top.com)</option>
+              <option value="yuanqiaoyun">Yuanqiaoyun (yuanqiaoyun.com)</option>
               <option value="custom">Custom Upstream Provider</option>
             </select>
           </div>
@@ -159,7 +162,7 @@
               v-model="yunwuCustomProvider"
               type="text"
               class="input font-mono"
-              placeholder="e.g. openlux, custom-vendor"
+              placeholder="e.g. openlux, portdan, custom-vendor"
             />
           </div>
           <div>
@@ -1957,10 +1960,27 @@ const interceptWarmupRequests = ref(false)
 const autoPauseOnExpired = ref(false)
 const mixedScheduling = ref(false) // For antigravity accounts: enable mixed scheduling
 const allowOverages = ref(false) // For antigravity accounts: enable AI Credits overages
-// Unofficial Provider (Yunwu / OpenLux) Node Settings
+// Unofficial Provider (Yunwu / OpenLux / Portdan / Top-API / Yuanqiaoyun) Node Settings
 const yunwuProvider = ref('openlux')
 const yunwuCustomProvider = ref('')
 const yunwuSupportedFamilies = ref<string[]>(['claude', 'gpt', 'gemini', 'other'])
+
+const YUNWU_PROVIDER_DEFAULTS: Record<string, string> = {
+  openlux: 'https://api.openlux.ai/v1',
+  portdan: 'https://portdan.com/v1',
+  'api-top': 'https://api-top.com/v1',
+  yuanqiaoyun: 'https://yuanqiaoyun.com/v1'
+}
+
+const onYunwuProviderChange = () => {
+  if (yunwuProvider.value in YUNWU_PROVIDER_DEFAULTS) {
+    const currentUrl = editBaseUrl.value?.trim()
+    const isDefaultUrl = !currentUrl || Object.values(YUNWU_PROVIDER_DEFAULTS).includes(currentUrl)
+    if (isDefaultUrl) {
+      editBaseUrl.value = YUNWU_PROVIDER_DEFAULTS[yunwuProvider.value]
+    }
+  }
+}
 const availableModelFamilies = [
   { id: 'claude', name: 'Claude', desc: 'claude-3-5-sonnet, claude-3-7-sonnet, opus...' },
   { id: 'gpt', name: 'GPT', desc: 'gpt-4o, o1, o3, chatgpt...' },
@@ -2104,7 +2124,9 @@ const defaultBaseUrl = computed(() => {
   if (props.account?.platform === 'openai' || props.account?.platform === 'sora') return 'https://api.openai.com'
   if (props.account?.platform === 'gemini') return 'https://generativelanguage.googleapis.com'
   if (props.account?.platform === 'antigravity') return 'https://cloudcode-pa.googleapis.com'
-  if (props.account?.platform === 'yunwu') return 'https://api.openlux.ai/v1'
+  if (props.account?.platform === 'yunwu') {
+    return YUNWU_PROVIDER_DEFAULTS[yunwuProvider.value] || 'https://api.openlux.ai/v1'
+  }
   return 'https://api.anthropic.com'
 })
 
@@ -2200,6 +2222,15 @@ const syncFormFromAccount = (newAccount: Account | null) => {
     const rawProv = (extra?.provider as string) || 'openlux'
     if (rawProv === 'openlux' || rawProv === 'yunwu') {
       yunwuProvider.value = 'openlux'
+      yunwuCustomProvider.value = ''
+    } else if (rawProv === 'portdan') {
+      yunwuProvider.value = 'portdan'
+      yunwuCustomProvider.value = ''
+    } else if (rawProv === 'api-top') {
+      yunwuProvider.value = 'api-top'
+      yunwuCustomProvider.value = ''
+    } else if (rawProv === 'yuanqiaoyun') {
+      yunwuProvider.value = 'yuanqiaoyun'
       yunwuCustomProvider.value = ''
     } else {
       yunwuProvider.value = 'custom'
@@ -2349,7 +2380,7 @@ const syncFormFromAccount = (newAccount: Account | null) => {
           : newAccount.platform === 'antigravity'
             ? 'https://cloudcode-pa.googleapis.com'
             : newAccount.platform === 'yunwu'
-              ? 'https://api.openlux.ai/v1'
+              ? (YUNWU_PROVIDER_DEFAULTS[yunwuProvider.value] || 'https://api.openlux.ai/v1')
               : 'https://api.anthropic.com'
     editBaseUrl.value = (credentials.base_url as string) || platformDefaultUrl
 

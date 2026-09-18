@@ -11,7 +11,51 @@ const (
 	FamilyOther  = "other"
 
 	DefaultProvider = "openlux"
+
+	ProviderOpenLux     = "openlux"
+	ProviderPortdan     = "portdan"
+	ProviderAPITop      = "api-top"
+	ProviderYuanqiaoyun = "yuanqiaoyun"
+
+	DefaultOpenLuxBaseURL     = "https://api.openlux.ai/v1"
+	DefaultPortdanBaseURL     = "https://portdan.com/v1"
+	DefaultAPITopBaseURL      = "https://api-top.com/v1"
+	DefaultYuanqiaoyunBaseURL = "https://yuanqiaoyun.com/v1"
 )
+
+// DefaultBaseURLForProvider returns the standard base URL for a given provider.
+func DefaultBaseURLForProvider(provider string) string {
+	switch CanonicalProvider(provider) {
+	case ProviderPortdan:
+		return DefaultPortdanBaseURL
+	case ProviderAPITop:
+		return DefaultAPITopBaseURL
+	case ProviderYuanqiaoyun:
+		return DefaultYuanqiaoyunBaseURL
+	default:
+		return DefaultOpenLuxBaseURL
+	}
+}
+
+// CanonicalProvider normalizes provider aliases.
+func CanonicalProvider(provider string) string {
+	p := strings.ToLower(strings.TrimSpace(provider))
+	switch p {
+	case "openlux", "yunwu", "api.openlux.ai":
+		return ProviderOpenLux
+	case "portdan", "portdan.com", "dandan":
+		return ProviderPortdan
+	case "api-top", "apitop", "api_top", "api-top.com", "top-api":
+		return ProviderAPITop
+	case "yuanqiaoyun", "yuanqiao", "yuanqiaoyun.com":
+		return ProviderYuanqiaoyun
+	default:
+		if p == "" {
+			return DefaultProvider
+		}
+		return p
+	}
+}
 
 // DefaultModelFamilies returns all supported model families by default.
 func DefaultModelFamilies() []string {
@@ -165,11 +209,7 @@ func ParseNodeProvider(extra map[string]any) string {
 		return DefaultProvider
 	}
 	if p, ok := extra["provider"].(string); ok && strings.TrimSpace(p) != "" {
-		trimmed := strings.TrimSpace(p)
-		if strings.EqualFold(trimmed, "yunwu") {
-			return DefaultProvider
-		}
-		return strings.ToLower(trimmed)
+		return CanonicalProvider(p)
 	}
 	return DefaultProvider
 }

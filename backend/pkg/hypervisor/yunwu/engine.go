@@ -1112,6 +1112,9 @@ func (yh *YunwuHypervisor) startBalanceSync(ctx context.Context) {
 			}
 			apiKey, _ := creds["api_key"].(string)
 			baseURL, _ := creds["base_url"].(string)
+			if baseURL == "" {
+				baseURL = DefaultBaseURLForProvider(ParseNodeProvider(acc.Extra))
+			}
 			if apiKey == "" {
 				observability.Default.YunwuBalanceSyncFailed()
 				slog.Warn("[YunwuStatsWorker] Balance sync skipped: account API key is empty", "node_id", fmt.Sprint(acc.ID))
@@ -1236,6 +1239,9 @@ func (yh *YunwuHypervisor) SyncNodeBalance(ctx context.Context, nodeID string, a
 		}
 		apiKey, _ = decrypted["api_key"].(string)
 		baseURL, _ = decrypted["base_url"].(string)
+		if baseURL == "" {
+			baseURL = DefaultBaseURLForProvider(ParseNodeProvider(acc.Extra))
+		}
 	}
 	if apiKey == "" {
 		return nil, fmt.Errorf("Yunwu API key is not configured")

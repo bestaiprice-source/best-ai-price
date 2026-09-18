@@ -40,11 +40,17 @@ Welcome to **sub2api** and the **AI Session Hypervisor (ASH / Yunwu Engine)** re
 - **SSE Transformer Bypass**: Direct `/responses` API calls bypass `responsesSSETransformer` to prevent truncated or empty responses when streaming native OpenAI/Codex format.
 
 ### 2.3 Unofficial Providers Engine (`pkg/hypervisor/yunwu`)
-- **Target**: Multi-channel third-party provider accounts (OpenLux / Yunwu, extensible to arbitrary upstream aggregators).
+- **Target**: Multi-channel third-party provider accounts (OpenLux / Yunwu, Portdan, Top-API, Yuanqiaoyun, and extensible to arbitrary upstream aggregators).
 - **General Hub for Unofficial Providers**:
   - The `yunwu` platform serves as the unified general hub for unofficial / third-party AI providers and aggregators.
-  - Upstream provider identifier is stored per-node in `account.Extra["provider"]` (defaults to `"openlux"`).
-  - Admin UI (`EditAccountModal.vue`, `CreateAccountModal.vue`, `GroupsView.vue`) exposes provider configuration and model family routing.
+  - Upstream provider identifier is stored per-node in `account.Extra["provider"]` (defaults to `"openlux"`). First-class supported presets:
+    1. `openlux`: OpenLux AI (`https://api.openlux.ai/v1`, pricing: `https://api.openlux.ai/api/pricing`)
+    2. `portdan`: Portdan AI / 蛋蛋中转 (`https://portdan.com/v1`)
+    3. `api-top`: Top-API (`https://api-top.com/v1`, pricing: `https://api-top.com/api/pricing`)
+    4. `yuanqiaoyun`: Yuanqiaoyun / New API (`https://yuanqiaoyun.com/v1`, pricing: `https://yuanqiaoyun.com/api/pricing`)
+    5. `custom`: Arbitrary user-defined upstream provider key and endpoint.
+  - `DefaultBaseURLForProvider(provider)` resolves provider-specific default base URLs in backend node management, tests, and balance sync fallback.
+  - Admin UI (`EditAccountModal.vue`, `CreateAccountModal.vue`, `GroupsView.vue`) exposes provider dropdown presets with auto-filling Base URLs and model family routing.
 - **Per-Node Model Family Routing (`pkg/hypervisor/yunwu/model_family.go`)**:
   - Each node can be independently configured in Admin UI to route any subset of four primary model families:
     1. `claude`: Claude models (`claude-3-5-sonnet`, `claude-3-7-sonnet`, `claude-3-opus`, etc., Anthropic messages protocol).
@@ -61,10 +67,9 @@ Welcome to **sub2api** and the **AI Session Hypervisor (ASH / Yunwu Engine)** re
 - **Dedicated Subsystems**:
   - `YunwuScheduler`: Tailored node selection for Yunwu execution nodes based on node health, queue depth, latency, and `UsedTokens` organic load balancing penalty (ensuring fair traffic distribution across active channels even when balance APIs are untracked). `YunwuRequireFreshBalance` defaults to `false` so nodes without balance API endpoints are not excluded.
   - `YunwuRebindingManager`: Handles failover and node cooldown transitions specifically for Yunwu provider clusters, enforcing Redis session-scoped distributed lock (`SETNX`) and running `YunwuScheduler` with user priority, credits, and system state during rebinding.
-  - `StatsWorker`: Syncs upstream credit balance from `/api/user/self`, `/dashboard/billing/subscription`, and credit grants. In `/api/user/self`, `data.quota` is parsed directly as the current available balance (avoiding double-subtraction of `used_quota`).
-  - Default Base URL: `https://api.openlux.ai/v1` (domain migrated to `api.openlux.ai`).
+  - `StatsWorker`: Syncs upstream credit balance from `/api/user/self`, `/dashboard/billing/subscription`, and credit grants across One-API/New-API compatible providers. In `/api/user/self`, `data.quota` is parsed directly as the current available balance (avoiding double-subtraction of `used_quota`).
   - Runtime credentials: `AnthropicRuntime.Execute` attaches `Authorization: Bearer <api_key>` headers for Yunwu platform accounts.
-  - **Dynamic Real-Time Pricing (`YunwuPricingService`) & Gateway Pre-Admission**: Resolves model pricing on-demand from `https://api.openlux.ai/api/pricing` (One-API/New-API standard pricing format: base rate $0.002/1k tokens, `model_ratio`, `completion_ratio`, `cache_ratio`, `model_price`). Employs `singleflight.Group` to prevent redundant parallel HTTP requests and caches snapshots in-memory as a fallback against upstream network drops. Integrated into `BillingService` so gateway usage logs (`RecordUsage`) accurately calculate costs and deduct funds from user balances for Yunwu and Gemini models (`gemini-3.8-flash`, `gemini-3.5-flash`, `gemini-3-pro-preview`, etc.). Enforces pre-routing admission guard (`CheckModelPricingAvailable`): if pricing cannot be resolved for a model, the request is rejected immediately with HTTP 400 without forwarding to upstream and without touching user balance.
+  - **Dynamic Multi-Provider Real-Time Pricing (`YunwuPricingService`) & Gateway Pre-Admission**: Resolves model pricing on-demand from upstream pricing endpoints (`https://api.openlux.ai/api/pricing`, `https://api-top.com/api/pricing`, `https://yuanqiaoyun.com/api/pricing` in standard One-API/New-API format: base rate $0.002/1k tokens, `model_ratio`, `completion_ratio`, `cache_ratio`, `model_price`). Employs `singleflight.Group` to prevent redundant parallel HTTP requests, seamlessly merges pricing tables across providers, and caches snapshots in-memory as a fallback against upstream network drops. Integrated into `BillingService` so gateway usage logs (`RecordUsage`) accurately calculate costs and deduct funds from user balances for Yunwu and Gemini models (`gemini-3.8-flash`, `gemini-3.5-flash`, `gemini-3-pro-preview`, etc.). Enforces pre-routing admission guard (`CheckModelPricingAvailable`): if pricing cannot be resolved for a model, the request is rejected immediately with HTTP 400 without forwarding to upstream and without touching user balance.
   - **Configurable Pricing Markup (Default 10% / 1.10x)**: Supports global and per-group markup multipliers. System-wide default rate multiplier is set to `1.10` (+10% margin over base USD prices). Configurable in Admin Settings -> Defaults (`default_rate_multiplier`), in group creation forms (defaults to `1.1`), and stored in DB settings (`SettingKeyDefaultRateMultiplier = "default_rate_multiplier"`). Deductions calculate as `TotalCost * RateMultiplier`.
   - **Operational Balance Thresholds, Concurrency Clamping & Anti-Overdraft Guard**:
     - `MinOperationalBalance = 0.002` (USD): Minimum account balance required to initiate requests in balance-billed mode. Enforced in `billing_cache_service.go` (`checkBalanceEligibility`), `api_key_auth.go`, and `api_key_auth_google.go`. Requests from accounts below $0.002 are rejected upfront with HTTP 403 / "Insufficient account balance" before reaching upstream providers.

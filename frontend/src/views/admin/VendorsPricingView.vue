@@ -106,7 +106,10 @@ const isSyncingAll = ref(false);
 const selectedVendor = ref<Vendor | null>(null);
 
 const HARDCODED_VENDORS = [
-  { name: 'Yunwu', url: 'https://api.openlux.ai' }
+  { name: 'OpenLux (Yunwu)', url: 'https://api.openlux.ai' },
+  { name: 'Portdan AI', url: 'https://portdan.com' },
+  { name: 'Top-API', url: 'https://api-top.com' },
+  { name: 'Yuanqiaoyun', url: 'https://yuanqiaoyun.com' }
 ];
 
 const displayVendors = computed(() => {

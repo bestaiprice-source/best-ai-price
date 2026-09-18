@@ -26,6 +26,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/server/gatewayctx"
 	"github.com/Wei-Shaw/sub2api/internal/util/soraerror"
 	"github.com/Wei-Shaw/sub2api/internal/util/urlvalidator"
+	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/yunwu"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
@@ -467,7 +468,7 @@ func (s *AccountTestService) fetchYunwuAvailableModels(ctx context.Context, acco
 
 	baseURL := account.GetBaseURL()
 	if strings.TrimSpace(baseURL) == "" {
-		baseURL = "https://api.openlux.ai/v1"
+		baseURL = yunwu.DefaultBaseURLForProvider(yunwu.ParseNodeProvider(account.Extra))
 	}
 	normalizedBaseURL, err := s.validateUpstreamBaseURL(baseURL)
 	if err != nil {
@@ -713,7 +714,7 @@ func (s *AccountTestService) testClaudeAccountConnection(c gatewayctx.GatewayCon
 			baseURL := account.GetBaseURL()
 			if baseURL == "" {
 				if account.Platform == PlatformYunwu {
-					baseURL = "https://api.openlux.ai/v1"
+					baseURL = yunwu.DefaultBaseURLForProvider(yunwu.ParseNodeProvider(account.Extra))
 				} else {
 					baseURL = "https://api.anthropic.com"
 				}
@@ -969,7 +970,7 @@ func (s *AccountTestService) testOpenAIAccountConnection(c gatewayctx.GatewayCon
 		baseURL := account.GetOpenAIBaseURL()
 		if baseURL == "" {
 			if account.Platform == PlatformYunwu {
-				baseURL = "https://api.openlux.ai/v1"
+				baseURL = yunwu.DefaultBaseURLForProvider(yunwu.ParseNodeProvider(account.Extra))
 			} else {
 				baseURL = "https://api.openai.com"
 			}

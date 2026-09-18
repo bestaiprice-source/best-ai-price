@@ -278,8 +278,11 @@
       >
         <div>
           <label class="input-label">Provider</label>
-          <select v-model="yunwuProvider" class="input">
-            <option value="openlux">OpenLux (Yunwu)</option>
+          <select v-model="yunwuProvider" class="input" @change="onYunwuProviderChange">
+            <option value="openlux">OpenLux (api.openlux.ai)</option>
+            <option value="portdan">Portdan AI (portdan.com)</option>
+            <option value="api-top">Top-API (api-top.com)</option>
+            <option value="yuanqiaoyun">Yuanqiaoyun (yuanqiaoyun.com)</option>
             <option value="custom">Custom Upstream Provider</option>
           </select>
         </div>
@@ -289,7 +292,7 @@
             v-model="yunwuCustomProvider"
             type="text"
             class="input font-mono"
-            placeholder="e.g. openlux, custom-vendor"
+            placeholder="e.g. openlux, portdan, custom-vendor"
           />
         </div>
         <div>
@@ -299,9 +302,9 @@
             type="text"
             required
             class="input"
-            placeholder="https://api.openlux.ai/v1"
+            :placeholder="YUNWU_PROVIDER_DEFAULTS[yunwuProvider] || 'https://api.openlux.ai/v1'"
           />
-          <p class="input-hint">Yunwu / Unofficial API Base URL (defaults to https://api.openlux.ai/v1)</p>
+          <p class="input-hint">Unofficial API Base URL (defaults to {{ YUNWU_PROVIDER_DEFAULTS[yunwuProvider] || 'https://api.openlux.ai/v1' }})</p>
         </div>
         <div>
           <label class="input-label">API Key</label>
@@ -3282,6 +3285,19 @@ const yunwuApiKey = ref('') // For Yunwu type: API key
 const yunwuProvider = ref('openlux')
 const yunwuCustomProvider = ref('')
 const yunwuSupportedFamilies = ref<string[]>(['claude', 'gpt', 'gemini', 'other'])
+
+const YUNWU_PROVIDER_DEFAULTS: Record<string, string> = {
+  openlux: 'https://api.openlux.ai/v1',
+  portdan: 'https://portdan.com/v1',
+  'api-top': 'https://api-top.com/v1',
+  yuanqiaoyun: 'https://yuanqiaoyun.com/v1'
+}
+
+const onYunwuProviderChange = () => {
+  if (yunwuProvider.value in YUNWU_PROVIDER_DEFAULTS) {
+    yunwuBaseUrl.value = YUNWU_PROVIDER_DEFAULTS[yunwuProvider.value]
+  }
+}
 const availableModelFamilies = [
   { id: 'claude', name: 'Claude', desc: 'claude-3-5-sonnet, claude-3-7-sonnet, opus...' },
   { id: 'gpt', name: 'GPT', desc: 'gpt-4o, o1, o3, chatgpt...' },
@@ -4224,14 +4240,14 @@ const handleSubmit = async () => {
       return
     }
 
-    const credentials: Record<string, unknown> = {
-      base_url: yunwuBaseUrl.value.trim() || 'https://api.openlux.ai/v1',
-      api_key: yunwuApiKey.value.trim()
-    }
-
     const finalProvider = (yunwuProvider.value === 'custom' && yunwuCustomProvider.value.trim())
       ? yunwuCustomProvider.value.trim().toLowerCase()
       : (yunwuProvider.value || 'openlux')
+    const defaultUrl = YUNWU_PROVIDER_DEFAULTS[finalProvider] || 'https://api.openlux.ai/v1'
+    const credentials: Record<string, unknown> = {
+      base_url: yunwuBaseUrl.value.trim() || defaultUrl,
+      api_key: yunwuApiKey.value.trim()
+    }
     const extra: Record<string, unknown> = {
       provider: finalProvider,
       supported_model_families: yunwuSupportedFamilies.value.length > 0

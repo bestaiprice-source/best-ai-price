@@ -14,6 +14,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/domain"
 	openaipkg "github.com/Wei-Shaw/sub2api/internal/pkg/openai"
+	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/yunwu"
 )
 
 type Account struct {
@@ -811,7 +812,7 @@ func (a *Account) GetBaseURL() string {
 	baseURL := a.GetCredential("base_url")
 	if baseURL == "" {
 		if a.Platform == PlatformYunwu {
-			return "https://api.openlux.ai/v1"
+			return yunwu.DefaultBaseURLForProvider(yunwu.ParseNodeProvider(a.Extra))
 		}
 		return "https://api.anthropic.com"
 	}
