@@ -181,31 +181,39 @@ func TestProviderPriceManagerFetchAndCache(t *testing.T) {
 	assert.InDelta(t, 0.03, in, 0.0001)
 	assert.InDelta(t, 0.15, out, 0.0001)
 
-	// Cache hit in non-test mode
-	inCached, outCached, foundCached := ppm.ResolveNodePrice(ctx, node, "claude-3-7-sonnet")
-	assert.True(t, foundCached)
-	assert.Equal(t, in, inCached)
-	assert.Equal(t, out, outCached)
+	// Second request fetches fresh without caching
+	inLive2, outLive2, foundLive2 := ppm.ResolveNodePrice(ctx, node, "claude-3-7-sonnet")
+	assert.True(t, foundLive2)
+	assert.Equal(t, in, inLive2)
+	assert.Equal(t, out, outLive2)
 
-	// Unlisted model in cache in non-test mode
+	// Unlisted model returns false and triggers 10-minute cooldown
 	_, _, foundUnlisted := ppm.ResolveNodePrice(ctx, node, "completely-unlisted")
 	assert.False(t, foundUnlisted)
+	assert.True(t, ppm.IsNoPriceCooldown(node.NodeID, "completely-unlisted"))
 
 	// Node without pricing URL in non-test mode
 	noURLNode := &health.ExecutionNode{NodeID: "no-url-node", Provider: "unknown_prov"}
 	_, _, foundNoURL := ppm.ResolveNodePrice(ctx, noURLNode, "claude-3-7-sonnet")
 	assert.False(t, foundNoURL)
 
-	// Stale cache test: make server return 500, but expire the cache to trigger stale lookup
+	// When endpoint fails (500 error), returns false and enters 10m cooldown
 	atomic.StoreInt32(&statusCode, http.StatusInternalServerError)
-	ppm.mu.Lock()
-	ppm.cacheExpiry[server.URL+"/api/pricing"] = time.Now().Add(-1 * time.Minute)
-	ppm.mu.Unlock()
+	_, _, foundFailed := ppm.ResolveNodePrice(ctx, node, "claude-3-7-sonnet")
+	assert.False(t, foundFailed)
+	assert.True(t, ppm.IsNoPriceCooldown(node.NodeID, "claude-3-7-sonnet"))
 
-	inStale, outStale, foundStale := ppm.ResolveNodePrice(ctx, node, "claude-3-7-sonnet")
-	assert.True(t, foundStale)
-	assert.InDelta(t, 0.03, inStale, 0.0001)
-	assert.InDelta(t, 0.15, outStale, 0.0001)
+	// During cooldown, remains false even if server recovers
+	atomic.StoreInt32(&statusCode, http.StatusOK)
+	_, _, foundInCooldown := ppm.ResolveNodePrice(ctx, node, "claude-3-7-sonnet")
+	assert.False(t, foundInCooldown)
+
+	// When 10m cooldown expires (or cleared), request resolves successfully again
+	ppm.ClearNoPriceCooldown(node.NodeID, "claude-3-7-sonnet")
+	inRecovered, outRecovered, foundRecovered := ppm.ResolveNodePrice(ctx, node, "claude-3-7-sonnet")
+	assert.True(t, foundRecovered)
+	assert.InDelta(t, 0.03, inRecovered, 0.0001)
+	assert.InDelta(t, 0.15, outRecovered, 0.0001)
 
 	// Cache injection & ResolveNodePrice
 	ppm.SetProviderPrices("test-node-1", fetched)

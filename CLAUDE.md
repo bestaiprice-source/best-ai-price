@@ -74,9 +74,11 @@ Welcome to **sub2api** and the **AI Session Hypervisor (ASH / Yunwu Engine)** re
   - `ProviderPriceManager` (`pkg/hypervisor/yunwu/pricing.go`): Manages multi-provider pricing resolution for unofficial nodes:
     - Resolves from DB `ash_vendor_models` for other providers (bypassed for Portdan).
     - For Portdan, `GET /api/v1/channels/available` with Bearer auth is the SOLE pricing truth; static table fallbacks and generic benchmark prices are disabled.
-    - Fetches and caches live provider pricing endpoints with 5-minute TTL, singleflight deduplication, and optional `Authorization: Bearer <token>` auth:
+    - No long-term caching of prices: prices are queried fresh on-demand (with `singleflight` deduplication guarding parallel requests).
+    - Negative status cooldown: if a model has no price on a provider or price check fails, `hasPrice = false` is assigned for strictly 10 minutes (`DefaultNoPriceCooldown = 10 * time.Minute`), preventing upstream endpoint hammering. After 10 minutes, subsequent requests re-query the provider.
+    - Formats supported:
       - One-API / New-API format: `{"data": [{"model_name", "model_ratio", "model_price", "completion_ratio"}]}` (`api.openlux.ai`, `api-top.com`, `yuanqiaoyun.com`, or `<baseURL>/api/pricing`).
-      - sub2api format: `[{"platforms": [{"supported_models": [{"name", "pricing": {"input_price", "output_price"}}]}]}]` (`portdan.com/api/v1/channels/available`).
+      - sub2api format: `[{"platforms": [{"supported_models": [{"name", "pricing": {"input_price", "output_price"}}]}]}]` (`portdan.com/api/v1/channels/available`), with automatic per-token to per-1k normalization.
     - Resolves model aliases (e.g., `claude-3-7-sonnet` -> `claude-3-7-sonnet-20250219`, `gemini-3-pro` -> `gemini-3-pro-preview`).
     - Exposes `ResolveNodePrice(ctx, node, model) (in, out, found)` and `SetProviderPrices` for mock testing.
   - `YunwuScheduler`: Tailored node selection for Yunwu execution nodes based on node health, queue depth, latency, and `UsedTokens` organic load balancing penalty (ensuring fair traffic distribution across active channels even when balance APIs are untracked). `YunwuRequireFreshBalance` defaults to `false` so nodes without balance API endpoints are not excluded.
