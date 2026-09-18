@@ -814,4 +814,15 @@ func TestUpstreamRequestID(t *testing.T) {
 	assert.Equal(t, "", upstreamRequestID(http.Header{}))
 }
 
+func TestDefaultBaseURLForYunwu(t *testing.T) {
+	assert.Equal(t, "https://api.openlux.ai/v1", defaultBaseURLForYunwu(nil))
+	assert.Equal(t, "https://api.openlux.ai/v1", defaultBaseURLForYunwu(map[string]any{"provider": "openlux"}))
+	assert.Equal(t, "https://portdan.com/v1", defaultBaseURLForYunwu(map[string]any{"provider": "portdan"}))
+	assert.Equal(t, "https://portdan.com/v1", defaultBaseURLForYunwu(map[string]any{"provider": "portdan.com"}))
+	assert.Equal(t, "https://api-top.com/v1", defaultBaseURLForYunwu(map[string]any{"provider": "api-top"}))
+	assert.Equal(t, "https://api-top.com/v1", defaultBaseURLForYunwu(map[string]any{"provider": "top-api"}))
+	assert.Equal(t, "https://yuanqiaoyun.com/v1", defaultBaseURLForYunwu(map[string]any{"provider": "yuanqiaoyun"}))
+	assert.Equal(t, "https://api.openlux.ai/v1", defaultBaseURLForYunwu(map[string]any{"provider": "unknown"}))
+}
+
 

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -39,19 +40,23 @@ var KnownProviderPricingURLs = map[string]string{
 	ProviderOpenLux:     "https://api.openlux.ai/api/pricing",
 	ProviderAPITop:      "https://api-top.com/api/pricing",
 	ProviderYuanqiaoyun: "https://yuanqiaoyun.com/api/pricing",
+	ProviderPortdan:     "https://portdan.com/api/v1/channels/available",
 }
 
 // PricingURLForProvider resolves the public pricing endpoint for a given provider or base URL
 func PricingURLForProvider(provider string, baseURL string) string {
 	prov := CanonicalProvider(provider)
-	if u, ok := KnownProviderPricingURLs[prov]; ok && u != "" {
-		return u
-	}
 	if strings.TrimSpace(baseURL) != "" {
 		parsed, err := url.Parse(strings.TrimRight(strings.TrimSpace(baseURL), "/"))
 		if err == nil && parsed.Scheme != "" && parsed.Host != "" {
+			if prov == ProviderPortdan {
+				return parsed.Scheme + "://" + parsed.Host + "/api/v1/channels/available"
+			}
 			return parsed.Scheme + "://" + parsed.Host + "/api/pricing"
 		}
+	}
+	if u, ok := KnownProviderPricingURLs[prov]; ok && u != "" {
+		return u
 	}
 	return ""
 }
@@ -127,7 +132,7 @@ func (ppm *ProviderPriceManager) lookupModelInPrices(prices map[string]ProviderM
 	return ProviderModelPrice{}, false
 }
 
-func (ppm *ProviderPriceManager) fetchProviderPrices(ctx context.Context, endpointURL string) (map[string]ProviderModelPrice, error) {
+func (ppm *ProviderPriceManager) fetchProviderPrices(ctx context.Context, endpointURL string, token ...string) (map[string]ProviderModelPrice, error) {
 	if endpointURL == "" {
 		return nil, errors.New("empty endpoint url")
 	}
@@ -144,6 +149,9 @@ func (ppm *ProviderPriceManager) fetchProviderPrices(ctx context.Context, endpoi
 		if err != nil {
 			return nil, err
 		}
+		if len(token) > 0 && strings.TrimSpace(token[0]) != "" {
+			req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(token[0]))
+		}
 
 		resp, err := ppm.httpClient.Do(req)
 		if err != nil {
@@ -155,6 +163,12 @@ func (ppm *ProviderPriceManager) fetchProviderPrices(ctx context.Context, endpoi
 			return nil, fmt.Errorf("endpoint %s returned HTTP %d", endpointURL, resp.StatusCode)
 		}
 
+		bodyBytes, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return nil, err
+		}
+
+		// 1. Try One-API / New-API format: {"data": [...]}
 		var payload struct {
 			Data []struct {
 				ModelName       string  `json:"model_name"`
@@ -166,39 +180,82 @@ func (ppm *ProviderPriceManager) fetchProviderPrices(ctx context.Context, endpoi
 			} `json:"data"`
 		}
 
-		if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
-			return nil, err
-		}
-
-		prices := make(map[string]ProviderModelPrice, len(payload.Data))
-		for _, item := range payload.Data {
-			k := strings.ToLower(strings.TrimSpace(item.ModelName))
-			if k == "" {
-				continue
-			}
-
-			var inputPrice, outputPrice float64
-			if item.ModelPrice > 0 {
-				inputPrice = item.ModelPrice
-				outputPrice = item.ModelPrice
-			} else {
-				baseRatePer1k := 0.002
-				inputPrice = item.ModelRatio * baseRatePer1k
-				compRatio := item.CompletionRatio
-				if compRatio <= 0 {
-					compRatio = 1.0
+		if err := json.Unmarshal(bodyBytes, &payload); err == nil && len(payload.Data) > 0 {
+			prices := make(map[string]ProviderModelPrice, len(payload.Data))
+			for _, item := range payload.Data {
+				k := strings.ToLower(strings.TrimSpace(item.ModelName))
+				if k == "" {
+					continue
 				}
-				outputPrice = item.ModelRatio * compRatio * baseRatePer1k
-			}
 
-			prices[k] = ProviderModelPrice{
-				InputPricePer1k:  inputPrice,
-				OutputPricePer1k: outputPrice,
-				Available:        item.Available || item.ModelRatio > 0 || item.ModelPrice > 0,
+				var inputPrice, outputPrice float64
+				if item.ModelPrice > 0 {
+					inputPrice = item.ModelPrice
+					outputPrice = item.ModelPrice
+				} else {
+					baseRatePer1k := 0.002
+					inputPrice = item.ModelRatio * baseRatePer1k
+					compRatio := item.CompletionRatio
+					if compRatio <= 0 {
+						compRatio = 1.0
+					}
+					outputPrice = item.ModelRatio * compRatio * baseRatePer1k
+				}
+
+				prices[k] = ProviderModelPrice{
+					InputPricePer1k:  inputPrice,
+					OutputPricePer1k: outputPrice,
+					Available:        item.Available || item.ModelRatio > 0 || item.ModelPrice > 0,
+				}
+			}
+			return prices, nil
+		}
+
+		// 2. Try sub2api /channels/available format: [{"platforms": [{"supported_models": [...]}]}]
+		var channelList []struct {
+			Platforms []struct {
+				SupportedModels []struct {
+					Name    string `json:"name"`
+					Pricing *struct {
+						InputPrice  *float64 `json:"input_price"`
+						OutputPrice *float64 `json:"output_price"`
+					} `json:"pricing"`
+				} `json:"supported_models"`
+			} `json:"platforms"`
+		}
+
+		if err := json.Unmarshal(bodyBytes, &channelList); err == nil && len(channelList) > 0 {
+			prices := make(map[string]ProviderModelPrice)
+			for _, ch := range channelList {
+				for _, pl := range ch.Platforms {
+					for _, m := range pl.SupportedModels {
+						k := strings.ToLower(strings.TrimSpace(m.Name))
+						if k == "" {
+							continue
+						}
+						var inPrice, outPrice float64
+						if m.Pricing != nil {
+							if m.Pricing.InputPrice != nil {
+								inPrice = *m.Pricing.InputPrice
+							}
+							if m.Pricing.OutputPrice != nil {
+								outPrice = *m.Pricing.OutputPrice
+							}
+						}
+						prices[k] = ProviderModelPrice{
+							InputPricePer1k:  inPrice,
+							OutputPricePer1k: outPrice,
+							Available:        true,
+						}
+					}
+				}
+			}
+			if len(prices) > 0 {
+				return prices, nil
 			}
 		}
 
-		return prices, nil
+		return nil, fmt.Errorf("unknown pricing response format from %s", endpointURL)
 	})
 
 	if err != nil {
@@ -253,6 +310,7 @@ func (ppm *ProviderPriceManager) ResolveNodePrice(ctx context.Context, node *hea
 
 	// 2. Check Database (ash_vendor_models and account extras) if DB is available
 	var baseURL string
+	var apiKey string
 	if ppm.store != nil && ppm.store.DB() != nil && node.NodeID != "" {
 		if accID, parseErr := strconv.ParseInt(node.NodeID, 10, 64); parseErr == nil {
 			if acc, err := ppm.store.DB().Account.Get(ctx, accID); err == nil && acc != nil {
@@ -269,11 +327,14 @@ func (ppm *ProviderPriceManager) ResolveNodePrice(ctx context.Context, node *hea
 					}
 				}
 
-				// 2b. Check credentials base_url in ash_vendor_models
+				// 2b. Check credentials base_url and api_key
 				if acc.Credentials != nil {
 					creds, _ := credentials.DecryptMap(acc.Credentials, ppm.decryptor)
 					baseURL, _ = creds["base_url"].(string)
 					baseURL = strings.TrimRight(baseURL, "/")
+					if k, ok := creds["api_key"].(string); ok && k != "" {
+						apiKey = k
+					}
 					if baseURL != "" {
 						var in, out float64
 						if rows, err := ppm.store.DB().QueryContext(ctx, `SELECT m.input_price,m.output_price FROM ash_vendor_models m JOIN ash_vendors v ON v.id=m.vendor_id WHERE rtrim(v.url,'/')=$1 AND m.model_name=$2 AND m.is_available=true`, baseURL, model); err == nil {
@@ -305,7 +366,7 @@ func (ppm *ProviderPriceManager) ResolveNodePrice(ctx context.Context, node *hea
 		}
 
 		// Fetch fresh
-		fetchedPrices, err := ppm.fetchProviderPrices(ctx, pricingURL)
+		fetchedPrices, err := ppm.fetchProviderPrices(ctx, pricingURL, apiKey)
 		if err == nil && fetchedPrices != nil {
 			ppm.mu.Lock()
 			ppm.cache[pricingURL] = fetchedPrices

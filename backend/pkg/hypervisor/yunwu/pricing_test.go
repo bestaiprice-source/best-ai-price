@@ -40,8 +40,13 @@ func TestPricingURLForProvider(t *testing.T) {
 		},
 		{
 			provider: "portdan",
+			baseURL:  "",
+			expected: "https://portdan.com/api/v1/channels/available",
+		},
+		{
+			provider: "portdan",
 			baseURL:  "https://custom-portdan.com/v1",
-			expected: "https://custom-portdan.com/api/pricing",
+			expected: "https://custom-portdan.com/api/v1/channels/available",
 		},
 		{
 			provider: "custom_vendor",
@@ -597,3 +602,83 @@ type mockPriceResolver struct {
 func (m *mockPriceResolver) ResolveNodePrice(ctx context.Context, node *health.ExecutionNode, model string) (float64, float64, bool) {
 	return m.in, m.out, m.found
 }
+
+func TestProviderPriceManager_Sub2APIChannelsAvailableFormat(t *testing.T) {
+	var capturedAuthHeader string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedAuthHeader = r.Header.Get("Authorization")
+		if r.URL.Path != "/api/v1/channels/available" {
+			http.NotFound(w, r)
+			return
+		}
+
+		// Return sub2api /channels/available JSON response structure
+		payload := []map[string]any{
+			{
+				"id":   1,
+				"name": "Standard Group",
+				"platforms": []map[string]any{
+					{
+						"id":   1,
+						"name": "Anthropic",
+						"supported_models": []map[string]any{
+							{
+								"name": "claude-3-7-sonnet-20250219",
+								"pricing": map[string]any{
+									"input_price":  0.003,
+									"output_price": 0.015,
+								},
+							},
+							{
+								"name": "claude-3-5-haiku-20241022",
+								"pricing": map[string]any{
+									"input_price":  0.001,
+									"output_price": 0.005,
+								},
+							},
+							{
+								"name": "free-tier-model",
+								"pricing": map[string]any{
+									"input_price":  0.0,
+									"output_price": 0.0,
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(payload)
+	}))
+	defer server.Close()
+
+	ppm := NewProviderPriceManager(nil, nil, server.Client())
+	ctx := context.Background()
+
+	// 1. Fetch with token
+	prices, err := ppm.fetchProviderPrices(ctx, server.URL+"/api/v1/channels/available", "secret-user-token")
+	require.NoError(t, err)
+	assert.Equal(t, "Bearer secret-user-token", capturedAuthHeader)
+	assert.Len(t, prices, 3)
+
+	// 2. Check parsed prices
+	sonnet, found := ppm.lookupModelInPrices(prices, "claude-3-7-sonnet-20250219")
+	assert.True(t, found)
+	assert.Equal(t, 0.003, sonnet.InputPricePer1k)
+	assert.Equal(t, 0.015, sonnet.OutputPricePer1k)
+	assert.True(t, sonnet.Available)
+
+	haiku, found := ppm.lookupModelInPrices(prices, "claude-3-5-haiku-20241022")
+	assert.True(t, found)
+	assert.Equal(t, 0.001, haiku.InputPricePer1k)
+	assert.Equal(t, 0.005, haiku.OutputPricePer1k)
+
+	// Free tier model (pricing 0,0)
+	freeMod, found := ppm.lookupModelInPrices(prices, "free-tier-model")
+	assert.True(t, freeMod.Available)
+	assert.True(t, found)
+	assert.Equal(t, 0.0, freeMod.InputPricePer1k)
+}
+

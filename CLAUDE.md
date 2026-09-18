@@ -45,7 +45,7 @@ Welcome to **sub2api** and the **AI Session Hypervisor (ASH / Yunwu Engine)** re
   - The `yunwu` platform serves as the unified general hub for unofficial / third-party AI providers and aggregators.
   - Upstream provider identifier is stored per-node in `account.Extra["provider"]` (defaults to `"openlux"`). First-class supported presets:
     1. `openlux`: OpenLux AI (`https://api.openlux.ai/v1`, pricing: `https://api.openlux.ai/api/pricing`)
-    2. `portdan`: Portdan AI / 蛋蛋中转 (`https://portdan.com/v1`)
+    2. `portdan`: Portdan AI / 蛋蛋中转 (`https://portdan.com/v1`, sub2api architecture; user channel pricing: `https://portdan.com/api/v1/channels/available` with Bearer auth, or DB `ash_vendor_models`)
     3. `api-top`: Top-API (`https://api-top.com/v1`, pricing: `https://api-top.com/api/pricing`)
     4. `yuanqiaoyun`: Yuanqiaoyun / New API (`https://yuanqiaoyun.com/v1`, pricing: `https://yuanqiaoyun.com/api/pricing`)
     5. `custom`: Arbitrary user-defined upstream provider key and endpoint.
@@ -73,7 +73,9 @@ Welcome to **sub2api** and the **AI Session Hypervisor (ASH / Yunwu Engine)** re
 - **Dedicated Subsystems**:
   - `ProviderPriceManager` (`pkg/hypervisor/yunwu/pricing.go`): Manages multi-provider pricing resolution for unofficial nodes:
     - Resolves from DB `ash_vendor_models` (via account vendor ID or credentials base URL).
-    - Fetches and caches live One-API / New-API `/api/pricing` endpoints (`api.openlux.ai`, `portdan.com`, `api-top.com`, `yuanqiaoyun.com`, or custom `<baseURL>/api/pricing`) with 5-minute TTL and `singleflight.Group` deduplication.
+    - Fetches and caches live provider pricing endpoints with 5-minute TTL, singleflight deduplication, and optional `Authorization: Bearer <token>` auth:
+      - One-API / New-API format: `{"data": [{"model_name", "model_ratio", "model_price", "completion_ratio"}]}` (`api.openlux.ai`, `api-top.com`, `yuanqiaoyun.com`, or `<baseURL>/api/pricing`).
+      - sub2api format: `[{"platforms": [{"supported_models": [{"name", "pricing": {"input_price", "output_price"}}]}]}]` (`portdan.com/api/v1/channels/available`).
     - Resolves model aliases (e.g., `claude-3-7-sonnet` -> `claude-3-7-sonnet-20250219`, `gemini-3-pro` -> `gemini-3-pro-preview`).
     - Exposes `ResolveNodePrice(ctx, node, model) (in, out, found)` and `SetProviderPrices` for mock testing.
   - `YunwuScheduler`: Tailored node selection for Yunwu execution nodes based on node health, queue depth, latency, and `UsedTokens` organic load balancing penalty (ensuring fair traffic distribution across active channels even when balance APIs are untracked). `YunwuRequireFreshBalance` defaults to `false` so nodes without balance API endpoints are not excluded.
