@@ -39,6 +39,7 @@ func (s *YunwuScheduler) SelectNode(
 	userPriority int,
 	currentLeaseNodeID string,
 	systemState string,
+	prices ...map[string]float64,
 ) (*health.ExecutionNode, error) {
 	now := time.Now()
 	var candidates []health.ExecutionNode
@@ -119,6 +120,40 @@ func (s *YunwuScheduler) SelectNode(
 		finalCandidates = limitedCandidates
 	} else {
 		finalCandidates = candidates
+	}
+
+	// 2.5 Filter by cheapest price tier (Cheapest-First Routing)
+	// The node with the lowest price rate (inputPrice + outputPrice) is prioritized.
+	// More expensive nodes act strictly as fallback candidates (used when the cheaper nodes are in cooldown or unavailable).
+	if len(prices) > 0 && prices[0] != nil && len(prices[0]) > 0 {
+		priceMap := prices[0]
+		minPrice := -1.0
+		for _, node := range finalCandidates {
+			if p, ok := priceMap[node.NodeID]; ok {
+				if minPrice < 0 || p < minPrice {
+					minPrice = p
+				}
+			}
+		}
+
+		if minPrice >= 0 {
+			var cheapestCandidates []health.ExecutionNode
+			for _, node := range finalCandidates {
+				if p, ok := priceMap[node.NodeID]; ok {
+					if p <= minPrice*1.0001 || (p-minPrice) < 1e-9 {
+						cheapestCandidates = append(cheapestCandidates, node)
+					}
+				}
+			}
+			if len(cheapestCandidates) > 0 {
+				slog.Debug("[YunwuScheduler] Filtered candidates to cheapest price tier",
+					"cheapest_count", len(cheapestCandidates),
+					"total_candidates", len(finalCandidates),
+					"min_price", minPrice,
+				)
+				finalCandidates = cheapestCandidates
+			}
+		}
 	}
 
 	// 3. Score Yunwu nodes:

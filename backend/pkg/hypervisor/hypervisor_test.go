@@ -436,12 +436,16 @@ func TestYunwuHypervisorDispatch(t *testing.T) {
 	store := newTestStorage(t)
 
 	// Create a Yunwu account in DB
+	grp, err := store.DB().Group.Create().SetName("test-grp-dispatch").Save(ctx)
+	require.NoError(t, err)
+
 	acc, err := store.DB().Account.Create().
 		SetName("yunwu-node-1").
 		SetPlatform("yunwu").
 		SetType("api_key").
 		SetStatus("active").
 		SetCredentials(map[string]any{"api_key": "sk-yunwu-test-key", "base_url": "https://api.openlux.ai/v1"}).
+		AddGroups(grp).
 		Save(ctx)
 	require.NoError(t, err)
 	_ = acc

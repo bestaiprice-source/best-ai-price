@@ -199,3 +199,73 @@ func TestRebindingManagerFailureHandling(t *testing.T) {
 	require.NoError(t, err)
 	assert.GreaterOrEqual(t, count, int64(1))
 }
+
+func TestYunwuSchedulerCheapestFirstRouting(t *testing.T) {
+	sch := NewYunwuScheduler(false)
+	ctx := context.Background()
+
+	nodeCheap := health.ExecutionNode{NodeID: "node-cheap", State: "healthy"}
+	nodeExpensive := health.ExecutionNode{NodeID: "node-expensive", State: "healthy"}
+	nodes := []health.ExecutionNode{nodeCheap, nodeExpensive}
+
+	prices := map[string]float64{
+		"node-cheap":     0.05,
+		"node-expensive": 0.15,
+	}
+
+	// 1. Both nodes healthy -> cheapest node selected
+	selected, err := sch.SelectNode(ctx, nodes, nil, nil, 1, "", "NORMAL", prices)
+	require.NoError(t, err)
+	assert.Equal(t, "node-cheap", selected.NodeID)
+
+	// 2. Even if expensive node was previously leased, cheapest node is preferred
+	selected, err = sch.SelectNode(ctx, nodes, nil, nil, 1, "node-expensive", "NORMAL", prices)
+	require.NoError(t, err)
+	assert.Equal(t, "node-cheap", selected.NodeID)
+
+	// 3. Cheapest node enters cooldown -> fallback to more expensive node
+	future := time.Now().Add(10 * time.Minute)
+	states := map[string]*health.NodeRuntimeState{
+		"node-cheap": {
+			NodeID:        "node-cheap",
+			CooldownUntil: &future,
+		},
+	}
+	selected, err = sch.SelectNode(ctx, nodes, states, nil, 1, "", "NORMAL", prices)
+	require.NoError(t, err)
+	assert.Equal(t, "node-expensive", selected.NodeID)
+
+	// 4. Cooldown expires -> cheapest node prioritized again
+	past := time.Now().Add(-1 * time.Minute)
+	states["node-cheap"].CooldownUntil = &past
+	selected, err = sch.SelectNode(ctx, nodes, states, nil, 1, "", "NORMAL", prices)
+	require.NoError(t, err)
+	assert.Equal(t, "node-cheap", selected.NodeID)
+
+	// 5. Equal price tier -> balances traffic based on UsedTokens
+	nodeCheap1 := health.ExecutionNode{NodeID: "cheap-1", State: "healthy"}
+	nodeCheap2 := health.ExecutionNode{NodeID: "cheap-2", State: "healthy"}
+	equalPrices := map[string]float64{
+		"cheap-1": 0.05,
+		"cheap-2": 0.05,
+	}
+	equalStates := map[string]*health.NodeRuntimeState{
+		"cheap-1": {NodeID: "cheap-1", UsedTokens: 500000}, // penalty applies
+		"cheap-2": {NodeID: "cheap-2", UsedTokens: 0},
+	}
+	selected, err = sch.SelectNode(ctx, []health.ExecutionNode{nodeCheap1, nodeCheap2}, equalStates, nil, 1, "", "NORMAL", equalPrices)
+	require.NoError(t, err)
+	assert.Equal(t, "cheap-2", selected.NodeID)
+
+	// 6. Rebinding with prices: failed cheap node rebinds to expensive fallback
+	store := setupTestYunwuStore(t)
+	rm := NewYunwuRebindingManager(store)
+	_ = rm.nm.SaveNode(ctx, &nodeCheap)
+	_ = rm.nm.SaveNode(ctx, &nodeExpensive)
+
+	rebound, err := rm.HandleYunwuFailure(ctx, "sess-rebind-price", "node-cheap", errors.New("500 internal server error"), nodes, 1, nil, "NORMAL", prices)
+	require.NoError(t, err)
+	require.NotNil(t, rebound)
+	assert.Equal(t, "node-expensive", rebound.NodeID)
+}
+

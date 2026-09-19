@@ -94,6 +94,9 @@ func TestConcurrentHandleRequestYunwuReservations(t *testing.T) {
 	store := newTestStorage(t)
 	ctx := context.Background()
 
+	grp, err := store.DB().Group.Create().SetName("test-grp-conc").Save(ctx)
+	require.NoError(t, err)
+
 	node, err := store.DB().Account.Create().
 		SetName("yunwu-node-conc").
 		SetPlatform("yunwu").
@@ -101,6 +104,7 @@ func TestConcurrentHandleRequestYunwuReservations(t *testing.T) {
 		SetStatus("active").
 		SetSchedulable(true).
 		SetCredentials(map[string]any{"api_key": "sk-yunwu-test"}).
+		AddGroups(grp).
 		Save(ctx)
 	require.NoError(t, err)
 

@@ -48,6 +48,7 @@ func (rm *YunwuRebindingManager) HandleYunwuFailure(
 	userPriority int,
 	credits map[string]float64,
 	systemState string,
+	prices ...map[string]float64,
 ) (*health.ExecutionNode, error) {
 	slog.Warn("[YunwuRebinding] Handling Yunwu channel failure",
 		"session_id", sessionID,
@@ -146,7 +147,7 @@ func (rm *YunwuRebindingManager) HandleYunwuFailure(
 		systemState = "NORMAL"
 	}
 
-	selected, selectErr := sch.SelectNode(ctx, candidates, nodeStates, credits, userPriority, "", systemState)
+	selected, selectErr := sch.SelectNode(ctx, candidates, nodeStates, credits, userPriority, "", systemState, prices...)
 	if selectErr != nil {
 		slog.Error("[YunwuRebinding] Yunwu scheduler selection failed during rebinding", "error", selectErr)
 		return nil, ErrYunwuRebindingExhausted

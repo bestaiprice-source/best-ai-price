@@ -74,6 +74,9 @@ func TestYunwuEngineAccountIsolation(t *testing.T) {
 		Save(ctx)
 	require.NoError(t, err)
 
+	grp, err := store.DB().Group.Create().SetName("test-grp-isolation").Save(ctx)
+	require.NoError(t, err)
+
 	// Create a Yunwu account (platform = yunwu)
 	ywAcc, err := store.DB().Account.Create().
 		SetName("yunwu-node-2").
@@ -82,6 +85,7 @@ func TestYunwuEngineAccountIsolation(t *testing.T) {
 		SetStatus("active").
 		SetSchedulable(true).
 		SetCredentials(map[string]any{"api_key": "sk-yunwu-test"}).
+		AddGroups(grp).
 		Save(ctx)
 	require.NoError(t, err)
 

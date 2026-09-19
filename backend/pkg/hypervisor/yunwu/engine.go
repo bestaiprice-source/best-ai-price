@@ -264,6 +264,7 @@ func (yh *YunwuHypervisor) HandleRequest(
 	requestedFamily := ClassifyModelFamily(requestedModel)
 	var compatibleNodes []health.ExecutionNode
 	familyMatchedNodes := 0
+	nodePrices := make(map[string]float64)
 
 	for _, node := range nodes {
 		if !NodeSupportsFamily(node.Capabilities, requestedFamily) {
@@ -271,7 +272,7 @@ func (yh *YunwuHypervisor) HandleRequest(
 		}
 		familyMatchedNodes++
 		nodeCopy := node
-		_, _, hasPrice := yh.resolveNodePrice(ctx, &nodeCopy, requestedModel)
+		inPrice, outPrice, hasPrice := yh.resolveNodePrice(ctx, &nodeCopy, requestedModel)
 		if !hasPrice {
 			slog.Debug("[YunwuHypervisor] Candidate node skipped: no pricing found on provider",
 				"node_id", node.NodeID,
@@ -282,6 +283,7 @@ func (yh *YunwuHypervisor) HandleRequest(
 			continue
 		}
 		compatibleNodes = append(compatibleNodes, node)
+		nodePrices[node.NodeID] = inPrice + outPrice
 	}
 
 	if len(compatibleNodes) == 0 {
@@ -334,8 +336,8 @@ func (yh *YunwuHypervisor) HandleRequest(
 		"system_state", systemState,
 	)
 
-	// 5. Select Best Node via YunwuScheduler
-	selectedNode, err := yh.sch.SelectNode(ctx, nodes, states, credits, userPriority, activeLeaseNodeID, systemState)
+	// 5. Select Best Node via YunwuScheduler (prioritizes cheapest price tier with failover)
+	selectedNode, err := yh.sch.SelectNode(ctx, nodes, states, credits, userPriority, activeLeaseNodeID, systemState, nodePrices)
 	if err != nil {
 		slog.Error("[YunwuHypervisor] YunwuScheduler selection failed", "error", err, "total_nodes", len(nodes))
 		return nil, err
@@ -453,7 +455,7 @@ func (yh *YunwuHypervisor) HandleRequest(
 		}
 		_, _ = yh.store.LogEvent(ctx, ownerID, &sess.ID, &selectedNode.NodeID, "RebindingStarted", map[string]any{"reason": execErr.Error(), "pool_type": "yunwu"})
 		observability.Default.Rebinding()
-		reboundNode, rebindErr := yh.rm.HandleYunwuFailure(ctx, sess.ID, selectedNode.NodeID, execErr, nodes, userPriority, credits, systemState)
+		reboundNode, rebindErr := yh.rm.HandleYunwuFailure(ctx, sess.ID, selectedNode.NodeID, execErr, nodes, userPriority, credits, systemState, nodePrices)
 		if rebindErr == nil && reboundNode != nil {
 			slog.Info("[YunwuHypervisor] Rebinding succeeded, retrying",
 				"session_id", sess.ID,
@@ -510,6 +512,9 @@ func (yh *YunwuHypervisor) HandleRequest(
 		state = &health.NodeRuntimeState{NodeID: selectedNode.NodeID}
 	}
 	state.AvgLatencyMs = (state.AvgLatencyMs + latencyMs) / 2
+	if meta != nil {
+		state.UsedTokens += int64(meta.InputTokens + meta.OutputTokens)
+	}
 	_ = yh.nm.SaveNodeRuntimeState(ctx, state)
 
 	// 9. Record usage
