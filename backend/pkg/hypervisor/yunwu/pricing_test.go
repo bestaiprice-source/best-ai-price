@@ -765,4 +765,84 @@ func TestProviderPriceManager_PortdanEndpointSoleSource(t *testing.T) {
 	assert.False(t, unlistedFound, "Models not in Portdan /channels/available must not resolve")
 }
 
+func TestProviderPriceManager_CacheIsolationBetweenProviders(t *testing.T) {
+	t.Setenv("ASH_YUNWU_TEST_MODE", "false")
+	ctx := context.Background()
+
+	// Provider A server: gpt-4o at $0.005 / $0.015
+	serverA := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"data": []map[string]any{
+				{
+					"model_name":       "gpt-4o",
+					"model_ratio":      2.5,
+					"completion_ratio": 3.0,
+				},
+			},
+		})
+	}))
+	defer serverA.Close()
+
+	// Provider B server: gpt-4o at $0.001 / $0.003
+	serverB := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"data": []map[string]any{
+				{
+					"model_name":       "gpt-4o",
+					"model_ratio":      0.5,
+					"completion_ratio": 3.0,
+				},
+			},
+		})
+	}))
+	defer serverB.Close()
+
+	oldAPITop := KnownProviderPricingURLs[ProviderAPITop]
+	oldYuanqiaoyun := KnownProviderPricingURLs[ProviderYuanqiaoyun]
+	KnownProviderPricingURLs[ProviderAPITop] = serverA.URL + "/api/pricing"
+	KnownProviderPricingURLs[ProviderYuanqiaoyun] = serverB.URL + "/api/pricing"
+	defer func() {
+		KnownProviderPricingURLs[ProviderAPITop] = oldAPITop
+		KnownProviderPricingURLs[ProviderYuanqiaoyun] = oldYuanqiaoyun
+	}()
+
+	nodeA := &health.ExecutionNode{
+		NodeID:   "node-server-a",
+		Provider: "api-top",
+	}
+	nodeB := &health.ExecutionNode{
+		NodeID:   "node-server-b",
+		Provider: "yuanqiaoyun",
+	}
+
+	ppm := NewProviderPriceManager(nil, nil, http.DefaultClient)
+
+	// 1. Resolve price on Node A -> fetches from serverA
+	inA, outA, foundA := ppm.ResolveNodePrice(ctx, nodeA, "gpt-4o")
+	require.True(t, foundA)
+	assert.InDelta(t, 0.005, inA, 0.0001)
+	assert.InDelta(t, 0.015, outA, 0.0001)
+
+	// 2. Resolve price on Node B -> fetches from serverB (NOT polluted by Node A's cache!)
+	inB, outB, foundB := ppm.ResolveNodePrice(ctx, nodeB, "gpt-4o")
+	require.True(t, foundB)
+	assert.InDelta(t, 0.001, inB, 0.0001)
+	assert.InDelta(t, 0.003, outB, 0.0001)
+
+	// 3. Query Node A again -> served from its own isolated cache
+	inA2, outA2, foundA2 := ppm.ResolveNodePrice(ctx, nodeA, "gpt-4o")
+	require.True(t, foundA2)
+	assert.InDelta(t, 0.005, inA2, 0.0001)
+	assert.InDelta(t, 0.015, outA2, 0.0001)
+
+	// 4. Query Node B again -> served from its own isolated cache
+	inB2, outB2, foundB2 := ppm.ResolveNodePrice(ctx, nodeB, "gpt-4o")
+	require.True(t, foundB2)
+	assert.InDelta(t, 0.001, inB2, 0.0001)
+	assert.InDelta(t, 0.003, outB2, 0.0001)
+}
+
+
 

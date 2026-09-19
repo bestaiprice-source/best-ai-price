@@ -321,23 +321,16 @@ func (ppm *ProviderPriceManager) ResolveNodePrice(ctx context.Context, node *hea
 		return 0, 0, false
 	}
 
-	// 1. Check in-memory cached / manual provider prices first
+	// 1. Check in-memory cached prices for this specific node first
 	ppm.mu.RLock()
-	if prices, ok := ppm.cache[canonicalProv]; ok {
-		exp, hasExp := ppm.cacheExpiry[canonicalProv]
-		if !hasExp || time.Now().Before(exp) {
-			if p, found := ppm.lookupModelInPrices(prices, model); found {
-				ppm.mu.RUnlock()
-				return p.InputPricePer1k, p.OutputPricePer1k, true
-			}
-		}
-	}
-	if prices, ok := ppm.cache[node.NodeID]; ok {
-		exp, hasExp := ppm.cacheExpiry[node.NodeID]
-		if !hasExp || time.Now().Before(exp) {
-			if p, found := ppm.lookupModelInPrices(prices, model); found {
-				ppm.mu.RUnlock()
-				return p.InputPricePer1k, p.OutputPricePer1k, true
+	if node.NodeID != "" {
+		if prices, ok := ppm.cache[node.NodeID]; ok {
+			exp, hasExp := ppm.cacheExpiry[node.NodeID]
+			if !hasExp || time.Now().Before(exp) {
+				if p, found := ppm.lookupModelInPrices(prices, model); found {
+					ppm.mu.RUnlock()
+					return p.InputPricePer1k, p.OutputPricePer1k, true
+				}
 			}
 		}
 	}
@@ -425,14 +418,20 @@ func (ppm *ProviderPriceManager) ResolveNodePrice(ctx context.Context, node *hea
 		}
 		ppm.mu.RUnlock()
 
-		// Fetch fresh prices and store in 30-minute cache
+		// Fetch fresh prices and store in 30-minute cache strictly per endpoint and node
 		fetchedPrices, err := ppm.fetchProviderPrices(ctx, pricingURL, apiKey)
 		if err == nil && fetchedPrices != nil {
 			ppm.mu.Lock()
 			ppm.cache[pricingURL] = fetchedPrices
 			ppm.cacheExpiry[pricingURL] = time.Now().Add(DefaultPricingCacheTTL)
-			ppm.cache[canonicalProv] = fetchedPrices
-			ppm.cacheExpiry[canonicalProv] = time.Now().Add(DefaultPricingCacheTTL)
+			if node.NodeID != "" {
+				ppm.cache[node.NodeID] = fetchedPrices
+				ppm.cacheExpiry[node.NodeID] = time.Now().Add(DefaultPricingCacheTTL)
+			}
+			if pricingURL == KnownProviderPricingURLs[canonicalProv] {
+				ppm.cache[canonicalProv] = fetchedPrices
+				ppm.cacheExpiry[canonicalProv] = time.Now().Add(DefaultPricingCacheTTL)
+			}
 			delete(ppm.noPriceUntil, negKey)
 			ppm.mu.Unlock()
 
@@ -454,8 +453,20 @@ func (ppm *ProviderPriceManager) ResolveNodePrice(ctx context.Context, node *hea
 			ppm.mu.RUnlock()
 		}
 
-		return 0, 0, false
 	}
+
+	// 4. Fallback to manually seeded provider prices (e.g. SetProviderPrices in unit tests)
+	ppm.mu.RLock()
+	if prices, ok := ppm.cache[canonicalProv]; ok {
+		exp, hasExp := ppm.cacheExpiry[canonicalProv]
+		if !hasExp || time.Now().Before(exp) {
+			if p, found := ppm.lookupModelInPrices(prices, model); found {
+				ppm.mu.RUnlock()
+				return p.InputPricePer1k, p.OutputPricePer1k, true
+			}
+		}
+	}
+	ppm.mu.RUnlock()
 
 	return 0, 0, false
 }
