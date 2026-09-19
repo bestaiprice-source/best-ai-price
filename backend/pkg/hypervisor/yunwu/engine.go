@@ -343,15 +343,15 @@ func (yh *YunwuHypervisor) HandleRequest(
 		return nil, err
 	}
 	media := classifyMediaRequest(ctx, requestedModel, reqPayload)
-	inputPrice, outputPrice, hasPrice := yh.resolveNodePrice(ctx, selectedNode, requestedModel)
-	if !hasPrice {
+	admittedInputPrice, admittedOutputPrice, hasAdmittedPrice := yh.resolveNodePrice(ctx, selectedNode, requestedModel)
+	if !hasAdmittedPrice {
 		return nil, ErrNoPricingAvailable
 	}
 	estimatedMicroUSD := int64(0)
 	if media.Kind != "" {
 		estimatedMicroUSD, _ = yh.resolveMediaPrice(ctx, selectedNode.NodeID, requestedModel, media)
 	} else {
-		estimatedMicroUSD = estimateRequestMicroUSD(reqPayload, inputPrice, outputPrice)
+		estimatedMicroUSD = estimateRequestMicroUSD(reqPayload, admittedInputPrice, admittedOutputPrice)
 	}
 	// Even non-billable control-plane calls atomically validate that the chosen
 	// node still has allocatable balance. The 1 micro-USD hold is refunded.
@@ -529,6 +529,10 @@ func (yh *YunwuHypervisor) HandleRequest(
 		}
 
 		inputPrice, outputPrice, hasPrice := yh.resolveNodePrice(ctx, selectedNode, modelName)
+		if !hasPrice && hasAdmittedPrice {
+			// Fallback to pre-admission pricing resolved when node was selected
+			inputPrice, outputPrice, hasPrice = admittedInputPrice, admittedOutputPrice, true
+		}
 		if !hasPrice {
 			slog.Warn("[YunwuHypervisor] Warning: price not found after execution, skipping user charge",
 				"node_id", selectedNode.NodeID,
@@ -778,7 +782,23 @@ func (yh *YunwuHypervisor) liveMaxMinutes(ctx context.Context, nodeID string) in
 }
 
 func CalculateBilledMicroUSD(inputTokens, outputTokens int64, inputPriceUSDPer1K, outputPriceUSDPer1K float64) int64 {
-	return int64(math.Ceil(float64(inputTokens)*inputPriceUSDPer1K*1000 + float64(outputTokens)*outputPriceUSDPer1K*1000))
+	if inputTokens < 0 {
+		inputTokens = 0
+	}
+	if outputTokens < 0 {
+		outputTokens = 0
+	}
+	if inputPriceUSDPer1K < 0 || math.IsNaN(inputPriceUSDPer1K) || math.IsInf(inputPriceUSDPer1K, 0) {
+		inputPriceUSDPer1K = 0
+	}
+	if outputPriceUSDPer1K < 0 || math.IsNaN(outputPriceUSDPer1K) || math.IsInf(outputPriceUSDPer1K, 0) {
+		outputPriceUSDPer1K = 0
+	}
+	cost := float64(inputTokens)*inputPriceUSDPer1K*1000 + float64(outputTokens)*outputPriceUSDPer1K*1000
+	if cost <= 0 || math.IsNaN(cost) || math.IsInf(cost, 0) {
+		return 0
+	}
+	return int64(math.Ceil(cost))
 }
 
 func estimateRequestMicroUSD(payload []byte, inputPriceUSDPer1K, outputPriceUSDPer1K float64) int64 {

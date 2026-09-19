@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/url"
 	"os"
@@ -232,6 +233,13 @@ func (ppm *ProviderPriceManager) fetchProviderPrices(ctx context.Context, endpoi
 					outputPrice = item.ModelRatio * compRatio * baseRatePer1k
 				}
 
+				if inputPrice < 0 || math.IsNaN(inputPrice) || math.IsInf(inputPrice, 0) {
+					inputPrice = 0
+				}
+				if outputPrice < 0 || math.IsNaN(outputPrice) || math.IsInf(outputPrice, 0) {
+					outputPrice = 0
+				}
+
 				prices[k] = ProviderModelPrice{
 					InputPricePer1k:  inputPrice,
 					OutputPricePer1k: outputPrice,
@@ -278,6 +286,12 @@ func (ppm *ProviderPriceManager) fetchProviderPrices(ctx context.Context, endpoi
 						}
 						if outPrice > 0 && outPrice < 0.0001 {
 							outPrice *= 1000
+						}
+						if inPrice < 0 || math.IsNaN(inPrice) || math.IsInf(inPrice, 0) {
+							inPrice = 0
+						}
+						if outPrice < 0 || math.IsNaN(outPrice) || math.IsInf(outPrice, 0) {
+							outPrice = 0
 						}
 						prices[k] = ProviderModelPrice{
 							InputPricePer1k:  inPrice,

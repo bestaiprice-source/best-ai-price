@@ -76,6 +76,10 @@ Welcome to **sub2api** and the **AI Session Hypervisor (ASH / Yunwu Engine)** re
     - For Portdan, `GET /api/v1/channels/available` with Bearer auth is the SOLE pricing truth; static table fallbacks and generic benchmark prices are disabled.
     - 30-Minute Pricing Cache with Strict Provider Isolation: Upstream pricing tables are cached in-memory with a 30-minute expiration (`DefaultPricingCacheTTL = 30 * time.Minute`), keyed strictly by `node.NodeID` and endpoint `pricingURL` (e.g. `https://bestaiprice.com/api/pricing`, `https://api.openlux.ai/api/pricing`). This ensures prices from different upstream providers or custom aggregator URLs are completely isolated and never cross-contaminate. `singleflight` deduplication prevents parallel requests from hammering upstream endpoints.
     - Graceful Error Fallback: Network errors, timeouts, or 5xx/429 responses from pricing endpoints do NOT poison nodes with artificial negative cooldowns. Expired cached pricing is retained as fallback if available, or the node is safely skipped without long-term negative lockout.
+    - Pricing Security Guards:
+      - Rigorous sanitization against negative, `NaN`, and `Inf` price injections in both One-API and sub2api parsers.
+      - Mathematical guard in `CalculateBilledMicroUSD`: enforces non-negative inputs and ceiling rounding to microUSD, preventing integer truncation errors or negative balance deductions.
+      - Pre-Admission Price Lock: if a transient lookup failure occurs post-execution, the hypervisor falls back to the pre-admission pricing verified at session admission, completely eliminating free-generation loopholes.
     - Formats supported:
       - One-API / New-API format: `{"data": [{"model_name", "model_ratio", "model_price", "completion_ratio"}]}` (`api.openlux.ai`, `api-top.com`, `yuanqiaoyun.com`, or `<baseURL>/api/pricing`).
       - sub2api format: `[{"platforms": [{"supported_models": [{"name", "pricing": {"input_price", "output_price"}}]}]}]` (`portdan.com/api/v1/channels/available`), with automatic per-token to per-1k normalization.
