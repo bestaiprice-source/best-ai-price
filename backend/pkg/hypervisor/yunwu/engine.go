@@ -1064,7 +1064,12 @@ func (yh *YunwuHypervisor) getAllYunwuNodes(ctx context.Context) ([]health.Execu
 
 	if yh.store != nil && yh.store.DB() != nil {
 		dbAccounts, _ = yh.store.DB().Account.Query().
-			Where(account.PlatformEqualFold("yunwu"), account.Status("active"), account.Schedulable(true)).
+			Where(
+				account.PlatformEqualFold("yunwu"),
+				account.Status("active"),
+				account.Schedulable(true),
+				account.HasAccountGroups(),
+			).
 			All(ctx)
 	}
 

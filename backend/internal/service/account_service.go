@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
@@ -10,8 +11,9 @@ import (
 )
 
 var (
-	ErrAccountNotFound = infraerrors.NotFound("ACCOUNT_NOT_FOUND", "account not found")
-	ErrAccountNilInput = infraerrors.BadRequest("ACCOUNT_NIL_INPUT", "account input cannot be nil")
+	ErrAccountNotFound           = infraerrors.NotFound("ACCOUNT_NOT_FOUND", "account not found")
+	ErrAccountNilInput           = infraerrors.BadRequest("ACCOUNT_NIL_INPUT", "account input cannot be nil")
+	ErrYunwuAccountGroupRequired = infraerrors.BadRequest("ACCOUNT_GROUP_REQUIRED", "unofficial provider (yunwu) accounts must belong to at least one group")
 )
 
 const AccountListGroupUngrouped int64 = -1
@@ -142,6 +144,11 @@ func NewAccountService(accountRepo AccountRepository, groupRepo GroupRepository)
 
 // Create 创建账号
 func (s *AccountService) Create(ctx context.Context, req CreateAccountRequest) (*Account, error) {
+	// 验证非官方节点（yunwu）必须至少属于一个分组
+	if strings.EqualFold(req.Platform, "yunwu") && len(req.GroupIDs) == 0 {
+		return nil, ErrYunwuAccountGroupRequired
+	}
+
 	// 验证分组是否存在（如果指定了分组）
 	if len(req.GroupIDs) > 0 {
 		if err := s.validateGroupIDsExist(ctx, req.GroupIDs); err != nil {
@@ -262,6 +269,11 @@ func (s *AccountService) Update(ctx context.Context, id int64, req UpdateAccount
 	}
 	if req.AutoPauseOnExpired != nil {
 		account.AutoPauseOnExpired = *req.AutoPauseOnExpired
+	}
+
+	// 验证非官方节点（yunwu）必须至少属于一个分组
+	if strings.EqualFold(account.Platform, "yunwu") && req.GroupIDs != nil && len(*req.GroupIDs) == 0 {
+		return nil, ErrYunwuAccountGroupRequired
 	}
 
 	// 先验证分组是否存在（在任何写操作之前）

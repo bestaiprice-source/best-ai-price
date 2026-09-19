@@ -22,6 +22,7 @@ import (
 
 const (
 	DefaultNoPriceCooldown = 10 * time.Minute
+	DefaultPricingCacheTTL = 30 * time.Minute
 )
 
 var (
@@ -74,6 +75,7 @@ type ProviderPriceManager struct {
 
 	mu           sync.RWMutex
 	cache        map[string]map[string]ProviderModelPrice
+	cacheExpiry  map[string]time.Time
 	noPriceUntil map[string]time.Time
 	aliases      map[string]string
 }
@@ -87,6 +89,7 @@ func NewProviderPriceManager(store *storage.Storage, decryptor credentials.Ciphe
 		store:        store,
 		decryptor:    decryptor,
 		cache:        make(map[string]map[string]ProviderModelPrice),
+		cacheExpiry:  make(map[string]time.Time),
 		noPriceUntil: make(map[string]time.Time),
 		aliases: map[string]string{
 			"gemini-3-pro":               "gemini-3-pro-preview",
@@ -110,6 +113,7 @@ func (ppm *ProviderPriceManager) SetProviderPrices(providerOrKey string, prices 
 	defer ppm.mu.Unlock()
 	key := strings.ToLower(strings.TrimSpace(providerOrKey))
 	ppm.cache[key] = prices
+	ppm.cacheExpiry[key] = time.Now().Add(DefaultPricingCacheTTL)
 }
 
 // SetNoPriceCooldown sets 10-minute (or custom) cooldown for a node/provider and model
@@ -302,19 +306,39 @@ func (ppm *ProviderPriceManager) ResolveNodePrice(ctx context.Context, node *hea
 		return 0, 0, false
 	}
 
-	// 1. Check in-memory cached / manual provider prices first
 	canonicalProv := CanonicalProvider(node.Provider)
+	normModel := strings.ToLower(strings.TrimSpace(model))
+	negKey := fmt.Sprintf("%s:%s", node.NodeID, normModel)
+	if node.NodeID == "" {
+		negKey = fmt.Sprintf("%s:%s", canonicalProv, normModel)
+	}
+
+	// 0. Check cooldown for negative hasPrice = false status (if explicitly configured)
+	ppm.mu.RLock()
+	until, hasUntil := ppm.noPriceUntil[negKey]
+	ppm.mu.RUnlock()
+	if hasUntil && time.Now().Before(until) {
+		return 0, 0, false
+	}
+
+	// 1. Check in-memory cached / manual provider prices first
 	ppm.mu.RLock()
 	if prices, ok := ppm.cache[canonicalProv]; ok {
-		if p, found := ppm.lookupModelInPrices(prices, model); found {
-			ppm.mu.RUnlock()
-			return p.InputPricePer1k, p.OutputPricePer1k, true
+		exp, hasExp := ppm.cacheExpiry[canonicalProv]
+		if !hasExp || time.Now().Before(exp) {
+			if p, found := ppm.lookupModelInPrices(prices, model); found {
+				ppm.mu.RUnlock()
+				return p.InputPricePer1k, p.OutputPricePer1k, true
+			}
 		}
 	}
 	if prices, ok := ppm.cache[node.NodeID]; ok {
-		if p, found := ppm.lookupModelInPrices(prices, model); found {
-			ppm.mu.RUnlock()
-			return p.InputPricePer1k, p.OutputPricePer1k, true
+		exp, hasExp := ppm.cacheExpiry[node.NodeID]
+		if !hasExp || time.Now().Before(exp) {
+			if p, found := ppm.lookupModelInPrices(prices, model); found {
+				ppm.mu.RUnlock()
+				return p.InputPricePer1k, p.OutputPricePer1k, true
+			}
 		}
 	}
 	ppm.mu.RUnlock()
@@ -384,39 +408,52 @@ func (ppm *ProviderPriceManager) ResolveNodePrice(ctx context.Context, node *hea
 		}
 	}
 
-	// 3. Check 10-minute cooldown for negative hasPrice = false status
-	normModel := strings.ToLower(strings.TrimSpace(model))
-	negKey := fmt.Sprintf("%s:%s", node.NodeID, normModel)
-	if node.NodeID == "" {
-		negKey = fmt.Sprintf("%s:%s", canonicalProv, normModel)
-	}
-
-	ppm.mu.RLock()
-	until, hasUntil := ppm.noPriceUntil[negKey]
-	ppm.mu.RUnlock()
-	if hasUntil && time.Now().Before(until) {
-		return 0, 0, false
-	}
-
-	// 4. Resolve pricing endpoint for provider
+	// 3. Resolve pricing endpoint for provider
 	pricingURL := PricingURLForProvider(canonicalProv, baseURL)
 	if pricingURL != "" {
-		// Fetch fresh on demand (no pricing caching). singleflight prevents parallel duplicate network calls.
-		fetchedPrices, err := ppm.fetchProviderPrices(ctx, pricingURL, apiKey)
-		if err == nil && fetchedPrices != nil {
-			if p, found := ppm.lookupModelInPrices(fetchedPrices, model); found {
-				// Success: clear any negative cooldown and return price
-				ppm.mu.Lock()
-				delete(ppm.noPriceUntil, negKey)
-				ppm.mu.Unlock()
-				return p.InputPricePer1k, p.OutputPricePer1k, true
+		// Check URL cache if valid (within 30-minute TTL)
+		ppm.mu.RLock()
+		if prices, ok := ppm.cache[pricingURL]; ok {
+			exp, hasExp := ppm.cacheExpiry[pricingURL]
+			if !hasExp || time.Now().Before(exp) {
+				ppm.mu.RUnlock()
+				if p, found := ppm.lookupModelInPrices(prices, model); found {
+					return p.InputPricePer1k, p.OutputPricePer1k, true
+				}
+				return 0, 0, false
 			}
 		}
+		ppm.mu.RUnlock()
 
-		// Price not found or network fetch failed: issue hasPrice = false for 10 minutes
-		ppm.mu.Lock()
-		ppm.noPriceUntil[negKey] = time.Now().Add(DefaultNoPriceCooldown)
-		ppm.mu.Unlock()
+		// Fetch fresh prices and store in 30-minute cache
+		fetchedPrices, err := ppm.fetchProviderPrices(ctx, pricingURL, apiKey)
+		if err == nil && fetchedPrices != nil {
+			ppm.mu.Lock()
+			ppm.cache[pricingURL] = fetchedPrices
+			ppm.cacheExpiry[pricingURL] = time.Now().Add(DefaultPricingCacheTTL)
+			ppm.cache[canonicalProv] = fetchedPrices
+			ppm.cacheExpiry[canonicalProv] = time.Now().Add(DefaultPricingCacheTTL)
+			delete(ppm.noPriceUntil, negKey)
+			ppm.mu.Unlock()
+
+			if p, found := ppm.lookupModelInPrices(fetchedPrices, model); found {
+				return p.InputPricePer1k, p.OutputPricePer1k, true
+			}
+			return 0, 0, false
+		}
+
+		// On network error or fetch failure: do not set an artificial cooldown lock.
+		// If an expired cache exists, gracefully fall back to it.
+		ppm.mu.RLock()
+		if prices, ok := ppm.cache[pricingURL]; ok {
+			ppm.mu.RUnlock()
+			if p, found := ppm.lookupModelInPrices(prices, model); found {
+				return p.InputPricePer1k, p.OutputPricePer1k, true
+			}
+		} else {
+			ppm.mu.RUnlock()
+		}
+
 		return 0, 0, false
 	}
 

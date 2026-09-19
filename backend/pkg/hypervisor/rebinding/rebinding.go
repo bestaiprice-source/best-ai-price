@@ -69,10 +69,13 @@ func (rm *RebindingManager) RebindSession(
 	isUpstreamError := strings.Contains(errMsg, "upstream error status 429") ||
 		strings.Contains(errMsg, "upstream error status 401") ||
 		strings.Contains(errMsg, "upstream error status 403") ||
+		strings.Contains(errMsg, "upstream error status 404") ||
 		strings.Contains(errMsg, "upstream error status 5") ||
 		strings.Contains(errMsg, "rate_limit_error") ||
 		strings.Contains(errMsg, "permission_error") ||
-		strings.Contains(errMsg, "overloaded_error")
+		strings.Contains(errMsg, "overloaded_error") ||
+		strings.Contains(errMsg, "model_not_found") ||
+		strings.Contains(errMsg, "no available channel")
 
 	if isUpstreamError {
 		cooldownUntil := time.Now().Add(10 * time.Minute)

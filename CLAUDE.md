@@ -74,13 +74,20 @@ Welcome to **sub2api** and the **AI Session Hypervisor (ASH / Yunwu Engine)** re
   - `ProviderPriceManager` (`pkg/hypervisor/yunwu/pricing.go`): Manages multi-provider pricing resolution for unofficial nodes:
     - Resolves from DB `ash_vendor_models` for other providers (bypassed for Portdan).
     - For Portdan, `GET /api/v1/channels/available` with Bearer auth is the SOLE pricing truth; static table fallbacks and generic benchmark prices are disabled.
-    - No long-term caching of prices: prices are queried fresh on-demand (with `singleflight` deduplication guarding parallel requests).
-    - Negative status cooldown: if a model has no price on a provider or price check fails, `hasPrice = false` is assigned for strictly 10 minutes (`DefaultNoPriceCooldown = 10 * time.Minute`), preventing upstream endpoint hammering. After 10 minutes, subsequent requests re-query the provider.
+    - 30-Minute Pricing Cache: Upstream pricing tables are cached in-memory with a 30-minute expiration (`DefaultPricingCacheTTL = 30 * time.Minute`), with `singleflight` deduplication guarding parallel requests. This prevents upstream rate limits (429/timeouts) from hammering external APIs while keeping pricing fresh.
+    - Graceful Error Fallback: Network errors, timeouts, or 5xx/429 responses from pricing endpoints do NOT poison nodes with artificial negative cooldowns. Expired cached pricing is retained as fallback if available, or the node is safely skipped without long-term negative lockout.
     - Formats supported:
       - One-API / New-API format: `{"data": [{"model_name", "model_ratio", "model_price", "completion_ratio"}]}` (`api.openlux.ai`, `api-top.com`, `yuanqiaoyun.com`, or `<baseURL>/api/pricing`).
       - sub2api format: `[{"platforms": [{"supported_models": [{"name", "pricing": {"input_price", "output_price"}}]}]}]` (`portdan.com/api/v1/channels/available`), with automatic per-token to per-1k normalization.
-    - Resolves model aliases (e.g., `claude-3-7-sonnet` -> `claude-3-7-sonnet-20250219`, `gemini-3-pro` -> `gemini-3-pro-preview`).
+    - Resolves model aliases (e.g., `claude-3-7-sonnet` -> `claude-3-7-sonnet-20250219`, `gemini-3-pro` -> `gemini-3-pro-preview`, `gemini-3-flash` -> `gemini-3-flash-preview`).
     - Exposes `ResolveNodePrice(ctx, node, model) (in, out, found)` and `SetProviderPrices` for mock testing.
+  - **Mandatory Group Assignment for Unofficial Nodes**:
+    - All unofficial (`yunwu`) nodes MUST be assigned to at least one group.
+    - Enforced at the hypervisor level: `getAllYunwuNodes` applies `account.HasAccountGroups()` to strictly exclude ungrouped unofficial nodes from execution candidate selection.
+    - Enforced at service level: `AccountService.Create` and `AccountService.Update` reject accounts with platform `yunwu` if no groups are specified (`ErrYunwuAccountGroupRequired`).
+  - **Upstream Error Recognition & Failover (`model_not_found` / `no available channel`)**:
+    - `isUpstreamError` in `pkg/hypervisor/rebinding` recognizes `model_not_found`, `no available channel`, and HTTP 404 upstream errors as failover-eligible events.
+    - When a third-party aggregator token lacks channel bindings for a model, the hypervisor places the failing node on cooldown and automatically triggers session rebinding to an alternative compatible node in the pool.
   - `YunwuScheduler`: Tailored node selection for Yunwu execution nodes based on node health, queue depth, latency, and `UsedTokens` organic load balancing penalty (ensuring fair traffic distribution across active channels even when balance APIs are untracked). `YunwuRequireFreshBalance` defaults to `false` so nodes without balance API endpoints are not excluded.
   - `YunwuRebindingManager`: Handles failover and node cooldown transitions specifically for Yunwu provider clusters, enforcing Redis session-scoped distributed lock (`SETNX`) and running `YunwuScheduler` with user priority, credits, and system state during rebinding.
   - `StatsWorker`: Syncs upstream credit balance from `/api/user/self`, `/dashboard/billing/subscription`, and credit grants across One-API/New-API compatible providers. In `/api/user/self`, `data.quota` is parsed directly as the current available balance (avoiding double-subtraction of `used_quota`).
