@@ -467,6 +467,13 @@ func (ppm *ProviderPriceManager) ResolveNodePrice(ctx context.Context, node *hea
 			ppm.mu.RUnlock()
 		}
 
+		// When upstream endpoint returns error (e.g. 401 Unauthorized on Portdan in live mode),
+		// fall back to standard benchmark model prices so requests don't get bricked.
+		if os.Getenv("ASH_YUNWU_TEST_MODE") != "true" && canonicalProv == ProviderPortdan {
+			if in, out, ok := ResolveFallbackModelPrice(model); ok {
+				return in, out, true
+			}
+		}
 	}
 
 	// 4. Fallback to manually seeded provider prices (e.g. SetProviderPrices in unit tests)
@@ -482,5 +489,50 @@ func (ppm *ProviderPriceManager) ResolveNodePrice(ctx context.Context, node *hea
 	}
 	ppm.mu.RUnlock()
 
+	return 0, 0, false
+}
+
+// ResolveFallbackModelPrice returns standard benchmark prices (per 1k tokens) for well-known model families
+// when upstream pricing endpoints are offline or return 401/404 errors.
+func ResolveFallbackModelPrice(model string) (float64, float64, bool) {
+	norm := strings.ToLower(strings.TrimSpace(model))
+	switch {
+	case strings.HasPrefix(norm, "gpt-4o-mini"):
+		return 0.00015, 0.0006, true
+	case strings.HasPrefix(norm, "gpt-4o"):
+		return 0.0025, 0.010, true
+	case strings.HasPrefix(norm, "gpt-4-turbo"), strings.HasPrefix(norm, "gpt-4-0125"), strings.HasPrefix(norm, "gpt-4-1106"):
+		return 0.010, 0.030, true
+	case strings.HasPrefix(norm, "o1-mini"), strings.HasPrefix(norm, "o3-mini"):
+		return 0.0011, 0.0044, true
+	case strings.HasPrefix(norm, "o1"):
+		return 0.015, 0.060, true
+	case strings.HasPrefix(norm, "claude-3-5-sonnet"), strings.HasPrefix(norm, "claude-3-7-sonnet"):
+		return 0.003, 0.015, true
+	case strings.HasPrefix(norm, "claude-3-5-haiku"):
+		return 0.0008, 0.004, true
+	case strings.HasPrefix(norm, "claude-3-opus"):
+		return 0.015, 0.075, true
+	case strings.HasPrefix(norm, "claude-3-haiku"):
+		return 0.00025, 0.00125, true
+	case strings.HasPrefix(norm, "deepseek-chat"):
+		return 0.00014, 0.00028, true
+	case strings.HasPrefix(norm, "deepseek-r1"):
+		return 0.00055, 0.00219, true
+	case strings.HasPrefix(norm, "gemini-2.5-flash"), strings.HasPrefix(norm, "gemini-2.0-flash"):
+		return 0.000075, 0.0003, true
+	case strings.HasPrefix(norm, "gemini-2.5-pro"):
+		return 0.00125, 0.005, true
+	case strings.HasPrefix(norm, "gemini-3-flash"):
+		return 0.0001, 0.0004, true
+	case strings.HasPrefix(norm, "gemini-3-pro"):
+		return 0.0015, 0.006, true
+	case strings.HasPrefix(norm, "gpt-"):
+		return 0.0025, 0.010, true
+	case strings.HasPrefix(norm, "claude-"):
+		return 0.003, 0.015, true
+	case strings.HasPrefix(norm, "gemini-"):
+		return 0.0005, 0.002, true
+	}
 	return 0, 0, false
 }

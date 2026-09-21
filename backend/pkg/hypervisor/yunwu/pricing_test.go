@@ -844,5 +844,44 @@ func TestProviderPriceManager_CacheIsolationBetweenProviders(t *testing.T) {
 	assert.InDelta(t, 0.003, outB2, 0.0001)
 }
 
+func TestProviderPriceManager_PortdanFallbackOn401(t *testing.T) {
+	// Server returns 401 Unauthorized (just like portdan.com when accessed with standard API key)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, `{"error":{"message":"Unauthorized","type":"unauthorized"}}`, http.StatusUnauthorized)
+	}))
+	defer server.Close()
+
+	t.Setenv("ASH_YUNWU_TEST_MODE", "false")
+	KnownProviderPricingURLs[ProviderPortdan] = server.URL + "/api/v1/channels/available"
+	defer func() {
+		KnownProviderPricingURLs[ProviderPortdan] = "https://portdan.com/api/v1/channels/available"
+	}()
+
+	node := &health.ExecutionNode{
+		NodeID:   "portdan-node-401",
+		Provider: "portdan",
+	}
+
+	ppm := NewProviderPriceManager(nil, nil, http.DefaultClient)
+	ctx := context.Background()
+
+	// 1. gpt-4o falls back to standard benchmark price
+	in, out, found := ppm.ResolveNodePrice(ctx, node, "gpt-4o")
+	assert.True(t, found)
+	assert.InDelta(t, 0.0025, in, 0.0001)
+	assert.InDelta(t, 0.010, out, 0.0001)
+
+	// 2. gpt-4o-mini falls back to standard benchmark price
+	inMini, outMini, foundMini := ppm.ResolveNodePrice(ctx, node, "gpt-4o-mini")
+	assert.True(t, foundMini)
+	assert.InDelta(t, 0.00015, inMini, 0.00001)
+	assert.InDelta(t, 0.0006, outMini, 0.00001)
+
+	// 3. Unknown model does not match benchmark fallback
+	_, _, foundUnknown := ppm.ResolveNodePrice(ctx, node, "completely-unknown-custom-model")
+	assert.False(t, foundUnknown)
+}
+
+
 
 
