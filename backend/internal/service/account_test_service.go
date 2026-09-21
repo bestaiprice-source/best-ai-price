@@ -662,6 +662,33 @@ func (s *AccountTestService) TestAccountConnection(c gatewayctx.GatewayContext, 
 		return s.testSoraAccountConnection(c, account)
 	}
 
+	if account.Platform == PlatformYunwu {
+		return s.routeYunwuAccountTest(c, account, modelID, prompt)
+	}
+
+	return s.testClaudeAccountConnection(c, account, modelID)
+}
+
+func (s *AccountTestService) routeYunwuAccountTest(c gatewayctx.GatewayContext, account *Account, modelID string, prompt string) error {
+	families := yunwu.ParseNodeModelFamilies(account.Extra)
+	family := ""
+	if modelID != "" {
+		family = yunwu.ClassifyModelFamily(modelID)
+	} else if len(families) > 0 {
+		if !yunwu.NodeSupportsFamily(families, yunwu.FamilyClaude) && yunwu.NodeSupportsFamily(families, yunwu.FamilyGPT) {
+			family = yunwu.FamilyGPT
+		} else if !yunwu.NodeSupportsFamily(families, yunwu.FamilyClaude) && yunwu.NodeSupportsFamily(families, yunwu.FamilyGemini) {
+			family = yunwu.FamilyGemini
+		} else if yunwu.NodeSupportsFamily(families, yunwu.FamilyGPT) && !yunwu.NodeSupportsFamily(families, yunwu.FamilyClaude) {
+			family = yunwu.FamilyGPT
+		} else if yunwu.NodeSupportsFamily(families, yunwu.FamilyClaude) {
+			family = yunwu.FamilyClaude
+		}
+	}
+
+	if family == yunwu.FamilyGPT || family == yunwu.FamilyGemini {
+		return s.testOpenAIAccountConnection(c, account, modelID, prompt)
+	}
 	return s.testClaudeAccountConnection(c, account, modelID)
 }
 
@@ -790,6 +817,13 @@ func (s *AccountTestService) testClaudeAccountConnection(c gatewayctx.GatewayCon
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		errMsg := fmt.Sprintf("API returned %d: %s", resp.StatusCode, string(body))
+
+		// If this is a Yunwu account and upstream says /v1/messages is not allowed,
+		// it means the node is configured for OpenAI/GPT, not Claude.
+		// Automatically fallback to OpenAI test!
+		if account.Platform == PlatformYunwu && strings.Contains(errMsg, "does not allow /v1/messages dispatch") {
+			return s.testOpenAIAccountConnection(c, account, modelID, "")
+		}
 
 		// 403 表示账号被上游封禁，标记为 error 状态
 		if resp.StatusCode == http.StatusForbidden {
@@ -970,7 +1004,10 @@ func (s *AccountTestService) testOpenAIAccountConnection(c gatewayctx.GatewayCon
 		baseURL := account.GetOpenAIBaseURL()
 		if baseURL == "" {
 			if account.Platform == PlatformYunwu {
-				baseURL = yunwu.DefaultBaseURLForProvider(yunwu.ParseNodeProvider(account.Extra))
+				baseURL = account.GetBaseURL()
+				if baseURL == "" {
+					baseURL = yunwu.DefaultBaseURLForProvider(yunwu.ParseNodeProvider(account.Extra))
+				}
 			} else {
 				baseURL = "https://api.openai.com"
 			}
@@ -979,7 +1016,13 @@ func (s *AccountTestService) testOpenAIAccountConnection(c gatewayctx.GatewayCon
 		if err != nil {
 			return s.sendErrorAndEnd(c, fmt.Sprintf("Invalid base URL: %s", err.Error()))
 		}
-		apiURL = strings.TrimSuffix(normalizedBaseURL, "/") + "/responses"
+		if account.Platform == PlatformYunwu {
+			base := strings.TrimSuffix(normalizedBaseURL, "/")
+			base = strings.TrimSuffix(base, "/v1")
+			apiURL = base + "/v1/chat/completions"
+		} else {
+			apiURL = strings.TrimSuffix(normalizedBaseURL, "/") + "/responses"
+		}
 	} else {
 		return s.sendErrorAndEnd(c, fmt.Sprintf("Unsupported account type: %s", account.Type))
 	}
@@ -991,8 +1034,23 @@ func (s *AccountTestService) testOpenAIAccountConnection(c gatewayctx.GatewayCon
 	c.SetHeader("X-Accel-Buffering", "no")
 	_ = c.Flush()
 
-	// Create OpenAI Responses API payload
-	payload := createOpenAITestPayload(testModelID, isOAuth)
+	// Create OpenAI test payload
+	var payload map[string]any
+	if account.Platform == PlatformYunwu {
+		userPrompt := strings.TrimSpace(prompt)
+		if userPrompt == "" {
+			userPrompt = "hi"
+		}
+		payload = map[string]any{
+			"model": testModelID,
+			"messages": []map[string]any{
+				{"role": "user", "content": userPrompt},
+			},
+			"stream": true,
+		}
+	} else {
+		payload = createOpenAITestPayload(testModelID, isOAuth)
+	}
 	payloadBytes, _ := json.Marshal(payload)
 
 	// Send test_start event
@@ -2323,6 +2381,21 @@ func (s *AccountTestService) processOpenAIStream(c gatewayctx.GatewayContext, bo
 				}
 			}
 			return s.sendErrorAndEnd(c, errorMsg)
+		default:
+			// Standard OpenAI chat/completions stream chunk
+			if choices, ok := data["choices"].([]any); ok && len(choices) > 0 {
+				if choiceMap, ok := choices[0].(map[string]any); ok {
+					if delta, ok := choiceMap["delta"].(map[string]any); ok {
+						if content, ok := delta["content"].(string); ok && content != "" {
+							s.sendEvent(c, TestEvent{Type: "content", Text: content})
+						}
+					}
+					if finishReason, ok := choiceMap["finish_reason"].(string); ok && finishReason != "" {
+						s.sendEvent(c, TestEvent{Type: "test_complete", Success: true})
+						return nil
+					}
+				}
+			}
 		}
 	}
 }

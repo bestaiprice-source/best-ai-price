@@ -237,3 +237,71 @@ func TestAccountTestService_ValidateUpstreamBaseURL_AllowsRealThirdPartyHostsWhe
 		require.Equal(t, raw, normalized)
 	}
 }
+
+func TestAccountTestService_YunwuAccount_OpenAIRoutingAndFallback(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	ctx, recorder := newSoraTestContext()
+
+	// Upstream returns standard OpenAI chat completions stream
+	resp := newJSONResponse(http.StatusOK, "")
+	resp.Body = io.NopCloser(strings.NewReader("data: {\"choices\":[{\"delta\":{\"content\":\"Hello from Portdan\"}}]}\n\ndata: {\"choices\":[{\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n"))
+
+	repo := &openAIAccountTestRepo{}
+	upstream := &queuedHTTPUpstream{responses: []*http.Response{resp}}
+	svc := &AccountTestService{accountRepo: repo, httpUpstream: upstream}
+
+	account := &Account{
+		ID:          99,
+		Platform:    PlatformYunwu,
+		Type:        AccountTypeAPIKey,
+		Concurrency: 1,
+		Credentials: map[string]any{"api_key": "sk-portdan-test", "base_url": "https://portdan.com"},
+		Extra: map[string]any{
+			"provider":                 "portdan",
+			"supported_model_families": []string{"gpt"},
+		},
+	}
+
+	err := svc.routeYunwuAccountTest(gatewayctx.FromGin(ctx), account, "", "")
+	require.NoError(t, err)
+	require.Equal(t, 1, len(upstream.requests))
+	require.Equal(t, "https://portdan.com/v1/chat/completions", upstream.requests[0].URL.String())
+	require.Contains(t, recorder.Body.String(), "Hello from Portdan")
+	require.Contains(t, recorder.Body.String(), "test_complete")
+}
+
+func TestAccountTestService_YunwuClaude403FallbackToOpenAI(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	ctx, recorder := newSoraTestContext()
+
+	// 1. Claude /v1/messages returns 403 "This group does not allow /v1/messages dispatch"
+	claude403Resp := newJSONResponse(http.StatusForbidden, `{"error":{"message":"This group does not allow /v1/messages dispatch","type":"permission_error"}}`)
+
+	// 2. Fallback to /v1/chat/completions succeeds
+	openAIResp := newJSONResponse(http.StatusOK, "")
+	openAIResp.Body = io.NopCloser(strings.NewReader("data: {\"choices\":[{\"delta\":{\"content\":\"Recovered via OpenAI\"}}]}\n\ndata: [DONE]\n\n"))
+
+	repo := &openAIAccountTestRepo{}
+	upstream := &queuedHTTPUpstream{responses: []*http.Response{claude403Resp, openAIResp}}
+	svc := &AccountTestService{accountRepo: repo, httpUpstream: upstream}
+
+	account := &Account{
+		ID:          100,
+		Platform:    PlatformYunwu,
+		Type:        AccountTypeAPIKey,
+		Concurrency: 1,
+		Credentials: map[string]any{"api_key": "sk-portdan-test", "base_url": "https://portdan.com"},
+		Extra: map[string]any{
+			"provider": "portdan",
+		},
+	}
+
+	err := svc.testClaudeAccountConnection(gatewayctx.FromGin(ctx), account, "claude-3-7-sonnet")
+	require.NoError(t, err)
+	require.Equal(t, 2, len(upstream.requests))
+	require.Contains(t, upstream.requests[0].URL.Path, "/v1/messages")
+	require.Contains(t, upstream.requests[1].URL.Path, "/v1/chat/completions")
+	require.Contains(t, recorder.Body.String(), "Recovered via OpenAI")
+	require.Contains(t, recorder.Body.String(), "test_complete")
+}
+
