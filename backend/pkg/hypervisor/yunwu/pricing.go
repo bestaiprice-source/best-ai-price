@@ -42,22 +42,30 @@ type PriceResolver interface {
 	ResolveNodePrice(ctx context.Context, node *health.ExecutionNode, model string) (float64, float64, bool)
 }
 
+const DefaultPortdanPricingURL = "https://bestaiprice.com/gateway/data/providers.json"
+
 var KnownProviderPricingURLs = map[string]string{
 	ProviderOpenLux:     "https://api.openlux.ai/api/pricing",
 	ProviderAPITop:      "https://api-top.com/api/pricing",
 	ProviderYuanqiaoyun: "https://yuanqiaoyun.com/api/pricing",
-	ProviderPortdan:     "https://portdan.com/api/v1/channels/available",
+	ProviderPortdan:     DefaultPortdanPricingURL,
 }
 
 // PricingURLForProvider resolves the public pricing endpoint for a given provider or base URL
 func PricingURLForProvider(provider string, baseURL string) string {
 	prov := CanonicalProvider(provider)
+	if prov == ProviderPortdan {
+		if envURL := strings.TrimSpace(os.Getenv("PORTDAN_PRICING_URL")); envURL != "" {
+			return envURL
+		}
+		if u, ok := KnownProviderPricingURLs[ProviderPortdan]; ok && u != "" {
+			return u
+		}
+		return DefaultPortdanPricingURL
+	}
 	if strings.TrimSpace(baseURL) != "" {
 		parsed, err := url.Parse(strings.TrimRight(strings.TrimSpace(baseURL), "/"))
 		if err == nil && parsed.Scheme != "" && parsed.Host != "" {
-			if prov == ProviderPortdan {
-				return parsed.Scheme + "://" + parsed.Host + "/api/v1/channels/available"
-			}
 			return parsed.Scheme + "://" + parsed.Host + "/api/pricing"
 		}
 	}
@@ -180,7 +188,8 @@ func (ppm *ProviderPriceManager) fetchProviderPrices(ctx context.Context, endpoi
 		if err != nil {
 			return nil, err
 		}
-		if len(token) > 0 && strings.TrimSpace(token[0]) != "" {
+		req.Header.Set("Accept", "application/json")
+		if len(token) > 0 && strings.TrimSpace(token[0]) != "" && !strings.Contains(endpointURL, "providers.json") {
 			req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(token[0]))
 		}
 
@@ -301,6 +310,115 @@ func (ppm *ProviderPriceManager) fetchProviderPrices(ctx context.Context, endpoi
 					}
 				}
 			}
+			if len(prices) > 0 {
+				return prices, nil
+			}
+		}
+
+		// 3. Try BestAIPrice providers.json format: [{"provider_name": "...", "provider_domain": "...", "model_name": "...", "input_price_usd_per_1m": ...}]
+		var providersList []struct {
+			ProviderName        string   `json:"provider_name"`
+			ProviderDomain      string   `json:"provider_domain"`
+			ModelName           string   `json:"model_name"`
+			CanonicalModelID    string   `json:"canonical_model_id"`
+			InputPriceUSDPer1M  *float64 `json:"input_price_usd_per_1m"`
+			OutputPriceUSDPer1M *float64 `json:"output_price_usd_per_1m"`
+			NativePriceUSD      *float64 `json:"native_price_usd"`
+			NativePriceUnit     *string  `json:"native_price_unit"`
+		}
+
+		if err := json.Unmarshal(bodyBytes, &providersList); err == nil && len(providersList) > 0 && (providersList[0].ProviderDomain != "" || providersList[0].ProviderName != "") {
+			prices := make(map[string]ProviderModelPrice)
+			// Pass 1: populate general fallback from all providers in providers.json
+			for _, item := range providersList {
+				var inPrice, outPrice float64
+				if item.InputPriceUSDPer1M != nil {
+					inPrice = *item.InputPriceUSDPer1M / 1000.0 // convert USD/1M tokens to USD/1k tokens
+				}
+				if item.OutputPriceUSDPer1M != nil {
+					outPrice = *item.OutputPriceUSDPer1M / 1000.0 // convert USD/1M tokens to USD/1k tokens
+				}
+				if inPrice == 0 && outPrice == 0 && item.NativePriceUSD != nil {
+					inPrice = *item.NativePriceUSD
+					outPrice = *item.NativePriceUSD
+				}
+				if inPrice < 0 || math.IsNaN(inPrice) || math.IsInf(inPrice, 0) {
+					inPrice = 0
+				}
+				if outPrice < 0 || math.IsNaN(outPrice) || math.IsInf(outPrice, 0) {
+					outPrice = 0
+				}
+
+				mName := strings.ToLower(strings.TrimSpace(item.ModelName))
+				if mName != "" {
+					if _, exists := prices[mName]; !exists {
+						prices[mName] = ProviderModelPrice{
+							InputPricePer1k:  inPrice,
+							OutputPricePer1k: outPrice,
+							Available:        true,
+						}
+					}
+				}
+				if item.CanonicalModelID != "" {
+					parts := strings.Split(item.CanonicalModelID, "/")
+					shortID := strings.ToLower(strings.TrimSpace(parts[len(parts)-1]))
+					if shortID != "" {
+						if _, exists := prices[shortID]; !exists {
+							prices[shortID] = ProviderModelPrice{
+								InputPricePer1k:  inPrice,
+								OutputPricePer1k: outPrice,
+								Available:        true,
+							}
+						}
+					}
+				}
+			}
+
+			// Pass 2: overwrite with Portdan-specific pricing where available
+			for _, item := range providersList {
+				pDomain := strings.ToLower(strings.TrimSpace(item.ProviderDomain))
+				pName := strings.ToLower(strings.TrimSpace(item.ProviderName))
+				if strings.Contains(pDomain, "portdan") || strings.Contains(pName, "portdan") {
+					var inPrice, outPrice float64
+					if item.InputPriceUSDPer1M != nil {
+						inPrice = *item.InputPriceUSDPer1M / 1000.0
+					}
+					if item.OutputPriceUSDPer1M != nil {
+						outPrice = *item.OutputPriceUSDPer1M / 1000.0
+					}
+					if inPrice == 0 && outPrice == 0 && item.NativePriceUSD != nil {
+						inPrice = *item.NativePriceUSD
+						outPrice = *item.NativePriceUSD
+					}
+					if inPrice < 0 || math.IsNaN(inPrice) || math.IsInf(inPrice, 0) {
+						inPrice = 0
+					}
+					if outPrice < 0 || math.IsNaN(outPrice) || math.IsInf(outPrice, 0) {
+						outPrice = 0
+					}
+
+					mName := strings.ToLower(strings.TrimSpace(item.ModelName))
+					if mName != "" {
+						prices[mName] = ProviderModelPrice{
+							InputPricePer1k:  inPrice,
+							OutputPricePer1k: outPrice,
+							Available:        true,
+						}
+					}
+					if item.CanonicalModelID != "" {
+						parts := strings.Split(item.CanonicalModelID, "/")
+						shortID := strings.ToLower(strings.TrimSpace(parts[len(parts)-1]))
+						if shortID != "" {
+							prices[shortID] = ProviderModelPrice{
+								InputPricePer1k:  inPrice,
+								OutputPricePer1k: outPrice,
+								Available:        true,
+							}
+						}
+					}
+				}
+			}
+
 			if len(prices) > 0 {
 				return prices, nil
 			}

@@ -41,12 +41,12 @@ func TestPricingURLForProvider(t *testing.T) {
 		{
 			provider: "portdan",
 			baseURL:  "",
-			expected: "https://portdan.com/api/v1/channels/available",
+			expected: DefaultPortdanPricingURL,
 		},
 		{
 			provider: "portdan",
 			baseURL:  "https://custom-portdan.com/v1",
-			expected: "https://custom-portdan.com/api/v1/channels/available",
+			expected: DefaultPortdanPricingURL,
 		},
 		{
 			provider: "custom_vendor",
@@ -843,6 +843,93 @@ func TestProviderPriceManager_CacheIsolationBetweenProviders(t *testing.T) {
 	assert.InDelta(t, 0.001, inB2, 0.0001)
 	assert.InDelta(t, 0.003, outB2, 0.0001)
 }
+
+func TestProviderPriceManager_PortdanProvidersJSON(t *testing.T) {
+	mockProvidersData := []map[string]any{
+		{
+			"provider_name":             "Portdan AI",
+			"provider_domain":           "portdan.com",
+			"model_name":                "gpt-5.6-sol",
+			"canonical_model_id":        "openai/gpt-5.6-sol",
+			"input_price_usd_per_1m":    0.075,
+			"output_price_usd_per_1m":   0.45,
+		},
+		{
+			"provider_name":             "Portdan AI",
+			"provider_domain":           "portdan.com",
+			"model_name":                "gpt-5.6-luna",
+			"canonical_model_id":        "openai/gpt-5.6-luna",
+			"input_price_usd_per_1m":    0.003,
+			"output_price_usd_per_1m":   0.018,
+		},
+		{
+			"provider_name":             "Portdan AI",
+			"provider_domain":           "portdan.com",
+			"model_name":                "claude-sonnet-4-6",
+			"canonical_model_id":        "anthropic/claude-sonnet-4-6",
+			"input_price_usd_per_1m":    0.45,
+			"output_price_usd_per_1m":   2.25,
+		},
+		{
+			"provider_name":             "ByteCat",
+			"provider_domain":           "bytecatcode.org",
+			"model_name":                "gpt-5.5",
+			"canonical_model_id":        "openai/gpt-5.5",
+			"input_price_usd_per_1m":    0.50,
+			"output_price_usd_per_1m":   3.00,
+		},
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(mockProvidersData)
+	}))
+	defer server.Close()
+
+	t.Setenv("ASH_YUNWU_TEST_MODE", "false")
+	oldURL := KnownProviderPricingURLs[ProviderPortdan]
+	KnownProviderPricingURLs[ProviderPortdan] = server.URL + "/gateway/data/providers.json"
+	defer func() {
+		KnownProviderPricingURLs[ProviderPortdan] = oldURL
+	}()
+
+	node := &health.ExecutionNode{
+		NodeID:   "portdan-node-live",
+		Provider: "portdan",
+	}
+
+	ppm := NewProviderPriceManager(nil, nil, http.DefaultClient)
+	ctx := context.Background()
+
+	// 1. gpt-5.6-sol resolves exact Portdan price
+	in, out, found := ppm.ResolveNodePrice(ctx, node, "gpt-5.6-sol")
+	require.True(t, found)
+	assert.InDelta(t, 0.000075, in, 0.000001)
+	assert.InDelta(t, 0.00045, out, 0.000001)
+
+	// 2. gpt-5.6-luna resolves exact Portdan price
+	inLuna, outLuna, foundLuna := ppm.ResolveNodePrice(ctx, node, "gpt-5.6-luna")
+	require.True(t, foundLuna)
+	assert.InDelta(t, 0.000003, inLuna, 0.0000001)
+	assert.InDelta(t, 0.000018, outLuna, 0.0000001)
+
+	// 3. claude-sonnet-4-6 resolves exact Portdan price
+	inClaude, outClaude, foundClaude := ppm.ResolveNodePrice(ctx, node, "claude-sonnet-4-6")
+	require.True(t, foundClaude)
+	assert.InDelta(t, 0.00045, inClaude, 0.00001)
+	assert.InDelta(t, 0.00225, outClaude, 0.00001)
+
+	// 4. gpt-5.5 resolves from generic providers.json fallback
+	in55, out55, found55 := ppm.ResolveNodePrice(ctx, node, "gpt-5.5")
+	require.True(t, found55)
+	assert.InDelta(t, 0.0005, in55, 0.00001)
+	assert.InDelta(t, 0.003, out55, 0.00001)
+
+	// 5. Unlisted model returns false
+	_, _, foundUnknown := ppm.ResolveNodePrice(ctx, node, "completely-unknown-nonexistent-model")
+	assert.False(t, foundUnknown)
+}
+
 
 
 
