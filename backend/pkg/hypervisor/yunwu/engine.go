@@ -1203,7 +1203,7 @@ func (yh *YunwuHypervisor) startBalanceSync(ctx context.Context) {
 				_, _ = yh.store.LogEvent(ctx, "system", nil, nil, "YunwuBalanceSyncFailed", map[string]any{"node_id": fmt.Sprint(acc.ID), "error": "account API key is empty"})
 				continue
 			}
-			node := &health.ExecutionNode{NodeID: fmt.Sprint(acc.ID), AccountName: acc.Name, Provider: "yunwu"}
+			node := &health.ExecutionNode{NodeID: fmt.Sprint(acc.ID), AccountName: acc.Name, Provider: ParseNodeProvider(acc.Extra)}
 			if _, syncErr := yh.sw.SyncNodeStats(ctx, node, apiKey, baseURL); syncErr != nil {
 				observability.Default.YunwuBalanceSyncFailed()
 				slog.Warn("[YunwuStatsWorker] Yunwu balance sync failed",

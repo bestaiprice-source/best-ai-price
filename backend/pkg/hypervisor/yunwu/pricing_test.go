@@ -919,11 +919,9 @@ func TestProviderPriceManager_PortdanProvidersJSON(t *testing.T) {
 	assert.InDelta(t, 0.00045, inClaude, 0.00001)
 	assert.InDelta(t, 0.00225, outClaude, 0.00001)
 
-	// 4. gpt-5.5 resolves from generic providers.json fallback
-	in55, out55, found55 := ppm.ResolveNodePrice(ctx, node, "gpt-5.5")
-	require.True(t, found55)
-	assert.InDelta(t, 0.0005, in55, 0.00001)
-	assert.InDelta(t, 0.003, out55, 0.00001)
+	// 4. Non-Portdan models in providers.json (e.g. gpt-5.5 from ByteCat) MUST NOT resolve for Portdan node
+	_, _, foundByteCat := ppm.ResolveNodePrice(ctx, node, "gpt-5.5")
+	assert.False(t, foundByteCat, "Non-Portdan models in providers.json must strictly not leak into Portdan node pricing")
 
 	// 5. Unlisted model returns false
 	_, _, foundUnknown := ppm.ResolveNodePrice(ctx, node, "completely-unknown-nonexistent-model")

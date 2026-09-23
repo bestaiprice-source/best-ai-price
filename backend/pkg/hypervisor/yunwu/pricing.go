@@ -329,52 +329,7 @@ func (ppm *ProviderPriceManager) fetchProviderPrices(ctx context.Context, endpoi
 
 		if err := json.Unmarshal(bodyBytes, &providersList); err == nil && len(providersList) > 0 && (providersList[0].ProviderDomain != "" || providersList[0].ProviderName != "") {
 			prices := make(map[string]ProviderModelPrice)
-			// Pass 1: populate general fallback from all providers in providers.json
-			for _, item := range providersList {
-				var inPrice, outPrice float64
-				if item.InputPriceUSDPer1M != nil {
-					inPrice = *item.InputPriceUSDPer1M / 1000.0 // convert USD/1M tokens to USD/1k tokens
-				}
-				if item.OutputPriceUSDPer1M != nil {
-					outPrice = *item.OutputPriceUSDPer1M / 1000.0 // convert USD/1M tokens to USD/1k tokens
-				}
-				if inPrice == 0 && outPrice == 0 && item.NativePriceUSD != nil {
-					inPrice = *item.NativePriceUSD
-					outPrice = *item.NativePriceUSD
-				}
-				if inPrice < 0 || math.IsNaN(inPrice) || math.IsInf(inPrice, 0) {
-					inPrice = 0
-				}
-				if outPrice < 0 || math.IsNaN(outPrice) || math.IsInf(outPrice, 0) {
-					outPrice = 0
-				}
-
-				mName := strings.ToLower(strings.TrimSpace(item.ModelName))
-				if mName != "" {
-					if _, exists := prices[mName]; !exists {
-						prices[mName] = ProviderModelPrice{
-							InputPricePer1k:  inPrice,
-							OutputPricePer1k: outPrice,
-							Available:        true,
-						}
-					}
-				}
-				if item.CanonicalModelID != "" {
-					parts := strings.Split(item.CanonicalModelID, "/")
-					shortID := strings.ToLower(strings.TrimSpace(parts[len(parts)-1]))
-					if shortID != "" {
-						if _, exists := prices[shortID]; !exists {
-							prices[shortID] = ProviderModelPrice{
-								InputPricePer1k:  inPrice,
-								OutputPricePer1k: outPrice,
-								Available:        true,
-							}
-						}
-					}
-				}
-			}
-
-			// Pass 2: overwrite with Portdan-specific pricing where available
+			// Filter strictly for Portdan-specific pricing records to guarantee complete pricing isolation
 			for _, item := range providersList {
 				pDomain := strings.ToLower(strings.TrimSpace(item.ProviderDomain))
 				pName := strings.ToLower(strings.TrimSpace(item.ProviderName))
@@ -588,17 +543,19 @@ func (ppm *ProviderPriceManager) ResolveNodePrice(ctx context.Context, node *hea
 	}
 
 	// 4. Fallback to manually seeded provider prices (e.g. SetProviderPrices in unit tests)
-	ppm.mu.RLock()
-	if prices, ok := ppm.cache[canonicalProv]; ok {
-		exp, hasExp := ppm.cacheExpiry[canonicalProv]
-		if !hasExp || time.Now().Before(exp) {
-			if p, found := ppm.lookupModelInPrices(prices, model); found {
-				ppm.mu.RUnlock()
-				return p.InputPricePer1k, p.OutputPricePer1k, true
+	if baseURL == "" || pricingURL == KnownProviderPricingURLs[canonicalProv] {
+		ppm.mu.RLock()
+		if prices, ok := ppm.cache[canonicalProv]; ok {
+			exp, hasExp := ppm.cacheExpiry[canonicalProv]
+			if !hasExp || time.Now().Before(exp) {
+				if p, found := ppm.lookupModelInPrices(prices, model); found {
+					ppm.mu.RUnlock()
+					return p.InputPricePer1k, p.OutputPricePer1k, true
+				}
 			}
 		}
+		ppm.mu.RUnlock()
 	}
-	ppm.mu.RUnlock()
 
 	return 0, 0, false
 }
