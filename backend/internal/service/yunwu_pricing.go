@@ -26,6 +26,51 @@ var DefaultPricingEndpoints = []string{
 	"https://yuanqiaoyun.com/api/pricing",
 }
 
+// DefaultProviderPricingURLs maps known provider identifiers to their official pricing endpoints
+var DefaultProviderPricingURLs = map[string]string{
+	"openlux":     "https://api.openlux.ai/api/pricing",
+	"api-top":     "https://api-top.com/api/pricing",
+	"yuanqiaoyun": "https://yuanqiaoyun.com/api/pricing",
+}
+
+// CanonicalPricingProvider normalizes provider names for pricing lookup
+func CanonicalPricingProvider(provider string) string {
+	p := strings.ToLower(strings.TrimSpace(provider))
+	switch p {
+	case "openlux", "yunwu", "api.openlux.ai":
+		return "openlux"
+	case "api-top", "top-api", "api_top", "apitop", "api-top.com":
+		return "api-top"
+	case "yuanqiaoyun", "yuanqiao", "yuanqiaoyun.com":
+		return "yuanqiaoyun"
+	case "portdan", "portdan.com":
+		return "portdan"
+	default:
+		if p == "" {
+			return "openlux"
+		}
+		return p
+	}
+}
+
+type pricingProviderKey struct{}
+
+// ContextWithPricingProvider attaches a provider name to the context for provider-specific pricing lookups
+func ContextWithPricingProvider(ctx context.Context, provider string) context.Context {
+	return context.WithValue(ctx, pricingProviderKey{}, CanonicalPricingProvider(provider))
+}
+
+// PricingProviderFromContext extracts the provider name from context if present
+func PricingProviderFromContext(ctx context.Context) string {
+	if ctx == nil {
+		return ""
+	}
+	if v, ok := ctx.Value(pricingProviderKey{}).(string); ok {
+		return v
+	}
+	return ""
+}
+
 // YunwuPricingRawItem matches the JSON structure returned by api.openlux.ai/api/pricing
 type YunwuPricingRawItem struct {
 	ModelName       string  `json:"model_name"`
@@ -41,17 +86,17 @@ type YunwuPricingResponse struct {
 	Data []YunwuPricingRawItem `json:"data"`
 }
 
-// YunwuPricingService fetches and resolves real-time pricing from Yunwu (OpenLux, Top-API, Yuanqiaoyun)
+// YunwuPricingService fetches and resolves real-time pricing strictly isolated per provider
 type YunwuPricingService struct {
-	pricingURL  string
-	pricingURLs []string
-	httpClient  *http.Client
-	sf          singleflight.Group
+	pricingURL      string
+	providerURLs    map[string]string
+	httpClient      *http.Client
+	sf              singleflight.Group
 
-	mu          sync.RWMutex
-	lastPricing map[string]*YunwuPricingRawItem
-	lastUpdated time.Time
-	aliases     map[string]string
+	mu              sync.RWMutex
+	providerPricing map[string]map[string]*YunwuPricingRawItem
+	providerUpdated map[string]time.Time
+	aliases         map[string]string
 }
 
 // NewYunwuPricingService creates a new Yunwu pricing service
@@ -60,20 +105,24 @@ func NewYunwuPricingService() *YunwuPricingService {
 	if url == "" {
 		url = strings.TrimSpace(os.Getenv("OPENLUX_PRICING_URL"))
 	}
-	var urls []string
-	if url != "" {
-		urls = []string{url}
-	} else {
-		urls = append([]string(nil), DefaultPricingEndpoints...)
+	if url == "" {
+		url = DefaultYunwuPricingURL
 	}
 
+	providerURLs := make(map[string]string)
+	for k, v := range DefaultProviderPricingURLs {
+		providerURLs[k] = v
+	}
+	providerURLs["openlux"] = url
+
 	return &YunwuPricingService{
-		pricingURL:  urls[0],
-		pricingURLs: urls,
+		pricingURL:      url,
+		providerURLs:    providerURLs,
 		httpClient: &http.Client{
 			Timeout: 10 * time.Second,
 		},
-		lastPricing: make(map[string]*YunwuPricingRawItem),
+		providerPricing: make(map[string]map[string]*YunwuPricingRawItem),
+		providerUpdated: make(map[string]time.Time),
 		aliases: map[string]string{
 			"gemini-3-pro":   "gemini-3-pro-preview",
 			"gemini-3.1-pro": "gemini-3.1-pro-preview",
@@ -87,17 +136,23 @@ func NewYunwuPricingServiceWithClient(pricingURL string, client *http.Client) *Y
 	if client == nil {
 		client = &http.Client{Timeout: 10 * time.Second}
 	}
-	var urls []string
-	if pricingURL != "" {
-		urls = []string{pricingURL}
-	} else {
-		urls = append([]string(nil), DefaultPricingEndpoints...)
+	url := pricingURL
+	if url == "" {
+		url = DefaultYunwuPricingURL
 	}
+
+	providerURLs := make(map[string]string)
+	for k, v := range DefaultProviderPricingURLs {
+		providerURLs[k] = v
+	}
+	providerURLs["openlux"] = url
+
 	return &YunwuPricingService{
-		pricingURL:  urls[0],
-		pricingURLs: urls,
-		httpClient:  client,
-		lastPricing: make(map[string]*YunwuPricingRawItem),
+		pricingURL:      url,
+		providerURLs:    providerURLs,
+		httpClient:      client,
+		providerPricing: make(map[string]map[string]*YunwuPricingRawItem),
+		providerUpdated: make(map[string]time.Time),
 		aliases: map[string]string{
 			"gemini-3-pro":   "gemini-3-pro-preview",
 			"gemini-3.1-pro": "gemini-3.1-pro-preview",
@@ -106,11 +161,33 @@ func NewYunwuPricingServiceWithClient(pricingURL string, client *http.Client) *Y
 	}
 }
 
-// FetchPricing queries pricing endpoints (OpenLux, Top-API, Yuanqiaoyun) and aggregates pricing.
-// Singleflight is used to avoid duplicate concurrent HTTP requests under load.
-// If remote calls fail, it falls back to the last successfully cached pricing.
-func (s *YunwuPricingService) FetchPricing(ctx context.Context) (map[string]*YunwuPricingRawItem, error) {
-	v, err, _ := s.sf.Do("fetch_pricing", func() (interface{}, error) {
+// SetProviderURL overrides or adds an endpoint URL for a specific provider
+func (s *YunwuPricingService) SetProviderURL(provider, url string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	prov := CanonicalPricingProvider(provider)
+	s.providerURLs[prov] = strings.TrimSpace(url)
+}
+
+// FetchPricingForProvider queries the pricing endpoint for a specific provider.
+// This guarantees that prices from different providers never merge or cross-contaminate.
+func (s *YunwuPricingService) FetchPricingForProvider(ctx context.Context, provider string) (map[string]*YunwuPricingRawItem, error) {
+	prov := CanonicalPricingProvider(provider)
+
+	s.mu.RLock()
+	endpoint, ok := s.providerURLs[prov]
+	s.mu.RUnlock()
+
+	if !ok || endpoint == "" {
+		if prov == "openlux" {
+			endpoint = s.pricingURL
+		} else {
+			return nil, fmt.Errorf("no pricing endpoint configured for provider %s", prov)
+		}
+	}
+
+	flightKey := "fetch_pricing_" + prov
+	v, err, _ := s.sf.Do(flightKey, func() (interface{}, error) {
 		reqCtx := ctx
 		if reqCtx == nil {
 			var cancel context.CancelFunc
@@ -118,72 +195,54 @@ func (s *YunwuPricingService) FetchPricing(ctx context.Context) (map[string]*Yun
 			defer cancel()
 		}
 
-		pricingMap := make(map[string]*YunwuPricingRawItem)
-		var lastErr error
-		successCount := 0
-
-		for _, endpoint := range s.pricingURLs {
-			req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, endpoint, nil)
-			if err != nil {
-				lastErr = fmt.Errorf("failed to create pricing request for %s: %w", endpoint, err)
-				continue
-			}
-
-			resp, err := s.httpClient.Do(req)
-			if err != nil {
-				lastErr = fmt.Errorf("failed to fetch pricing from %s: %w", endpoint, err)
-				continue
-			}
-
-			if resp.StatusCode != http.StatusOK {
-				resp.Body.Close()
-				lastErr = fmt.Errorf("pricing endpoint %s returned HTTP %d", endpoint, resp.StatusCode)
-				continue
-			}
-
-			var payload YunwuPricingResponse
-			err = json.NewDecoder(resp.Body).Decode(&payload)
-			resp.Body.Close()
-			if err != nil {
-				lastErr = fmt.Errorf("failed to decode pricing response from %s: %w", endpoint, err)
-				continue
-			}
-
-			successCount++
-			for i := range payload.Data {
-				item := payload.Data[i]
-				key := strings.ToLower(strings.TrimSpace(item.ModelName))
-				if key != "" {
-					if _, exists := pricingMap[key]; !exists {
-						pricingMap[key] = &item
-					}
-				}
-			}
+		req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, endpoint, nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create pricing request for %s (%s): %w", prov, endpoint, err)
 		}
 
-		if successCount == 0 {
-			if lastErr == nil {
-				lastErr = fmt.Errorf("no pricing endpoints configured")
+		resp, err := s.httpClient.Do(req)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch pricing from %s (%s): %w", prov, endpoint, err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			return nil, fmt.Errorf("pricing endpoint for %s (%s) returned HTTP %d", prov, endpoint, resp.StatusCode)
+		}
+
+		var payload YunwuPricingResponse
+		if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+			return nil, fmt.Errorf("failed to decode pricing response from %s (%s): %w", prov, endpoint, err)
+		}
+
+		pricingMap := make(map[string]*YunwuPricingRawItem, len(payload.Data))
+		for i := range payload.Data {
+			item := payload.Data[i]
+			key := strings.ToLower(strings.TrimSpace(item.ModelName))
+			if key != "" {
+				pricingMap[key] = &item
 			}
-			return nil, lastErr
 		}
 
 		s.mu.Lock()
-		s.lastPricing = pricingMap
-		s.lastUpdated = time.Now()
+		s.providerPricing[prov] = pricingMap
+		s.providerUpdated[prov] = time.Now()
 		s.mu.Unlock()
 
 		return pricingMap, nil
 	})
 
 	if err != nil {
-		// Graceful fallback to last known pricing if available
+		// Graceful fallback to last known pricing for this specific provider
 		s.mu.RLock()
-		cached := s.lastPricing
+		cached := s.providerPricing[prov]
 		s.mu.RUnlock()
 
 		if len(cached) > 0 {
-			slog.Warn("failed to fetch fresh Yunwu pricing, falling back to cached snapshot", "error", err, "cached_models", len(cached))
+			slog.Warn("failed to fetch fresh pricing for provider, falling back to cached snapshot",
+				"provider", prov,
+				"error", err,
+				"cached_models", len(cached))
 			return cached, nil
 		}
 		return nil, err
@@ -192,13 +251,18 @@ func (s *YunwuPricingService) FetchPricing(ctx context.Context) (map[string]*Yun
 	return v.(map[string]*YunwuPricingRawItem), nil
 }
 
-// GetModelPricing resolves model pricing according to Yunwu rates.
-func (s *YunwuPricingService) GetModelPricing(ctx context.Context, modelName string) (*ModelPricing, bool) {
+// FetchPricing queries the default pricing endpoint (OpenLux) with isolated storage.
+func (s *YunwuPricingService) FetchPricing(ctx context.Context) (map[string]*YunwuPricingRawItem, error) {
+	return s.FetchPricingForProvider(ctx, "openlux")
+}
+
+// GetModelPricingForProvider resolves model pricing for a specific provider.
+func (s *YunwuPricingService) GetModelPricingForProvider(ctx context.Context, provider string, modelName string) (*ModelPricing, bool) {
 	if modelName == "" {
 		return nil, false
 	}
 
-	prices, err := s.FetchPricing(ctx)
+	prices, err := s.FetchPricingForProvider(ctx, provider)
 	if err != nil || len(prices) == 0 {
 		return nil, false
 	}
@@ -260,4 +324,15 @@ func (s *YunwuPricingService) GetModelPricing(ctx context.Context, modelName str
 	pricing.CacheCreationPricePerToken = cacheCreationPerToken
 
 	return pricing, true
+}
+
+// GetModelPricing resolves model pricing according to Yunwu rates.
+// If a provider is specified in context, it resolves pricing strictly for that provider.
+// Otherwise it defaults to OpenLux.
+func (s *YunwuPricingService) GetModelPricing(ctx context.Context, modelName string) (*ModelPricing, bool) {
+	prov := PricingProviderFromContext(ctx)
+	if prov == "" {
+		prov = "openlux"
+	}
+	return s.GetModelPricingForProvider(ctx, prov, modelName)
 }

@@ -310,43 +310,86 @@ func TestOpenAIGatewayService_CheckModelPricingAvailable(t *testing.T) {
 	require.Contains(t, err.Error(), "pricing not found for model")
 }
 
-func TestYunwuPricingService_MultiEndpointAggregation(t *testing.T) {
+func TestYunwuPricingService_ProviderIsolation(t *testing.T) {
 	// Endpoint 1: OpenLux-like
-	ts1 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	tsOpenLux := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(YunwuPricingResponse{
 			Data: []YunwuPricingRawItem{
 				{ModelName: "gemini-3.8-flash", ModelRatio: 0.375, CompletionRatio: 5},
+				{ModelName: "gpt-4o", ModelRatio: 1.0, CompletionRatio: 3},
 			},
 		})
 	}))
-	defer ts1.Close()
+	defer tsOpenLux.Close()
 
-	// Endpoint 2: Top-API-like (has extra model)
-	ts2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	// Endpoint 2: Top-API-like (different price for gpt-4o, and exclusive claude-haiku-4-5)
+	tsTopAPI := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(YunwuPricingResponse{
 			Data: []YunwuPricingRawItem{
 				{ModelName: "claude-haiku-4-5", ModelRatio: 1.25, CompletionRatio: 4},
+				{ModelName: "gpt-4o", ModelRatio: 2.0, CompletionRatio: 3},
 			},
 		})
 	}))
-	defer ts2.Close()
+	defer tsTopAPI.Close()
 
-	svc := &YunwuPricingService{
-		pricingURLs: []string{ts1.URL, ts2.URL},
-		httpClient:  ts1.Client(),
-		lastPricing: make(map[string]*YunwuPricingRawItem),
-		aliases:     make(map[string]string),
-	}
+	svc := NewYunwuPricingServiceWithClient(tsOpenLux.URL, tsOpenLux.Client())
+	svc.SetProviderURL("api-top", tsTopAPI.URL)
 
-	prices, err := svc.FetchPricing(context.Background())
+	ctx := context.Background()
+
+	// 1. OpenLux fetch contains only OpenLux models
+	openluxPrices, err := svc.FetchPricingForProvider(ctx, "openlux")
 	require.NoError(t, err)
-	require.Len(t, prices, 2)
-	require.Contains(t, prices, "gemini-3.8-flash")
-	require.Contains(t, prices, "claude-haiku-4-5")
-	require.Equal(t, 0.375, prices["gemini-3.8-flash"].ModelRatio)
-	require.Equal(t, 1.25, prices["claude-haiku-4-5"].ModelRatio)
+	require.Len(t, openluxPrices, 2)
+	require.Contains(t, openluxPrices, "gemini-3.8-flash")
+	require.Contains(t, openluxPrices, "gpt-4o")
+	require.NotContains(t, openluxPrices, "claude-haiku-4-5", "OpenLux must not leak models from Top-API")
+	require.Equal(t, 1.0, openluxPrices["gpt-4o"].ModelRatio)
+
+	// 2. Top-API fetch contains only Top-API models
+	topPrices, err := svc.FetchPricingForProvider(ctx, "api-top")
+	require.NoError(t, err)
+	require.Len(t, topPrices, 2)
+	require.Contains(t, topPrices, "claude-haiku-4-5")
+	require.Contains(t, topPrices, "gpt-4o")
+	require.NotContains(t, topPrices, "gemini-3.8-flash", "Top-API must not leak models from OpenLux")
+	require.Equal(t, 2.0, topPrices["gpt-4o"].ModelRatio)
+
+	// 3. Pricing lookup for OpenLux returns OpenLux pricing
+	pOpenLux, ok := svc.GetModelPricingForProvider(ctx, "openlux", "gpt-4o")
+	require.True(t, ok)
+	require.InDelta(t, 2e-6*1.0, pOpenLux.InputPricePerToken, 1e-9)
+
+	// 4. Model not in OpenLux cannot be resolved through OpenLux
+	_, ok = svc.GetModelPricingForProvider(ctx, "openlux", "claude-haiku-4-5")
+	require.False(t, ok, "Model absent in OpenLux must not resolve via shared pool")
+
+	// 5. Pricing lookup for Top-API returns Top-API pricing
+	pTop, ok := svc.GetModelPricingForProvider(ctx, "api-top", "gpt-4o")
+	require.True(t, ok)
+	require.InDelta(t, 2e-6*2.0, pTop.InputPricePerToken, 1e-9)
+
+	// 6. Context-aware provider routing
+	ctxWithTop := ContextWithPricingProvider(ctx, "api-top")
+	pCtxTop, ok := svc.GetModelPricing(ctxWithTop, "gpt-4o")
+	require.True(t, ok)
+	require.InDelta(t, 2e-6*2.0, pCtxTop.InputPricePerToken, 1e-9)
+
+	// 7. Default context falls back strictly to OpenLux, not a shared pool
+	pDefault, ok := svc.GetModelPricing(ctx, "gpt-4o")
+	require.True(t, ok)
+	require.InDelta(t, 2e-6*1.0, pDefault.InputPricePerToken, 1e-9)
+
+	// 8. CanonicalProvider helper normalizes variations
+	require.Equal(t, "openlux", CanonicalPricingProvider("OpenLux"))
+	require.Equal(t, "openlux", CanonicalPricingProvider("api.openlux.ai"))
+	require.Equal(t, "api-top", CanonicalPricingProvider("top-api"))
+	require.Equal(t, "api-top", CanonicalPricingProvider("API-TOP"))
+	require.Equal(t, "yuanqiaoyun", CanonicalPricingProvider("yuanqiao"))
+	require.Equal(t, "portdan", CanonicalPricingProvider("portdan.com"))
 }
 
 

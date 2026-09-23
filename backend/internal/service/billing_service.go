@@ -3,8 +3,6 @@ package service
 import (
 	"context"
 	"fmt"
-
-	"log"
 	"strings"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
@@ -389,12 +387,18 @@ func (s *BillingService) GetModelPricingWithContext(ctx context.Context, model s
 	// 3. 使用硬编码回退价格
 	fallback := s.getFallbackPricing(model)
 	if fallback != nil {
-		log.Printf("[Billing] Using fallback pricing for model: %s", model)
 		return s.applyModelSpecificPricingPolicy(model, fallback), nil
 	}
 
 	return nil, fmt.Errorf("pricing not found for model: %s", model)
 }
+
+// GetModelPricingForProvider gets model pricing configuration for a specific provider
+func (s *BillingService) GetModelPricingForProvider(ctx context.Context, provider string, model string) (*ModelPricing, error) {
+	ctxWithProv := ContextWithPricingProvider(ctx, provider)
+	return s.GetModelPricingWithContext(ctxWithProv, model)
+}
+
 
 // CalculateCost 计算使用费用
 func (s *BillingService) CalculateCost(model string, tokens UsageTokens, rateMultiplier float64) (*CostBreakdown, error) {
