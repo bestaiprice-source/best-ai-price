@@ -217,40 +217,56 @@ func (w *StatsWorker) SyncNodeStats(ctx context.Context, node *health.ExecutionN
 		}
 	}
 
-	// Strategy 1: New API / One API native token usage endpoint (/api/usage/token) ⚡
-	// This directly returns the exact token balance and available quota without subtraction heuristics
-	tokenGrants, errToken := w.syncNewAPITokenUsage(ctx, origin, apiPrefix, apiKey)
-	if errToken == nil && tokenGrants != nil && (tokenGrants.TotalAvailable > 0 || tokenGrants.TotalGranted > 0) {
-		w.recordSyncedSnapshot(ctx, node, tokenGrants, "token_usage")
-		return tokenGrants, nil
-	}
-
-	// Strategy 2: Primary OpenAI / One API / New API credit_grants endpoint
+	// Strategy 1: Primary OpenAI / DeepSeek credit_grants endpoint
 	grants, errGrants := w.syncCreditGrants(ctx, origin, apiPrefix, apiKey)
 	if errGrants == nil && grants != nil && (grants.TotalAvailable > 0 || grants.TotalGranted > 0) {
 		w.recordSyncedSnapshot(ctx, node, grants, "credit_grants")
 		return grants, nil
 	}
 
-	// Strategy 3: Subscription + Usage endpoints (One API / New API format)
+	// Strategy 2: Direct subscription available balance (e.g. OpenLux / OpenAI with explicit total_available)
 	subGrants, errSub := w.syncSubscriptionUsage(ctx, origin, apiPrefix, apiKey)
+	if errSub == nil && subGrants != nil && subGrants.Object == "subscription_direct" && subGrants.TotalAvailable > 0 {
+		w.recordSyncedSnapshot(ctx, node, subGrants, "subscription")
+		return subGrants, nil
+	}
+
+	// Strategy 3: New API / One API native token usage endpoint (/api/usage/token) ⚡
+	// This directly returns the exact token balance and available quota without subtraction heuristics.
+	// If the token has unlimited_quota and no specific remaining quota, it cleanly falls through.
+	tokenGrants, errToken := w.syncNewAPITokenUsage(ctx, origin, apiPrefix, apiKey)
+	if errToken == nil && tokenGrants != nil && (tokenGrants.TotalAvailable > 0 || tokenGrants.TotalGranted > 0) {
+		w.recordSyncedSnapshot(ctx, node, tokenGrants, "token_usage")
+		return tokenGrants, nil
+	}
+
+	// Strategy 4: User profile & wallet balance (/api/user/self, /v1/user/self, /api/user/balance) ⚡
+	// This returns the authoritative user account balance (e.g. $3.00 for api top / new-api)
+	// before relying on unverified hard limits.
+	userGrants, errUser := w.syncUserSelf(ctx, origin, apiPrefix, apiKey)
+	if errUser == nil && userGrants != nil && (userGrants.TotalAvailable > 0 || userGrants.TotalGranted > 0) {
+		w.recordSyncedSnapshot(ctx, node, userGrants, "user_self")
+		return userGrants, nil
+	}
+
+	// Strategy 5: Subscription with usage subtraction calculation (when total_available wasn't direct)
 	if errSub == nil && subGrants != nil && (subGrants.TotalAvailable > 0 || subGrants.TotalGranted > 0) {
 		w.recordSyncedSnapshot(ctx, node, subGrants, "subscription")
 		return subGrants, nil
 	}
 
-	// Strategy 4: Sub2API / Gateway usage endpoint (/v1/usage, /usage)
+	// Strategy 6: Gateway usage endpoint (/v1/usage, /usage)
 	sub2Grants, errSub2 := w.syncSub2APIUsage(ctx, origin, apiPrefix, apiKey)
 	if errSub2 == nil && sub2Grants != nil && (sub2Grants.TotalAvailable > 0 || sub2Grants.TotalGranted > 0) {
 		w.recordSyncedSnapshot(ctx, node, sub2Grants, "sub2api_usage")
 		return sub2Grants, nil
 	}
 
-	// Strategy 5: User self profile / token endpoint fallback
-	userGrants, errUser := w.syncNodeStatsFallback(ctx, node, apiKey, origin)
-	if errUser == nil && userGrants != nil && (userGrants.TotalAvailable > 0 || userGrants.TotalGranted > 0) {
-		w.recordSyncedSnapshot(ctx, node, userGrants, "user_self")
-		return userGrants, nil
+	// Strategy 7: Fallback endpoint scanner (token list, simple balance, etc.)
+	fallbackGrants, errFallback := w.syncNodeStatsFallback(ctx, node, apiKey, origin)
+	if errFallback == nil && fallbackGrants != nil && (fallbackGrants.TotalAvailable > 0 || fallbackGrants.TotalGranted > 0) {
+		w.recordSyncedSnapshot(ctx, node, fallbackGrants, "fallback")
+		return fallbackGrants, nil
 	}
 
 	// If we got a valid response even if 0 available balance
@@ -258,13 +274,17 @@ func (w *StatsWorker) SyncNodeStats(ctx context.Context, node *health.ExecutionN
 		w.recordSyncedSnapshot(ctx, node, tokenGrants, "token_usage_zero")
 		return tokenGrants, nil
 	}
+	if userGrants != nil {
+		w.recordSyncedSnapshot(ctx, node, userGrants, "user_self_zero")
+		return userGrants, nil
+	}
 	if sub2Grants != nil {
 		w.recordSyncedSnapshot(ctx, node, sub2Grants, "sub2api_usage_zero")
 		return sub2Grants, nil
 	}
-	if userGrants != nil {
-		w.recordSyncedSnapshot(ctx, node, userGrants, "user_self_zero")
-		return userGrants, nil
+	if fallbackGrants != nil {
+		w.recordSyncedSnapshot(ctx, node, fallbackGrants, "fallback_zero")
+		return fallbackGrants, nil
 	}
 	if subGrants != nil {
 		w.recordSyncedSnapshot(ctx, node, subGrants, "subscription_zero")
@@ -283,9 +303,10 @@ func (w *StatsWorker) SyncNodeStats(ctx context.Context, node *health.ExecutionN
 		"err_sub", errSub,
 		"err_sub2", errSub2,
 		"err_grants", errGrants,
+		"err_fallback", errFallback,
 	)
 
-	return nil, fmt.Errorf("failed to sync Yunwu balance across all endpoints (token: %v, sub2api: %v, subscription: %v, credit_grants: %v, user/self: %v)", errToken, errSub2, errSub, errGrants, errUser)
+	return nil, fmt.Errorf("failed to sync Yunwu balance across all endpoints (token: %v, user/self: %v, subscription: %v, credit_grants: %v, sub2api: %v, fallback: %v)", errToken, errUser, errSub, errGrants, errSub2, errFallback)
 }
 
 func normalizeQuotaToUSD(val float64) float64 {
@@ -636,19 +657,17 @@ func (w *StatsWorker) syncNewAPITokenUsage(ctx context.Context, origin, apiPrefi
 			continue
 		}
 
-		if td.UnlimitedQuota {
-			usedUSD := normalizeQuotaToUSD(td.TotalUsed)
-			return &YunwuCreditGrantsResponse{
-				Object:         "token_usage_unlimited",
-				TotalGranted:   999999.0,
-				TotalUsed:      usedUSD,
-				TotalAvailable: 999999.0,
-			}, nil
-		}
-
 		avail := td.TotalAvailable
 		if avail == 0 && td.RemainQuota > 0 {
 			avail = td.RemainQuota
+		}
+
+		// When unlimited_quota is true and no specific remaining quota is defined on the token,
+		// the token has no token-level quota restriction, so the true balance resides in the user's
+		// account wallet (/api/user/self). Do not return a fake 999999.0 balance; fall through to syncUserSelf!
+		if td.UnlimitedQuota && avail <= 0 {
+			lastErr = fmt.Errorf("token has unlimited_quota with no specific quota, falling through to user wallet balance")
+			continue
 		}
 
 		availUSD := normalizeQuotaToUSD(avail)
@@ -662,6 +681,124 @@ func (w *StatsWorker) syncNewAPITokenUsage(ctx context.Context, origin, apiPrefi
 		return &YunwuCreditGrantsResponse{
 			Object:         "token_usage",
 			TotalGranted:   grantedUSD,
+			TotalUsed:      usedUSD,
+			TotalAvailable: availUSD,
+		}, nil
+	}
+	return nil, lastErr
+}
+
+func (w *StatsWorker) syncUserSelf(ctx context.Context, origin, apiPrefix, apiKey string) (*YunwuCreditGrantsResponse, error) {
+	urls := []string{
+		origin + "/api/user/self",
+		origin + apiPrefix + "/user/self",
+		origin + "/v1/user/self",
+		origin + apiPrefix + "/v1/user/self",
+		origin + "/user/self",
+		origin + "/api/user/balance",
+		origin + "/v1/user/balance",
+	}
+
+	seen := make(map[string]bool)
+	var uniqueURLs []string
+	for _, u := range urls {
+		if !seen[u] {
+			seen[u] = true
+			uniqueURLs = append(uniqueURLs, u)
+		}
+	}
+
+	var lastErr error
+	for _, u := range uniqueURLs {
+		req, err := http.NewRequestWithContext(ctx, "GET", u, nil)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		req.Header.Set("Authorization", "Bearer "+apiKey)
+		req.Header.Set("x-api-key", apiKey)
+		req.Header.Set("Accept", "application/json")
+
+		resp, err := w.httpClient.Do(req)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		if resp.StatusCode != http.StatusOK {
+			resp.Body.Close()
+			lastErr = fmt.Errorf("HTTP %d from %s", resp.StatusCode, u)
+			continue
+		}
+
+		contentType := resp.Header.Get("Content-Type")
+		if contentType != "" && !strings.Contains(contentType, "json") {
+			resp.Body.Close()
+			lastErr = fmt.Errorf("non-JSON content-type (%s) from %s", contentType, u)
+			continue
+		}
+
+		body, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil {
+			lastErr = err
+			continue
+		}
+
+		trimmed := strings.TrimSpace(string(body))
+		if strings.HasPrefix(trimmed, "<") {
+			lastErr = fmt.Errorf("HTML response from %s", u)
+			continue
+		}
+
+		type userData struct {
+			Quota       float64 `json:"quota"`
+			UsedQuota   float64 `json:"used_quota"`
+			Balance     float64 `json:"balance"`
+			RemainQuota float64 `json:"remain_quota"`
+			TotalQuota  float64 `json:"total_quota"`
+		}
+
+		var envelope struct {
+			Success bool      `json:"success"`
+			Code    any       `json:"code"`
+			Message string    `json:"message"`
+			Data    *userData `json:"data"`
+			userData
+		}
+
+		if err := json.Unmarshal(body, &envelope); err != nil {
+			lastErr = err
+			continue
+		}
+
+		ud := envelope.Data
+		if ud == nil && (envelope.Quota > 0 || envelope.Balance > 0 || envelope.RemainQuota > 0 || envelope.UsedQuota > 0) {
+			ud = &envelope.userData
+		}
+
+		if ud == nil {
+			lastErr = fmt.Errorf("no user quota data from %s", u)
+			continue
+		}
+
+		avail := ud.Balance
+		if avail == 0 && ud.RemainQuota > 0 {
+			avail = ud.RemainQuota
+		}
+		if avail == 0 && ud.Quota > 0 {
+			avail = ud.Quota
+		}
+
+		availUSD := normalizeQuotaToUSD(avail)
+		usedUSD := normalizeQuotaToUSD(ud.UsedQuota)
+		totalGrantedUSD := normalizeQuotaToUSD(ud.TotalQuota)
+		if totalGrantedUSD == 0 {
+			totalGrantedUSD = availUSD + usedUSD
+		}
+
+		return &YunwuCreditGrantsResponse{
+			Object:         "user_self",
+			TotalGranted:   totalGrantedUSD,
 			TotalUsed:      usedUSD,
 			TotalAvailable: availUSD,
 		}, nil
@@ -757,7 +894,7 @@ func (w *StatsWorker) syncSubscriptionUsage(ctx context.Context, origin, apiPref
 		if sub.TotalAvailable > 0 {
 			totalAvailUSD := normalizeQuotaToUSD(sub.TotalAvailable)
 			return &YunwuCreditGrantsResponse{
-				Object:         "subscription",
+				Object:         "subscription_direct",
 				TotalGranted:   hardLimitUSD,
 				TotalUsed:      maxFloat64(0, hardLimitUSD-totalAvailUSD),
 				TotalAvailable: totalAvailUSD,
