@@ -217,28 +217,36 @@ func (w *StatsWorker) SyncNodeStats(ctx context.Context, node *health.ExecutionN
 		}
 	}
 
-	// Strategy 1: Primary OpenAI / One API / New API credit_grants endpoint (native available balance ⚡)
+	// Strategy 1: New API / One API native token usage endpoint (/api/usage/token) ⚡
+	// This directly returns the exact token balance and available quota without subtraction heuristics
+	tokenGrants, errToken := w.syncNewAPITokenUsage(ctx, origin, apiPrefix, apiKey)
+	if errToken == nil && tokenGrants != nil && (tokenGrants.TotalAvailable > 0 || tokenGrants.TotalGranted > 0) {
+		w.recordSyncedSnapshot(ctx, node, tokenGrants, "token_usage")
+		return tokenGrants, nil
+	}
+
+	// Strategy 2: Primary OpenAI / One API / New API credit_grants endpoint
 	grants, errGrants := w.syncCreditGrants(ctx, origin, apiPrefix, apiKey)
 	if errGrants == nil && grants != nil && (grants.TotalAvailable > 0 || grants.TotalGranted > 0) {
 		w.recordSyncedSnapshot(ctx, node, grants, "credit_grants")
 		return grants, nil
 	}
 
-	// Strategy 2: Subscription + Usage endpoints (One API / New API format)
+	// Strategy 3: Subscription + Usage endpoints (One API / New API format)
 	subGrants, errSub := w.syncSubscriptionUsage(ctx, origin, apiPrefix, apiKey)
 	if errSub == nil && subGrants != nil && (subGrants.TotalAvailable > 0 || subGrants.TotalGranted > 0) {
 		w.recordSyncedSnapshot(ctx, node, subGrants, "subscription")
 		return subGrants, nil
 	}
 
-	// Strategy 3: Sub2API / Gateway usage endpoint (/v1/usage, /usage)
+	// Strategy 4: Sub2API / Gateway usage endpoint (/v1/usage, /usage)
 	sub2Grants, errSub2 := w.syncSub2APIUsage(ctx, origin, apiPrefix, apiKey)
 	if errSub2 == nil && sub2Grants != nil && (sub2Grants.TotalAvailable > 0 || sub2Grants.TotalGranted > 0) {
 		w.recordSyncedSnapshot(ctx, node, sub2Grants, "sub2api_usage")
 		return sub2Grants, nil
 	}
 
-	// Strategy 4: User self profile / token endpoint fallback
+	// Strategy 5: User self profile / token endpoint fallback
 	userGrants, errUser := w.syncNodeStatsFallback(ctx, node, apiKey, origin)
 	if errUser == nil && userGrants != nil && (userGrants.TotalAvailable > 0 || userGrants.TotalGranted > 0) {
 		w.recordSyncedSnapshot(ctx, node, userGrants, "user_self")
@@ -246,6 +254,10 @@ func (w *StatsWorker) SyncNodeStats(ctx context.Context, node *health.ExecutionN
 	}
 
 	// If we got a valid response even if 0 available balance
+	if tokenGrants != nil {
+		w.recordSyncedSnapshot(ctx, node, tokenGrants, "token_usage_zero")
+		return tokenGrants, nil
+	}
 	if sub2Grants != nil {
 		w.recordSyncedSnapshot(ctx, node, sub2Grants, "sub2api_usage_zero")
 		return sub2Grants, nil
@@ -266,13 +278,14 @@ func (w *StatsWorker) SyncNodeStats(ctx context.Context, node *health.ExecutionN
 	slog.Warn("[YunwuStatsWorker] All balance sync strategies failed",
 		"node_id", node.NodeID,
 		"provider", provider,
+		"err_token", errToken,
 		"err_user", errUser,
 		"err_sub", errSub,
 		"err_sub2", errSub2,
 		"err_grants", errGrants,
 	)
 
-	return nil, fmt.Errorf("failed to sync Yunwu balance across all endpoints (sub2api: %v, subscription: %v, credit_grants: %v, user/self: %v)", errSub2, errSub, errGrants, errUser)
+	return nil, fmt.Errorf("failed to sync Yunwu balance across all endpoints (token: %v, sub2api: %v, subscription: %v, credit_grants: %v, user/self: %v)", errToken, errSub2, errSub, errGrants, errUser)
 }
 
 func normalizeQuotaToUSD(val float64) float64 {
@@ -534,6 +547,128 @@ func (w *StatsWorker) syncCreditGrants(ctx context.Context, origin, apiPrefix, a
 	return nil, lastErr
 }
 
+func (w *StatsWorker) syncNewAPITokenUsage(ctx context.Context, origin, apiPrefix, apiKey string) (*YunwuCreditGrantsResponse, error) {
+	urls := []string{
+		origin + "/api/usage/token",
+		origin + apiPrefix + "/usage/token",
+		origin + "/v1/api/usage/token",
+		origin + apiPrefix + "/v1/usage/token",
+	}
+
+	seen := make(map[string]bool)
+	var uniqueURLs []string
+	for _, u := range urls {
+		if !seen[u] {
+			seen[u] = true
+			uniqueURLs = append(uniqueURLs, u)
+		}
+	}
+
+	var lastErr error
+	for _, u := range uniqueURLs {
+		req, err := http.NewRequestWithContext(ctx, "GET", u, nil)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		req.Header.Set("Authorization", "Bearer "+apiKey)
+		req.Header.Set("Accept", "application/json")
+
+		resp, err := w.httpClient.Do(req)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		if resp.StatusCode != http.StatusOK {
+			resp.Body.Close()
+			lastErr = fmt.Errorf("HTTP %d from %s", resp.StatusCode, u)
+			continue
+		}
+
+		contentType := resp.Header.Get("Content-Type")
+		if contentType != "" && !strings.Contains(contentType, "json") {
+			resp.Body.Close()
+			lastErr = fmt.Errorf("non-JSON content-type (%s) from %s", contentType, u)
+			continue
+		}
+
+		body, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil {
+			lastErr = err
+			continue
+		}
+
+		trimmed := strings.TrimSpace(string(body))
+		if strings.HasPrefix(trimmed, "<") {
+			lastErr = fmt.Errorf("HTML response from %s", u)
+			continue
+		}
+
+		type tokenData struct {
+			Object         string  `json:"object"`
+			Name           string  `json:"name"`
+			TotalGranted   float64 `json:"total_granted"`
+			TotalUsed      float64 `json:"total_used"`
+			TotalAvailable float64 `json:"total_available"`
+			RemainQuota    float64 `json:"remain_quota"`
+			UnlimitedQuota bool    `json:"unlimited_quota"`
+		}
+
+		var envelope struct {
+			Data   *tokenData `json:"data"`
+			Object string     `json:"object"`
+			tokenData
+		}
+
+		if err := json.Unmarshal(body, &envelope); err != nil {
+			lastErr = err
+			continue
+		}
+
+		td := envelope.Data
+		if td == nil && (envelope.TotalAvailable > 0 || envelope.TotalGranted > 0 || envelope.RemainQuota > 0 || envelope.UnlimitedQuota || envelope.Object == "token_usage") {
+			td = &envelope.tokenData
+		}
+
+		if td == nil {
+			lastErr = fmt.Errorf("no token usage data from %s", u)
+			continue
+		}
+
+		if td.UnlimitedQuota {
+			usedUSD := normalizeQuotaToUSD(td.TotalUsed)
+			return &YunwuCreditGrantsResponse{
+				Object:         "token_usage_unlimited",
+				TotalGranted:   999999.0,
+				TotalUsed:      usedUSD,
+				TotalAvailable: 999999.0,
+			}, nil
+		}
+
+		avail := td.TotalAvailable
+		if avail == 0 && td.RemainQuota > 0 {
+			avail = td.RemainQuota
+		}
+
+		availUSD := normalizeQuotaToUSD(avail)
+		grantedUSD := normalizeQuotaToUSD(td.TotalGranted)
+		usedUSD := normalizeQuotaToUSD(td.TotalUsed)
+
+		if grantedUSD == 0 && (availUSD > 0 || usedUSD > 0) {
+			grantedUSD = availUSD + usedUSD
+		}
+
+		return &YunwuCreditGrantsResponse{
+			Object:         "token_usage",
+			TotalGranted:   grantedUSD,
+			TotalUsed:      usedUSD,
+			TotalAvailable: availUSD,
+		}, nil
+	}
+	return nil, lastErr
+}
+
 func (w *StatsWorker) syncSubscriptionUsage(ctx context.Context, origin, apiPrefix, apiKey string) (*YunwuCreditGrantsResponse, error) {
 	urls := []string{
 		origin + apiPrefix + "/dashboard/billing/subscription",
@@ -640,9 +775,10 @@ func (w *StatsWorker) syncSubscriptionUsage(ctx context.Context, origin, apiPref
 		}
 
 		// Fetch usage to calculate remaining available USD
+		// Use historical start date to ensure all usage against this token/account is counted
 		now := time.Now()
-		startDate := now.AddDate(0, -1, 0).Format("2006-01-02")
-		endDate := now.AddDate(0, 0, 1).Format("2006-01-02")
+		startDate := "2020-01-01"
+		endDate := now.AddDate(0, 0, 2).Format("2006-01-02")
 
 		usageBase := strings.TrimSuffix(subURLUsed, "/subscription")
 		usageURL := fmt.Sprintf("%s/usage?start_date=%s&end_date=%s", usageBase, startDate, endDate)
@@ -670,8 +806,12 @@ func (w *StatsWorker) syncSubscriptionUsage(ctx context.Context, origin, apiPref
 			}
 		}
 
-		availableUSD := hardLimitUSD
-		totalGrantedUSD := hardLimitUSD + totalUsageUSD
+		// Calculate available balance: Remaining = HardLimit - TotalUsage
+		availableUSD := maxFloat64(0, hardLimitUSD-totalUsageUSD)
+		totalGrantedUSD := hardLimitUSD
+		if totalGrantedUSD < availableUSD+totalUsageUSD {
+			totalGrantedUSD = availableUSD + totalUsageUSD
+		}
 
 		return &YunwuCreditGrantsResponse{
 			Object:         "subscription",
@@ -744,6 +884,8 @@ func (w *StatsWorker) syncNodeStatsFallback(ctx context.Context, node *health.Ex
 	}
 
 	urls := []string{
+		baseURL + "/api/usage/token",
+		baseURL + "/v1/api/usage/token",
 		baseURL + "/api/user/self",
 		baseURL + "/v1/user/self",
 		baseURL + "/user/self",
@@ -792,6 +934,54 @@ func (w *StatsWorker) syncNodeStatsFallback(ctx context.Context, node *health.Ex
 		if strings.HasPrefix(trimmed, "<") {
 			lastErr = fmt.Errorf("HTML response from %s", u)
 			continue
+		}
+
+		// Try token_usage format: {"data": {"total_available": ...}} or {"total_available": ...}
+		var tokenUsage struct {
+			Data struct {
+				TotalAvailable float64 `json:"total_available"`
+				TotalGranted   float64 `json:"total_granted"`
+				TotalUsed      float64 `json:"total_used"`
+				RemainQuota    float64 `json:"remain_quota"`
+			} `json:"data"`
+			TotalAvailable float64 `json:"total_available"`
+			TotalGranted   float64 `json:"total_granted"`
+			TotalUsed      float64 `json:"total_used"`
+			RemainQuota    float64 `json:"remain_quota"`
+		}
+		if json.Unmarshal(body, &tokenUsage) == nil {
+			avail := tokenUsage.Data.TotalAvailable
+			if avail == 0 && tokenUsage.Data.RemainQuota > 0 {
+				avail = tokenUsage.Data.RemainQuota
+			}
+			if avail == 0 && tokenUsage.TotalAvailable > 0 {
+				avail = tokenUsage.TotalAvailable
+			}
+			if avail == 0 && tokenUsage.RemainQuota > 0 {
+				avail = tokenUsage.RemainQuota
+			}
+			if avail > 0 {
+				availUSD := normalizeQuotaToUSD(avail)
+				granted := tokenUsage.Data.TotalGranted
+				if granted == 0 {
+					granted = tokenUsage.TotalGranted
+				}
+				used := tokenUsage.Data.TotalUsed
+				if used == 0 {
+					used = tokenUsage.TotalUsed
+				}
+				grantedUSD := normalizeQuotaToUSD(granted)
+				usedUSD := normalizeQuotaToUSD(used)
+				if grantedUSD == 0 {
+					grantedUSD = availUSD + usedUSD
+				}
+				return &YunwuCreditGrantsResponse{
+					Object:         "token_usage",
+					TotalGranted:   grantedUSD,
+					TotalUsed:      usedUSD,
+					TotalAvailable: availUSD,
+				}, nil
+			}
 		}
 
 		// Try user profile format

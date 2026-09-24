@@ -426,3 +426,209 @@ func TestYunwuHypervisorGroupAndAllBalanceSync(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "database unavailable")
 }
+
+func TestSyncNewAPITokenUsage(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("new-api token usage endpoint with raw quota ($3 remaining)", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, "/api/usage/token", r.URL.Path)
+			assert.Equal(t, "Bearer sk-test-key", r.Header.Get("Authorization"))
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"code":    true,
+				"message": "ok",
+				"data": map[string]any{
+					"object":          "token_usage",
+					"name":            "api top",
+					"total_granted":   100000000.0, // 100M quota = $200.00
+					"total_used":      98500000.0,  // 98.5M quota = $197.00
+					"total_available": 1500000.0,   // 1.5M quota = $3.00
+					"unlimited_quota": false,
+				},
+			})
+		}))
+		defer server.Close()
+
+		sw := NewStatsWorker(nil)
+		sw.httpClient = server.Client()
+
+		grants, err := sw.syncNewAPITokenUsage(ctx, server.URL, "", "sk-test-key")
+		require.NoError(t, err)
+		assert.NotNil(t, grants)
+		assert.Equal(t, "token_usage", grants.Object)
+		assert.InDelta(t, 3.0, grants.TotalAvailable, 0.001)
+		assert.InDelta(t, 200.0, grants.TotalGranted, 0.001)
+		assert.InDelta(t, 197.0, grants.TotalUsed, 0.001)
+	})
+
+	t.Run("unlimited quota token", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"data": map[string]any{
+					"total_used":      500000.0,
+					"unlimited_quota": true,
+				},
+			})
+		}))
+		defer server.Close()
+
+		sw := NewStatsWorker(nil)
+		sw.httpClient = server.Client()
+
+		grants, err := sw.syncNewAPITokenUsage(ctx, server.URL, "", "sk-test-key")
+		require.NoError(t, err)
+		assert.NotNil(t, grants)
+		assert.Equal(t, "token_usage_unlimited", grants.Object)
+		assert.Equal(t, 999999.0, grants.TotalAvailable)
+		assert.Equal(t, 1.0, grants.TotalUsed)
+	})
+
+	t.Run("HTML response rejection", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "text/html")
+			_, _ = w.Write([]byte("<html>Error</html>"))
+		}))
+		defer server.Close()
+
+		sw := NewStatsWorker(nil)
+		sw.httpClient = server.Client()
+
+		_, err := sw.syncNewAPITokenUsage(ctx, server.URL, "", "sk-test-key")
+		assert.Error(t, err)
+	})
+}
+
+func TestSyncSubscriptionUsageSubtraction(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("hard_limit_usd $200 with total_usage 19700 cents ($197) yields $3 remaining", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			if strings.Contains(r.URL.Path, "subscription") {
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"object":         "billing_subscription",
+					"hard_limit_usd": 200.0,
+				})
+				return
+			}
+			if strings.Contains(r.URL.Path, "usage") {
+				assert.Contains(t, r.URL.RawQuery, "start_date=2020-01-01")
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"total_usage": 19700.0, // 19700 cents = $197.00
+				})
+				return
+			}
+			http.NotFound(w, r)
+		}))
+		defer server.Close()
+
+		sw := NewStatsWorker(nil)
+		sw.httpClient = server.Client()
+
+		grants, err := sw.syncSubscriptionUsage(ctx, server.URL, "/v1", "sk-test-key")
+		require.NoError(t, err)
+		assert.NotNil(t, grants)
+		assert.Equal(t, "subscription", grants.Object)
+		assert.InDelta(t, 3.0, grants.TotalAvailable, 0.001)
+		assert.InDelta(t, 200.0, grants.TotalGranted, 0.001)
+		assert.InDelta(t, 197.0, grants.TotalUsed, 0.001)
+	})
+}
+
+func TestSyncNodeStatsApiTopEndToEnd(t *testing.T) {
+	ctx := context.Background()
+	store := setupTestYunwuStore(t)
+
+	t.Run("api top with native /api/usage/token returns exactly $3.00 instead of $200.00", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			if r.URL.Path == "/api/usage/token" {
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"code":    true,
+					"message": "ok",
+					"data": map[string]any{
+						"object":          "token_usage",
+						"name":            "api top",
+						"total_granted":   100000000.0, // 100M quota = $200.00
+						"total_used":      98500000.0,  // 98.5M quota = $197.00
+						"total_available": 1500000.0,   // 1.5M quota = $3.00
+					},
+				})
+				return
+			}
+			// Legacy subscription endpoint returns 200 limit
+			if strings.Contains(r.URL.Path, "subscription") {
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"hard_limit_usd": 200.0,
+				})
+				return
+			}
+			http.NotFound(w, r)
+		}))
+		defer server.Close()
+
+		sw := NewStatsWorker(store)
+		sw.httpClient = server.Client()
+
+		node := &health.ExecutionNode{
+			NodeID:      "api-top-node",
+			AccountName: "api top",
+			Provider:    "openlux",
+		}
+
+		grants, err := sw.SyncNodeStats(ctx, node, "sk-test", server.URL)
+		require.NoError(t, err)
+		assert.NotNil(t, grants)
+		assert.Equal(t, "token_usage", grants.Object)
+		assert.InDelta(t, 3.0, grants.TotalAvailable, 0.001)
+		assert.InDelta(t, 200.0, grants.TotalGranted, 0.001)
+		assert.InDelta(t, 197.0, grants.TotalUsed, 0.001)
+	})
+
+	t.Run("api top fallback to subscription+usage subtraction correctly calculates $3.00", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			if strings.Contains(r.URL.Path, "usage/token") {
+				http.NotFound(w, r)
+				return
+			}
+			if strings.Contains(r.URL.Path, "credit_grants") {
+				http.NotFound(w, r)
+				return
+			}
+			if strings.Contains(r.URL.Path, "subscription") {
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"hard_limit_usd": 200.0,
+				})
+				return
+			}
+			if strings.Contains(r.URL.Path, "usage") {
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"total_usage": 19700.0, // 19700 cents = $197.00
+				})
+				return
+			}
+			http.NotFound(w, r)
+		}))
+		defer server.Close()
+
+		sw := NewStatsWorker(store)
+		sw.httpClient = server.Client()
+
+		node := &health.ExecutionNode{
+			NodeID:      "api-top-fallback-node",
+			AccountName: "api top",
+			Provider:    "openlux",
+		}
+
+		grants, err := sw.SyncNodeStats(ctx, node, "sk-test", server.URL+"/v1")
+		require.NoError(t, err)
+		assert.NotNil(t, grants)
+		assert.Equal(t, "subscription", grants.Object)
+		assert.InDelta(t, 3.0, grants.TotalAvailable, 0.001)
+		assert.InDelta(t, 200.0, grants.TotalGranted, 0.001)
+		assert.InDelta(t, 197.0, grants.TotalUsed, 0.001)
+	})
+}

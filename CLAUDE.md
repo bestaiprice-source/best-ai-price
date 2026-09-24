@@ -107,9 +107,10 @@ Welcome to **sub2api** and the **AI Session Hypervisor (ASH / Yunwu Engine)** re
   - `YunwuRebindingManager`: Handles failover and node cooldown transitions specifically for Yunwu provider clusters, enforcing Redis session-scoped distributed lock (`SETNX`) and running `YunwuScheduler` with user priority, credits, prices, and system state during rebinding.
   - `StatsWorker` (`pkg/hypervisor/yunwu/stats_worker.go`): Multi-provider balance checker and credit synchronization for unofficial / reseller nodes:
     - **One-API / New-API Providers (`openlux`, `api-top`, `yuanqiaoyun`)**:
-      - Checks `/v1/dashboard/billing/subscription` and `/dashboard/billing/subscription` (`hard_limit_usd` and `total_available`). Zero-balance (`hard_limit_usd <= 0` or `total_available == 0`) is recognized as a valid $0.00 balance rather than throwing a false-positive error.
-      - Checks `/dashboard/billing/credit_grants` (`total_granted`, `total_used`, `total_available`).
-      - Fallback: `/api/user/self` (`data.quota` parsed directly as available balance).
+      - Priority 1: Native New-API Token Usage Endpoint (`GET /api/usage/token` and `/v1/api/usage/token`). Returns precise key/token quota (`data.total_available`, `data.total_granted`, `data.total_used`, and `data.unlimited_quota`). Quota units (500,000 units = $1.00 USD) are normalized via `normalizeQuotaToUSD`, directly yielding accurate available balance without subtraction heuristics.
+      - Priority 2: Standard credit grants endpoint (`/dashboard/billing/credit_grants`).
+      - Priority 3: Subscription + Usage endpoints (`/v1/dashboard/billing/subscription` and `/dashboard/billing/usage`). Accurately calculates remaining available balance as `availableUSD = max(0, hardLimitUSD - totalUsageUSD)` with an expanded 5-year start date window (`start_date=2020-01-01`) to cover historical token consumption. Zero-balance (`hard_limit_usd <= 0` or `total_available == 0`) is recognized as a valid $0.00 balance rather than throwing a false-positive error.
+      - Fallback: `/api/user/self` (`data.quota` parsed directly as available balance), `/api/token/`, and `/api/user/balance`.
       - HTML/SPA Rejection: Upstream endpoints that return HTML SPA fallback pages (e.g. `<!DOCTYPE html>` or `text/html` instead of JSON, common with OpenLux or unauthenticated endpoints) are automatically detected and safely skipped with clear errors rather than failing with JSON unmarshal syntax errors.
     - **Sub2API Architecture (`portdan`)**:
       - Authoritative balance sync via `GET /v1/usage` and `/usage` with Bearer authentication.
