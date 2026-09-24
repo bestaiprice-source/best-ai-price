@@ -234,8 +234,9 @@ func (w *StatsWorker) SyncNodeStats(ctx context.Context, node *health.ExecutionN
 	// Strategy 3: New API / One API native token usage endpoint (/api/usage/token) ⚡
 	// This directly returns the exact token balance and available quota without subtraction heuristics.
 	// If the token has unlimited_quota and no specific remaining quota, it cleanly falls through.
+	// If the token has a limited quota (even if 0 balance), it is authoritative.
 	tokenGrants, errToken := w.syncNewAPITokenUsage(ctx, origin, apiPrefix, apiKey)
-	if errToken == nil && tokenGrants != nil && (tokenGrants.TotalAvailable > 0 || tokenGrants.TotalGranted > 0) {
+	if errToken == nil && tokenGrants != nil {
 		w.recordSyncedSnapshot(ctx, node, tokenGrants, "token_usage")
 		return tokenGrants, nil
 	}

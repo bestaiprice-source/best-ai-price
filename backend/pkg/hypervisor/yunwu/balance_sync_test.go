@@ -716,6 +716,53 @@ func TestSyncNodeStatsApiTopEndToEnd(t *testing.T) {
 		assert.InDelta(t, 197.0, grants.TotalUsed, 0.001)
 	})
 
+	t.Run("api top with limited quota 0 correctly returns $0.00 without falling into subscription mock", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			if r.URL.Path == "/api/usage/token" {
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"code":    true,
+					"message": "ok",
+					"data": map[string]any{
+						"object":          "token_usage",
+						"name":            "api top",
+						"total_granted":   0.0,
+						"total_used":      0.0,
+						"total_available": 0.0,
+						"remain_quota":    0.0,
+						"unlimited_quota": false,
+					},
+				})
+				return
+			}
+			// Mock subscription returning 200.0 should NOT be reached
+			if strings.Contains(r.URL.Path, "subscription") {
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"hard_limit_usd": 200.0,
+				})
+				return
+			}
+			http.NotFound(w, r)
+		}))
+		defer server.Close()
+
+		sw := NewStatsWorker(store)
+		sw.httpClient = server.Client()
+
+		node := &health.ExecutionNode{
+			NodeID:      "api-top-zero-quota-node",
+			AccountName: "api top",
+			Provider:    "api-top",
+		}
+
+		grants, err := sw.SyncNodeStats(ctx, node, "sk-test", server.URL)
+		require.NoError(t, err)
+		assert.NotNil(t, grants)
+		assert.Equal(t, "token_usage", grants.Object)
+		assert.InDelta(t, 0.0, grants.TotalAvailable, 0.001)
+		assert.InDelta(t, 0.0, grants.TotalGranted, 0.001)
+	})
+
 	t.Run("api top fallback to subscription+usage subtraction correctly calculates $3.00", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
