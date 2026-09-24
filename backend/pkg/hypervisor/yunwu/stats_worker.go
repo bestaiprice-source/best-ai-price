@@ -633,6 +633,10 @@ func (w *StatsWorker) syncNewAPITokenUsage(ctx context.Context, origin, apiPrefi
 			TotalUsed      float64 `json:"total_used"`
 			TotalAvailable float64 `json:"total_available"`
 			RemainQuota    float64 `json:"remain_quota"`
+			Quota          float64 `json:"quota"`
+			Balance        float64 `json:"balance"`
+			UserQuota      float64 `json:"user_quota"`
+			AccountQuota   float64 `json:"account_quota"`
 			UnlimitedQuota bool    `json:"unlimited_quota"`
 		}
 
@@ -648,7 +652,7 @@ func (w *StatsWorker) syncNewAPITokenUsage(ctx context.Context, origin, apiPrefi
 		}
 
 		td := envelope.Data
-		if td == nil && (envelope.TotalAvailable > 0 || envelope.TotalGranted > 0 || envelope.RemainQuota > 0 || envelope.UnlimitedQuota || envelope.Object == "token_usage") {
+		if td == nil && (envelope.TotalAvailable > 0 || envelope.TotalGranted > 0 || envelope.RemainQuota > 0 || envelope.Quota > 0 || envelope.Balance > 0 || envelope.UnlimitedQuota || envelope.Object == "token_usage") {
 			td = &envelope.tokenData
 		}
 
@@ -660,6 +664,18 @@ func (w *StatsWorker) syncNewAPITokenUsage(ctx context.Context, origin, apiPrefi
 		avail := td.TotalAvailable
 		if avail == 0 && td.RemainQuota > 0 {
 			avail = td.RemainQuota
+		}
+		if avail == 0 && td.Quota > 0 {
+			avail = td.Quota
+		}
+		if avail == 0 && td.Balance > 0 {
+			avail = td.Balance
+		}
+		if avail == 0 && td.UserQuota > 0 {
+			avail = td.UserQuota
+		}
+		if avail == 0 && td.AccountQuota > 0 {
+			avail = td.AccountQuota
 		}
 
 		// When unlimited_quota is true and no specific remaining quota is defined on the token,
@@ -941,6 +957,14 @@ func (w *StatsWorker) syncSubscriptionUsage(ctx context.Context, origin, apiPref
 					}
 				}
 			}
+		}
+
+		// In New-API / One-API relay platforms, /v1/dashboard/billing/subscription returns a static mock
+		// hard_limit_usd: 200.0 or 100.0 with 0 usage. This is NOT the user's real balance (e.g. user may have $3 in wallet).
+		// We must ignore this mock if total_available is absent.
+		if (hardLimitUSD == 200.0 || hardLimitUSD == 100.0) && totalUsageUSD == 0 && sub.TotalAvailable <= 0 {
+			lastErr = fmt.Errorf("ignoring mock hard_limit_usd (%v) from %s", hardLimitUSD, subURLUsed)
+			continue
 		}
 
 		// Calculate available balance: Remaining = HardLimit - TotalUsage
