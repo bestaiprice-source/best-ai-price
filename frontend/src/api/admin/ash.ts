@@ -106,12 +106,22 @@ export async function releaseAshDeposit(depositID: number, ownerID?: string): Pr
   return data
 }
 
+export interface YunwuNodeGroup {
+  id: number
+  name: string
+}
+
 export interface YunwuNodeItem {
   node_id: string
   account_name: string
   platform: string
   type: string
   state: string
+  provider?: string
+  model_families?: string[]
+  priority?: number
+  concurrency?: number
+  groups?: YunwuNodeGroup[]
   total_available_usd: number
   allocatable_usd?: number
   balance_status?: string
@@ -123,13 +133,37 @@ export interface YunwuNodeItem {
   status: string
 }
 
+export interface NodeBalanceSyncResult {
+  node_id: string
+  account_name: string
+  provider: string
+  status: string
+  source?: string
+  available_usd?: number
+  allocatable_usd?: number
+  total_granted_usd?: number
+  total_used_usd?: number
+  error?: string
+}
+
+export interface GroupBalanceSyncSummary {
+  group_id: number
+  total_nodes: number
+  synced_nodes: number
+  failed_nodes: number
+  total_available_usd: number
+  total_allocatable_usd: number
+  nodes: NodeBalanceSyncResult[]
+}
+
 export async function getAshYunwuHealth(): Promise<AshHealthResponse> {
   const { data } = await apiClient.get<AshHealthResponse>('/ash/admin/yunwu/health')
   return data
 }
 
-export async function getAshYunwuNodes(): Promise<YunwuNodeItem[]> {
-  const { data } = await apiClient.get<YunwuNodeItem[]>('/ash/admin/yunwu/nodes')
+export async function getAshYunwuNodes(groupID?: number | string): Promise<YunwuNodeItem[]> {
+  const url = groupID ? `/ash/admin/yunwu/nodes?group_id=${groupID}` : '/ash/admin/yunwu/nodes'
+  const { data } = await apiClient.get<YunwuNodeItem[]>(url)
   return data
 }
 
@@ -140,3 +174,16 @@ export async function syncAshYunwuNode(nodeID: string, apiKey?: string, baseURL?
   })
   return data
 }
+
+export async function syncAshYunwuGroup(groupID: number | string): Promise<GroupBalanceSyncSummary> {
+  const { data } = await apiClient.post<GroupBalanceSyncSummary>(`/ash/admin/yunwu/groups/${groupID}/sync`)
+  return data
+}
+
+export async function syncAllAshYunwuNodes(groupID?: number | string): Promise<GroupBalanceSyncSummary> {
+  const { data } = await apiClient.post<GroupBalanceSyncSummary>('/ash/admin/yunwu/sync', {
+    group_id: groupID ? Number(groupID) : undefined
+  })
+  return data
+}
+

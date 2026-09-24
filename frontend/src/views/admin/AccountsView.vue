@@ -187,6 +187,13 @@
               >
                 {{ getAntigravityTierLabel(row) }}
               </span>
+              <span
+                v-if="row.platform === 'yunwu' && row.extra?.balance_usd !== undefined"
+                class="inline-flex items-center gap-0.5 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-mono font-bold text-amber-700 dark:bg-amber-950/40 dark:text-amber-300"
+                :title="'Provider: ' + (row.extra?.provider || 'unknown') + (row.extra?.balance_updated_at ? '\nUpdated: ' + row.extra.balance_updated_at : '')"
+              >
+                <span>⚡ ${{ Number(row.extra.balance_usd).toFixed(2) }}</span>
+              </span>
             </div>
           </template>
           <template #cell-capacity="{ row }">
@@ -284,7 +291,7 @@
     <AccountTestModal :show="showTest" :account="testingAcc" @close="closeTestModal" />
     <AccountStatsModal :show="showStats" :account="statsAcc" @close="closeStatsModal" />
     <ScheduledTestsPanel :show="showSchedulePanel" :account-id="scheduleAcc?.id ?? null" :model-options="scheduleModelOptions" @close="closeSchedulePanel" />
-    <AccountActionMenu :show="menu.show" :account="menu.acc" :position="menu.pos" @close="menu.show = false" @test="handleTest" @refresh-models="handleRefreshModels" @stats="handleViewStats" @schedule="handleSchedule" @reauth="handleReAuth" @refresh-token="handleRefresh" @recover-state="handleRecoverState" @reset-quota="handleResetQuota" />
+    <AccountActionMenu :show="menu.show" :account="menu.acc" :position="menu.pos" @close="menu.show = false" @test="handleTest" @refresh-models="handleRefreshModels" @stats="handleViewStats" @schedule="handleSchedule" @reauth="handleReAuth" @refresh-token="handleRefresh" @recover-state="handleRecoverState" @reset-quota="handleResetQuota" @sync-balance="handleSyncBalance" />
     <SyncFromCrsModal :show="showSync" @close="showSync = false" @synced="reload" />
     <ImportDataModal :show="showImportData" :groups="groups" @close="showImportData = false" @imported="handleDataImported" />
     <BulkEditAccountModal :show="showBulkEdit" :account-ids="selIds" :selected-platforms="selPlatforms" :selected-types="selTypes" :proxies="proxies" :groups="groups" @close="showBulkEdit = false" @updated="handleBulkUpdated" />
@@ -1439,6 +1446,16 @@ const handleResetQuota = async (a: Account) => {
     appStore.showSuccess(t('common.success'))
   } catch (error) {
     console.error('Failed to reset quota:', error)
+  }
+}
+const handleSyncBalance = async (a: Account) => {
+  try {
+    const res = await adminAPI.ash.syncAshYunwuNode(String(a.id))
+    appStore.showSuccess(t('common.success') + `: $${res.total_available.toFixed(2)} available`)
+    reload()
+  } catch (error: any) {
+    console.error('Failed to sync balance:', error)
+    appStore.showError(error?.response?.data?.error || error?.message || 'Failed to sync balance')
   }
 }
 const handleDelete = (a: Account) => { deletingAcc.value = a; showDeleteDialog.value = true }

@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -174,6 +175,23 @@ func (w *StatsWorker) saveSnapshot(ctx context.Context, node *health.ExecutionNo
 	if err == nil && previous != nil && previous.AvailableMicroUSD != snap.AvailableMicroUSD {
 		_, _ = w.store.LogEvent(ctx, "system", nil, &node.NodeID, "YunwuBalanceReconciled", map[string]any{"previous_available_micro_usd": previous.AvailableMicroUSD, "available_micro_usd": snap.AvailableMicroUSD})
 	}
+
+	// Persist the synced balance to the Account entity in DB so it is reflected across all views
+	if w.store != nil && w.store.DB() != nil {
+		if accID, parseErr := strconv.ParseInt(node.NodeID, 10, 64); parseErr == nil && accID > 0 {
+			if dbAcc, getErr := w.store.DB().Account.Get(ctx, accID); getErr == nil && dbAcc != nil {
+				extra := dbAcc.Extra
+				if extra == nil {
+					extra = make(map[string]any)
+				}
+				extra["balance_usd"] = grants.TotalAvailable
+				extra["balance_updated_at"] = now.Format(time.RFC3339)
+				extra["balance_source"] = source
+				_ = w.store.DB().Account.UpdateOneID(accID).SetExtra(extra).Exec(ctx)
+			}
+		}
+	}
+
 	return err
 }
 
@@ -182,6 +200,21 @@ func (w *StatsWorker) SyncNodeStats(ctx context.Context, node *health.ExecutionN
 	origin, apiPrefix, err := normalizeBillingBaseURL(baseURL)
 	if err != nil {
 		return nil, err
+	}
+
+	provider := ""
+	if node != nil {
+		provider = CanonicalProvider(node.Provider)
+	}
+
+	// Strategy Priority:
+	// For Portdan / sub2api architecture, prioritize sub2api usage endpoint (/v1/usage)
+	if provider == ProviderPortdan || strings.Contains(strings.ToLower(baseURL), "portdan") {
+		sub2Grants, errSub2 := w.syncSub2APIUsage(ctx, origin, apiPrefix, apiKey)
+		if errSub2 == nil && sub2Grants != nil {
+			w.recordSyncedSnapshot(ctx, node, sub2Grants, "sub2api_usage")
+			return sub2Grants, nil
+		}
 	}
 
 	// Strategy 1: Primary OpenAI / One API / New API credit_grants endpoint (native available balance ⚡)
@@ -198,14 +231,25 @@ func (w *StatsWorker) SyncNodeStats(ctx context.Context, node *health.ExecutionN
 		return subGrants, nil
 	}
 
-	// Strategy 3: User self profile / token endpoint fallback
+	// Strategy 3: Sub2API / Gateway usage endpoint (/v1/usage, /usage)
+	sub2Grants, errSub2 := w.syncSub2APIUsage(ctx, origin, apiPrefix, apiKey)
+	if errSub2 == nil && sub2Grants != nil && (sub2Grants.TotalAvailable > 0 || sub2Grants.TotalGranted > 0) {
+		w.recordSyncedSnapshot(ctx, node, sub2Grants, "sub2api_usage")
+		return sub2Grants, nil
+	}
+
+	// Strategy 4: User self profile / token endpoint fallback
 	userGrants, errUser := w.syncNodeStatsFallback(ctx, node, apiKey, origin)
 	if errUser == nil && userGrants != nil && (userGrants.TotalAvailable > 0 || userGrants.TotalGranted > 0) {
 		w.recordSyncedSnapshot(ctx, node, userGrants, "user_self")
 		return userGrants, nil
 	}
 
-	// If we got a valid response from user/self even if 0
+	// If we got a valid response even if 0 available balance
+	if sub2Grants != nil {
+		w.recordSyncedSnapshot(ctx, node, sub2Grants, "sub2api_usage_zero")
+		return sub2Grants, nil
+	}
 	if userGrants != nil {
 		w.recordSyncedSnapshot(ctx, node, userGrants, "user_self_zero")
 		return userGrants, nil
@@ -221,12 +265,14 @@ func (w *StatsWorker) SyncNodeStats(ctx context.Context, node *health.ExecutionN
 
 	slog.Warn("[YunwuStatsWorker] All balance sync strategies failed",
 		"node_id", node.NodeID,
+		"provider", provider,
 		"err_user", errUser,
 		"err_sub", errSub,
+		"err_sub2", errSub2,
 		"err_grants", errGrants,
 	)
 
-	return nil, fmt.Errorf("failed to sync Yunwu balance across all endpoints (user/self: %v, subscription: %v, credit_grants: %v)", errUser, errSub, errGrants)
+	return nil, fmt.Errorf("failed to sync Yunwu balance across all endpoints (sub2api: %v, subscription: %v, credit_grants: %v, user/self: %v)", errSub2, errSub, errGrants, errUser)
 }
 
 func normalizeQuotaToUSD(val float64) float64 {
@@ -241,6 +287,151 @@ func normalizeQuotaToUSD(val float64) float64 {
 	return val
 }
 
+func (w *StatsWorker) syncSub2APIUsage(ctx context.Context, origin, apiPrefix, apiKey string) (*YunwuCreditGrantsResponse, error) {
+	urls := []string{
+		origin + apiPrefix + "/usage",
+		origin + "/v1/usage",
+		origin + "/usage",
+		origin + apiPrefix + "/v1/usage",
+	}
+
+	seen := make(map[string]bool)
+	var uniqueURLs []string
+	for _, u := range urls {
+		if !seen[u] {
+			seen[u] = true
+			uniqueURLs = append(uniqueURLs, u)
+		}
+	}
+
+	var lastErr error
+	for _, u := range uniqueURLs {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		req.Header.Set("Authorization", "Bearer "+apiKey)
+		req.Header.Set("x-api-key", apiKey)
+		req.Header.Set("Accept", "application/json")
+
+		resp, err := w.httpClient.Do(req)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		if resp.StatusCode != http.StatusOK {
+			resp.Body.Close()
+			lastErr = fmt.Errorf("HTTP %d from %s", resp.StatusCode, u)
+			continue
+		}
+
+		contentType := resp.Header.Get("Content-Type")
+		if contentType != "" && !strings.Contains(contentType, "json") {
+			resp.Body.Close()
+			lastErr = fmt.Errorf("non-JSON content-type (%s) from %s", contentType, u)
+			continue
+		}
+
+		body, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil {
+			lastErr = err
+			continue
+		}
+
+		trimmed := strings.TrimSpace(string(body))
+		if strings.HasPrefix(trimmed, "<") {
+			lastErr = fmt.Errorf("HTML response from %s", u)
+			continue
+		}
+
+		var sub2Resp struct {
+			Mode      string   `json:"mode"`
+			IsValid   bool     `json:"isValid"`
+			PlanName  string   `json:"planName"`
+			Balance   *float64 `json:"balance"`
+			Remaining *float64 `json:"remaining"`
+			Unit      string   `json:"unit"`
+			Quota     *struct {
+				Limit     float64 `json:"limit"`
+				Used      float64 `json:"used"`
+				Remaining float64 `json:"remaining"`
+				Unit      string  `json:"unit"`
+			} `json:"quota"`
+			Usage *struct {
+				TotalCost float64 `json:"total_cost"`
+				TodayCost float64 `json:"today_cost"`
+			} `json:"usage"`
+			Data *struct {
+				Balance   *float64 `json:"balance"`
+				Quota     *float64 `json:"quota"`
+				Remaining *float64 `json:"remaining"`
+			} `json:"data"`
+		}
+
+		if err := json.Unmarshal(body, &sub2Resp); err != nil {
+			lastErr = err
+			continue
+		}
+
+		var totalAvail, totalGranted, totalUsed float64
+		found := false
+
+		if sub2Resp.Quota != nil {
+			totalAvail = sub2Resp.Quota.Remaining
+			totalGranted = sub2Resp.Quota.Limit
+			totalUsed = sub2Resp.Quota.Used
+			found = true
+		} else if sub2Resp.Remaining != nil {
+			totalAvail = *sub2Resp.Remaining
+			found = true
+			if sub2Resp.Balance != nil {
+				totalGranted = *sub2Resp.Balance
+				if totalGranted >= totalAvail {
+					totalUsed = totalGranted - totalAvail
+				}
+			} else if sub2Resp.Usage != nil {
+				totalUsed = sub2Resp.Usage.TotalCost
+				totalGranted = totalAvail + totalUsed
+			} else {
+				totalGranted = totalAvail
+			}
+		} else if sub2Resp.Balance != nil {
+			totalAvail = *sub2Resp.Balance
+			found = true
+			if sub2Resp.Usage != nil {
+				totalUsed = sub2Resp.Usage.TotalCost
+			}
+			totalGranted = totalAvail + totalUsed
+		} else if sub2Resp.Data != nil {
+			if sub2Resp.Data.Balance != nil {
+				totalAvail = normalizeQuotaToUSD(*sub2Resp.Data.Balance)
+				totalGranted = totalAvail
+				found = true
+			} else if sub2Resp.Data.Remaining != nil {
+				totalAvail = normalizeQuotaToUSD(*sub2Resp.Data.Remaining)
+				totalGranted = totalAvail
+				found = true
+			} else if sub2Resp.Data.Quota != nil {
+				totalAvail = normalizeQuotaToUSD(*sub2Resp.Data.Quota)
+				totalGranted = totalAvail
+				found = true
+			}
+		}
+
+		if found {
+			return &YunwuCreditGrantsResponse{
+				Object:         "sub2api_usage",
+				TotalGranted:   totalGranted,
+				TotalUsed:      totalUsed,
+				TotalAvailable: totalAvail,
+			}, nil
+		}
+	}
+	return nil, lastErr
+}
+
 func (w *StatsWorker) syncCreditGrants(ctx context.Context, origin, apiPrefix, apiKey string) (*YunwuCreditGrantsResponse, error) {
 	urls := []string{
 		origin + apiPrefix + "/dashboard/billing/credit_grants",
@@ -248,8 +439,17 @@ func (w *StatsWorker) syncCreditGrants(ctx context.Context, origin, apiPrefix, a
 		origin + "/dashboard/billing/credit_grants",
 	}
 
+	seen := make(map[string]bool)
+	var uniqueURLs []string
+	for _, u := range urls {
+		if !seen[u] {
+			seen[u] = true
+			uniqueURLs = append(uniqueURLs, u)
+		}
+	}
+
 	var lastErr error
-	for _, billingURL := range urls {
+	for _, billingURL := range uniqueURLs {
 		req, err := http.NewRequestWithContext(ctx, "GET", billingURL, nil)
 		if err != nil {
 			lastErr = err
@@ -269,10 +469,23 @@ func (w *StatsWorker) syncCreditGrants(ctx context.Context, origin, apiPrefix, a
 			continue
 		}
 
+		contentType := resp.Header.Get("Content-Type")
+		if contentType != "" && !strings.Contains(contentType, "json") {
+			resp.Body.Close()
+			lastErr = fmt.Errorf("non-JSON content-type (%s) from %s", contentType, billingURL)
+			continue
+		}
+
 		body, err := io.ReadAll(resp.Body)
 		resp.Body.Close()
 		if err != nil {
 			lastErr = err
+			continue
+		}
+
+		trimmed := strings.TrimSpace(string(body))
+		if strings.HasPrefix(trimmed, "<") {
+			lastErr = fmt.Errorf("HTML response from %s", billingURL)
 			continue
 		}
 
@@ -306,8 +519,13 @@ func (w *StatsWorker) syncCreditGrants(ctx context.Context, origin, apiPrefix, a
 			}
 		}
 
+		objName := grants.Object
+		if objName == "" {
+			objName = "credit_summary"
+		}
+
 		return &YunwuCreditGrantsResponse{
-			Object:         grants.Object,
+			Object:         objName,
 			TotalGranted:   totalGranted,
 			TotalUsed:      totalUsed,
 			TotalAvailable: totalAvail,
@@ -323,11 +541,18 @@ func (w *StatsWorker) syncSubscriptionUsage(ctx context.Context, origin, apiPref
 		origin + "/dashboard/billing/subscription",
 	}
 
-	var subResp *http.Response
-	var subURLUsed string
+	seen := make(map[string]bool)
+	var uniqueURLs []string
+	for _, u := range urls {
+		if !seen[u] {
+			seen[u] = true
+			uniqueURLs = append(uniqueURLs, u)
+		}
+	}
+
 	var lastErr error
 
-	for _, u := range urls {
+	for _, u := range uniqueURLs {
 		req, err := http.NewRequestWithContext(ctx, "GET", u, nil)
 		if err != nil {
 			lastErr = err
@@ -341,107 +566,121 @@ func (w *StatsWorker) syncSubscriptionUsage(ctx context.Context, origin, apiPref
 			lastErr = err
 			continue
 		}
-		if resp.StatusCode == http.StatusOK {
-			subResp = resp
-			subURLUsed = u
-			break
+		if resp.StatusCode != http.StatusOK {
+			resp.Body.Close()
+			lastErr = fmt.Errorf("HTTP %d from %s", resp.StatusCode, u)
+			continue
 		}
+
+		contentType := resp.Header.Get("Content-Type")
+		if contentType != "" && !strings.Contains(contentType, "json") {
+			resp.Body.Close()
+			lastErr = fmt.Errorf("non-JSON content-type (%s) from %s", contentType, u)
+			continue
+		}
+
+		body, err := io.ReadAll(resp.Body)
 		resp.Body.Close()
-		lastErr = fmt.Errorf("HTTP %d from %s", resp.StatusCode, u)
-	}
+		if err != nil {
+			lastErr = err
+			continue
+		}
 
-	if subResp == nil {
-		return nil, lastErr
-	}
-	defer subResp.Body.Close()
+		trimmed := strings.TrimSpace(string(body))
+		if strings.HasPrefix(trimmed, "<") {
+			lastErr = fmt.Errorf("HTML response from %s", u)
+			continue
+		}
 
-	body, err := io.ReadAll(subResp.Body)
-	if err != nil {
-		return nil, err
-	}
+		var sub struct {
+			HardLimitUSD    float64 `json:"hard_limit_usd"`
+			SystemHardLimit float64 `json:"system_hard_limit_usd"`
+			HardLimit       float64 `json:"hard_limit"`
+			TotalGranted    float64 `json:"total_granted"`
+			TotalAvailable  float64 `json:"total_available"`
+		}
+		if err := json.Unmarshal(body, &sub); err != nil {
+			lastErr = err
+			continue
+		}
 
-	var sub struct {
-		HardLimitUSD    float64 `json:"hard_limit_usd"`
-		SystemHardLimit float64 `json:"system_hard_limit_usd"`
-		HardLimit       float64 `json:"hard_limit"`
-		TotalGranted    float64 `json:"total_granted"`
-		TotalAvailable  float64 `json:"total_available"`
-	}
-	if err := json.Unmarshal(body, &sub); err != nil {
-		return nil, err
-	}
+		subURLUsed := u
+		hardLimit := sub.HardLimitUSD
+		if hardLimit == 0 && sub.SystemHardLimit > 0 {
+			hardLimit = sub.SystemHardLimit
+		}
+		if hardLimit == 0 && sub.HardLimit > 0 {
+			hardLimit = sub.HardLimit
+		}
+		if hardLimit == 0 && sub.TotalGranted > 0 {
+			hardLimit = sub.TotalGranted
+		}
 
-	hardLimit := sub.HardLimitUSD
-	if hardLimit == 0 && sub.SystemHardLimit > 0 {
-		hardLimit = sub.SystemHardLimit
-	}
-	if hardLimit == 0 && sub.HardLimit > 0 {
-		hardLimit = sub.HardLimit
-	}
-	if hardLimit == 0 && sub.TotalGranted > 0 {
-		hardLimit = sub.TotalGranted
-	}
+		hardLimitUSD := normalizeQuotaToUSD(hardLimit)
 
-	hardLimitUSD := normalizeQuotaToUSD(hardLimit)
+		// If the subscription endpoint already provides total_available directly
+		if sub.TotalAvailable > 0 {
+			totalAvailUSD := normalizeQuotaToUSD(sub.TotalAvailable)
+			return &YunwuCreditGrantsResponse{
+				Object:         "subscription",
+				TotalGranted:   hardLimitUSD,
+				TotalUsed:      maxFloat64(0, hardLimitUSD-totalAvailUSD),
+				TotalAvailable: totalAvailUSD,
+			}, nil
+		}
 
-	// If the subscription endpoint already provides total_available directly
-	if sub.TotalAvailable > 0 {
-		totalAvailUSD := normalizeQuotaToUSD(sub.TotalAvailable)
-		return &YunwuCreditGrantsResponse{
-			Object:         "subscription",
-			TotalGranted:   hardLimitUSD,
-			TotalUsed:      maxFloat64(0, hardLimitUSD-totalAvailUSD),
-			TotalAvailable: totalAvailUSD,
-		}, nil
-	}
+		// In New API / One API, if hardLimitUSD is 0, this is a legitimate 0 available balance
+		if hardLimitUSD <= 0 && sub.TotalAvailable <= 0 {
+			return &YunwuCreditGrantsResponse{
+				Object:         "subscription_zero",
+				TotalGranted:   0,
+				TotalUsed:      0,
+				TotalAvailable: 0,
+			}, nil
+		}
 
-	if hardLimitUSD <= 0 {
-		return nil, fmt.Errorf("subscription hard limit is 0 from %s", subURLUsed)
-	}
+		// Fetch usage to calculate remaining available USD
+		now := time.Now()
+		startDate := now.AddDate(0, -1, 0).Format("2006-01-02")
+		endDate := now.AddDate(0, 0, 1).Format("2006-01-02")
 
-	// Fetch usage to calculate remaining available USD
-	now := time.Now()
-	startDate := now.AddDate(0, -1, 0).Format("2006-01-02")
-	endDate := now.AddDate(0, 0, 1).Format("2006-01-02")
+		usageBase := strings.TrimSuffix(subURLUsed, "/subscription")
+		usageURL := fmt.Sprintf("%s/usage?start_date=%s&end_date=%s", usageBase, startDate, endDate)
 
-	usageBase := strings.TrimSuffix(subURLUsed, "/subscription")
-	usageURL := fmt.Sprintf("%s/usage?start_date=%s&end_date=%s", usageBase, startDate, endDate)
-
-	totalUsageUSD := 0.0
-	if reqUsage, err := http.NewRequestWithContext(ctx, "GET", usageURL, nil); err == nil {
-		reqUsage.Header.Set("Authorization", "Bearer "+apiKey)
-		reqUsage.Header.Set("Accept", "application/json")
-		if respUsage, err := w.httpClient.Do(reqUsage); err == nil {
-			defer respUsage.Body.Close()
-			if respUsage.StatusCode == http.StatusOK {
-				if usageBody, err := io.ReadAll(respUsage.Body); err == nil {
-					var u struct {
-						TotalUsage float64 `json:"total_usage"` // Cents or Quota
-					}
-					if json.Unmarshal(usageBody, &u) == nil && u.TotalUsage > 0 {
-						if u.TotalUsage > 100000 {
-							totalUsageUSD = u.TotalUsage / 500000.0
-						} else {
-							totalUsageUSD = u.TotalUsage / 100.0
+		totalUsageUSD := 0.0
+		if reqUsage, err := http.NewRequestWithContext(ctx, "GET", usageURL, nil); err == nil {
+			reqUsage.Header.Set("Authorization", "Bearer "+apiKey)
+			reqUsage.Header.Set("Accept", "application/json")
+			if respUsage, err := w.httpClient.Do(reqUsage); err == nil {
+				defer respUsage.Body.Close()
+				if respUsage.StatusCode == http.StatusOK {
+					if usageBody, err := io.ReadAll(respUsage.Body); err == nil {
+						var u struct {
+							TotalUsage float64 `json:"total_usage"` // Cents or Quota
+						}
+						if json.Unmarshal(usageBody, &u) == nil && u.TotalUsage > 0 {
+							if u.TotalUsage > 100000 {
+								totalUsageUSD = u.TotalUsage / 500000.0
+							} else {
+								totalUsageUSD = u.TotalUsage / 100.0
+							}
 						}
 					}
 				}
 			}
 		}
+
+		availableUSD := hardLimitUSD
+		totalGrantedUSD := hardLimitUSD + totalUsageUSD
+
+		return &YunwuCreditGrantsResponse{
+			Object:         "subscription",
+			TotalGranted:   totalGrantedUSD,
+			TotalUsed:      totalUsageUSD,
+			TotalAvailable: availableUSD,
+		}, nil
 	}
-
-	// In One API / New API / Yunwu, hard_limit_usd returned by /dashboard/billing/subscription
-	// is populated directly from user.Quota (the current available balance in credits/USD).
-	// Therefore hardLimitUSD is already the available balance, rather than the initial deposit.
-	availableUSD := hardLimitUSD
-	totalGrantedUSD := hardLimitUSD + totalUsageUSD
-
-	return &YunwuCreditGrantsResponse{
-		Object:         "subscription",
-		TotalGranted:   totalGrantedUSD,
-		TotalUsed:      totalUsageUSD,
-		TotalAvailable: availableUSD,
-	}, nil
+	return nil, lastErr
 }
 
 func maxFloat64(a, b float64) float64 {
@@ -509,6 +748,9 @@ func (w *StatsWorker) syncNodeStatsFallback(ctx context.Context, node *health.Ex
 		baseURL + "/v1/user/self",
 		baseURL + "/user/self",
 		baseURL + "/api/token/",
+		baseURL + "/v1/token/",
+		baseURL + "/api/user/balance",
+		baseURL + "/v1/user/balance",
 	}
 
 	var lastErr error
@@ -532,10 +774,23 @@ func (w *StatsWorker) syncNodeStatsFallback(ctx context.Context, node *health.Ex
 			continue
 		}
 
+		contentType := resp.Header.Get("Content-Type")
+		if contentType != "" && !strings.Contains(contentType, "json") {
+			resp.Body.Close()
+			lastErr = fmt.Errorf("non-JSON content-type (%s) from %s", contentType, u)
+			continue
+		}
+
 		body, err := io.ReadAll(resp.Body)
 		resp.Body.Close()
 		if err != nil {
 			lastErr = err
+			continue
+		}
+
+		trimmed := strings.TrimSpace(string(body))
+		if strings.HasPrefix(trimmed, "<") {
+			lastErr = fmt.Errorf("HTML response from %s", u)
 			continue
 		}
 
@@ -593,6 +848,66 @@ func (w *StatsWorker) syncNodeStatsFallback(ctx context.Context, node *health.Ex
 				TotalUsed:      0,
 				TotalAvailable: totalRemain,
 			}, nil
+		}
+
+		// Try simple balance format: {"balance": 10.5} or {"data": {"balance": 10.5}}
+		var simpleBalance struct {
+			Balance   *float64 `json:"balance"`
+			Remaining *float64 `json:"remaining"`
+			Data      *struct {
+				Balance   *float64 `json:"balance"`
+				Quota     *float64 `json:"quota"`
+				Remaining *float64 `json:"remaining"`
+			} `json:"data"`
+		}
+		if json.Unmarshal(body, &simpleBalance) == nil {
+			if simpleBalance.Balance != nil {
+				avail := normalizeQuotaToUSD(*simpleBalance.Balance)
+				return &YunwuCreditGrantsResponse{
+					Object:         "user_balance",
+					TotalGranted:   avail,
+					TotalUsed:      0,
+					TotalAvailable: avail,
+				}, nil
+			}
+			if simpleBalance.Remaining != nil {
+				avail := normalizeQuotaToUSD(*simpleBalance.Remaining)
+				return &YunwuCreditGrantsResponse{
+					Object:         "user_balance",
+					TotalGranted:   avail,
+					TotalUsed:      0,
+					TotalAvailable: avail,
+				}, nil
+			}
+			if simpleBalance.Data != nil {
+				if simpleBalance.Data.Balance != nil {
+					avail := normalizeQuotaToUSD(*simpleBalance.Data.Balance)
+					return &YunwuCreditGrantsResponse{
+						Object:         "user_balance",
+						TotalGranted:   avail,
+						TotalUsed:      0,
+						TotalAvailable: avail,
+					}, nil
+				}
+				if simpleBalance.Data.Remaining != nil {
+					avail := normalizeQuotaToUSD(*simpleBalance.Data.Remaining)
+					return &YunwuCreditGrantsResponse{
+						Object:         "user_balance",
+						TotalGranted:   avail,
+						TotalUsed:      0,
+						TotalAvailable: avail,
+					}, nil
+				}
+				if simpleBalance.Data.Quota != nil {
+					avail := normalizeQuotaToUSD(*simpleBalance.Data.Quota)
+					return &YunwuCreditGrantsResponse{
+						Object:         "user_balance",
+						TotalGranted:   avail,
+						TotalUsed:      0,
+						TotalAvailable: avail,
+					}, nil
+				}
+			}
 		}
 	}
 

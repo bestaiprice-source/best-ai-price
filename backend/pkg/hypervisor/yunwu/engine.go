@@ -19,6 +19,7 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/account"
+	"github.com/Wei-Shaw/sub2api/ent/accountgroup"
 	"github.com/Wei-Shaw/sub2api/internal/credentials"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/backup"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/compiler"
@@ -1327,6 +1328,140 @@ func (yh *YunwuHypervisor) BalanceSnapshot(ctx context.Context, nodeID string) (
 	return yh.sw.Snapshot(ctx, nodeID, time.Duration(yh.cfg.YunwuBalanceStaleSeconds)*time.Second)
 }
 func (yh *YunwuHypervisor) BalanceReservePercent() int { return yh.cfg.YunwuBalanceReservePercent }
+
+// NodeBalanceSyncResult describes the outcome of syncing an individual node's balance
+type NodeBalanceSyncResult struct {
+	NodeID          string  `json:"node_id"`
+	AccountName     string  `json:"account_name"`
+	Provider        string  `json:"provider"`
+	AvailableUSD    float64 `json:"available_usd"`
+	AllocatableUSD  float64 `json:"allocatable_usd"`
+	TotalGrantedUSD float64 `json:"total_granted_usd"`
+	TotalUsedUSD    float64 `json:"total_used_usd"`
+	Status          string  `json:"status"`
+	Source          string  `json:"source,omitempty"`
+	Error           string  `json:"error,omitempty"`
+}
+
+// GroupBalanceSyncSummary summarizes batch balance sync for a group or all nodes
+type GroupBalanceSyncSummary struct {
+	GroupID             int64                   `json:"group_id,omitempty"`
+	TotalNodes          int                     `json:"total_nodes"`
+	SyncedNodes         int                     `json:"synced_nodes"`
+	FailedNodes         int                     `json:"failed_nodes"`
+	TotalAvailableUSD   float64                 `json:"total_available_usd"`
+	TotalAllocatableUSD float64                 `json:"total_allocatable_usd"`
+	Nodes               []NodeBalanceSyncResult `json:"nodes"`
+}
+
+// SyncGroupBalances syncs the balance for all active nodes belonging to a specific group
+func (yh *YunwuHypervisor) SyncGroupBalances(ctx context.Context, groupID int64) (*GroupBalanceSyncSummary, error) {
+	return yh.SyncAllBalances(ctx, groupID)
+}
+
+// SyncAllBalances syncs balance across all Yunwu accounts, optionally filtered by groupID
+func (yh *YunwuHypervisor) SyncAllBalances(ctx context.Context, groupID ...int64) (*GroupBalanceSyncSummary, error) {
+	if yh.store == nil || yh.store.DB() == nil {
+		return nil, fmt.Errorf("database unavailable")
+	}
+
+	query := yh.store.DB().Account.Query().Where(
+		account.PlatformEqualFold("yunwu"),
+		account.Status("active"),
+	)
+
+	var targetGroupID int64
+	if len(groupID) > 0 && groupID[0] > 0 {
+		targetGroupID = groupID[0]
+		query = query.Where(account.HasAccountGroupsWith(accountgroup.GroupIDEQ(targetGroupID)))
+	}
+
+	accounts, err := query.All(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query accounts: %w", err)
+	}
+
+	summary := &GroupBalanceSyncSummary{
+		GroupID:    targetGroupID,
+		TotalNodes: len(accounts),
+		Nodes:      make([]NodeBalanceSyncResult, 0, len(accounts)),
+	}
+
+	reservePercent := yh.cfg.YunwuBalanceReservePercent
+
+	for _, acc := range accounts {
+		nodeID := fmt.Sprintf("%d", acc.ID)
+		prov := ParseNodeProvider(acc.Extra)
+		resItem := NodeBalanceSyncResult{
+			NodeID:      nodeID,
+			AccountName: acc.Name,
+			Provider:    prov,
+			Status:      "unknown",
+		}
+
+		creds, decErr := credentials.DecryptMap(acc.Credentials, yh.decryptor)
+		if decErr != nil {
+			observability.Default.YunwuBalanceSyncFailed()
+			resItem.Status = "error"
+			resItem.Error = decErr.Error()
+			summary.FailedNodes++
+			summary.Nodes = append(summary.Nodes, resItem)
+			continue
+		}
+
+		apiKey, _ := creds["api_key"].(string)
+		baseURL, _ := creds["base_url"].(string)
+		if baseURL == "" {
+			baseURL = DefaultBaseURLForProvider(prov)
+		}
+
+		if apiKey == "" {
+			observability.Default.YunwuBalanceSyncFailed()
+			resItem.Status = "error"
+			resItem.Error = "API key is empty"
+			summary.FailedNodes++
+			summary.Nodes = append(summary.Nodes, resItem)
+			continue
+		}
+
+		node := &health.ExecutionNode{
+			NodeID:      nodeID,
+			AccountName: acc.Name,
+			Provider:    prov,
+			State:       "healthy",
+		}
+
+		grants, syncErr := yh.sw.SyncNodeStats(ctx, node, apiKey, baseURL)
+		if syncErr != nil {
+			observability.Default.YunwuBalanceSyncFailed()
+			resItem.Status = "error"
+			resItem.Error = syncErr.Error()
+			summary.FailedNodes++
+			summary.Nodes = append(summary.Nodes, resItem)
+			continue
+		}
+
+		availUSD := grants.TotalAvailable
+		allocatableUSD := availUSD * (1.0 - float64(reservePercent)/100.0)
+		if allocatableUSD < 0 {
+			allocatableUSD = 0
+		}
+
+		resItem.Status = "fresh"
+		resItem.Source = grants.Object
+		resItem.AvailableUSD = availUSD
+		resItem.AllocatableUSD = allocatableUSD
+		resItem.TotalGrantedUSD = grants.TotalGranted
+		resItem.TotalUsedUSD = grants.TotalUsed
+
+		summary.SyncedNodes++
+		summary.TotalAvailableUSD += availUSD
+		summary.TotalAllocatableUSD += allocatableUSD
+		summary.Nodes = append(summary.Nodes, resItem)
+	}
+
+	return summary, nil
+}
 
 // rawRequestPayload is a minimal structure to extract messages and system prompt
 // from Anthropic/OpenAI-compatible JSON request payloads.

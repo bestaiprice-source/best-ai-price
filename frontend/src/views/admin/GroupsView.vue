@@ -214,6 +214,16 @@
           <template #cell-actions="{ row }">
             <div class="flex items-center gap-1">
               <button
+                v-if="row.platform === 'yunwu'"
+                @click="handleSyncGroupBalances(row)"
+                :disabled="syncingGroups[row.id]"
+                class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-purple-600 transition-colors hover:bg-purple-50 hover:text-purple-700 dark:text-purple-400 dark:hover:bg-purple-900/30"
+                title="Sync all node balances in this Yunwu group"
+              >
+                <Icon name="bolt" size="sm" :class="{ 'animate-spin': syncingGroups[row.id] }" />
+                <span class="text-xs">{{ syncingGroups[row.id] ? 'Syncing...' : 'Sync Balance' }}</span>
+              </button>
+              <button
                 @click="handleEdit(row)"
                 class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-primary-600 dark:hover:bg-dark-700 dark:hover:text-primary-400"
               >
@@ -2600,6 +2610,23 @@ const handleUpdateGroup = async () => {
     console.error('Error updating group:', error)
   } finally {
     submitting.value = false
+  }
+}
+
+const syncingGroups = reactive<Record<number, boolean>>({})
+
+const handleSyncGroupBalances = async (group: AdminGroup) => {
+  syncingGroups[group.id] = true
+  try {
+    const summary = await adminAPI.ash.syncAshYunwuGroup(group.id)
+    appStore.showSuccess(
+      `Synced ${summary.synced_nodes}/${summary.total_nodes} nodes for "${group.name}". Available: $${summary.total_available_usd.toFixed(2)}`
+    )
+  } catch (error: any) {
+    appStore.showError(error.response?.data?.error || error.message || 'Failed to sync group balances')
+    console.error('Error syncing group balances:', error)
+  } finally {
+    syncingGroups[group.id] = false
   }
 }
 

@@ -105,7 +105,22 @@ Welcome to **sub2api** and the **AI Session Hypervisor (ASH / Yunwu Engine)** re
     - `processOpenAIStream` handles both standard OpenAI chat completion SSE chunks (`choices[0].delta.content`) and Responses API chunks (`response.output_text.delta`).
   - `YunwuScheduler`: Tailored node selection for Yunwu execution nodes based on price tiering, node health, queue depth, latency, and `UsedTokens` organic load balancing penalty (ensuring fair traffic distribution across active channels even when balance APIs are untracked). `YunwuRequireFreshBalance` defaults to `false` so nodes without balance API endpoints are not excluded.
   - `YunwuRebindingManager`: Handles failover and node cooldown transitions specifically for Yunwu provider clusters, enforcing Redis session-scoped distributed lock (`SETNX`) and running `YunwuScheduler` with user priority, credits, prices, and system state during rebinding.
-  - `StatsWorker`: Syncs upstream credit balance from `/api/user/self`, `/dashboard/billing/subscription`, and credit grants across One-API/New-API compatible providers. In `/api/user/self`, `data.quota` is parsed directly as the current available balance (avoiding double-subtraction of `used_quota`).
+  - `StatsWorker` (`pkg/hypervisor/yunwu/stats_worker.go`): Multi-provider balance checker and credit synchronization for unofficial / reseller nodes:
+    - **One-API / New-API Providers (`openlux`, `api-top`, `yuanqiaoyun`)**:
+      - Checks `/v1/dashboard/billing/subscription` and `/dashboard/billing/subscription` (`hard_limit_usd` and `total_available`). Zero-balance (`hard_limit_usd <= 0` or `total_available == 0`) is recognized as a valid $0.00 balance rather than throwing a false-positive error.
+      - Checks `/dashboard/billing/credit_grants` (`total_granted`, `total_used`, `total_available`).
+      - Fallback: `/api/user/self` (`data.quota` parsed directly as available balance).
+      - HTML/SPA Rejection: Upstream endpoints that return HTML SPA fallback pages (e.g. `<!DOCTYPE html>` or `text/html` instead of JSON, common with OpenLux or unauthenticated endpoints) are automatically detected and safely skipped with clear errors rather than failing with JSON unmarshal syntax errors.
+    - **Sub2API Architecture (`portdan`)**:
+      - Authoritative balance sync via `GET /v1/usage` and `/usage` with Bearer authentication.
+      - Supports unrestricted mode (`mode: "unrestricted"`, `balance`, `remaining`), quota-limited mode (`mode: "quota_limited"`, `quota: {limit, used, remaining}`), and data object formats.
+      - Automatically sets `total_available`, `total_granted`, and `total_used`.
+    - **Persistence**:
+      - Persists `extra["balance_usd"]`, `extra["balance_updated_at"]`, and `extra["balance_source"]` directly to the PostgreSQL `account` row for administrative tracking and UI visibility.
+      - Stores real-time `BalanceSnapshot` in Redis (`ash:yunwu:balance:{nodeID}`) with fresh/stale markers for the scheduler and health monitor.
+  - **Group-Level & Cluster-Wide Sync (`YunwuHypervisor`)**:
+    - `SyncGroupBalances(ctx, groupID)`: Queries all active accounts assigned to the specified group, decrypts credentials, syncs balances in parallel, and calculates group summaries (`total_nodes`, `synced_nodes`, `failed_nodes`, `total_available_usd`, `total_allocatable_usd`).
+    - `SyncAllBalances(ctx, [groupID])`: Cluster-wide balance sync across all Yunwu accounts or filtered by group.
   - Runtime credentials: `AnthropicRuntime.Execute` attaches `Authorization: Bearer <api_key>` headers for Yunwu platform accounts.
   - **Dynamic Multi-Provider Real-Time Pricing (`YunwuPricingService`) & Gateway Pre-Admission**: Resolves model pricing on-demand from upstream pricing endpoints (`https://api.openlux.ai/api/pricing`, `https://api-top.com/api/pricing`, `https://yuanqiaoyun.com/api/pricing` in standard One-API/New-API format: base rate $0.002/1k tokens, `model_ratio`, `completion_ratio`, `cache_ratio`, `model_price`, and for **Portdan** via `https://bestaiprice.com/gateway/data/providers.json` with per-provider/model price indexing). Employs `singleflight.Group` to prevent redundant parallel HTTP requests, maintains strictly isolated pricing caches per provider (`FetchPricingForProvider`, `GetModelPricingForProvider`, `ContextWithPricingProvider`) to eliminate cross-provider model leakage and pricing pollution, and caches snapshots in-memory (30-minute TTL) as a fallback against upstream network drops. Integrated into `BillingService` so gateway usage logs (`RecordUsage`) accurately calculate costs and deduct funds from user balances for Yunwu and Gemini models (`gemini-3.8-flash`, `gemini-3.5-flash`, `gemini-3-pro-preview`, etc.). Enforces pre-routing admission guard (`CheckModelPricingAvailable`): if pricing cannot be resolved for a model, the request is rejected immediately with HTTP 400 without forwarding to upstream and without touching user balance.
   - **Configurable Pricing Markup (Default 10% / 1.10x)**: Supports global and per-group markup multipliers. System-wide default rate multiplier is set to `1.10` (+10% margin over base USD prices). Configurable in Admin Settings -> Defaults (`default_rate_multiplier`), in group creation forms (defaults to `1.1`), and stored in DB settings (`SettingKeyDefaultRateMultiplier = "default_rate_multiplier"`). Deductions calculate as `TotalCost * RateMultiplier`.
@@ -402,8 +417,10 @@ sub2api/
 - `GET /api/v1/ash/health`: Hypervisor health state and degradation mode.
 - `GET /api/v1/ash/stats/nodes`: Real-time node runtime metrics.
 - `GET /api/v1/ash/admin/yunwu/health`: Health status of Yunwu provider cluster.
-- `GET /api/v1/ash/admin/yunwu/nodes`: List Yunwu nodes with credit balances and allocatable capacity.
-- `POST /api/v1/ash/admin/yunwu/nodes/:id/sync`: Trigger manual credit balance synchronization for a Yunwu node.
+- `GET /api/v1/ash/admin/yunwu/nodes?group_id=:id`: List Yunwu nodes with credit balances, allocatable capacity, provider, model families, and group associations (optionally filtered by `group_id`).
+- `POST /api/v1/ash/admin/yunwu/nodes/:id/sync`: Trigger manual credit balance synchronization for an individual Yunwu node.
+- `POST /api/v1/ash/admin/yunwu/groups/:id/sync`: Trigger credit balance synchronization for all active nodes in a Yunwu group.
+- `POST /api/v1/ash/admin/yunwu/sync`: Trigger batch credit balance synchronization across all Yunwu nodes (or filtered by `{ group_id }`).
 
 ### Server Binding & Security Defaults
 - **Localhost Binding**: By default, `server.host` and `BIND_HOST` default to `127.0.0.1` across `config.go`, setup wizards, and systemd service. Docker compose configuration `deploy/docker-compose.local.yml` supports configurable host port mapping via `${HOST_PORT:-8000}:${SERVER_PORT:-8080}` to avoid port collisions on Windows Hyper-V / WSL reserved ranges.

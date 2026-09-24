@@ -13,6 +13,7 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/account"
+	"github.com/Wei-Shaw/sub2api/ent/accountgroup"
 	"github.com/Wei-Shaw/sub2api/ent/ashdeposit"
 	"github.com/Wei-Shaw/sub2api/ent/ashevent"
 	"github.com/Wei-Shaw/sub2api/ent/ashusage"
@@ -937,7 +938,7 @@ func RegisterAshRoutes(
 				c.JSON(http.StatusOK, yh.GetHealthStatus(c.Request.Context()))
 			})
 
-			// GET /ash/admin/yunwu/nodes
+			// GET /ash/admin/yunwu/nodes (supports ?group_id=...)
 			adminGroup.GET("/admin/yunwu/nodes", func(c *gin.Context) {
 				slog.Info("[YunwuAdminAPI] Listing Yunwu execution nodes")
 				engine := h.Gateway.GetHypervisorEngine()
@@ -947,13 +948,26 @@ func RegisterAshRoutes(
 					return
 				}
 
-				dbAccounts, _ := engine.Storage().DB().Account.Query().
+				query := engine.Storage().DB().Account.Query().
 					Where(account.PlatformEqualFold("yunwu")).
-					All(c.Request.Context())
+					WithAccountGroups(func(ag *ent.AccountGroupQuery) {
+						ag.WithGroup()
+					})
 
-				if len(dbAccounts) == 0 {
+				if groupIDStr := c.Query("group_id"); groupIDStr != "" {
+					if gid, err := strconv.ParseInt(groupIDStr, 10, 64); err == nil && gid > 0 {
+						query = query.Where(account.HasAccountGroupsWith(accountgroup.GroupIDEQ(gid)))
+					}
+				}
+
+				dbAccounts, _ := query.All(c.Request.Context())
+
+				if len(dbAccounts) == 0 && c.Query("group_id") == "" {
 					dbAccounts, _ = engine.Storage().DB().Account.Query().
 						Where(account.NameContainsFold("yunwu")).
+						WithAccountGroups(func(ag *ent.AccountGroupQuery) {
+							ag.WithGroup()
+						}).
 						All(c.Request.Context())
 				}
 
@@ -980,10 +994,23 @@ func RegisterAshRoutes(
 						}
 					}
 
-					baseURL := yunwu.DefaultBaseURLForProvider(yunwu.ParseNodeProvider(acc.Extra))
+					prov := yunwu.ParseNodeProvider(acc.Extra)
+					baseURL := yunwu.DefaultBaseURLForProvider(prov)
 					if acc.Credentials != nil {
 						if urlStr, ok := acc.Credentials["base_url"].(string); ok && urlStr != "" {
 							baseURL = urlStr
+						}
+					}
+
+					var nodeGroups []gin.H
+					if acc.Edges.AccountGroups != nil {
+						for _, ag := range acc.Edges.AccountGroups {
+							if ag.Edges.Group != nil {
+								nodeGroups = append(nodeGroups, gin.H{
+									"id":   ag.Edges.Group.ID,
+									"name": ag.Edges.Group.Name,
+								})
+							}
 						}
 					}
 
@@ -991,6 +1018,9 @@ func RegisterAshRoutes(
 						"node_id":                 nodeID,
 						"account_name":            acc.Name,
 						"platform":                "yunwu",
+						"provider":                prov,
+						"model_families":          yunwu.ParseNodeModelFamilies(acc.Extra),
+						"groups":                  nodeGroups,
 						"type":                    acc.Type,
 						"state":                   nodeState,
 						"total_available_usd":     availableUSD,
@@ -1002,6 +1032,8 @@ func RegisterAshRoutes(
 						"reserve_percent":         reservePercent,
 						"base_url":                baseURL,
 						"status":                  acc.Status,
+						"priority":                acc.Priority,
+						"concurrency":             acc.Concurrency,
 					})
 				}
 
@@ -1009,7 +1041,7 @@ func RegisterAshRoutes(
 				c.JSON(http.StatusOK, list)
 			})
 
-			// POST /ash/admin/yunwu/nodes/:id/sync - Manual balance sync with Yunwu API
+			// POST /ash/admin/yunwu/nodes/:id/sync - Manual balance sync with Yunwu API for a single node
 			adminGroup.POST("/admin/yunwu/nodes/:id/sync", func(c *gin.Context) {
 				nodeID := c.Param("id")
 				slog.Info("[YunwuAdminAPI] Manual balance sync requested for node", "node_id", nodeID)
@@ -1036,7 +1068,87 @@ func RegisterAshRoutes(
 				})
 
 				slog.Info("[YunwuAdminAPI] Sync node balance succeeded", "node_id", nodeID, "total_available", grants.TotalAvailable)
-				c.JSON(http.StatusOK, grants)
+				c.JSON(http.StatusOK, gin.H{
+					"node_id":         nodeID,
+					"total_available": grants.TotalAvailable,
+					"total_used":      grants.TotalUsed,
+					"total_granted":   grants.TotalGranted,
+					"source":          grants.Object,
+					"status":          "fresh",
+				})
+			})
+
+			// POST /ash/admin/yunwu/groups/:id/sync - Sync balance for all nodes in a Yunwu group
+			adminGroup.POST("/admin/yunwu/groups/:id/sync", func(c *gin.Context) {
+				groupIDStr := c.Param("id")
+				gid, err := strconv.ParseInt(groupIDStr, 10, 64)
+				if err != nil || gid <= 0 {
+					c.JSON(http.StatusBadRequest, gin.H{"error": "invalid group ID"})
+					return
+				}
+
+				engine := h.Gateway.GetHypervisorEngine()
+				if engine == nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "hypervisor engine not initialized"})
+					return
+				}
+
+				yh := engine.YunwuEngine()
+				if yh == nil {
+					yh = yunwu.NewYunwuHypervisor(engine.Storage(), nil)
+				}
+
+				summary, err := yh.SyncGroupBalances(c.Request.Context(), gid)
+				if err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+					return
+				}
+
+				slog.Info("[YunwuAdminAPI] Synced group balances",
+					"group_id", gid,
+					"total_nodes", summary.TotalNodes,
+					"synced_nodes", summary.SyncedNodes,
+					"total_available_usd", summary.TotalAvailableUSD,
+				)
+				c.JSON(http.StatusOK, summary)
+			})
+
+			// POST /ash/admin/yunwu/sync - Batch sync balance across nodes (optionally filtered by group_id)
+			adminGroup.POST("/admin/yunwu/sync", func(c *gin.Context) {
+				var req struct {
+					GroupID int64 `json:"group_id"`
+				}
+				_ = c.ShouldBindJSON(&req)
+				if req.GroupID <= 0 {
+					if qGid := c.Query("group_id"); qGid != "" {
+						req.GroupID, _ = strconv.ParseInt(qGid, 10, 64)
+					}
+				}
+
+				engine := h.Gateway.GetHypervisorEngine()
+				if engine == nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "hypervisor engine not initialized"})
+					return
+				}
+
+				yh := engine.YunwuEngine()
+				if yh == nil {
+					yh = yunwu.NewYunwuHypervisor(engine.Storage(), nil)
+				}
+
+				summary, err := yh.SyncAllBalances(c.Request.Context(), req.GroupID)
+				if err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+					return
+				}
+
+				slog.Info("[YunwuAdminAPI] Synced all Yunwu nodes",
+					"group_id", req.GroupID,
+					"total_nodes", summary.TotalNodes,
+					"synced_nodes", summary.SyncedNodes,
+					"total_available_usd", summary.TotalAvailableUSD,
+				)
+				c.JSON(http.StatusOK, summary)
 			})
 		}
 	}

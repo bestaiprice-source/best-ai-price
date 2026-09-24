@@ -366,13 +366,44 @@
     <!-- YUNWU NODE BALANCE & HEALTH TABLE -->
     <!-- ========================================================================= -->
     <div v-else class="space-y-3">
-      <div class="flex items-center justify-between">
-        <h4 class="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
-          <span>Yunwu API Channel Balances & Node Health</span>
-          <span class="rounded bg-purple-100 px-2 py-0.5 text-xs font-semibold text-purple-700 dark:bg-purple-900/50 dark:text-purple-300">
-            {{ yunwuNodes.length }} channels
-          </span>
-        </h4>
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div class="flex flex-wrap items-center gap-3">
+          <h4 class="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
+            <span>Yunwu API Channel Balances & Node Health</span>
+            <span class="rounded bg-purple-100 px-2 py-0.5 text-xs font-semibold text-purple-700 dark:bg-purple-900/50 dark:text-purple-300">
+              {{ yunwuNodes.length }} channels
+            </span>
+          </h4>
+
+          <!-- Group Filter Dropdown -->
+          <div class="flex items-center gap-1.5 text-xs">
+            <span class="text-gray-500 dark:text-gray-400 font-medium">Group:</span>
+            <select
+              v-model="selectedGroupFilter"
+              @change="handleGroupFilterChange"
+              class="rounded-lg border border-gray-300 bg-white px-2.5 py-1 text-xs text-gray-700 focus:border-purple-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+            >
+              <option value="">All Groups</option>
+              <option v-for="g in availableGroups" :key="g.id" :value="g.id">
+                {{ g.name }}
+              </option>
+            </select>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <!-- Sync Filtered Group Button -->
+          <button
+            v-if="selectedGroupFilter"
+            @click="handleSyncFilteredGroup"
+            :disabled="syncingAll || loading"
+            class="btn btn-secondary text-xs flex items-center gap-1 bg-purple-50 text-purple-700 hover:bg-purple-100 dark:bg-purple-950/40 dark:text-purple-300 border-purple-200 dark:border-purple-800"
+            title="Sync balances for all nodes in the selected group"
+          >
+            <Icon name="bolt" size="xs" :class="{ 'animate-spin': syncingAll }" />
+            <span>Sync Group Balances</span>
+          </button>
+        </div>
       </div>
 
       <div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
@@ -401,14 +432,31 @@
             >
               <!-- Node Name / Account -->
               <td class="px-4 py-3 font-semibold text-gray-900 dark:text-white">
-                <div class="flex items-center gap-1.5">
+                <div class="flex flex-wrap items-center gap-1.5">
                   <span>{{ node.account_name || ('Yunwu Node #' + node.node_id) }}</span>
+                  <span
+                    v-if="node.provider"
+                    class="rounded px-1.5 py-0.5 text-[10px] font-mono font-semibold uppercase tracking-wider"
+                    :class="getProviderBadgeClass(node.provider)"
+                  >
+                    {{ node.provider }}
+                  </span>
                   <span class="rounded bg-purple-100 px-1.5 py-0.2 text-[10px] font-mono text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">
                     {{ node.type || 'api_key' }}
                   </span>
                 </div>
-                <div class="text-[10px] font-mono text-gray-400">
-                  ID: {{ node.node_id }} <span v-if="node.base_url">| {{ node.base_url }}</span>
+                <div class="flex flex-wrap items-center gap-2 mt-0.5 text-[10px] text-gray-400">
+                  <span class="font-mono">ID: {{ node.node_id }}</span>
+                  <span v-if="node.groups && node.groups.length > 0" class="flex items-center gap-1">
+                    <span
+                      v-for="grp in node.groups"
+                      :key="grp.id"
+                      class="rounded bg-gray-100 px-1.5 py-0.2 text-[9px] text-gray-600 dark:bg-gray-700 dark:text-gray-300"
+                    >
+                      {{ grp.name }}
+                    </span>
+                  </span>
+                  <span v-if="node.base_url" class="truncate max-w-[200px]" :title="node.base_url">| {{ node.base_url }}</span>
                 </div>
               </td>
 
@@ -629,13 +677,47 @@ const formatRelativeTime = (dateStr?: string) => {
   }
 }
 
+const selectedGroupFilter = ref<string | number>('')
+
+const availableGroups = computed(() => {
+  const map = new Map<number, string>()
+  for (const node of yunwuNodes.value) {
+    if (node.groups) {
+      for (const g of node.groups) {
+        map.set(g.id, g.name)
+      }
+    }
+  }
+  return Array.from(map.entries()).map(([id, name]) => ({ id, name }))
+})
+
+const getProviderBadgeClass = (provider?: string) => {
+  switch (provider?.toLowerCase()) {
+    case 'openlux':
+      return 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 border border-blue-200 dark:border-blue-800'
+    case 'portdan':
+      return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
+    case 'api-top':
+      return 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 border border-amber-200 dark:border-amber-800'
+    case 'yuanqiaoyun':
+      return 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800'
+    default:
+      return 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'
+  }
+}
+
+const handleGroupFilterChange = () => {
+  loadAshData()
+}
+
 const loadAshData = async () => {
   loading.value = true
   try {
+    const groupID = selectedGroupFilter.value ? Number(selectedGroupFilter.value) : undefined
     if (activeEngine.value === 'yunwu') {
       const [healthRes, ywNodes] = await Promise.all([
         adminAPI.ash.getAshYunwuHealth().catch(() => null),
-        adminAPI.ash.getAshYunwuNodes().catch(() => [])
+        adminAPI.ash.getAshYunwuNodes(groupID).catch(() => [])
       ])
       healthData.value = healthRes
       yunwuNodes.value = ywNodes || []
@@ -645,7 +727,7 @@ const loadAshData = async () => {
         adminAPI.ash.getAshGlobalStats().catch(() => null),
         adminAPI.ash.getAshNodeMetrics().catch(() => []),
         adminAPI.ash.getAshAnalytics().catch(() => null),
-        adminAPI.ash.getAshYunwuNodes().catch(() => [])
+        adminAPI.ash.getAshYunwuNodes(groupID).catch(() => [])
       ])
       healthData.value = healthRes
       globalStats.value = statsRes
@@ -674,11 +756,24 @@ const handleSyncNodeBalance = async (nodeID: string) => {
   }
 }
 
+const handleSyncFilteredGroup = async () => {
+  if (!selectedGroupFilter.value) return
+  syncingAll.value = true
+  try {
+    await adminAPI.ash.syncAshYunwuGroup(selectedGroupFilter.value)
+    await loadAshData()
+  } catch (err) {
+    console.error('Failed to sync group balances:', err)
+  } finally {
+    syncingAll.value = false
+  }
+}
+
 const handleSyncAllYunwu = async () => {
   syncingAll.value = true
   try {
-    const promises = yunwuNodes.value.map(n => adminAPI.ash.syncAshYunwuNode(n.node_id).catch(() => null))
-    await Promise.all(promises)
+    const groupID = selectedGroupFilter.value ? Number(selectedGroupFilter.value) : undefined
+    await adminAPI.ash.syncAllAshYunwuNodes(groupID)
     await loadAshData()
   } catch (err) {
     console.error('Failed to sync all Yunwu nodes:', err)

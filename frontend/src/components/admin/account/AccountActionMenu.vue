@@ -40,6 +40,14 @@
                 {{ t('admin.accounts.refreshToken') }}
               </button>
             </template>
+            <button
+              v-if="account.platform === 'yunwu'"
+              @click="$emit('sync-balance', account); $emit('close')"
+              class="flex w-full items-center gap-2 px-4 py-2 text-sm text-purple-600 hover:bg-gray-100 dark:hover:bg-dark-700"
+            >
+              <Icon name="bolt" size="sm" class="text-purple-500" />
+              {{ t('admin.accounts.syncBalance') || 'Sync Balance' }}
+            </button>
             <div v-if="hasRecoverableState" class="my-1 border-t border-gray-100 dark:border-dark-700"></div>
             <button v-if="hasRecoverableState" @click="$emit('recover-state', account); $emit('close')" class="flex w-full items-center gap-2 px-4 py-2 text-sm text-emerald-600 hover:bg-gray-100 dark:hover:bg-dark-700">
               <Icon name="sync" size="sm" />
@@ -63,7 +71,7 @@ import { Icon } from '@/components/icons'
 import type { Account } from '@/types'
 
 const props = defineProps<{ show: boolean; account: Account | null; position: { top: number; left: number } | null }>()
-const emit = defineEmits(['close', 'test', 'refresh-models', 'stats', 'schedule', 'reauth', 'refresh-token', 'recover-state', 'reset-quota'])
+const emit = defineEmits(['close', 'test', 'refresh-models', 'stats', 'schedule', 'reauth', 'refresh-token', 'recover-state', 'reset-quota', 'sync-balance'])
 const { t } = useI18n()
 const supportsModelRefresh = computed(() => {
   if (!props.account) return false
