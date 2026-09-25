@@ -1937,3 +1937,62 @@ func (h *SettingHandler) UpdateStreamTimeoutSettingsGateway(c gatewayctx.Gateway
 		ThresholdWindowMinutes: updatedSettings.ThresholdWindowMinutes,
 	})
 }
+
+// GetTelegramSettings 获取Telegram配置
+// GET /api/v1/admin/settings/telegram
+func (h *SettingHandler) GetTelegramSettings(c *gin.Context) {
+	h.GetTelegramSettingsGateway(gatewayctx.FromGin(c))
+}
+
+func (h *SettingHandler) GetTelegramSettingsGateway(c gatewayctx.GatewayContext) {
+	settings, err := h.settingService.GetTelegramSettings(c.Request().Context())
+	if err != nil {
+		response.ErrorFromContext(gatewayJSONResponder{ctx: c}, err)
+		return
+	}
+	response.SuccessContext(gatewayJSONResponder{ctx: c}, settings)
+}
+
+// UpdateTelegramSettings 更新Telegram配置
+// PUT /api/v1/admin/settings/telegram
+func (h *SettingHandler) UpdateTelegramSettings(c *gin.Context) {
+	h.UpdateTelegramSettingsGateway(gatewayctx.FromGin(c))
+}
+
+func (h *SettingHandler) UpdateTelegramSettingsGateway(c gatewayctx.GatewayContext) {
+	var req service.UpdateTelegramSettingsRequest
+	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
+		response.ErrorContext(gatewayJSONResponder{ctx: c}, http.StatusBadRequest, "Invalid request: "+err.Error())
+		return
+	}
+
+	if err := h.settingService.SetTelegramSettings(c.Request().Context(), &req); err != nil {
+		response.ErrorContext(gatewayJSONResponder{ctx: c}, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	updated, err := h.settingService.GetTelegramSettings(c.Request().Context())
+	if err != nil {
+		response.ErrorFromContext(gatewayJSONResponder{ctx: c}, err)
+		return
+	}
+	response.SuccessContext(gatewayJSONResponder{ctx: c}, updated)
+}
+
+// TestTelegramSettings 发送Telegram测试通知
+// POST /api/v1/admin/settings/telegram/test
+func (h *SettingHandler) TestTelegramSettings(c *gin.Context) {
+	h.TestTelegramSettingsGateway(gatewayctx.FromGin(c))
+}
+
+func (h *SettingHandler) TestTelegramSettingsGateway(c gatewayctx.GatewayContext) {
+	count, err := h.settingService.TestTelegramNotification(c.Request().Context())
+	if err != nil {
+		response.ErrorContext(gatewayJSONResponder{ctx: c}, http.StatusBadRequest, err.Error())
+		return
+	}
+	response.SuccessContext(gatewayJSONResponder{ctx: c}, map[string]any{
+		"sent_count": count,
+		"message":    "Test notification sent successfully",
+	})
+}

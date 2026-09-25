@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
@@ -11,6 +12,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
+	"net/http"
 	"net/url"
 	"regexp"
 	"sort"
@@ -146,6 +148,7 @@ type SettingService struct {
 	onUpdate               func() // Callback when settings are updated (for cache invalidation)
 	onS3Update             func() // Callback when Sora S3 settings are updated
 	onTLSFingerprintUpdate func() // Callback when TLS fingerprint settings are updated
+	onTelegramUpdate       func() // Callback when Telegram settings are updated
 	version                string // Application version
 	hotSettings            sync.Map
 	hotSettingsSF          singleflight.Group
@@ -466,6 +469,11 @@ func (s *SettingService) SetOnS3UpdateCallback(callback func()) {
 // SetOnTLSFingerprintUpdateCallback 设置 TLS 指纹配置变更时的回调函数。
 func (s *SettingService) SetOnTLSFingerprintUpdateCallback(callback func()) {
 	s.onTLSFingerprintUpdate = callback
+}
+
+// SetOnTelegramUpdateCallback 设置 Telegram 配置变更时的回调函数。
+func (s *SettingService) SetOnTelegramUpdateCallback(callback func()) {
+	s.onTelegramUpdate = callback
 }
 
 // SetVersion sets the application version for injection into public settings
@@ -3008,4 +3016,245 @@ func maxInt64(value int64, min int64) int64 {
 		return min
 	}
 	return value
+}
+
+// TelegramSettings holds the administrative Telegram bot and notification settings.
+type TelegramSettings struct {
+	BotToken           string              `json:"bot_token"`
+	BotTokenConfigured bool                `json:"bot_token_configured"`
+	AlertsEnabled      bool                `json:"alerts_enabled"`
+	AlertThresholdUSD  float64             `json:"alert_threshold_usd"`
+	AllowedUsers       []string            `json:"allowed_users"`
+	ActiveRecipients   []TelegramRecipient `json:"active_recipients"`
+}
+
+type TelegramRecipient struct {
+	ChatID    int64  `json:"chat_id"`
+	Username  string `json:"username"`
+	FirstName string `json:"first_name"`
+	JoinedAt  string `json:"joined_at"`
+}
+
+// UpdateTelegramSettingsRequest represents payload for updating Telegram notification settings.
+type UpdateTelegramSettingsRequest struct {
+	BotToken          *string  `json:"bot_token,omitempty"`
+	AlertsEnabled     bool     `json:"alerts_enabled"`
+	AlertThresholdUSD float64  `json:"alert_threshold_usd"`
+	AllowedUsers      []string `json:"allowed_users"`
+}
+
+func maskTelegramToken(token string) string {
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return ""
+	}
+	parts := strings.SplitN(token, ":", 2)
+	if len(parts) == 2 {
+		prefix := parts[0]
+		secret := parts[1]
+		if len(secret) > 6 {
+			return prefix + ":" + secret[:3] + strings.Repeat("*", len(secret)-6) + secret[len(secret)-3:]
+		}
+		return prefix + ":******"
+	}
+	if len(token) > 8 {
+		return token[:4] + strings.Repeat("*", len(token)-8) + token[len(token)-4:]
+	}
+	return "********"
+}
+
+func isTelegramUserAllowedSimple(userID int64, username string, allowedUsers []string) bool {
+	if len(allowedUsers) == 0 {
+		return false
+	}
+	cleanUsername := strings.ToLower(strings.TrimPrefix(strings.TrimSpace(username), "@"))
+	userIDStr := strconv.FormatInt(userID, 10)
+	for _, u := range allowedUsers {
+		trimmed := strings.TrimSpace(u)
+		if trimmed == "" {
+			continue
+		}
+		if trimmed == "*" || trimmed == userIDStr {
+			return true
+		}
+		cleanAllowed := strings.ToLower(strings.TrimPrefix(trimmed, "@"))
+		if cleanUsername != "" && cleanAllowed == cleanUsername {
+			return true
+		}
+	}
+	return false
+}
+
+// GetTelegramSettings retrieves Telegram notification settings.
+func (s *SettingService) GetTelegramSettings(ctx context.Context) (*TelegramSettings, error) {
+	keys := []string{
+		SettingKeyTelegramBotToken,
+		SettingKeyTelegramAlertsEnabled,
+		SettingKeyTelegramAlertThreshold,
+		SettingKeyTelegramAllowedUsers,
+		SettingKeyTelegramActiveRecipients,
+	}
+
+	values, err := s.settingRepo.GetMultiple(ctx, keys)
+	if err != nil {
+		return nil, fmt.Errorf("get telegram settings: %w", err)
+	}
+
+	token := values[SettingKeyTelegramBotToken]
+	alertsEnabled := true
+	if v, exists := values[SettingKeyTelegramAlertsEnabled]; exists {
+		if b, err := strconv.ParseBool(v); err == nil {
+			alertsEnabled = b
+		}
+	}
+
+	threshold := 20.0
+	if v, exists := values[SettingKeyTelegramAlertThreshold]; exists {
+		if f, err := strconv.ParseFloat(v, 64); err == nil && f >= 0 {
+			threshold = f
+		}
+	}
+
+	allowedUsers := []string{}
+	if raw := values[SettingKeyTelegramAllowedUsers]; raw != "" {
+		_ = json.Unmarshal([]byte(raw), &allowedUsers)
+	}
+
+	activeRecipients := []TelegramRecipient{}
+	if raw := values[SettingKeyTelegramActiveRecipients]; raw != "" {
+		_ = json.Unmarshal([]byte(raw), &activeRecipients)
+	}
+
+	return &TelegramSettings{
+		BotToken:           maskTelegramToken(token),
+		BotTokenConfigured: strings.TrimSpace(token) != "",
+		AlertsEnabled:      alertsEnabled,
+		AlertThresholdUSD:  threshold,
+		AllowedUsers:       allowedUsers,
+		ActiveRecipients:   activeRecipients,
+	}, nil
+}
+
+// SetTelegramSettings updates Telegram notification settings.
+func (s *SettingService) SetTelegramSettings(ctx context.Context, req *UpdateTelegramSettingsRequest) error {
+	if req == nil {
+		return fmt.Errorf("request cannot be nil")
+	}
+
+	updates := make(map[string]string)
+	if req.BotToken != nil {
+		rawToken := strings.TrimSpace(*req.BotToken)
+		if rawToken != "" && !strings.Contains(rawToken, "*") {
+			updates[SettingKeyTelegramBotToken] = rawToken
+		}
+	}
+
+	updates[SettingKeyTelegramAlertsEnabled] = strconv.FormatBool(req.AlertsEnabled)
+
+	threshold := req.AlertThresholdUSD
+	if threshold < 0 {
+		threshold = 20.0
+	}
+	updates[SettingKeyTelegramAlertThreshold] = strconv.FormatFloat(threshold, 'f', 2, 64)
+
+	allowedUsersJSON, err := json.Marshal(req.AllowedUsers)
+	if err != nil {
+		return fmt.Errorf("marshal allowed users: %w", err)
+	}
+	updates[SettingKeyTelegramAllowedUsers] = string(allowedUsersJSON)
+
+	if err := s.settingRepo.SetMultiple(ctx, updates); err != nil {
+		return fmt.Errorf("update telegram settings: %w", err)
+	}
+
+	if s.onTelegramUpdate != nil {
+		s.onTelegramUpdate()
+	}
+	return nil
+}
+
+// TestTelegramNotification sends a test alert to authorized Telegram recipients.
+func (s *SettingService) TestTelegramNotification(ctx context.Context) (int, error) {
+	keys := []string{
+		SettingKeyTelegramBotToken,
+		SettingKeyTelegramAllowedUsers,
+		SettingKeyTelegramActiveRecipients,
+	}
+	values, err := s.settingRepo.GetMultiple(ctx, keys)
+	if err != nil {
+		return 0, fmt.Errorf("get telegram settings: %w", err)
+	}
+
+	token := strings.TrimSpace(values[SettingKeyTelegramBotToken])
+	if token == "" {
+		return 0, fmt.Errorf("telegram bot token is not configured")
+	}
+
+	var allowedUsers []string
+	if raw := values[SettingKeyTelegramAllowedUsers]; raw != "" {
+		_ = json.Unmarshal([]byte(raw), &allowedUsers)
+	}
+
+	var activeRecipients []TelegramRecipient
+	if raw := values[SettingKeyTelegramActiveRecipients]; raw != "" {
+		_ = json.Unmarshal([]byte(raw), &activeRecipients)
+	}
+
+	targetMap := make(map[int64]struct{})
+	for _, r := range activeRecipients {
+		if r.ChatID != 0 && isTelegramUserAllowedSimple(r.ChatID, r.Username, allowedUsers) {
+			targetMap[r.ChatID] = struct{}{}
+		}
+	}
+	for _, u := range allowedUsers {
+		if id, err := strconv.ParseInt(strings.TrimSpace(u), 10, 64); err == nil && id != 0 {
+			targetMap[id] = struct{}{}
+		}
+	}
+
+	if len(targetMap) == 0 {
+		return 0, fmt.Errorf("no recipients available to receive test alert (please specify numeric user IDs in allowed users or send /start to the bot)")
+	}
+
+	msg := fmt.Sprintf(
+		"🧪 <b>Тестовое уведомление: AI Gateway</b>\n\n"+
+			"Telegram-бот успешно подключен и настроен для мониторинга балансов провайдеров.\n"+
+			"Время: %s",
+		time.Now().UTC().Format("2006-01-02 15:04:05 UTC"),
+	)
+
+	sentCount := 0
+	var lastErr error
+	client := &http.Client{Timeout: 10 * time.Second}
+	for chatID := range targetMap {
+		payload := map[string]string{
+			"chat_id":    strconv.FormatInt(chatID, 10),
+			"text":       msg,
+			"parse_mode": "HTML",
+		}
+		bodyBytes, _ := json.Marshal(payload)
+		endpoint := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", token)
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(bodyBytes))
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := client.Do(req)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		resp.Body.Close()
+		if resp.StatusCode == http.StatusOK {
+			sentCount++
+		} else {
+			lastErr = fmt.Errorf("telegram returned HTTP %d", resp.StatusCode)
+		}
+	}
+
+	if sentCount == 0 && lastErr != nil {
+		return 0, lastErr
+	}
+	return sentCount, nil
 }

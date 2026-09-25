@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -364,3 +365,42 @@ func TestStatsWorker_NotifierIntegration(t *testing.T) {
 
 	assert.True(t, sw.Notifier().IsAlerted(ctx, "integ-node-1"))
 }
+
+func TestTelegramNotifier_SendDirectAlert(t *testing.T) {
+	var sentMessages []telegramSendMessagePayload
+	var mu sync.Mutex
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/bottest-token/sendMessage" {
+			var payload telegramSendMessagePayload
+			body, _ := io.ReadAll(r.Body)
+			_ = json.Unmarshal(body, &payload)
+			mu.Lock()
+			sentMessages = append(sentMessages, payload)
+			mu.Unlock()
+			_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
+	}))
+	defer server.Close()
+
+	cfg := &config.HypervisorConfig{
+		TelegramBotToken:     "test-token",
+		TelegramAllowedUsers: []string{"123456", "654321"},
+	}
+
+	notifier := NewTelegramNotifier(nil, cfg)
+	notifier.SetBaseURL(server.URL)
+	notifier.SetHTTPClient(server.Client())
+
+	count, err := notifier.SendDirectAlert(context.Background(), "Direct alert test")
+	require.NoError(t, err)
+	assert.Equal(t, 2, count)
+
+	mu.Lock()
+	defer mu.Unlock()
+	assert.Len(t, sentMessages, 2)
+}
+

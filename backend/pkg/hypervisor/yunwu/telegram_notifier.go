@@ -24,6 +24,7 @@ type TelegramNotifier struct {
 	cfg        *config.HypervisorConfig
 	httpClient *http.Client
 	baseURL    string
+	bot        *TelegramBot
 
 	mu         sync.Mutex
 	memAlerted map[string]bool
@@ -38,7 +39,7 @@ func NewTelegramNotifier(store *storage.Storage, cfg *config.HypervisorConfig) *
 		store: store,
 		cfg:   cfg,
 		httpClient: &http.Client{
-			Timeout: 10 * time.Second,
+			Timeout: 15 * time.Second,
 		},
 		baseURL:    "https://api.telegram.org",
 		memAlerted: make(map[string]bool),
@@ -57,58 +58,131 @@ func (n *TelegramNotifier) SetHTTPClient(client *http.Client) {
 	n.httpClient = client
 }
 
-func (n *TelegramNotifier) resolveConfig(ctx context.Context) (enabled bool, botToken, chatID string, threshold float64) {
-	enabled = true
-	threshold = 20.0
+func (n *TelegramNotifier) SetBot(bot *TelegramBot) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.bot = bot
+}
+
+type notifierConfig struct {
+	enabled      bool
+	botToken     string
+	threshold    float64
+	allowedUsers []string
+	recipients   []TelegramRecipient
+	legacyChatID string
+}
+
+func (n *TelegramNotifier) resolveNotifierConfig(ctx context.Context) notifierConfig {
+	cfg := notifierConfig{
+		enabled:   true,
+		threshold: 20.0,
+	}
+
 	if n.cfg != nil {
-		enabled = n.cfg.TelegramAlertsEnabled
-		botToken = n.cfg.TelegramBotToken
-		chatID = n.cfg.TelegramChatID
+		cfg.enabled = n.cfg.TelegramAlertsEnabled
+		cfg.botToken = n.cfg.TelegramBotToken
+		cfg.legacyChatID = n.cfg.TelegramChatID
 		if n.cfg.TelegramAlertThresholdUSD > 0 {
-			threshold = n.cfg.TelegramAlertThresholdUSD
+			cfg.threshold = n.cfg.TelegramAlertThresholdUSD
+		}
+		cfg.allowedUsers = append(cfg.allowedUsers, n.cfg.TelegramAllowedUsers...)
+	}
+
+	if n.store != nil && n.store.DB() != nil {
+		keys := []string{
+			config.SettingKeyTelegramBotToken,
+			config.SettingKeyTelegramChatID,
+			config.SettingKeyTelegramAlertThreshold,
+			config.SettingKeyTelegramAlertsEnabled,
+			config.SettingKeyTelegramAllowedUsers,
+			config.SettingKeyTelegramActiveRecipients,
+		}
+
+		settings, err := n.store.DB().Setting.Query().
+			Where(setting.KeyIn(keys...)).
+			All(ctx)
+		if err == nil {
+			for _, s := range settings {
+				switch s.Key {
+				case config.SettingKeyTelegramBotToken:
+					if strings.TrimSpace(s.Value) != "" {
+						cfg.botToken = strings.TrimSpace(s.Value)
+					}
+				case config.SettingKeyTelegramChatID:
+					if strings.TrimSpace(s.Value) != "" {
+						cfg.legacyChatID = strings.TrimSpace(s.Value)
+					}
+				case config.SettingKeyTelegramAlertThreshold:
+					if val, err := strconv.ParseFloat(strings.TrimSpace(s.Value), 64); err == nil && val >= 0 {
+						cfg.threshold = val
+					}
+				case config.SettingKeyTelegramAlertsEnabled:
+					if val, err := strconv.ParseBool(strings.TrimSpace(s.Value)); err == nil {
+						cfg.enabled = val
+					}
+				case config.SettingKeyTelegramAllowedUsers:
+					if parsed := parseAllowedUsers(s.Value); len(parsed) > 0 {
+						cfg.allowedUsers = parsed
+					}
+				case config.SettingKeyTelegramActiveRecipients:
+					var recs []TelegramRecipient
+					if err := json.Unmarshal([]byte(s.Value), &recs); err == nil {
+						cfg.recipients = recs
+					}
+				}
+			}
 		}
 	}
 
-	if n.store == nil || n.store.DB() == nil {
-		return enabled, botToken, chatID, threshold
-	}
-
-	keys := []string{
-		config.SettingKeyTelegramBotToken,
-		config.SettingKeyTelegramChatID,
-		config.SettingKeyTelegramAlertThreshold,
-		config.SettingKeyTelegramAlertsEnabled,
-	}
-
-	settings, err := n.store.DB().Setting.Query().
-		Where(setting.KeyIn(keys...)).
-		All(ctx)
-	if err != nil {
-		return enabled, botToken, chatID, threshold
-	}
-
-	for _, s := range settings {
-		switch s.Key {
-		case config.SettingKeyTelegramBotToken:
-			if strings.TrimSpace(s.Value) != "" {
-				botToken = strings.TrimSpace(s.Value)
-			}
-		case config.SettingKeyTelegramChatID:
-			if strings.TrimSpace(s.Value) != "" {
-				chatID = strings.TrimSpace(s.Value)
-			}
-		case config.SettingKeyTelegramAlertThreshold:
-			if val, err := strconv.ParseFloat(strings.TrimSpace(s.Value), 64); err == nil && val >= 0 {
-				threshold = val
-			}
-		case config.SettingKeyTelegramAlertsEnabled:
-			if val, err := strconv.ParseBool(strings.TrimSpace(s.Value)); err == nil {
-				enabled = val
+	// Supplement with in-memory recipients from TelegramBot if available
+	if n.bot != nil {
+		botRecs := n.bot.Recipients()
+		existingMap := make(map[int64]bool)
+		for _, r := range cfg.recipients {
+			existingMap[r.ChatID] = true
+		}
+		for _, br := range botRecs {
+			if !existingMap[br.ChatID] {
+				cfg.recipients = append(cfg.recipients, br)
 			}
 		}
 	}
 
-	return enabled, botToken, chatID, threshold
+	return cfg
+}
+
+func (n *TelegramNotifier) resolveTargetChatIDs(cfg notifierConfig) []string {
+	targetMap := make(map[string]struct{})
+
+	// 1. All active recipients whose user ID or username is authorized
+	for _, r := range cfg.recipients {
+		if r.ChatID == 0 {
+			continue
+		}
+		if IsTelegramUserAllowed(r.ChatID, r.Username, cfg.allowedUsers) {
+			targetMap[strconv.FormatInt(r.ChatID, 10)] = struct{}{}
+		}
+	}
+
+	// 2. Direct numeric user IDs in allowedUsers
+	for _, u := range cfg.allowedUsers {
+		trimmed := strings.TrimSpace(u)
+		if _, err := strconv.ParseInt(trimmed, 10, 64); err == nil && trimmed != "0" {
+			targetMap[trimmed] = struct{}{}
+		}
+	}
+
+	// 3. Fallback legacy chat ID if specified and no other recipients
+	if len(targetMap) == 0 && cfg.legacyChatID != "" {
+		targetMap[cfg.legacyChatID] = struct{}{}
+	}
+
+	result := make([]string, 0, len(targetMap))
+	for id := range targetMap {
+		result = append(result, id)
+	}
+	return result
 }
 
 func (n *TelegramNotifier) markAlerted(ctx context.Context, nodeID string) (bool, error) {
@@ -159,32 +233,43 @@ func (n *TelegramNotifier) CheckAndNotify(ctx context.Context, nodeID, accountNa
 		return false, nil
 	}
 
-	enabled, botToken, chatID, threshold := n.resolveConfig(ctx)
-	if !enabled {
+	nCfg := n.resolveNotifierConfig(ctx)
+	if !nCfg.enabled {
 		return false, nil
 	}
 
-	// When balance is above threshold, clear any prior alert state so future drops will alert again.
-	if availableUSD > threshold {
+	// Balance replenished above threshold: reset alert state
+	if availableUSD > nCfg.threshold {
 		if n.IsAlerted(ctx, nodeID) {
 			n.clearAlerted(ctx, nodeID)
 			slog.Info("[TelegramNotifier] Yunwu node balance replenished above threshold, alert state reset",
 				"node_id", nodeID,
 				"provider", provider,
 				"available_usd", availableUSD,
-				"threshold", threshold,
+				"threshold", nCfg.threshold,
 			)
 		}
 		return false, nil
 	}
 
 	// Balance is <= threshold ($20 or lower).
-	if botToken == "" || chatID == "" {
-		slog.Debug("[TelegramNotifier] Low balance detected but Telegram credentials not configured",
+	if strings.TrimSpace(nCfg.botToken) == "" {
+		slog.Debug("[TelegramNotifier] Low balance detected but Telegram bot token not configured",
 			"node_id", nodeID,
 			"provider", provider,
 			"available_usd", availableUSD,
-			"threshold", threshold,
+			"threshold", nCfg.threshold,
+		)
+		return false, nil
+	}
+
+	targetChatIDs := n.resolveTargetChatIDs(nCfg)
+	if len(targetChatIDs) == 0 {
+		slog.Info("[TelegramNotifier] Low balance detected but no authorized Telegram users/recipients configured",
+			"node_id", nodeID,
+			"provider", provider,
+			"available_usd", availableUSD,
+			"threshold", nCfg.threshold,
 		)
 		return false, nil
 	}
@@ -198,25 +283,64 @@ func (n *TelegramNotifier) CheckAndNotify(ctx context.Context, nodeID, accountNa
 		return false, nil
 	}
 
-	msg := formatAlertMessage(provider, accountName, nodeID, availableUSD, threshold)
-	if err := n.sendTelegramMessage(ctx, botToken, chatID, msg); err != nil {
-		// Clear alerted state so we can retry on next balance sync
+	msg := formatAlertMessage(provider, accountName, nodeID, availableUSD, nCfg.threshold)
+
+	sentCount := 0
+	var lastErr error
+	for _, chatID := range targetChatIDs {
+		if err := n.sendTelegramMessage(ctx, nCfg.botToken, chatID, msg); err != nil {
+			slog.Error("[TelegramNotifier] Failed to send Telegram alert to recipient",
+				"chat_id", chatID,
+				"node_id", nodeID,
+				"error", err,
+			)
+			lastErr = err
+		} else {
+			sentCount++
+		}
+	}
+
+	if sentCount == 0 && lastErr != nil {
+		// If all deliveries failed, reset state so retry occurs on next sync
 		n.clearAlerted(ctx, nodeID)
-		slog.Error("[TelegramNotifier] Failed to send Telegram low balance alert",
-			"node_id", nodeID,
-			"provider", provider,
-			"error", err,
-		)
-		return false, err
+		return false, lastErr
 	}
 
 	slog.Info("[TelegramNotifier] Successfully sent Telegram low balance alert",
 		"node_id", nodeID,
 		"provider", provider,
 		"available_usd", availableUSD,
-		"threshold", threshold,
+		"threshold", nCfg.threshold,
+		"recipients_count", sentCount,
 	)
 	return true, nil
+}
+
+func (n *TelegramNotifier) SendDirectAlert(ctx context.Context, text string) (int, error) {
+	nCfg := n.resolveNotifierConfig(ctx)
+	if strings.TrimSpace(nCfg.botToken) == "" {
+		return 0, fmt.Errorf("telegram bot token is not configured")
+	}
+
+	targetChatIDs := n.resolveTargetChatIDs(nCfg)
+	if len(targetChatIDs) == 0 {
+		return 0, fmt.Errorf("no authorized Telegram recipients found (whitelist users or send /start to bot)")
+	}
+
+	sentCount := 0
+	var lastErr error
+	for _, chatID := range targetChatIDs {
+		if err := n.sendTelegramMessage(ctx, nCfg.botToken, chatID, text); err != nil {
+			lastErr = err
+		} else {
+			sentCount++
+		}
+	}
+
+	if sentCount == 0 && lastErr != nil {
+		return 0, lastErr
+	}
+	return sentCount, nil
 }
 
 type telegramSendMessagePayload struct {
@@ -288,14 +412,14 @@ func formatAlertMessage(provider, accountName, nodeID string, balance, threshold
 		accountName = nodeID
 	}
 	return fmt.Sprintf(
-		"⚠️ <b>Low Balance Alert: %s</b>\n\n"+
-			"• <b>Provider:</b> %s\n"+
-			"• <b>Account:</b> %s\n"+
+		"⚠️ <b>Низкий баланс провайдера: %s</b>\n\n"+
+			"• <b>Провайдер:</b> %s\n"+
+			"• <b>Аккаунт:</b> %s\n"+
 			"• <b>Node ID:</b> <code>%s</code>\n"+
-			"• <b>Current Balance:</b> $%.2f\n"+
-			"• <b>Threshold:</b> $%.2f\n"+
-			"• <b>Status:</b> Immediate attention required\n"+
-			"• <b>Time:</b> %s",
+			"• <b>Текущий баланс:</b> $%.2f\n"+
+			"• <b>Порог алерта:</b> $%.2f\n"+
+			"• <b>Статус:</b> Требуется пополнение\n"+
+			"• <b>Время:</b> %s",
 		html.EscapeString(provider),
 		html.EscapeString(provider),
 		html.EscapeString(accountName),

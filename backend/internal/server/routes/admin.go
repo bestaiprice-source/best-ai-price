@@ -388,6 +388,9 @@ func ExecutableAdminRoutes(h *handler.Handlers) []gatewayctx.RouteDef {
 			gatewayctx.RouteDef{Method: http.MethodDelete, Path: "/api/v1/admin/settings/admin-api-key", Handler: h.Admin.Setting.DeleteAdminAPIKeyGateway, Middleware: []string{"request_logger", "cors", "security_headers", "client_request_id", "admin_auth"}},
 			gatewayctx.RouteDef{Method: http.MethodGet, Path: "/api/v1/admin/settings/overload-cooldown", Handler: h.Admin.Setting.GetOverloadCooldownSettingsGateway, Middleware: []string{"request_logger", "cors", "security_headers", "client_request_id", "admin_auth"}},
 			gatewayctx.RouteDef{Method: http.MethodPut, Path: "/api/v1/admin/settings/overload-cooldown", Handler: h.Admin.Setting.UpdateOverloadCooldownSettingsGateway, Middleware: []string{"request_logger", "cors", "security_headers", "client_request_id", "admin_auth"}},
+			gatewayctx.RouteDef{Method: http.MethodGet, Path: "/api/v1/admin/settings/telegram", Handler: h.Admin.Setting.GetTelegramSettingsGateway, Middleware: []string{"request_logger", "cors", "security_headers", "client_request_id", "admin_auth"}},
+			gatewayctx.RouteDef{Method: http.MethodPut, Path: "/api/v1/admin/settings/telegram", Handler: h.Admin.Setting.UpdateTelegramSettingsGateway, Middleware: []string{"request_logger", "cors", "security_headers", "client_request_id", "admin_auth"}},
+			gatewayctx.RouteDef{Method: http.MethodPost, Path: "/api/v1/admin/settings/telegram/test", Handler: h.Admin.Setting.TestTelegramSettingsGateway, Middleware: []string{"request_logger", "cors", "security_headers", "client_request_id", "admin_auth"}},
 			gatewayctx.RouteDef{Method: http.MethodGet, Path: "/api/v1/admin/settings/stream-timeout", Handler: h.Admin.Setting.GetStreamTimeoutSettingsGateway, Middleware: []string{"request_logger", "cors", "security_headers", "client_request_id", "admin_auth"}},
 			gatewayctx.RouteDef{Method: http.MethodPut, Path: "/api/v1/admin/settings/stream-timeout", Handler: h.Admin.Setting.UpdateStreamTimeoutSettingsGateway, Middleware: []string{"request_logger", "cors", "security_headers", "client_request_id", "admin_auth"}},
 			gatewayctx.RouteDef{Method: http.MethodGet, Path: "/api/v1/admin/settings/rectifier", Handler: h.Admin.Setting.GetRectifierSettingsGateway, Middleware: []string{"request_logger", "cors", "security_headers", "client_request_id", "admin_auth"}},
@@ -844,6 +847,10 @@ func registerSettingsRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		// 529过载冷却配置
 		adminSettings.GET("/overload-cooldown", h.Admin.Setting.GetOverloadCooldownSettings)
 		adminSettings.PUT("/overload-cooldown", h.Admin.Setting.UpdateOverloadCooldownSettings)
+		// Telegram 通知配置
+		adminSettings.GET("/telegram", h.Admin.Setting.GetTelegramSettings)
+		adminSettings.PUT("/telegram", h.Admin.Setting.UpdateTelegramSettings)
+		adminSettings.POST("/telegram/test", h.Admin.Setting.TestTelegramSettings)
 		// 流超时处理配置
 		adminSettings.GET("/stream-timeout", h.Admin.Setting.GetStreamTimeoutSettings)
 		adminSettings.PUT("/stream-timeout", h.Admin.Setting.UpdateStreamTimeoutSettings)

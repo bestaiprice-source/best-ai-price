@@ -133,6 +133,9 @@ func NewYunwuHypervisor(store *storage.Storage, rt runtime.Runtime, decryptors .
 		return nodes
 	})
 	yh.startBalanceSync(context.Background())
+	if yh.sw != nil && yh.sw.Bot() != nil {
+		yh.sw.Bot().Start(context.Background())
+	}
 
 	slog.Info("[YunwuHypervisor] Initialized dedicated Yunwu Engine")
 	return yh

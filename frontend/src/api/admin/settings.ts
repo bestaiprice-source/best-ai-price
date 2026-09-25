@@ -625,6 +625,44 @@ export async function getWebSearchEmulationConfig(): Promise<WebSearchEmulationC
   }
 }
 
+export interface TelegramRecipient {
+  chat_id: number
+  username: string
+  first_name: string
+  joined_at: string
+}
+
+export interface TelegramSettings {
+  bot_token: string
+  bot_token_configured: boolean
+  alerts_enabled: boolean
+  alert_threshold_usd: number
+  allowed_users: string[]
+  active_recipients: TelegramRecipient[]
+}
+
+export interface UpdateTelegramSettingsRequest {
+  bot_token?: string
+  alerts_enabled: boolean
+  alert_threshold_usd: number
+  allowed_users: string[]
+}
+
+export async function getTelegramSettings(): Promise<TelegramSettings> {
+  const { data } = await apiClient.get<TelegramSettings>('/admin/settings/telegram')
+  return data
+}
+
+export async function updateTelegramSettings(payload: UpdateTelegramSettingsRequest): Promise<TelegramSettings> {
+  const { data } = await apiClient.put<TelegramSettings>('/admin/settings/telegram', payload)
+  return data
+}
+
+export async function testTelegramNotification(): Promise<{ sent_count: number; message: string }> {
+  const { data } = await apiClient.post<{ sent_count: number; message: string }>('/admin/settings/telegram/test')
+  return data
+}
+
 export const settingsAPI = {
   getSettings,
   updateSettings,
@@ -655,7 +693,10 @@ export const settingsAPI = {
   updateSoraS3Profile,
   deleteSoraS3Profile,
   setActiveSoraS3Profile,
-  getWebSearchEmulationConfig
+  getWebSearchEmulationConfig,
+  getTelegramSettings,
+  updateTelegramSettings,
+  testTelegramNotification
 }
 
 export default settingsAPI

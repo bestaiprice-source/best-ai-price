@@ -99,3 +99,35 @@ func (nm *NodeManager) DeleteNodeRuntimeState(ctx context.Context, nodeID string
 	key := NodeRuntimeKey(nodeID)
 	return nm.store.Redis().Del(ctx, key).Err()
 }
+
+func (nm *NodeManager) GetAllNodes(ctx context.Context) ([]ExecutionNode, error) {
+	if nm.store == nil || nm.store.Redis() == nil {
+		return nil, nil
+	}
+	var cursor uint64
+	var allNodes []ExecutionNode
+	for {
+		keys, nextCursor, err := nm.store.Redis().Scan(ctx, cursor, "ash:node:*", 100).Result()
+		if err != nil {
+			return nil, err
+		}
+		for _, key := range keys {
+			if len(key) > 8 && key[len(key)-8:] == ":runtime" {
+				continue
+			}
+			data, err := nm.store.Redis().Get(ctx, key).Bytes()
+			if err != nil {
+				continue
+			}
+			var node ExecutionNode
+			if err := json.Unmarshal(data, &node); err == nil {
+				allNodes = append(allNodes, node)
+			}
+		}
+		cursor = nextCursor
+		if cursor == 0 {
+			break
+		}
+	}
+	return allNodes, nil
+}

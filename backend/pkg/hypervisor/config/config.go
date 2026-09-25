@@ -3,13 +3,16 @@ package config
 import (
 	"os"
 	"strconv"
+	"strings"
 )
 
 const (
-	SettingKeyTelegramBotToken       = "telegram_bot_token"
-	SettingKeyTelegramChatID         = "telegram_chat_id"
-	SettingKeyTelegramAlertThreshold = "telegram_alert_threshold"
-	SettingKeyTelegramAlertsEnabled  = "telegram_alerts_enabled"
+	SettingKeyTelegramBotToken          = "telegram_bot_token"
+	SettingKeyTelegramChatID            = "telegram_chat_id"
+	SettingKeyTelegramAlertThreshold    = "telegram_alert_threshold"
+	SettingKeyTelegramAlertsEnabled     = "telegram_alerts_enabled"
+	SettingKeyTelegramAllowedUsers      = "telegram_allowed_users"
+	SettingKeyTelegramActiveRecipients  = "telegram_active_recipients"
 )
 
 type HypervisorConfig struct {
@@ -36,10 +39,11 @@ type HypervisorConfig struct {
 	ActiveUserWindowSeconds       int
 	PoolReservePercent            int
 	MaxOwnerPoolSharePercent      int
-	TelegramBotToken              string  `mapstructure:"telegram_bot_token"`
-	TelegramChatID                string  `mapstructure:"telegram_chat_id"`
-	TelegramAlertThresholdUSD     float64 `mapstructure:"telegram_alert_threshold_usd"`
-	TelegramAlertsEnabled         bool    `mapstructure:"telegram_alerts_enabled"`
+	TelegramBotToken              string   `mapstructure:"telegram_bot_token"`
+	TelegramChatID                string   `mapstructure:"telegram_chat_id"`
+	TelegramAlertThresholdUSD     float64  `mapstructure:"telegram_alert_threshold_usd"`
+	TelegramAlertsEnabled         bool     `mapstructure:"telegram_alerts_enabled"`
+	TelegramAllowedUsers          []string `mapstructure:"telegram_allowed_users"`
 }
 
 // LoadFromEnv loads Hypervisor config from environment variables as overrides/fallbacks.
@@ -72,6 +76,7 @@ func LoadFromEnv() *HypervisorConfig {
 		TelegramChatID:                getEnvStringWithFallback("ASH_TELEGRAM_CHAT_ID", "TELEGRAM_CHAT_ID", ""),
 		TelegramAlertThresholdUSD:     getEnvFloatWithFallback("ASH_TELEGRAM_ALERT_THRESHOLD", "TELEGRAM_ALERT_THRESHOLD", 20.0),
 		TelegramAlertsEnabled:         getEnvBoolWithFallback("ASH_TELEGRAM_ALERTS_ENABLED", "TELEGRAM_ALERTS_ENABLED", true),
+		TelegramAllowedUsers:          getEnvStringSliceWithFallback("ASH_TELEGRAM_ALLOWED_USERS", "TELEGRAM_ALLOWED_USERS", nil),
 	}
 	// Retrying more than once is unsafe for non-idempotent upstream requests.
 	if cfg.MaxRetry < 0 {
@@ -110,6 +115,24 @@ func LoadFromEnv() *HypervisorConfig {
 		cfg.TelegramAlertThresholdUSD = 20.0
 	}
 	return cfg
+}
+
+func getEnvStringSliceWithFallback(primaryKey, fallbackKey string, defaultVal []string) []string {
+	val := os.Getenv(primaryKey)
+	if val == "" {
+		val = os.Getenv(fallbackKey)
+	}
+	if val == "" {
+		return defaultVal
+	}
+	parts := strings.Split(val, ",")
+	res := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if trimmed := strings.TrimSpace(p); trimmed != "" {
+			res = append(res, trimmed)
+		}
+	}
+	return res
 }
 
 func getEnvStringWithFallback(primaryKey, fallbackKey, defaultVal string) string {

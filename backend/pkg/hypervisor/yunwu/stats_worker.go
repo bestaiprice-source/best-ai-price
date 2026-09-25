@@ -55,6 +55,7 @@ type StatsWorker struct {
 	httpClient *http.Client
 	cfg        *config.HypervisorConfig
 	notifier   *TelegramNotifier
+	bot        *TelegramBot
 }
 
 func NewStatsWorker(store *storage.Storage, configs ...*config.HypervisorConfig) *StatsWorker {
@@ -62,15 +63,20 @@ func NewStatsWorker(store *storage.Storage, configs ...*config.HypervisorConfig)
 	if len(configs) > 0 && configs[0] != nil {
 		cfg = configs[0]
 	}
-	return &StatsWorker{
+	notifier := NewTelegramNotifier(store, cfg)
+	sw := &StatsWorker{
 		store: store,
 		nm:    health.NewNodeManager(store),
 		httpClient: &http.Client{
 			Timeout: 10 * time.Second,
 		},
 		cfg:      cfg,
-		notifier: NewTelegramNotifier(store, cfg),
+		notifier: notifier,
 	}
+	bot := NewTelegramBot(store, cfg, sw)
+	sw.bot = bot
+	notifier.SetBot(bot)
+	return sw
 }
 
 func (w *StatsWorker) Notifier() *TelegramNotifier {
@@ -79,6 +85,17 @@ func (w *StatsWorker) Notifier() *TelegramNotifier {
 
 func (w *StatsWorker) SetNotifier(n *TelegramNotifier) {
 	w.notifier = n
+}
+
+func (w *StatsWorker) Bot() *TelegramBot {
+	return w.bot
+}
+
+func (w *StatsWorker) SetBot(b *TelegramBot) {
+	w.bot = b
+	if w.notifier != nil {
+		w.notifier.SetBot(b)
+	}
 }
 
 func balanceKey(nodeID string) string { return "ash:yunwu:balance:" + nodeID }

@@ -2081,8 +2081,195 @@
           <DataManagementSettings />
         </div>
 
+        <!-- Tab: Telegram -->
+        <div v-show="activeTab === 'telegram'" class="space-y-6">
+          <div class="card">
+            <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
+              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+                {{ t('admin.settings.telegram.title') }}
+              </h2>
+              <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                {{ t('admin.settings.telegram.description') }}
+              </p>
+            </div>
+            <div class="space-y-6 p-6">
+              <!-- Loading State -->
+              <div v-if="telegramLoading" class="flex items-center gap-2 text-gray-500">
+                <div class="h-4 w-4 animate-spin rounded-full border-b-2 border-primary-600"></div>
+                {{ t('common.loading') }}
+              </div>
+
+              <template v-else>
+                <!-- Bot Token -->
+                <div>
+                  <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {{ t('admin.settings.telegram.botToken') }}
+                  </label>
+                  <input
+                    v-model="telegramForm.bot_token"
+                    type="password"
+                    :placeholder="t('admin.settings.telegram.botTokenPlaceholder')"
+                    class="input w-full font-mono text-sm"
+                  />
+                  <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                    {{ t('admin.settings.telegram.botTokenHint') }}
+                  </p>
+                </div>
+
+                <!-- Enable Alerts Toggle -->
+                <div class="flex items-center justify-between">
+                  <div>
+                    <label class="font-medium text-gray-900 dark:text-white">
+                      {{ t('admin.settings.telegram.alertsEnabled') }}
+                    </label>
+                    <p class="text-sm text-gray-500 dark:text-gray-400">
+                      {{ t('admin.settings.telegram.alertsEnabledHint') }}
+                    </p>
+                  </div>
+                  <Toggle v-model="telegramForm.alerts_enabled" />
+                </div>
+
+                <!-- Alert Threshold -->
+                <div>
+                  <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {{ t('admin.settings.telegram.alertThreshold') }}
+                  </label>
+                  <div class="relative w-48">
+                    <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-500 text-sm">$</span>
+                    <input
+                      v-model.number="telegramForm.alert_threshold_usd"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      class="input w-full pl-7"
+                    />
+                  </div>
+                  <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                    {{ t('admin.settings.telegram.alertThresholdHint') }}
+                  </p>
+                </div>
+
+                <!-- Whitelist: Allowed Users -->
+                <div>
+                  <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {{ t('admin.settings.telegram.allowedUsers') }}
+                  </label>
+                  <textarea
+                    v-model="telegramForm.allowed_users_text"
+                    rows="4"
+                    :placeholder="t('admin.settings.telegram.allowedUsersPlaceholder')"
+                    class="input w-full font-mono text-sm"
+                  ></textarea>
+                  <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                    {{ t('admin.settings.telegram.allowedUsersHint') }}
+                  </p>
+                </div>
+
+                <!-- Actions -->
+                <div class="flex items-center justify-end gap-3 border-t border-gray-100 pt-4 dark:border-dark-700">
+                  <button
+                    type="button"
+                    @click="handleTestTelegramNotification"
+                    :disabled="telegramTesting || telegramSaving || !telegramForm.bot_token"
+                    class="btn btn-secondary btn-sm"
+                  >
+                    <svg
+                      v-if="telegramTesting"
+                      class="mr-1 h-4 w-4 animate-spin"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle
+                        class="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        stroke-width="4"
+                      ></circle>
+                      <path
+                        class="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      ></path>
+                    </svg>
+                    {{ telegramTesting ? t('admin.settings.telegram.sendingTest') : t('admin.settings.telegram.sendTest') }}
+                  </button>
+                  <button
+                    type="button"
+                    @click="saveTelegramSettings"
+                    :disabled="telegramSaving"
+                    class="btn btn-primary btn-sm"
+                  >
+                    <svg
+                      v-if="telegramSaving"
+                      class="mr-1 h-4 w-4 animate-spin"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle
+                        class="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        stroke-width="4"
+                      ></circle>
+                      <path
+                        class="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      ></path>
+                    </svg>
+                    {{ telegramSaving ? t('admin.settings.saving') : t('admin.settings.saveSettings') }}
+                  </button>
+                </div>
+              </template>
+            </div>
+          </div>
+
+          <!-- Connected Active Recipients Card -->
+          <div class="card">
+            <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
+              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+                {{ t('admin.settings.telegram.activeRecipients') }}
+              </h2>
+              <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                {{ t('admin.settings.telegram.activeRecipientsDesc') }}
+              </p>
+            </div>
+            <div class="p-6">
+              <div v-if="telegramActiveRecipients.length === 0" class="py-6 text-center text-sm text-gray-500 dark:text-gray-400">
+                {{ t('admin.settings.telegram.noRecipients') }}
+              </div>
+              <div v-else class="overflow-x-auto">
+                <table class="w-full text-left text-sm">
+                  <thead>
+                    <tr class="border-b border-gray-100 text-xs font-semibold text-gray-500 uppercase dark:border-dark-700">
+                      <th class="pb-3">{{ t('admin.settings.telegram.userId') }}</th>
+                      <th class="pb-3">{{ t('admin.settings.telegram.username') }}</th>
+                      <th class="pb-3">{{ t('admin.settings.telegram.firstName') }}</th>
+                      <th class="pb-3">{{ t('admin.settings.telegram.connectedAt') }}</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-gray-100 dark:divide-dark-700">
+                    <tr v-for="recipient in telegramActiveRecipients" :key="recipient.chat_id">
+                      <td class="py-3 font-mono text-xs text-gray-900 dark:text-white">{{ recipient.chat_id }}</td>
+                      <td class="py-3 font-mono text-xs text-primary-600 dark:text-primary-400">
+                        {{ recipient.username ? '@' + recipient.username : '-' }}
+                      </td>
+                      <td class="py-3 text-gray-700 dark:text-gray-300">{{ recipient.first_name || '-' }}</td>
+                      <td class="py-3 text-xs text-gray-500 dark:text-gray-400">{{ formatTelegramDate(recipient.joined_at) }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- Save Button -->
-        <div v-show="activeTab !== 'backup' && activeTab !== 'data'" class="flex justify-end">
+        <div v-show="activeTab !== 'backup' && activeTab !== 'data' && activeTab !== 'telegram'" class="flex justify-end">
           <button type="submit" :disabled="saving" class="btn btn-primary">
             <svg v-if="saving" class="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
               <circle
@@ -2115,7 +2302,8 @@ import type {
   SystemSettings,
   UpdateSettingsRequest,
   DefaultSubscriptionSetting,
-  TLSFingerprintProfile
+  TLSFingerprintProfile,
+  TelegramRecipient
 } from '@/api/admin/settings'
 import type { AdminGroup } from '@/types'
 import AppLayout from '@/components/layout/AppLayout.vue'
@@ -2141,7 +2329,7 @@ const { t } = useI18n()
 const appStore = useAppStore()
 const adminSettingsStore = useAdminSettingsStore()
 
-type SettingsTab = 'general' | 'security' | 'users' | 'gateway' | 'email' | 'backup' | 'data'
+type SettingsTab = 'general' | 'security' | 'users' | 'gateway' | 'email' | 'backup' | 'data' | 'telegram'
 const activeTab = ref<SettingsTab>('general')
 const settingsTabs = [
   { key: 'general'  as SettingsTab, icon: 'home'   as const },
@@ -2151,6 +2339,7 @@ const settingsTabs = [
   { key: 'email'    as SettingsTab, icon: 'mail'   as const },
   { key: 'backup'   as SettingsTab, icon: 'database' as const },
   { key: 'data'     as SettingsTab, icon: 'cube'     as const },
+  { key: 'telegram' as SettingsTab, icon: 'bell'     as const },
 ]
 const { copyToClipboard } = useClipboard()
 
@@ -3096,6 +3285,83 @@ async function deleteTLSFingerprintProfile(profile: TLSFingerprintProfile) {
   }
 }
 
+// Telegram Settings
+const telegramLoading = ref(true)
+const telegramSaving = ref(false)
+const telegramTesting = ref(false)
+const telegramForm = reactive({
+  bot_token: '',
+  alerts_enabled: false,
+  alert_threshold_usd: 20,
+  allowed_users_text: ''
+})
+const telegramActiveRecipients = ref<TelegramRecipient[]>([])
+
+function formatTelegramDate(value?: string): string {
+  if (!value) return '-'
+  try {
+    return new Date(value).toLocaleString()
+  } catch {
+    return value
+  }
+}
+
+async function fetchTelegramSettings() {
+  telegramLoading.value = true
+  try {
+    const settings = await adminAPI.settings.getTelegramSettings()
+    telegramForm.bot_token = settings.bot_token || ''
+    telegramForm.alerts_enabled = settings.alerts_enabled
+    telegramForm.alert_threshold_usd = settings.alert_threshold_usd
+    telegramForm.allowed_users_text = (settings.allowed_users || []).join('\n')
+    telegramActiveRecipients.value = settings.active_recipients || []
+  } catch (error: any) {
+    appStore.showError(t('admin.settings.failedToLoad') + ': ' + (error.message || t('common.unknownError')))
+  } finally {
+    telegramLoading.value = false
+  }
+}
+
+async function saveTelegramSettings() {
+  telegramSaving.value = true
+  try {
+    const users = telegramForm.allowed_users_text
+      .split('\n')
+      .map(u => u.trim())
+      .filter(u => u.length > 0)
+
+    const updated = await adminAPI.settings.updateTelegramSettings({
+      bot_token: telegramForm.bot_token,
+      alerts_enabled: telegramForm.alerts_enabled,
+      alert_threshold_usd: telegramForm.alert_threshold_usd,
+      allowed_users: users
+    })
+    telegramForm.bot_token = updated.bot_token || ''
+    telegramForm.alerts_enabled = updated.alerts_enabled
+    telegramForm.alert_threshold_usd = updated.alert_threshold_usd
+    telegramForm.allowed_users_text = (updated.allowed_users || []).join('\n')
+    telegramActiveRecipients.value = updated.active_recipients || []
+    appStore.showSuccess(t('admin.settings.telegram.saveSuccess'))
+  } catch (error: any) {
+    appStore.showError(t('admin.settings.telegram.saveFailed') + ': ' + (error.message || t('common.unknownError')))
+  } finally {
+    telegramSaving.value = false
+  }
+}
+
+async function handleTestTelegramNotification() {
+  telegramTesting.value = true
+  try {
+    const res = await adminAPI.settings.testTelegramNotification()
+    appStore.showSuccess(res.message || t('admin.settings.telegram.testSuccess'))
+    await fetchTelegramSettings()
+  } catch (error: any) {
+    appStore.showError(t('admin.settings.telegram.testFailed') + ': ' + (error.message || t('common.unknownError')))
+  } finally {
+    telegramTesting.value = false
+  }
+}
+
 onMounted(() => {
   loadSettings()
   loadSubscriptionGroups()
@@ -3105,6 +3371,7 @@ onMounted(() => {
   loadRectifierSettings()
   loadBetaPolicySettings()
   loadTLSFingerprintSettings()
+  fetchTelegramSettings()
 })
 </script>
 
