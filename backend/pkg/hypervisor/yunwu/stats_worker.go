@@ -54,6 +54,7 @@ type StatsWorker struct {
 	nm         *health.NodeManager
 	httpClient *http.Client
 	cfg        *config.HypervisorConfig
+	notifier   *TelegramNotifier
 }
 
 func NewStatsWorker(store *storage.Storage, configs ...*config.HypervisorConfig) *StatsWorker {
@@ -67,8 +68,17 @@ func NewStatsWorker(store *storage.Storage, configs ...*config.HypervisorConfig)
 		httpClient: &http.Client{
 			Timeout: 10 * time.Second,
 		},
-		cfg: cfg,
+		cfg:      cfg,
+		notifier: NewTelegramNotifier(store, cfg),
 	}
+}
+
+func (w *StatsWorker) Notifier() *TelegramNotifier {
+	return w.notifier
+}
+
+func (w *StatsWorker) SetNotifier(n *TelegramNotifier) {
+	w.notifier = n
 }
 
 func balanceKey(nodeID string) string { return "ash:yunwu:balance:" + nodeID }
@@ -1014,6 +1024,20 @@ func (w *StatsWorker) recordSyncedSnapshot(ctx context.Context, node *health.Exe
 		"total_available_usd", grants.TotalAvailable,
 		"total_used_usd", grants.TotalUsed,
 	)
+
+	// Low balance check and Telegram notification
+	if w.notifier != nil && node != nil && grants != nil {
+		go func(nodeID, accountName, provider string, available float64) {
+			defer func() {
+				if r := recover(); r != nil {
+					slog.Error("[YunwuNotifier] Panic in balance alert notification", "recover", r)
+				}
+			}()
+			notifyCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			defer cancel()
+			_, _ = w.notifier.CheckAndNotify(notifyCtx, nodeID, accountName, provider, available)
+		}(node.NodeID, node.AccountName, node.Provider, grants.TotalAvailable)
+	}
 }
 
 func normalizeBillingBaseURL(raw string) (string, string, error) {

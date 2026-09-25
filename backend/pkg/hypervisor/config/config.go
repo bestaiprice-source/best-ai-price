@@ -5,6 +5,13 @@ import (
 	"strconv"
 )
 
+const (
+	SettingKeyTelegramBotToken       = "telegram_bot_token"
+	SettingKeyTelegramChatID         = "telegram_chat_id"
+	SettingKeyTelegramAlertThreshold = "telegram_alert_threshold"
+	SettingKeyTelegramAlertsEnabled  = "telegram_alerts_enabled"
+)
+
 type HypervisorConfig struct {
 	Enabled                       bool `mapstructure:"enabled"`
 	EnableRebinding               bool `mapstructure:"enable_rebinding"`
@@ -29,6 +36,10 @@ type HypervisorConfig struct {
 	ActiveUserWindowSeconds       int
 	PoolReservePercent            int
 	MaxOwnerPoolSharePercent      int
+	TelegramBotToken              string  `mapstructure:"telegram_bot_token"`
+	TelegramChatID                string  `mapstructure:"telegram_chat_id"`
+	TelegramAlertThresholdUSD     float64 `mapstructure:"telegram_alert_threshold_usd"`
+	TelegramAlertsEnabled         bool    `mapstructure:"telegram_alerts_enabled"`
 }
 
 // LoadFromEnv loads Hypervisor config from environment variables as overrides/fallbacks.
@@ -57,6 +68,10 @@ func LoadFromEnv() *HypervisorConfig {
 		ActiveUserWindowSeconds:       getEnvInt("ASH_ACTIVE_USER_WINDOW_SECONDS", 86400),
 		PoolReservePercent:            getEnvInt("ASH_POOL_RESERVE_PERCENT", 20),
 		MaxOwnerPoolSharePercent:      getEnvInt("ASH_MAX_OWNER_POOL_SHARE_PERCENT", 50),
+		TelegramBotToken:              getEnvStringWithFallback("ASH_TELEGRAM_BOT_TOKEN", "TELEGRAM_BOT_TOKEN", ""),
+		TelegramChatID:                getEnvStringWithFallback("ASH_TELEGRAM_CHAT_ID", "TELEGRAM_CHAT_ID", ""),
+		TelegramAlertThresholdUSD:     getEnvFloatWithFallback("ASH_TELEGRAM_ALERT_THRESHOLD", "TELEGRAM_ALERT_THRESHOLD", 20.0),
+		TelegramAlertsEnabled:         getEnvBoolWithFallback("ASH_TELEGRAM_ALERTS_ENABLED", "TELEGRAM_ALERTS_ENABLED", true),
 	}
 	// Retrying more than once is unsafe for non-idempotent upstream requests.
 	if cfg.MaxRetry < 0 {
@@ -91,7 +106,48 @@ func LoadFromEnv() *HypervisorConfig {
 	if cfg.MaxOwnerPoolSharePercent <= 0 || cfg.MaxOwnerPoolSharePercent > 100 {
 		cfg.MaxOwnerPoolSharePercent = 50
 	}
+	if cfg.TelegramAlertThresholdUSD <= 0 {
+		cfg.TelegramAlertThresholdUSD = 20.0
+	}
 	return cfg
+}
+
+func getEnvStringWithFallback(primaryKey, fallbackKey, defaultVal string) string {
+	if val := os.Getenv(primaryKey); val != "" {
+		return val
+	}
+	if val := os.Getenv(fallbackKey); val != "" {
+		return val
+	}
+	return defaultVal
+}
+
+func getEnvFloatWithFallback(primaryKey, fallbackKey string, defaultVal float64) float64 {
+	if val := os.Getenv(primaryKey); val != "" {
+		if parsed, err := strconv.ParseFloat(val, 64); err == nil && parsed >= 0 {
+			return parsed
+		}
+	}
+	if val := os.Getenv(fallbackKey); val != "" {
+		if parsed, err := strconv.ParseFloat(val, 64); err == nil && parsed >= 0 {
+			return parsed
+		}
+	}
+	return defaultVal
+}
+
+func getEnvBoolWithFallback(primaryKey, fallbackKey string, defaultVal bool) bool {
+	if val, exists := os.LookupEnv(primaryKey); exists {
+		if b, err := strconv.ParseBool(val); err == nil {
+			return b
+		}
+	}
+	if val, exists := os.LookupEnv(fallbackKey); exists {
+		if b, err := strconv.ParseBool(val); err == nil {
+			return b
+		}
+	}
+	return defaultVal
 }
 
 func getEnvFloat(key string, defaultVal float64) float64 {

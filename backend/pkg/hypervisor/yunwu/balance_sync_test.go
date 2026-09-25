@@ -44,6 +44,7 @@ func newTestYunwuStorageWithDB(t *testing.T) (*storage.Storage, *dbent.Client) {
 	t.Cleanup(mr.Close)
 
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() { _ = rdb.Close() })
 	return storage.NewStorage(client, rdb), client
 }
 

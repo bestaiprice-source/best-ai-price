@@ -123,6 +123,18 @@ Welcome to **sub2api** and the **AI Session Hypervisor (ASH / Yunwu Engine)** re
     - **Persistence**:
       - Persists `extra["balance_usd"]`, `extra["balance_updated_at"]`, and `extra["balance_source"]` directly to the PostgreSQL `account` row for administrative tracking and UI visibility.
       - Stores real-time `BalanceSnapshot` in Redis (`ash:yunwu:balance:{nodeID}`) with fresh/stale markers for the scheduler and health monitor.
+    - **Telegram Low Balance Notifications (`pkg/hypervisor/yunwu/telegram_notifier.go`)**:
+      - Automated alert dispatched to Telegram when any unofficial / Yunwu provider account balance drops to or below the configured threshold (default: `$20.00`).
+      - Hooked into authoritative balance sync updates (`StatsWorker.recordSyncedSnapshot`).
+      - **Deduplication & State Transition**:
+        - Alert state tracked in Redis (`ash:yunwu:alerted:balance_low:<nodeID>`) via atomic `SetNX` with in-memory fallback.
+        - **Single-Trigger Guarantee**: Emits an alert strictly *once* when crossing $\le$ the threshold. Repeated balance syncs while the balance remains low do not spam duplicate alerts.
+        - **Automatic Reset on Replenishment**: When an account is recharged above the threshold (`available_usd > threshold`), the alert state is automatically purged (`DEL`), enabling future alerts if the balance drops again.
+        - Failure resilience: If Telegram API delivery fails, the alert key is cleared to allow immediate retry on the next balance sync cycle.
+      - **Configuration Hierarchy**:
+        - Database `settings` take precedence: `telegram_bot_token`, `telegram_chat_id`, `telegram_alert_threshold`, `telegram_alerts_enabled`.
+        - Environment variable fallbacks: `ASH_TELEGRAM_BOT_TOKEN` / `TELEGRAM_BOT_TOKEN`, `ASH_TELEGRAM_CHAT_ID` / `TELEGRAM_CHAT_ID`, `ASH_TELEGRAM_ALERT_THRESHOLD` / `TELEGRAM_ALERT_THRESHOLD` (default 20.0), `ASH_TELEGRAM_ALERTS_ENABLED` / `TELEGRAM_ALERTS_ENABLED` (default true).
+      - **Message Formatting**: HTML-formatted message specifying the upstream Provider name, Account name, Node ID, current balance, threshold, and UTC timestamp.
   - **Group-Level & Cluster-Wide Sync (`YunwuHypervisor`)**:
     - `SyncGroupBalances(ctx, groupID)`: Queries all active accounts assigned to the specified group, decrypts credentials, syncs balances in parallel, and calculates group summaries (`total_nodes`, `synced_nodes`, `failed_nodes`, `total_available_usd`, `total_allocatable_usd`).
     - `SyncAllBalances(ctx, [groupID])`: Cluster-wide balance sync across all Yunwu accounts or filtered by group.

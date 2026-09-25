@@ -275,6 +275,12 @@ const (
 	SettingKeyBalanceLowNotifyRechargeURL = "balance_low_notify_recharge_url"
 	SettingKeyAccountQuotaNotifyEnabled   = "account_quota_notify_enabled"
 	SettingKeyAccountQuotaNotifyEmails    = "account_quota_notify_emails"
+
+	// Telegram 告警配置 (Provider / Yunwu balance alert)
+	SettingKeyTelegramBotToken       = "telegram_bot_token"
+	SettingKeyTelegramChatID         = "telegram_chat_id"
+	SettingKeyTelegramAlertThreshold = "telegram_alert_threshold"
+	SettingKeyTelegramAlertsEnabled  = "telegram_alerts_enabled"
 )
 
 // AdminAPIKeyPrefix is the prefix for admin API keys (distinct from user "sk-" keys).
