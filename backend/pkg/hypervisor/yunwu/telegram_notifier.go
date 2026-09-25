@@ -14,6 +14,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/ent/account"
+	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/setting"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/config"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/storage"
@@ -236,6 +238,32 @@ func (n *TelegramNotifier) CheckAndNotify(ctx context.Context, nodeID, accountNa
 	nCfg := n.resolveNotifierConfig(ctx)
 	if !nCfg.enabled {
 		return false, nil
+	}
+
+	// Filter: Alert ONLY for accounts belonging to the yunwu group
+	if n.store != nil && n.store.DB() != nil {
+		id, parseErr := strconv.ParseInt(nodeID, 10, 64)
+		if parseErr == nil && id > 0 {
+			inYunwuGroup, err := n.store.DB().Account.Query().
+				Where(
+					account.IDEQ(id),
+					account.PlatformEqualFold("yunwu"),
+					account.HasGroupsWith(
+						group.Or(
+							group.PlatformEqualFold("yunwu"),
+							group.NameEqualFold("yunwu"),
+							group.NameContainsFold("yunwu"),
+						),
+					),
+				).Exist(ctx)
+			if err == nil && !inYunwuGroup {
+				slog.Debug("[TelegramNotifier] Skipping notification: node does not belong to yunwu group",
+					"node_id", nodeID,
+					"account_name", accountName,
+				)
+				return false, nil
+			}
+		}
 	}
 
 	// Balance replenished above threshold: reset alert state

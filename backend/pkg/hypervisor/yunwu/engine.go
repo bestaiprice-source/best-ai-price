@@ -1179,7 +1179,11 @@ func (yh *YunwuHypervisor) startBalanceSync(ctx context.Context) {
 			slog.Warn("[YunwuStatsWorker] Balance sync skipped: database is unavailable")
 			return
 		}
-		accounts, err := yh.store.DB().Account.Query().Where(account.PlatformEqualFold("yunwu"), account.Status("active")).All(ctx)
+		accounts, err := yh.store.DB().Account.Query().
+			Where(
+				account.PlatformEqualFold("yunwu"),
+				account.Status("active"),
+			).All(ctx)
 		if err != nil {
 			slog.Warn("[YunwuStatsWorker] Failed to list Yunwu accounts for balance sync", "error", err)
 			return

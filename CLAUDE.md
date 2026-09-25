@@ -124,19 +124,19 @@ Welcome to **sub2api** and the **AI Session Hypervisor (ASH / Yunwu Engine)** re
       - Persists `extra["balance_usd"]`, `extra["balance_updated_at"]`, and `extra["balance_source"]` directly to the PostgreSQL `account` row for administrative tracking and UI visibility.
       - Stores real-time `BalanceSnapshot` in Redis (`ash:yunwu:balance:{nodeID}`) with fresh/stale markers for the scheduler and health monitor.
     - **Telegram Bot & Low Balance Notifications (`pkg/hypervisor/yunwu/telegram_notifier.go`, `telegram_bot.go`)**:
-      - Automated alert dispatched to Telegram when any unofficial / Yunwu provider account balance drops to or below the configured threshold (default: `$20.00`).
+      - Automated alert dispatched to Telegram when any account in the `yunwu` group drops to or below the configured threshold (default: `$20.00`).
       - Hooked into authoritative balance sync updates (`StatsWorker.recordSyncedSnapshot`).
+      - **Strict Yunwu Group Restriction**:
+        - Balance synchronization and alert triggering are strictly restricted to accounts belonging to the `yunwu` group (where group `platform == "yunwu"` or group `name` matches `"yunwu"` case-insensitively). Accounts outside the `yunwu` group (such as direct Claude Max or OpenAI accounts) are strictly filtered out and never trigger balance alerts.
+      - **Silent Admin Alert Mode (Pure Notification Bot)**:
+        - The bot operates purely for administrative alerting; all interactive commands (`/start`, `/balance`, `/status`, `/help`) and conversational text have been removed.
+        - Authorized administrators simply message the bot once (e.g. `/start`) to quietly register their `chat_id` into active alert recipients. The bot silently registers the recipient without replying with conversational text.
+        - Unauthorized users attempting to message the bot are silently ignored (no responses sent, no recipient registered).
       - **Targeted User Whitelist & Active Recipient Management**:
-        - Instead of sending to arbitrary or unverified chat IDs, the bot operates with a strict whitelist of authorized Telegram users configured in Admin Settings -> Telegram (`telegram_allowed_users`).
+        - The bot operates with a strict whitelist of authorized Telegram users configured in Admin Settings -> Telegram (`telegram_allowed_users`).
         - Supports numeric Telegram User IDs (`123456789`), usernames (`@admin` or `admin`, case-insensitive), or wildcard `*`.
         - Direct numeric User IDs in the whitelist can receive notifications immediately.
-        - Authorized users initiate interaction by sending `/start` to the bot; the bot verifies their Telegram ID and username against the whitelist, responds with a personalized welcome, and records them in active recipients (`SettingKeyTelegramActiveRecipients` in DB and `ash:yunwu:telegram:recipients` in Redis).
-        - Unauthorized users attempting to interact with the bot are rejected with an informative Access Denied message detailing their user ID and username so they can request whitelisting from the administrator.
-      - **Interactive Telegram Bot Commands**:
-        - `/start`: Registers the authorized user into active alert recipients and displays the system overview.
-        - `/help`: Displays available commands and quick-start instructions.
-        - `/balance`: Queries authoritative balance snapshots across all provider nodes in the cluster, displays individual balances with provider name and account, and flags accounts at or below the warning threshold with ⚠️.
-        - `/status`: Displays cluster health overview (total nodes, healthy nodes, nodes in cooldown, alert trigger threshold, alert enabled status, and number of connected active recipients).
+        - Connected recipients are stored in DB (`SettingKeyTelegramActiveRecipients`) and in Redis (`ash:yunwu:telegram:recipients`).
       - **Deduplication & State Transition**:
         - Alert state tracked in Redis (`ash:yunwu:alerted:balance_low:<nodeID>`) via atomic `SetNX` with in-memory fallback.
         - **Single-Trigger Guarantee**: Emits an alert strictly *once* when crossing $\le$ the threshold. Repeated balance syncs while the balance remains low do not spam duplicate alerts.

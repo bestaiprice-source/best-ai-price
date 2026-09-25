@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"html"
 	"io"
 	"log/slog"
 	"net/http"
@@ -418,218 +417,17 @@ func (b *TelegramBot) fetchUpdates(ctx context.Context, client *http.Client, bas
 func (b *TelegramBot) handleMessage(ctx context.Context, msg *tgMessage) {
 	from := msg.From
 	chatID := msg.Chat.ID
-	text := strings.TrimSpace(msg.Text)
 
 	// Check whitelist authorization
 	if !b.IsUserAllowed(from.ID, from.UserName) {
-		slog.Warn("[TelegramBot] Unauthorized message attempt",
+		slog.Warn("[TelegramBot] Unauthorized message attempt ignored",
 			"user_id", from.ID,
 			"username", from.UserName,
 			"chat_id", chatID,
-			"text", text,
 		)
-		reply := fmt.Sprintf(
-			"⛔ <b>Доступ ограничен</b>\n\n"+
-				"Ваш Telegram ID: <code>%d</code>\n"+
-				"Username: @%s\n\n"+
-				"Вы не добавлены в список разрешенных пользователей в панели администратора. "+
-				"Обратитесь к администратору для предоставления доступа.",
-			from.ID,
-			html.EscapeString(from.UserName),
-		)
-		_ = b.sendMessage(ctx, chatID, reply)
 		return
 	}
 
-	// User is authorized! Register as active recipient
+	// User is authorized: register as active recipient for low balance alerts
 	b.RegisterRecipient(ctx, chatID, from.UserName, from.FirstName)
-
-	cmd := strings.ToLower(strings.Fields(text)[0])
-	// Strip bot mention if present, e.g. /balance@MyBot
-	if idx := strings.Index(cmd, "@"); idx != -1 {
-		cmd = cmd[:idx]
-	}
-
-	switch cmd {
-	case "/start", "/help":
-		b.handleStartCommand(ctx, chatID, from.FirstName)
-	case "/balance":
-		b.handleBalanceCommand(ctx, chatID)
-	case "/status":
-		b.handleStatusCommand(ctx, chatID)
-	default:
-		reply := "ℹ️ Доступные команды:\n• /balance — проверить балансы провайдеров\n• /status — статус нод и системы\n• /help — справка"
-		_ = b.sendMessage(ctx, chatID, reply)
-	}
-}
-
-func (b *TelegramBot) handleStartCommand(ctx context.Context, chatID int64, firstName string) {
-	b.mu.RLock()
-	threshold := b.threshold
-	b.mu.RUnlock()
-
-	msg := fmt.Sprintf(
-		"👋 <b>Добро пожаловать, %s!</b>\n\n"+
-			"Вы успешно авторизованы в боте мониторинга <b>AI Gateway</b>.\n"+
-			"Бот будет присылать вам уведомления, если баланс любого провайдера опустится до <b>$%.2f</b> или ниже.\n\n"+
-			"<b>Доступные команды:</b>\n"+
-			"• /balance — проверить текущий баланс всех провайдеров\n"+
-			"• /status — состояние нод и порогов\n"+
-			"• /help — помощь по командам",
-		html.EscapeString(firstName),
-		threshold,
-	)
-	_ = b.sendMessage(ctx, chatID, msg)
-}
-
-func (b *TelegramBot) handleBalanceCommand(ctx context.Context, chatID int64) {
-	b.mu.RLock()
-	threshold := b.threshold
-	b.mu.RUnlock()
-
-	var nodes []health.ExecutionNode
-	if b.store != nil && b.store.Redis() != nil {
-		allNodes, err := b.nm.GetAllNodes(ctx)
-		if err == nil {
-			nodes = allNodes
-		}
-	}
-
-	if len(nodes) == 0 {
-		_ = b.sendMessage(ctx, chatID, "ℹ️ Нет зарегистрированных нод провайдеров в кластере.")
-		return
-	}
-
-	var sb strings.Builder
-	sb.WriteString("💳 <b>Балансы провайдеров Yunwu:</b>\n\n")
-
-	hasLowBalance := false
-	for _, n := range nodes {
-		snap, err := b.sw.Snapshot(ctx, n.NodeID, 1*time.Hour)
-		balanceUSD := 0.0
-		status := "ok"
-		if err == nil && snap != nil {
-			balanceUSD = snap.AvailableUSD
-		}
-
-		provider := n.Provider
-		if provider == "" {
-			provider = "Yunwu"
-		}
-		accName := n.AccountName
-		if accName == "" {
-			accName = n.NodeID
-		}
-
-		warn := ""
-		if balanceUSD <= threshold {
-			warn = " ⚠️ <i>(Низкий баланс!)</i>"
-			hasLowBalance = true
-		}
-
-		sb.WriteString(fmt.Sprintf("• <b>%s</b> (%s): $%.2f%s\n",
-			html.EscapeString(provider),
-			html.EscapeString(accName),
-			balanceUSD,
-			warn,
-		))
-		_ = status
-	}
-
-	sb.WriteString(fmt.Sprintf("\n<i>Порог предупреждения: $%.2f</i>", threshold))
-	if hasLowBalance {
-		sb.WriteString("\n⚠️ <b>Внимание:</b> обнаружены аккаунты с низким остатком средств!")
-	}
-
-	_ = b.sendMessage(ctx, chatID, sb.String())
-}
-
-func (b *TelegramBot) handleStatusCommand(ctx context.Context, chatID int64) {
-	b.mu.RLock()
-	threshold := b.threshold
-	enabled := b.enabled
-	recipientsCount := len(b.recipients)
-	b.mu.RUnlock()
-
-	var totalNodes, healthyNodes, cooldownNodes int
-	if b.store != nil && b.store.Redis() != nil {
-		nodes, _ := b.nm.GetAllNodes(ctx)
-		totalNodes = len(nodes)
-		for _, n := range nodes {
-			if n.State == "healthy" {
-				healthyNodes++
-			} else if n.State == "cooldown" {
-				cooldownNodes++
-			}
-		}
-	}
-
-	statusText := "🟢 Активны"
-	if !enabled {
-		statusText = "🔴 Отключены"
-	}
-
-	msg := fmt.Sprintf(
-		"⚙️ <b>Статус системы AI Gateway</b>\n\n"+
-			"• <b>Уведомления:</b> %s\n"+
-			"• <b>Порог низкого баланса:</b> $%.2f\n"+
-			"• <b>Всего нод провайдеров:</b> %d\n"+
-			"• <b>Здоровых нод:</b> %d\n"+
-			"• <b>Нод в кулдауне:</b> %d\n"+
-			"• <b>Авторизованных получателей:</b> %d\n"+
-			"• <b>Время сервера:</b> %s",
-		statusText,
-		threshold,
-		totalNodes,
-		healthyNodes,
-		cooldownNodes,
-		recipientsCount,
-		time.Now().UTC().Format("2006-01-02 15:04:05 UTC"),
-	)
-	_ = b.sendMessage(ctx, chatID, msg)
-}
-
-func (b *TelegramBot) sendMessage(ctx context.Context, chatID int64, text string) error {
-	b.mu.RLock()
-	token := b.botToken
-	client := b.httpClient
-	baseURL := b.baseURL
-	b.mu.RUnlock()
-
-	if strings.TrimSpace(token) == "" {
-		return fmt.Errorf("telegram bot token is empty")
-	}
-	if client == nil {
-		client = http.DefaultClient
-	}
-
-	endpoint := fmt.Sprintf("%s/bot%s/sendMessage", strings.TrimRight(baseURL, "/"), token)
-	payload := telegramSendMessagePayload{
-		ChatID:    strconv.FormatInt(chatID, 10),
-		Text:      text,
-		ParseMode: "HTML",
-	}
-
-	bodyBytes, err := json.Marshal(payload)
-	if err != nil {
-		return err
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(bodyBytes))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
-		return fmt.Errorf("telegram returned status %d: %s", resp.StatusCode, string(respBody))
-	}
-	return nil
 }
