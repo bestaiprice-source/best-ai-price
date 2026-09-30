@@ -1187,6 +1187,8 @@ func defaultBaseURLForYunwu(extra map[string]any) string {
 		return "https://api-top.com/v1"
 	case "yuanqiaoyun", "yuanqiaoyun.com":
 		return "https://yuanqiaoyun.com/v1"
+	case "x-llm", "x-llm.net", "xllm":
+		return "https://x-llm.net/v1"
 	default:
 		return "https://api.openlux.ai/v1"
 	}

@@ -109,7 +109,8 @@ const HARDCODED_VENDORS = [
   { name: 'OpenLux (Yunwu)', url: 'https://api.openlux.ai' },
   { name: 'Portdan AI', url: 'https://portdan.com' },
   { name: 'Top-API', url: 'https://api-top.com' },
-  { name: 'Yuanqiaoyun', url: 'https://yuanqiaoyun.com' }
+  { name: 'Yuanqiaoyun', url: 'https://yuanqiaoyun.com' },
+  { name: 'X-LLM', url: 'https://x-llm.net' }
 ];
 
 const displayVendors = computed(() => {

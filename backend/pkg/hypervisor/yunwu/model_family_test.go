@@ -42,6 +42,16 @@ func TestClassifyModelFamily(t *testing.T) {
 		{"chirp-v2", FamilyGemini},
 		{"google/gemini-1.5-pro", FamilyGemini},
 
+		// Kimi / Moonshot
+		{"kimi-latest", FamilyKimi},
+		{"kimi-k1.5", FamilyKimi},
+		{"kimi-k2.6", FamilyKimi},
+		{"kimi-k3", FamilyKimi},
+		{"moonshot-v1-8k", FamilyKimi},
+		{"moonshot-v1-32k", FamilyKimi},
+		{"moonshot-v1-128k", FamilyKimi},
+		{"moonshot/kimi-k2.6", FamilyKimi},
+
 		// Other / 3rd-party models
 		{"deepseek-chat", FamilyOther},
 		{"deepseek-reasoner", FamilyOther},
@@ -68,6 +78,8 @@ func TestCanonicalFamily(t *testing.T) {
 	assert.Equal(t, FamilyGPT, CanonicalFamily("chatgpt"))
 	assert.Equal(t, FamilyGemini, CanonicalFamily("gemini"))
 	assert.Equal(t, FamilyGemini, CanonicalFamily("google"))
+	assert.Equal(t, FamilyKimi, CanonicalFamily("kimi"))
+	assert.Equal(t, FamilyKimi, CanonicalFamily("moonshot"))
 	assert.Equal(t, FamilyOther, CanonicalFamily("other"))
 	assert.Equal(t, FamilyOther, CanonicalFamily("others"))
 	assert.Equal(t, FamilyOther, CanonicalFamily("misc"))
@@ -79,20 +91,23 @@ func TestNodeSupportsFamily(t *testing.T) {
 	assert.True(t, NodeSupportsFamily(nil, FamilyClaude))
 	assert.True(t, NodeSupportsFamily([]string{}, FamilyGPT))
 	assert.True(t, NodeSupportsFamily([]string{"*"}, FamilyGemini))
+	assert.True(t, NodeSupportsFamily([]string{"all"}, FamilyKimi))
 	assert.True(t, NodeSupportsFamily([]string{"all"}, FamilyOther))
 
 	// Specific capabilities
-	caps := []string{"claude", "gpt"}
+	caps := []string{"claude", "gpt", "kimi"}
 	assert.True(t, NodeSupportsFamily(caps, FamilyClaude))
 	assert.True(t, NodeSupportsFamily(caps, FamilyGPT))
+	assert.True(t, NodeSupportsFamily(caps, FamilyKimi))
 	assert.False(t, NodeSupportsFamily(caps, FamilyGemini))
 	assert.False(t, NodeSupportsFamily(caps, FamilyOther))
 
 	// Aliases in capabilities
-	legacyCaps := []string{"anthropic", "google"}
+	legacyCaps := []string{"anthropic", "google", "moonshot"}
 	assert.True(t, NodeSupportsFamily(legacyCaps, FamilyClaude))
 	assert.False(t, NodeSupportsFamily(legacyCaps, FamilyGPT))
 	assert.True(t, NodeSupportsFamily(legacyCaps, FamilyGemini))
+	assert.True(t, NodeSupportsFamily(legacyCaps, FamilyKimi))
 }
 
 func TestParseNodeModelFamilies(t *testing.T) {
@@ -104,27 +119,27 @@ func TestParseNodeModelFamilies(t *testing.T) {
 
 	// []string in extra
 	extraSliceStr := map[string]any{
-		"supported_model_families": []string{"claude", "gemini"},
+		"supported_model_families": []string{"claude", "gemini", "kimi"},
 	}
-	assert.Equal(t, []string{FamilyClaude, FamilyGemini}, ParseNodeModelFamilies(extraSliceStr))
+	assert.Equal(t, []string{FamilyClaude, FamilyGemini, FamilyKimi}, ParseNodeModelFamilies(extraSliceStr))
 
 	// []any (JSON unmarshal output) in extra
 	extraSliceAny := map[string]any{
-		"supported_model_families": []any{"gpt", "other", "claude"},
+		"supported_model_families": []any{"gpt", "kimi", "other", "claude"},
 	}
-	assert.Equal(t, []string{FamilyGPT, FamilyOther, FamilyClaude}, ParseNodeModelFamilies(extraSliceAny))
+	assert.Equal(t, []string{FamilyGPT, FamilyKimi, FamilyOther, FamilyClaude}, ParseNodeModelFamilies(extraSliceAny))
 
 	// Comma-separated string
 	extraCSV := map[string]any{
-		"supported_model_families": "claude, gpt, other",
+		"supported_model_families": "claude, gpt, kimi, other",
 	}
-	assert.Equal(t, []string{FamilyClaude, FamilyGPT, FamilyOther}, ParseNodeModelFamilies(extraCSV))
+	assert.Equal(t, []string{FamilyClaude, FamilyGPT, FamilyKimi, FamilyOther}, ParseNodeModelFamilies(extraCSV))
 
 	// Deduplication and normalization
 	extraDup := map[string]any{
-		"supported_model_families": []any{"anthropic", "claude", "openai", "gpt"},
+		"supported_model_families": []any{"anthropic", "claude", "openai", "gpt", "moonshot", "kimi"},
 	}
-	assert.Equal(t, []string{FamilyClaude, FamilyGPT}, ParseNodeModelFamilies(extraDup))
+	assert.Equal(t, []string{FamilyClaude, FamilyGPT, FamilyKimi}, ParseNodeModelFamilies(extraDup))
 
 	// Empty slices or invalid types
 	assert.Equal(t, DefaultModelFamilies(), ParseNodeModelFamilies(map[string]any{"supported_model_families": []string{}}))
@@ -143,12 +158,16 @@ func TestParseNodeProvider(t *testing.T) {
 	assert.Equal(t, "api-top", ParseNodeProvider(map[string]any{"provider": "apitop"}))
 	assert.Equal(t, "yuanqiaoyun", ParseNodeProvider(map[string]any{"provider": "yuanqiaoyun"}))
 	assert.Equal(t, "yuanqiaoyun", ParseNodeProvider(map[string]any{"provider": "yuanqiaoyun.com"}))
+	assert.Equal(t, "x-llm", ParseNodeProvider(map[string]any{"provider": "x-llm"}))
+	assert.Equal(t, "x-llm", ParseNodeProvider(map[string]any{"provider": "x-llm.net"}))
+	assert.Equal(t, "x-llm", ParseNodeProvider(map[string]any{"provider": "xllm"}))
 	assert.Equal(t, "custom-upstream", ParseNodeProvider(map[string]any{"provider": "custom-upstream"}))
 
 	assert.Equal(t, "https://api.openlux.ai/v1", DefaultBaseURLForProvider("openlux"))
 	assert.Equal(t, "https://portdan.com/v1", DefaultBaseURLForProvider("portdan"))
 	assert.Equal(t, "https://api-top.com/v1", DefaultBaseURLForProvider("api-top"))
 	assert.Equal(t, "https://yuanqiaoyun.com/v1", DefaultBaseURLForProvider("yuanqiaoyun"))
+	assert.Equal(t, "https://x-llm.net/v1", DefaultBaseURLForProvider("x-llm"))
 	assert.Equal(t, "https://api.openlux.ai/v1", DefaultBaseURLForProvider("unknown-provider"))
 	assert.Equal(t, "openlux", CanonicalProvider(""))
 }

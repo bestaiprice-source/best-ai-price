@@ -153,6 +153,7 @@
               <option value="portdan">Portdan AI (portdan.com)</option>
               <option value="api-top">Top-API (api-top.com)</option>
               <option value="yuanqiaoyun">Yuanqiaoyun (yuanqiaoyun.com)</option>
+              <option value="x-llm">X-LLM (x-llm.net)</option>
               <option value="custom">Custom Upstream Provider</option>
             </select>
           </div>
@@ -1963,13 +1964,14 @@ const allowOverages = ref(false) // For antigravity accounts: enable AI Credits 
 // Unofficial Provider (Yunwu / OpenLux / Portdan / Top-API / Yuanqiaoyun) Node Settings
 const yunwuProvider = ref('openlux')
 const yunwuCustomProvider = ref('')
-const yunwuSupportedFamilies = ref<string[]>(['claude', 'gpt', 'gemini', 'other'])
+const yunwuSupportedFamilies = ref<string[]>(['claude', 'gpt', 'gemini', 'kimi', 'other'])
 
 const YUNWU_PROVIDER_DEFAULTS: Record<string, string> = {
   openlux: 'https://api.openlux.ai/v1',
   portdan: 'https://portdan.com/v1',
   'api-top': 'https://api-top.com/v1',
-  yuanqiaoyun: 'https://yuanqiaoyun.com/v1'
+  yuanqiaoyun: 'https://yuanqiaoyun.com/v1',
+  'x-llm': 'https://x-llm.net/v1'
 }
 
 const onYunwuProviderChange = () => {
@@ -1985,6 +1987,7 @@ const availableModelFamilies = [
   { id: 'claude', name: 'Claude', desc: 'claude-3-5-sonnet, claude-3-7-sonnet, opus...' },
   { id: 'gpt', name: 'GPT', desc: 'gpt-4o, o1, o3, chatgpt...' },
   { id: 'gemini', name: 'Gemini', desc: 'gemini-1.5, gemini-2.5, live, imagen...' },
+  { id: 'kimi', name: 'Kimi', desc: 'kimi-latest, kimi-k1.5, kimi-k2.6, moonshot...' },
   { id: 'other', name: 'Other', desc: 'deepseek, qwen, llama, grok, mistral...' }
 ]
 const antigravityModelRestrictionMode = ref<'whitelist' | 'mapping'>('whitelist')
@@ -2232,6 +2235,9 @@ const syncFormFromAccount = (newAccount: Account | null) => {
     } else if (rawProv === 'yuanqiaoyun') {
       yunwuProvider.value = 'yuanqiaoyun'
       yunwuCustomProvider.value = ''
+    } else if (rawProv === 'x-llm' || rawProv === 'x-llm.net' || rawProv === 'xllm') {
+      yunwuProvider.value = 'x-llm'
+      yunwuCustomProvider.value = ''
     } else {
       yunwuProvider.value = 'custom'
       yunwuCustomProvider.value = rawProv
@@ -2240,12 +2246,12 @@ const syncFormFromAccount = (newAccount: Account | null) => {
     if (Array.isArray(families) && families.length > 0) {
       yunwuSupportedFamilies.value = [...(families as string[])]
     } else {
-      yunwuSupportedFamilies.value = ['claude', 'gpt', 'gemini', 'other']
+      yunwuSupportedFamilies.value = ['claude', 'gpt', 'gemini', 'kimi', 'other']
     }
   } else {
     yunwuProvider.value = 'openlux'
     yunwuCustomProvider.value = ''
-    yunwuSupportedFamilies.value = ['claude', 'gpt', 'gemini', 'other']
+    yunwuSupportedFamilies.value = ['claude', 'gpt', 'gemini', 'kimi', 'other']
   }
 
   // Load OpenAI passthrough toggle (OpenAI OAuth/API Key)

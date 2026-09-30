@@ -39,6 +39,11 @@ func TestPricingURLForProvider(t *testing.T) {
 			expected: "https://yuanqiaoyun.com/api/pricing",
 		},
 		{
+			provider: "x-llm",
+			baseURL:  "",
+			expected: "https://x-llm.net/api/pricing",
+		},
+		{
 			provider: "portdan",
 			baseURL:  "",
 			expected: DefaultPortdanPricingURL,
@@ -799,13 +804,36 @@ func TestProviderPriceManager_CacheIsolationBetweenProviders(t *testing.T) {
 	}))
 	defer serverB.Close()
 
+	// Provider C server (x-llm): gpt-4o at $0.008 / $0.024, and kimi-k2.6
+	serverC := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"data": []map[string]any{
+				{
+					"model_name":       "gpt-4o",
+					"model_ratio":      4.0,
+					"completion_ratio": 3.0,
+				},
+				{
+					"model_name":       "kimi-k2.6",
+					"model_ratio":      3.25,
+					"completion_ratio": 2.0,
+				},
+			},
+		})
+	}))
+	defer serverC.Close()
+
 	oldAPITop := KnownProviderPricingURLs[ProviderAPITop]
 	oldYuanqiaoyun := KnownProviderPricingURLs[ProviderYuanqiaoyun]
+	oldXLLM := KnownProviderPricingURLs[ProviderXLLM]
 	KnownProviderPricingURLs[ProviderAPITop] = serverA.URL + "/api/pricing"
 	KnownProviderPricingURLs[ProviderYuanqiaoyun] = serverB.URL + "/api/pricing"
+	KnownProviderPricingURLs[ProviderXLLM] = serverC.URL + "/api/pricing"
 	defer func() {
 		KnownProviderPricingURLs[ProviderAPITop] = oldAPITop
 		KnownProviderPricingURLs[ProviderYuanqiaoyun] = oldYuanqiaoyun
+		KnownProviderPricingURLs[ProviderXLLM] = oldXLLM
 	}()
 
 	nodeA := &health.ExecutionNode{
@@ -815,6 +843,10 @@ func TestProviderPriceManager_CacheIsolationBetweenProviders(t *testing.T) {
 	nodeB := &health.ExecutionNode{
 		NodeID:   "node-server-b",
 		Provider: "yuanqiaoyun",
+	}
+	nodeC := &health.ExecutionNode{
+		NodeID:   "node-server-c",
+		Provider: "x-llm",
 	}
 
 	ppm := NewProviderPriceManager(nil, nil, http.DefaultClient)
@@ -831,17 +863,41 @@ func TestProviderPriceManager_CacheIsolationBetweenProviders(t *testing.T) {
 	assert.InDelta(t, 0.001, inB, 0.0001)
 	assert.InDelta(t, 0.003, outB, 0.0001)
 
-	// 3. Query Node A again -> served from its own isolated cache
+	// 3. Resolve price on Node C (x-llm) -> fetches from serverC (NOT polluted by Node A or B!)
+	inC, outC, foundC := ppm.ResolveNodePrice(ctx, nodeC, "gpt-4o")
+	require.True(t, foundC)
+	assert.InDelta(t, 0.008, inC, 0.0001)
+	assert.InDelta(t, 0.024, outC, 0.0001)
+
+	// 4. Model exclusive to X-LLM is found on Node C, but NOT on Node A or Node B
+	inKimi, outKimi, foundKimi := ppm.ResolveNodePrice(ctx, nodeC, "kimi-k2.6")
+	require.True(t, foundKimi)
+	assert.InDelta(t, 0.0065, inKimi, 0.0001)
+	assert.InDelta(t, 0.013, outKimi, 0.0001)
+
+	_, _, foundKimiOnA := ppm.ResolveNodePrice(ctx, nodeA, "kimi-k2.6")
+	assert.False(t, foundKimiOnA, "Kimi model on x-llm must not leak into api-top cache")
+
+	_, _, foundKimiOnB := ppm.ResolveNodePrice(ctx, nodeB, "kimi-k2.6")
+	assert.False(t, foundKimiOnB, "Kimi model on x-llm must not leak into yuanqiaoyun cache")
+
+	// 5. Query Node A again -> served from its own isolated cache
 	inA2, outA2, foundA2 := ppm.ResolveNodePrice(ctx, nodeA, "gpt-4o")
 	require.True(t, foundA2)
 	assert.InDelta(t, 0.005, inA2, 0.0001)
 	assert.InDelta(t, 0.015, outA2, 0.0001)
 
-	// 4. Query Node B again -> served from its own isolated cache
+	// 6. Query Node B again -> served from its own isolated cache
 	inB2, outB2, foundB2 := ppm.ResolveNodePrice(ctx, nodeB, "gpt-4o")
 	require.True(t, foundB2)
 	assert.InDelta(t, 0.001, inB2, 0.0001)
 	assert.InDelta(t, 0.003, outB2, 0.0001)
+
+	// 7. Query Node C again -> served from its own isolated cache
+	inC2, outC2, foundC2 := ppm.ResolveNodePrice(ctx, nodeC, "gpt-4o")
+	require.True(t, foundC2)
+	assert.InDelta(t, 0.008, inC2, 0.0001)
+	assert.InDelta(t, 0.024, outC2, 0.0001)
 }
 
 func TestProviderPriceManager_PortdanProvidersJSON(t *testing.T) {

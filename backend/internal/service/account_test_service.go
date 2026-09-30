@@ -675,18 +675,23 @@ func (s *AccountTestService) routeYunwuAccountTest(c gatewayctx.GatewayContext, 
 	if modelID != "" {
 		family = yunwu.ClassifyModelFamily(modelID)
 	} else if len(families) > 0 {
-		if !yunwu.NodeSupportsFamily(families, yunwu.FamilyClaude) && yunwu.NodeSupportsFamily(families, yunwu.FamilyGPT) {
-			family = yunwu.FamilyGPT
-		} else if !yunwu.NodeSupportsFamily(families, yunwu.FamilyClaude) && yunwu.NodeSupportsFamily(families, yunwu.FamilyGemini) {
-			family = yunwu.FamilyGemini
-		} else if yunwu.NodeSupportsFamily(families, yunwu.FamilyGPT) && !yunwu.NodeSupportsFamily(families, yunwu.FamilyClaude) {
-			family = yunwu.FamilyGPT
-		} else if yunwu.NodeSupportsFamily(families, yunwu.FamilyClaude) {
+		if yunwu.NodeSupportsFamily(families, yunwu.FamilyClaude) {
 			family = yunwu.FamilyClaude
+		} else if yunwu.NodeSupportsFamily(families, yunwu.FamilyGPT) {
+			family = yunwu.FamilyGPT
+		} else if yunwu.NodeSupportsFamily(families, yunwu.FamilyGemini) {
+			family = yunwu.FamilyGemini
+		} else if yunwu.NodeSupportsFamily(families, yunwu.FamilyKimi) {
+			family = yunwu.FamilyKimi
+		} else {
+			family = yunwu.FamilyOther
 		}
 	}
 
-	if family == yunwu.FamilyGPT || family == yunwu.FamilyGemini {
+	if family == yunwu.FamilyGPT || family == yunwu.FamilyGemini || family == yunwu.FamilyKimi || family == yunwu.FamilyOther {
+		if modelID == "" && family == yunwu.FamilyKimi {
+			modelID = "kimi-latest"
+		}
 		return s.testOpenAIAccountConnection(c, account, modelID, prompt)
 	}
 	return s.testClaudeAccountConnection(c, account, modelID)

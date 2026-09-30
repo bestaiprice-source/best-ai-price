@@ -822,6 +822,9 @@ func TestDefaultBaseURLForYunwu(t *testing.T) {
 	assert.Equal(t, "https://api-top.com/v1", defaultBaseURLForYunwu(map[string]any{"provider": "api-top"}))
 	assert.Equal(t, "https://api-top.com/v1", defaultBaseURLForYunwu(map[string]any{"provider": "top-api"}))
 	assert.Equal(t, "https://yuanqiaoyun.com/v1", defaultBaseURLForYunwu(map[string]any{"provider": "yuanqiaoyun"}))
+	assert.Equal(t, "https://x-llm.net/v1", defaultBaseURLForYunwu(map[string]any{"provider": "x-llm"}))
+	assert.Equal(t, "https://x-llm.net/v1", defaultBaseURLForYunwu(map[string]any{"provider": "x-llm.net"}))
+	assert.Equal(t, "https://x-llm.net/v1", defaultBaseURLForYunwu(map[string]any{"provider": "xllm"}))
 	assert.Equal(t, "https://api.openlux.ai/v1", defaultBaseURLForYunwu(map[string]any{"provider": "unknown"}))
 }
 

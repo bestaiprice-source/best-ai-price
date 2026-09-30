@@ -335,8 +335,21 @@ func TestYunwuPricingService_ProviderIsolation(t *testing.T) {
 	}))
 	defer tsTopAPI.Close()
 
+	// Endpoint 3: X-LLM-like (exclusive kimi-k2.6, different ratio for gpt-4o)
+	tsXLLM := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(YunwuPricingResponse{
+			Data: []YunwuPricingRawItem{
+				{ModelName: "kimi-k2.6", ModelRatio: 3.25, CompletionRatio: 2},
+				{ModelName: "gpt-4o", ModelRatio: 4.0, CompletionRatio: 3},
+			},
+		})
+	}))
+	defer tsXLLM.Close()
+
 	svc := NewYunwuPricingServiceWithClient(tsOpenLux.URL, tsOpenLux.Client())
 	svc.SetProviderURL("api-top", tsTopAPI.URL)
+	svc.SetProviderURL("x-llm", tsXLLM.URL)
 
 	ctx := context.Background()
 
@@ -347,6 +360,7 @@ func TestYunwuPricingService_ProviderIsolation(t *testing.T) {
 	require.Contains(t, openluxPrices, "gemini-3.8-flash")
 	require.Contains(t, openluxPrices, "gpt-4o")
 	require.NotContains(t, openluxPrices, "claude-haiku-4-5", "OpenLux must not leak models from Top-API")
+	require.NotContains(t, openluxPrices, "kimi-k2.6", "OpenLux must not leak models from X-LLM")
 	require.Equal(t, 1.0, openluxPrices["gpt-4o"].ModelRatio)
 
 	// 2. Top-API fetch contains only Top-API models
@@ -356,29 +370,60 @@ func TestYunwuPricingService_ProviderIsolation(t *testing.T) {
 	require.Contains(t, topPrices, "claude-haiku-4-5")
 	require.Contains(t, topPrices, "gpt-4o")
 	require.NotContains(t, topPrices, "gemini-3.8-flash", "Top-API must not leak models from OpenLux")
+	require.NotContains(t, topPrices, "kimi-k2.6", "Top-API must not leak models from X-LLM")
 	require.Equal(t, 2.0, topPrices["gpt-4o"].ModelRatio)
 
-	// 3. Pricing lookup for OpenLux returns OpenLux pricing
+	// 3. X-LLM fetch contains only X-LLM models
+	xllmPrices, err := svc.FetchPricingForProvider(ctx, "x-llm")
+	require.NoError(t, err)
+	require.Len(t, xllmPrices, 2)
+	require.Contains(t, xllmPrices, "kimi-k2.6")
+	require.Contains(t, xllmPrices, "gpt-4o")
+	require.NotContains(t, xllmPrices, "gemini-3.8-flash", "X-LLM must not leak models from OpenLux")
+	require.NotContains(t, xllmPrices, "claude-haiku-4-5", "X-LLM must not leak models from Top-API")
+	require.Equal(t, 4.0, xllmPrices["gpt-4o"].ModelRatio)
+
+	// 4. Pricing lookup for OpenLux returns OpenLux pricing
 	pOpenLux, ok := svc.GetModelPricingForProvider(ctx, "openlux", "gpt-4o")
 	require.True(t, ok)
 	require.InDelta(t, 2e-6*1.0, pOpenLux.InputPricePerToken, 1e-9)
 
-	// 4. Model not in OpenLux cannot be resolved through OpenLux
+	// 5. Model not in OpenLux cannot be resolved through OpenLux
 	_, ok = svc.GetModelPricingForProvider(ctx, "openlux", "claude-haiku-4-5")
 	require.False(t, ok, "Model absent in OpenLux must not resolve via shared pool")
+	_, ok = svc.GetModelPricingForProvider(ctx, "openlux", "kimi-k2.6")
+	require.False(t, ok, "Model absent in OpenLux must not resolve via shared pool")
 
-	// 5. Pricing lookup for Top-API returns Top-API pricing
+	// 6. Pricing lookup for Top-API returns Top-API pricing
 	pTop, ok := svc.GetModelPricingForProvider(ctx, "api-top", "gpt-4o")
 	require.True(t, ok)
 	require.InDelta(t, 2e-6*2.0, pTop.InputPricePerToken, 1e-9)
 
-	// 6. Context-aware provider routing
+	// 7. Pricing lookup for X-LLM returns X-LLM pricing
+	pXLLM, ok := svc.GetModelPricingForProvider(ctx, "x-llm", "gpt-4o")
+	require.True(t, ok)
+	require.InDelta(t, 2e-6*4.0, pXLLM.InputPricePerToken, 1e-9)
+
+	pKimi, ok := svc.GetModelPricingForProvider(ctx, "x-llm", "kimi-k2.6")
+	require.True(t, ok)
+	require.InDelta(t, 2e-6*3.25, pKimi.InputPricePerToken, 1e-9)
+
+	// 8. Context-aware provider routing
 	ctxWithTop := ContextWithPricingProvider(ctx, "api-top")
 	pCtxTop, ok := svc.GetModelPricing(ctxWithTop, "gpt-4o")
 	require.True(t, ok)
 	require.InDelta(t, 2e-6*2.0, pCtxTop.InputPricePerToken, 1e-9)
 
-	// 7. Default context falls back strictly to OpenLux, not a shared pool
+	ctxWithXLLM := ContextWithPricingProvider(ctx, "x-llm")
+	pCtxXLLM, ok := svc.GetModelPricing(ctxWithXLLM, "gpt-4o")
+	require.True(t, ok)
+	require.InDelta(t, 2e-6*4.0, pCtxXLLM.InputPricePerToken, 1e-9)
+
+	pCtxKimi, ok := svc.GetModelPricing(ctxWithXLLM, "kimi-k2.6")
+	require.True(t, ok)
+	require.InDelta(t, 2e-6*3.25, pCtxKimi.InputPricePerToken, 1e-9)
+
+	// 9. Default context falls back strictly to OpenLux, not a shared pool
 	pDefault, ok := svc.GetModelPricing(ctx, "gpt-4o")
 	require.True(t, ok)
 	require.InDelta(t, 2e-6*1.0, pDefault.InputPricePerToken, 1e-9)
@@ -389,6 +434,9 @@ func TestYunwuPricingService_ProviderIsolation(t *testing.T) {
 	require.Equal(t, "api-top", CanonicalPricingProvider("top-api"))
 	require.Equal(t, "api-top", CanonicalPricingProvider("API-TOP"))
 	require.Equal(t, "yuanqiaoyun", CanonicalPricingProvider("yuanqiao"))
+	require.Equal(t, "x-llm", CanonicalPricingProvider("x-llm"))
+	require.Equal(t, "x-llm", CanonicalPricingProvider("x-llm.net"))
+	require.Equal(t, "x-llm", CanonicalPricingProvider("xllm"))
 	require.Equal(t, "portdan", CanonicalPricingProvider("portdan.com"))
 }
 

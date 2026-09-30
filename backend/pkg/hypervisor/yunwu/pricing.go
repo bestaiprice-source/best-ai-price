@@ -48,6 +48,7 @@ var KnownProviderPricingURLs = map[string]string{
 	ProviderOpenLux:     "https://api.openlux.ai/api/pricing",
 	ProviderAPITop:      "https://api-top.com/api/pricing",
 	ProviderYuanqiaoyun: "https://yuanqiaoyun.com/api/pricing",
+	ProviderXLLM:        "https://x-llm.net/api/pricing",
 	ProviderPortdan:     DefaultPortdanPricingURL,
 }
 

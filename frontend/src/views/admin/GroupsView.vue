@@ -1902,7 +1902,7 @@ const platformOptions = computed(() => [
   { value: 'kiro', label: 'Kiro' },
   { value: 'antigravity', label: 'Antigravity' },
   { value: 'sora', label: 'Sora' },
-  { value: 'yunwu', label: 'Unofficial Providers (OpenLux, Portdan, Top-API, Yuanqiaoyun)' }
+  { value: 'yunwu', label: 'Unofficial Providers (OpenLux, Portdan, Top-API, Yuanqiaoyun, X-LLM)' }
 ])
 
 const platformFilterOptions = computed(() => [
@@ -1913,7 +1913,7 @@ const platformFilterOptions = computed(() => [
   { value: 'kiro', label: 'Kiro' },
   { value: 'antigravity', label: 'Antigravity' },
   { value: 'sora', label: 'Sora' },
-  { value: 'yunwu', label: 'Unofficial Providers (OpenLux, Portdan, Top-API, Yuanqiaoyun)' }
+  { value: 'yunwu', label: 'Unofficial Providers (OpenLux, Portdan, Top-API, Yuanqiaoyun, X-LLM)' }
 ])
 
 const editStatusOptions = computed(() => [

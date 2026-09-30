@@ -701,6 +701,8 @@ const getProviderBadgeClass = (provider?: string) => {
       return 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 border border-amber-200 dark:border-amber-800'
     case 'yuanqiaoyun':
       return 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800'
+    case 'x-llm':
+      return 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300 border border-purple-200 dark:border-purple-800'
     default:
       return 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'
   }

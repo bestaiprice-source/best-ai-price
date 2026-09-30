@@ -19,11 +19,12 @@ const (
 	oneAPIBasePricePer1k   = 0.002 // Standard One-API / New-API base price per 1000 tokens ($2/1M tokens)
 )
 
-// DefaultPricingEndpoints lists the public pricing endpoints across unofficial New-API providers (OpenLux, Top-API, Yuanqiaoyun)
+// DefaultPricingEndpoints lists the public pricing endpoints across unofficial New-API providers (OpenLux, Top-API, Yuanqiaoyun, X-LLM)
 var DefaultPricingEndpoints = []string{
 	"https://api.openlux.ai/api/pricing",
 	"https://api-top.com/api/pricing",
 	"https://yuanqiaoyun.com/api/pricing",
+	"https://x-llm.net/api/pricing",
 }
 
 // DefaultProviderPricingURLs maps known provider identifiers to their official pricing endpoints
@@ -31,6 +32,7 @@ var DefaultProviderPricingURLs = map[string]string{
 	"openlux":     "https://api.openlux.ai/api/pricing",
 	"api-top":     "https://api-top.com/api/pricing",
 	"yuanqiaoyun": "https://yuanqiaoyun.com/api/pricing",
+	"x-llm":       "https://x-llm.net/api/pricing",
 }
 
 // CanonicalPricingProvider normalizes provider names for pricing lookup
@@ -43,6 +45,8 @@ func CanonicalPricingProvider(provider string) string {
 		return "api-top"
 	case "yuanqiaoyun", "yuanqiao", "yuanqiaoyun.com":
 		return "yuanqiaoyun"
+	case "x-llm", "x-llm.net", "xllm":
+		return "x-llm"
 	case "portdan", "portdan.com":
 		return "portdan"
 	default:

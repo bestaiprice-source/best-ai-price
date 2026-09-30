@@ -8,6 +8,7 @@ const (
 	FamilyClaude = "claude"
 	FamilyGPT    = "gpt"
 	FamilyGemini = "gemini"
+	FamilyKimi   = "kimi"
 	FamilyOther  = "other"
 
 	DefaultProvider = "openlux"
@@ -16,11 +17,13 @@ const (
 	ProviderPortdan     = "portdan"
 	ProviderAPITop      = "api-top"
 	ProviderYuanqiaoyun = "yuanqiaoyun"
+	ProviderXLLM        = "x-llm"
 
 	DefaultOpenLuxBaseURL     = "https://api.openlux.ai/v1"
 	DefaultPortdanBaseURL     = "https://portdan.com/v1"
 	DefaultAPITopBaseURL      = "https://api-top.com/v1"
 	DefaultYuanqiaoyunBaseURL = "https://yuanqiaoyun.com/v1"
+	DefaultXLLMBaseURL        = "https://x-llm.net/v1"
 )
 
 // DefaultBaseURLForProvider returns the standard base URL for a given provider.
@@ -32,6 +35,8 @@ func DefaultBaseURLForProvider(provider string) string {
 		return DefaultAPITopBaseURL
 	case ProviderYuanqiaoyun:
 		return DefaultYuanqiaoyunBaseURL
+	case ProviderXLLM:
+		return DefaultXLLMBaseURL
 	default:
 		return DefaultOpenLuxBaseURL
 	}
@@ -49,6 +54,8 @@ func CanonicalProvider(provider string) string {
 		return ProviderAPITop
 	case "yuanqiaoyun", "yuanqiao", "yuanqiaoyun.com":
 		return ProviderYuanqiaoyun
+	case "x-llm", "x-llm.net", "xllm":
+		return ProviderXLLM
 	default:
 		if p == "" {
 			return DefaultProvider
@@ -59,10 +66,10 @@ func CanonicalProvider(provider string) string {
 
 // DefaultModelFamilies returns all supported model families by default.
 func DefaultModelFamilies() []string {
-	return []string{FamilyClaude, FamilyGPT, FamilyGemini, FamilyOther}
+	return []string{FamilyClaude, FamilyGPT, FamilyGemini, FamilyKimi, FamilyOther}
 }
 
-// CanonicalFamily normalizes known aliases to one of the 4 standard families.
+// CanonicalFamily normalizes known aliases to one of the 5 standard families.
 func CanonicalFamily(family string) string {
 	f := strings.ToLower(strings.TrimSpace(family))
 	switch f {
@@ -72,6 +79,8 @@ func CanonicalFamily(family string) string {
 		return FamilyGPT
 	case "gemini", "google":
 		return FamilyGemini
+	case "kimi", "moonshot":
+		return FamilyKimi
 	case "other", "others", "misc":
 		return FamilyOther
 	default:
@@ -98,6 +107,9 @@ func ClassifyModelFamily(model string) string {
 		}
 		if strings.Contains(prefix, "google") {
 			return FamilyGemini
+		}
+		if strings.Contains(prefix, "moonshot") || strings.Contains(prefix, "kimi") {
+			return FamilyKimi
 		}
 		m = modelSuffix
 	}
@@ -130,6 +142,12 @@ func ClassifyModelFamily(model string) string {
 		strings.HasPrefix(m, "lyria") ||
 		strings.HasPrefix(m, "chirp") {
 		return FamilyGemini
+	}
+
+	// Kimi / Moonshot
+	if strings.HasPrefix(m, "kimi") ||
+		strings.HasPrefix(m, "moonshot") {
+		return FamilyKimi
 	}
 
 	// All other models (e.g. DeepSeek, Qwen, LLaMA, Mistral, Grok)
