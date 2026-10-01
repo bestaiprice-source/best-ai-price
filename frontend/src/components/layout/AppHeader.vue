@@ -1,8 +1,8 @@
 <template>
   <header class="sticky top-0 z-30 bg-[#ededed] h-[68px] min-h-[68px] transition-colors">
-    <div class="flex h-[68px] items-center justify-between px-3 md:px-6">
+    <div class="flex h-[68px] items-center justify-between px-5 sm:px-8 lg:px-10 xl:px-12">
       <!-- Left: Mobile Menu Toggle + Best Ai Price Brand Header + Optional Page Title -->
-      <div class="flex items-center gap-3 sm:gap-6">
+      <div class="flex items-center gap-4 sm:gap-6">
         <button
           @click="toggleMobileSidebar"
           class="btn-ghost btn-icon lg:hidden text-[#090c0a]"
@@ -364,11 +364,11 @@ onBeforeUnmount(() => {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 0.625rem;
+  gap: 0.75rem;
   white-space: nowrap;
   user-select: none;
   text-decoration: none;
-  height: 40px;
+  height: 48px;
   transition: opacity 0.15s ease;
 }
 
@@ -379,16 +379,16 @@ onBeforeUnmount(() => {
 .bap-main-logo {
   position: absolute;
   left: 0;
-  top: -18px;
-  width: 62px;
-  height: 62px;
+  top: -4px;
+  width: 56px;
+  height: 56px;
   flex-shrink: 0;
 }
 
 .bap-logo-text {
-  margin-left: 62px;
+  margin-left: 56px;
   font-family: 'Inter Tight', sans-serif;
-  font-size: 24px;
+  font-size: 23px;
   line-height: 1;
   letter-spacing: -0.01em;
   font-weight: 500;
@@ -396,14 +396,17 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 640px) {
+  .bap-header-logo {
+    height: 40px;
+  }
   .bap-main-logo {
-    top: -10px;
+    top: -2px;
     width: 44px;
     height: 44px;
   }
   .bap-logo-text {
-    margin-left: 44px;
-    font-size: 20px;
+    margin-left: 46px;
+    font-size: 19px;
   }
 }
 </style>
