@@ -30,11 +30,11 @@
       <div class="mb-8 text-center">
         <!-- Custom Logo or Default Logo -->
         <template v-if="settingsLoaded">
-          <div
-            class="mb-4 inline-flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl shadow-lg shadow-primary-500/30"
-          >
-            <img :src="resolveAssetUrl(siteLogo)" alt="Logo" class="h-full w-full object-contain" />
-          </div>
+          <BrandLogo
+            :src="siteLogo"
+            alt="Logo"
+            class="mb-4 inline-flex h-16 w-16 rounded-2xl shadow-lg shadow-[#4791ff]/20"
+          />
           <h1 class="text-gradient mb-2 text-3xl font-bold">
             {{ siteName }}
           </h1>
@@ -65,7 +65,8 @@
 <script setup lang="ts">
 import { computed, onMounted } from 'vue'
 import { useAppStore } from '@/stores'
-import { sanitizeUrl, resolveAssetUrl } from '@/utils/url'
+import { sanitizeUrl } from '@/utils/url'
+import BrandLogo from '@/components/common/BrandLogo.vue'
 
 const appStore = useAppStore()
 

@@ -41,9 +41,7 @@
       <nav class="mx-auto flex max-w-6xl items-center justify-between">
         <!-- Logo -->
         <div class="flex items-center">
-          <div class="h-10 w-10 overflow-hidden rounded-xl shadow-md">
-            <img :src="resolveAssetUrl(siteLogo)" alt="Logo" class="h-full w-full object-contain" />
-          </div>
+          <BrandLogo :src="siteLogo" alt="Logo" class="h-10 w-10 rounded-xl" />
         </div>
 
         <!-- Nav Actions -->
@@ -395,9 +393,10 @@ import { useI18n } from 'vue-i18n'
 import { useAuthStore, useAppStore } from '@/stores'
 import { useProviderPopularity } from '@/composables/useProviderPopularity'
 import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
+import BrandLogo from '@/components/common/BrandLogo.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { renderRichContent } from '@/utils/sanitize'
-import { sanitizeUrl, resolveAssetUrl } from '@/utils/url'
+import { sanitizeUrl } from '@/utils/url'
 
 const { t } = useI18n()
 

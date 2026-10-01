@@ -479,7 +479,7 @@ sub2api/
   - **Brand Accent & Active States**: Active primary buttons and menu items use `#4791ff` (`$colorAccentHover`) with `box-shadow: 0 0 15px rgba(0, 66, 163, 0.2)` and border-radius `0.5rem` / `0.8rem`. Deep brand accent `#0355cd`.
   - **Navigation Shell**:
     - **Header**: Height `68px` (`h-[68px]`), background `#ededed`/90 with backdrop blur, border-bottom `border-black/[0.07]`.
-    - **Sidebar**: Background `#f6f6f6`, border-right `border-black/[0.07]`, active item `#4791ff` with white text, inactive items `#797a79` with hover `rgba(255, 255, 255, 0.65)`. Default fallback logo `/Logo.svg` aligns directly with `bestaiprice.com`.
+    - **Sidebar**: Background `#f6f6f6`, border-right `border-black/[0.07]`, active item `#4791ff` with white text, inactive items `#797a79` with hover `rgba(255, 255, 255, 0.65)`. `BrandLogo.vue` renders custom `siteLogo` or falls back seamlessly to the inline vector Best Ai Price logo (eliminating 404s under reverse-proxy subpaths like `/gateway/`).
 
 
 ---

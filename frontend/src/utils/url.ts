@@ -123,7 +123,7 @@ export function getSetupBaseUrl(): string {
  * Resolves an asset path or logo URL against Vite's BASE_URL if relative.
  */
 export function resolveAssetUrl(url?: string | null): string {
-  const defaultLogo = `${getBasePath()}logo.png`.replace(/\/+/g, '/')
+  const defaultLogo = `${getBasePath()}logo.svg`.replace(/\/+/g, '/')
   if (!url) {
     return defaultLogo
   }
