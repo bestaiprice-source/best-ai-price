@@ -10,7 +10,7 @@
     <div class="sidebar-header">
       <!-- Custom Logo or Default Logo -->
       <div class="flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl">
-        <img :src="siteLogo ? resolveAssetUrl(siteLogo) : '/Logo.svg'" alt="Logo" class="h-full w-full object-contain" />
+        <img :src="siteLogo ? resolveAssetUrl(siteLogo) : '/logo.svg'" alt="Logo" class="h-full w-full object-contain" />
       </div>
       <transition name="fade">
         <div v-if="!sidebarCollapsed" class="flex flex-col">
