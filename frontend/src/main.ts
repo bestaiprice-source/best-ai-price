@@ -7,11 +7,9 @@ import { useAppStore } from '@/stores/app'
 import './style.css'
 
 function initThemeClass() {
-  const savedTheme = localStorage.getItem('theme')
-  const shouldUseDark =
-    savedTheme === 'dark' ||
-    (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)
-  document.documentElement.classList.toggle('dark', shouldUseDark)
+  // Always enforce light theme to match api-center
+  document.documentElement.classList.remove('dark')
+  localStorage.setItem('theme', 'light')
 }
 
 async function bootstrap() {

@@ -1,28 +1,28 @@
 <template>
-  <header class="glass sticky top-0 z-30 border-b border-gray-200/50 dark:border-dark-700/50">
-    <div class="flex h-16 items-center justify-between px-4 md:px-6">
+  <header class="sticky top-0 z-30 border-b border-black/[0.07] bg-[#ededed]/90 backdrop-blur-md">
+    <div class="flex h-[68px] items-center justify-between px-4 md:px-6">
       <!-- Left: Mobile Menu Toggle + Page Title -->
       <div class="flex items-center gap-4">
         <button
           @click="toggleMobileSidebar"
-          class="btn-ghost btn-icon lg:hidden"
+          class="btn-ghost btn-icon lg:hidden text-[#090c0a]"
           aria-label="Toggle Menu"
         >
           <Icon name="menu" size="md" />
         </button>
 
         <div class="hidden lg:block">
-          <h1 class="text-lg font-semibold text-gray-900 dark:text-white">
+          <h1 class="text-lg font-semibold tracking-tight text-[#090c0a]">
             {{ pageTitle }}
           </h1>
-          <p v-if="pageDescription" class="text-xs text-gray-500 dark:text-dark-400">
+          <p v-if="pageDescription" class="text-xs text-[#797a79]">
             {{ pageDescription }}
           </p>
         </div>
       </div>
 
       <!-- Right: Announcements + Docs + Language + Subscriptions + Balance + User Dropdown -->
-      <div class="flex items-center gap-3">
+      <div class="flex items-center gap-2.5">
         <!-- Announcement Bell -->
         <AnnouncementBell v-if="user" />
 
@@ -32,7 +32,7 @@
           :href="docUrl"
           target="_blank"
           rel="noopener noreferrer"
-          class="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-dark-400 dark:hover:bg-dark-800 dark:hover:text-white"
+          class="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-[#797a79] transition-colors hover:bg-white hover:text-[#090c0a]"
         >
           <Icon name="book" size="sm" />
           <span class="hidden sm:inline">{{ t('nav.docs') }}</span>
@@ -45,11 +45,11 @@
         <router-link
           v-if="user"
           to="/purchase"
-          class="group hidden items-center gap-2 rounded-xl bg-primary-50 px-3 py-1.5 transition-all hover:bg-primary-100 hover:shadow-sm dark:bg-primary-900/20 dark:hover:bg-primary-900/40 sm:flex cursor-pointer"
+          class="group hidden items-center gap-2 rounded-lg bg-white border border-black/[0.08] px-3 py-1.5 shadow-[0_0_10px_rgba(0,0,0,0.03)] transition-all hover:border-black/15 hover:shadow-sm sm:flex cursor-pointer"
           :title="t('nav.recharge')"
         >
           <svg
-            class="h-4 w-4 text-primary-600 transition-transform group-hover:scale-110 dark:text-primary-400"
+            class="h-4 w-4 text-[#4791ff] transition-transform group-hover:scale-110"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -61,10 +61,10 @@
               d="M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 013 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 00-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 01-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 003 15h-.75M15 10.5a3 3 0 11-6 0 3 3 0 016 0zm3 0h.008v.008H18V10.5zm-12 0h.008v.008H6V10.5z"
             />
           </svg>
-          <span class="text-sm font-semibold text-primary-700 dark:text-primary-300">
+          <span class="text-sm font-semibold text-[#090c0a]">
             ${{ user.balance?.toFixed(2) || '0.00' }}
           </span>
-          <span class="flex h-4 w-4 items-center justify-center rounded-full bg-primary-200/60 text-primary-700 transition-colors group-hover:bg-primary-600 group-hover:text-white dark:bg-primary-800/60 dark:text-primary-300 dark:group-hover:bg-primary-500">
+          <span class="flex h-4 w-4 items-center justify-center rounded-full bg-[#e8f2ff] text-[#0355cd] transition-colors group-hover:bg-[#4791ff] group-hover:text-white">
             <svg class="h-2.5 w-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="3">
               <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
             </svg>
@@ -75,34 +75,34 @@
         <div v-if="user" class="relative" ref="dropdownRef">
           <button
             @click="toggleDropdown"
-            class="flex items-center gap-2 rounded-xl p-1.5 transition-colors hover:bg-gray-100 dark:hover:bg-dark-800"
+            class="flex items-center gap-2 rounded-lg bg-white border border-black/[0.08] px-2.5 py-1.5 shadow-[0_0_10px_rgba(0,0,0,0.03)] transition-all hover:border-black/15 hover:bg-black/[0.02]"
             aria-label="User Menu"
           >
             <div
-              class="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-primary-500 to-primary-600 text-sm font-medium text-white shadow-sm"
+              class="flex h-7 w-7 items-center justify-center rounded-md bg-[#4791ff] text-xs font-semibold text-white shadow-sm"
             >
               {{ userInitials }}
             </div>
             <div class="hidden text-left md:block">
-              <div class="text-sm font-medium text-gray-900 dark:text-white">
+              <div class="text-sm font-medium text-[#090c0a]">
                 {{ displayName }}
               </div>
-              <div class="text-xs capitalize text-gray-500 dark:text-dark-400">
+              <div class="text-[11px] capitalize text-[#797a79]">
                 {{ user.role }}
               </div>
             </div>
-            <Icon name="chevronDown" size="sm" class="hidden text-gray-400 md:block" />
+            <Icon name="chevronDown" size="sm" class="hidden text-[#797a79] md:block" />
           </button>
 
           <!-- Dropdown Menu -->
           <transition name="dropdown">
-            <div v-if="dropdownOpen" class="dropdown right-0 mt-2 w-56">
+            <div v-if="dropdownOpen" class="dropdown right-0 mt-2 w-56 rounded-xl border border-black/[0.08] bg-white shadow-xl">
               <!-- User Info -->
-              <div class="border-b border-gray-100 px-4 py-3 dark:border-dark-700">
-                <div class="text-sm font-medium text-gray-900 dark:text-white">
+              <div class="border-b border-gray-100 px-4 py-3">
+                <div class="text-sm font-medium text-[#090c0a]">
                   {{ displayName }}
                 </div>
-                <div class="text-xs text-gray-500 dark:text-dark-400">{{ user.email }}</div>
+                <div class="text-xs text-[#797a79]">{{ user.email }}</div>
               </div>
 
               <!-- Balance (mobile only, click to recharge) -->

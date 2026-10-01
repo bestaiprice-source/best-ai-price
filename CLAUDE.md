@@ -470,6 +470,18 @@ sub2api/
   - `ConcurrencyService`: `cachedAccountLoadSnapshot` and `cachedUserLoadSnapshot` store and preserve precomputed `LoadRate`. Upstream or mock-provided load rates are retained when concurrency and waiting counters are zero, rather than resetting to 0.
   - `gatewayAccountReadyTier` & `openAIAccountReadyTier`: Accounts with `LoadRate >= 100` are explicitly marked with `slotFree = 0` (ReadyTier 2 / saturated), ensuring tiered schedulers properly prioritize accounts with available capacity over saturated accounts.
 
+### 9.4 Visual Design & Theme System (`bestaiprice.com` / `api-center` Alignment)
+- **Enforced Light Mode Only**: The interface is permanently locked to a clean light theme. Dark mode toggles and automatic dark OS preferences have been removed to unify `sub2api` seamlessly with the `bestaiprice.com` (`api-center`) design language as a single continuous site experience.
+- **Design Tokens & Palette**:
+  - **Page Background**: `#ededed` (matches `$colorBackground: #ededed;` in `api-center`).
+  - **Typography**: Google Font `Inter Tight` (letter-spacing `-0.01em` to `-0.02em`), text `#090c0a` (`$colorBlack`), secondary text `#797a79`, dark text `#212121`.
+  - **Cards & Stat Containers**: `background: linear-gradient(178.65deg, #ffffff 7.92%, #f7f7f7 98.85%)`, border `1px solid rgba(0, 0, 0, 0.07)`, shadow `0 0 20px rgba(0, 0, 0, 0.04)`, border-radius `1rem` / `1.6rem`.
+  - **Brand Accent & Active States**: Active primary buttons and menu items use `#4791ff` (`$colorAccentHover`) with `box-shadow: 0 0 15px rgba(0, 66, 163, 0.2)` and border-radius `0.5rem` / `0.8rem`. Deep brand accent `#0355cd`.
+  - **Navigation Shell**:
+    - **Header**: Height `68px` (`h-[68px]`), background `#ededed`/90 with backdrop blur, border-bottom `border-black/[0.07]`.
+    - **Sidebar**: Background `#f6f6f6`, border-right `border-black/[0.07]`, active item `#4791ff` with white text, inactive items `#797a79` with hover `rgba(255, 255, 255, 0.65)`. Default fallback logo `/Logo.svg` aligns directly with `bestaiprice.com`.
+
+
 ---
 
 ## 🧪 10. Testing & Development Rules

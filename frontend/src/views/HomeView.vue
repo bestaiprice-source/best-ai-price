@@ -63,15 +63,6 @@
             <Icon name="book" size="md" />
           </a>
 
-          <!-- Theme Toggle -->
-          <button
-            @click="toggleTheme"
-            class="rounded-lg p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-dark-400 dark:hover:bg-dark-800 dark:hover:text-white"
-            :title="isDark ? t('home.switchToLight') : t('home.switchToDark')"
-          >
-            <Icon v-if="isDark" name="sun" size="md" />
-            <Icon v-else name="moon" size="md" />
-          </button>
 
           <!-- Login / Dashboard Button -->
           <router-link
@@ -487,9 +478,6 @@ const renderedHomeContent = computed(() => renderRichContent(homeContent.value))
 // Check if homeContent is a URL (for iframe display)
 const isHomeContentUrl = computed(() => !!homeContentUrl.value)
 
-// Theme
-const isDark = ref(document.documentElement.classList.contains('dark'))
-
 // GitHub URL
 const githubUrl = 'https://github.com/DR-lin-eng/sub2api'
 
@@ -506,23 +494,10 @@ const userInitial = computed(() => {
 // Current year for footer
 const currentYear = computed(() => new Date().getFullYear())
 
-// Toggle theme
-function toggleTheme() {
-  isDark.value = !isDark.value
-  document.documentElement.classList.toggle('dark', isDark.value)
-  localStorage.setItem('theme', isDark.value ? 'dark' : 'light')
-}
-
-// Initialize theme
+// Initialize theme (enforce light mode)
 function initTheme() {
-  const savedTheme = localStorage.getItem('theme')
-  if (
-    savedTheme === 'dark' ||
-    (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)
-  ) {
-    isDark.value = true
-    document.documentElement.classList.add('dark')
-  }
+  document.documentElement.classList.remove('dark')
+  localStorage.setItem('theme', 'light')
 }
 
 onMounted(() => {

@@ -57,17 +57,14 @@ const props = defineProps<{
   loading?: boolean
 }>()
 
-const isDarkMode = computed(() => {
-  return document.documentElement.classList.contains('dark')
-})
 
 const chartColors = computed(() => ({
-  text: isDarkMode.value ? '#e5e7eb' : '#374151',
-  grid: isDarkMode.value ? '#374151' : '#e5e7eb',
-  input: '#3b82f6',
+  text: '#797a79',
+  grid: 'rgba(0, 0, 0, 0.06)',
+  input: '#4791ff',
   output: '#10b981',
   cacheCreation: '#f59e0b',
-  cacheRead: '#06b6d4'
+  cacheRead: '#0284c7'
 }))
 
 const chartData = computed(() => {
