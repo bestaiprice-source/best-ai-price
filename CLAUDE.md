@@ -293,7 +293,15 @@ sub2api/
 ├── frontend/                   # Vue 3 / Vite Frontend Application
 │   └── src/
 │       ├── api/                # API clients (keys.ts, admin.ts, etc.)
-│       ├── views/              # Pages (user/KeysView.vue, admin/*)
+│       ├── views/              # Pages (user/DashboardView.vue, admin/DashboardView.vue, etc.)
+│       │   # BestAiPrice / API-Center Dashboard Redesign:
+│       │   # - Google Fonts Inter Tight typography with tight letter spacing.
+│       │   # - BestAiPrice visual system (bap-card, bap-stat-card, bap-pill, bap-btn-accent).
+│       │   # - Micro-gradients (linear-gradient 178.65deg), subtle borders (rgba(0,0,0,0.07)), diffuse shadows.
+│       │   # - Electric blue brand accent (#4791ff, #0355cd) with glow effects.
+│       │   # - BestAiPrice pill switchers (Day/Hour) and model tags.
+│       │   # - User & Admin Dashboards with hero banners, operational status pills, and interactive quick action tiles.
+│       ├── components/         # Shared UI & dashboard components (UserDashboardStats, UserDashboardCharts, etc.)
 │       └── stores/             # Pinia stores (auth.ts, app.ts)
 └── backend/
     ├── cmd/server/             # Application entrypoint

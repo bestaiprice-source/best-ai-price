@@ -299,6 +299,73 @@
     @apply text-red-600 dark:text-red-400;
   }
 
+  /* ============ BestAiPrice / API-Center Visual System ============ */
+  .bap-stat-card {
+    @apply relative overflow-hidden rounded-2xl border border-black/[0.07] p-5;
+    background: linear-gradient(178.65deg, #ffffff 7.92%, #f8f9fa 98.85%);
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.035), 0 2px 6px rgba(0, 0, 0, 0.02);
+    @apply transition-all duration-200;
+  }
+  .bap-stat-card:hover {
+    @apply -translate-y-0.5 border-black/15;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.06);
+  }
+  .dark .bap-stat-card {
+    border-color: rgba(255, 255, 255, 0.08);
+    background: linear-gradient(178.65deg, #1c2128 7.92%, #14181f 98.85%);
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.25);
+  }
+  .dark .bap-stat-card:hover {
+    border-color: rgba(255, 255, 255, 0.16);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4);
+  }
+
+  .bap-card {
+    @apply rounded-2xl border border-black/[0.07] p-5;
+    background: linear-gradient(178.65deg, #ffffff 7.92%, #f8f9fa 98.85%);
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.035), 0 2px 6px rgba(0, 0, 0, 0.02);
+    @apply transition-all duration-200;
+  }
+  .dark .bap-card {
+    border-color: rgba(255, 255, 255, 0.08);
+    background: linear-gradient(178.65deg, #1c2128 7.92%, #14181f 98.85%);
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.25);
+  }
+
+  .bap-pill {
+    @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium tracking-tight;
+  }
+  .bap-pill-blue {
+    @apply bg-[#e8f2ff] text-[#0355cd] dark:bg-[#0355cd]/25 dark:text-[#60a5fa];
+  }
+  .bap-pill-green {
+    @apply bg-[#e7f9f2] text-[#10b981] dark:bg-[#10b981]/20 dark:text-[#34d399];
+  }
+  .bap-pill-red {
+    @apply bg-[#ffe6e6] text-[#ff153b] dark:bg-[#ff153b]/20 dark:text-[#f87171];
+  }
+  .bap-pill-amber {
+    @apply bg-[#fef3c7] text-[#d97706] dark:bg-[#d97706]/20 dark:text-[#fbbf24];
+  }
+  .bap-pill-purple {
+    @apply bg-[#f3e8ff] text-[#9333ea] dark:bg-[#9333ea]/20 dark:text-[#c084fc];
+  }
+  .bap-pill-gray {
+    @apply bg-black/5 text-gray-600 dark:bg-white/10 dark:text-gray-300;
+  }
+
+  .bap-btn-accent {
+    @apply relative inline-flex items-center justify-center gap-1.5 rounded-xl bg-[#4791ff] px-4 py-2 text-sm font-semibold text-white transition-all;
+    box-shadow: 0 0 15px rgba(3, 85, 205, 0.25);
+  }
+  .bap-btn-accent:hover {
+    @apply bg-[#327df0];
+    box-shadow: 0 0 22px rgba(3, 85, 205, 0.38);
+  }
+  .bap-btn-accent:active {
+    @apply scale-[0.98];
+  }
+
   /* ============ 表格样式 ============ */
   .table-container {
     @apply overflow-x-auto rounded-xl border border-gray-200 dark:border-dark-700;

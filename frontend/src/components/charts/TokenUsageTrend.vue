@@ -1,8 +1,11 @@
 <template>
-  <div class="card p-4">
-    <h3 class="mb-4 text-sm font-semibold text-gray-900 dark:text-white">
-      {{ t('admin.dashboard.tokenUsageTrend') }}
-    </h3>
+  <div class="bap-card p-5">
+    <div class="mb-4 flex items-center justify-between border-b border-black/[0.04] pb-3 dark:border-white/[0.06]">
+      <h3 class="text-sm font-semibold tracking-tight text-gray-900 dark:text-white">
+        {{ t('admin.dashboard.tokenUsageTrend') }}
+      </h3>
+      <span class="bap-pill bap-pill-blue text-[10px]">Trend</span>
+    </div>
     <div v-if="loading" class="flex h-48 items-center justify-center">
       <LoadingSpinner />
     </div>
@@ -11,7 +14,7 @@
     </div>
     <div
       v-else
-      class="flex h-48 items-center justify-center text-sm text-gray-500 dark:text-gray-400"
+      class="flex h-48 items-center justify-center text-xs text-gray-400 dark:text-gray-500"
     >
       {{ t('admin.dashboard.noDataAvailable') }}
     </div>

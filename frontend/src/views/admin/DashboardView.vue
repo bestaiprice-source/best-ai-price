@@ -1,205 +1,262 @@
 <template>
   <AppLayout>
     <div class="space-y-6">
+      <!-- BestAiPrice Styled Admin Hero Banner -->
+      <div class="bap-card relative overflow-hidden p-6 sm:p-7">
+        <div class="flex flex-col justify-between gap-4 md:flex-row md:items-center">
+          <div class="space-y-2">
+            <div class="flex flex-wrap items-center gap-2.5">
+              <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400">
+                <span class="relative flex h-2 w-2">
+                  <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
+                  <span class="relative inline-flex h-2 w-2 rounded-full bg-emerald-500"></span>
+                </span>
+                Hypervisor Active
+              </span>
+              <span class="bap-pill bap-pill-purple uppercase text-[10px]">
+                Admin Console
+              </span>
+            </div>
+            <h1 class="text-xl font-bold tracking-tight text-gray-900 sm:text-2xl dark:text-white">
+              {{ t('admin.dashboard.title') }}
+            </h1>
+            <p class="text-xs text-gray-500 sm:text-sm dark:text-gray-400">
+              System-wide metrics, upstream accounts health, active proxy clusters, and token usage trends.
+            </p>
+          </div>
+
+          <!-- Shortcuts -->
+          <div class="flex flex-wrap items-center gap-2.5">
+            <router-link
+              to="/admin/accounts"
+              class="bap-btn-accent"
+            >
+              <Icon name="server" size="xs" />
+              <span>{{ t('admin.dashboard.accounts') }}</span>
+            </router-link>
+            <router-link
+              to="/admin/users"
+              class="inline-flex items-center gap-1.5 rounded-xl border border-black/[0.08] bg-white px-3.5 py-2 text-xs font-semibold text-gray-700 shadow-sm transition-all hover:bg-gray-50 dark:border-white/[0.08] dark:bg-dark-800 dark:text-gray-200 dark:hover:bg-dark-700"
+            >
+              <Icon name="users" size="xs" />
+              <span>{{ t('admin.dashboard.users') }}</span>
+            </router-link>
+          </div>
+        </div>
+      </div>
+
       <!-- Loading State -->
-      <div v-if="loading" class="flex items-center justify-center py-12">
-        <LoadingSpinner />
+      <div v-if="loading" class="flex items-center justify-center py-16">
+        <LoadingSpinner size="lg" />
       </div>
 
       <template v-else-if="stats">
-        <!-- Row 1: Core Stats -->
-        <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <!-- Row 1: Core System Stats -->
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <!-- Total API Keys -->
-          <div class="card p-4">
-            <div class="flex items-center gap-3">
-              <div class="rounded-lg bg-blue-100 p-2 dark:bg-blue-900/30">
-                <Icon name="key" size="md" class="text-blue-600 dark:text-blue-400" :stroke-width="2" />
+          <div class="bap-stat-card group">
+            <div class="flex items-start justify-between">
+              <div class="flex items-center gap-3">
+                <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-[#0355cd] transition-transform group-hover:scale-105 dark:bg-[#0355cd]/20 dark:text-[#60a5fa]">
+                  <Icon name="key" size="md" :stroke-width="2" />
+                </div>
+                <div>
+                  <p class="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                    {{ t('admin.dashboard.apiKeys') }}
+                  </p>
+                  <p class="mt-0.5 font-mono text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
+                    {{ stats.total_api_keys }}
+                  </p>
+                </div>
               </div>
-              <div>
-                <p class="text-xs font-medium text-gray-500 dark:text-gray-400">
-                  {{ t('admin.dashboard.apiKeys') }}
-                </p>
-                <p class="text-xl font-bold text-gray-900 dark:text-white">
-                  {{ stats.total_api_keys }}
-                </p>
-                <p class="text-xs text-green-600 dark:text-green-400">
-                  {{ stats.active_api_keys }} {{ t('common.active') }}
-                </p>
-              </div>
+              <span class="bap-pill bap-pill-blue">
+                {{ stats.active_api_keys }} {{ t('common.active') }}
+              </span>
+            </div>
+            <div class="mt-4 flex items-center justify-between border-t border-black/[0.04] pt-3 text-xs text-gray-500 dark:border-white/[0.06] dark:text-gray-400">
+              <span>Status: <strong class="text-emerald-600 dark:text-emerald-400">{{ stats.active_api_keys }} Online</strong></span>
+              <router-link to="/keys" class="font-medium text-[#4791ff] hover:underline">
+                Manage &rarr;
+              </router-link>
             </div>
           </div>
 
           <!-- Service Accounts -->
-          <div class="card p-4">
-            <div class="flex items-center gap-3">
-              <div class="rounded-lg bg-purple-100 p-2 dark:bg-purple-900/30">
-                <Icon name="server" size="md" class="text-purple-600 dark:text-purple-400" :stroke-width="2" />
+          <div class="bap-stat-card group">
+            <div class="flex items-start justify-between">
+              <div class="flex items-center gap-3">
+                <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-50 text-purple-600 transition-transform group-hover:scale-105 dark:bg-purple-950/40 dark:text-purple-400">
+                  <Icon name="server" size="md" :stroke-width="2" />
+                </div>
+                <div>
+                  <p class="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                    {{ t('admin.dashboard.accounts') }}
+                  </p>
+                  <p class="mt-0.5 font-mono text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
+                    {{ stats.total_accounts }}
+                  </p>
+                </div>
               </div>
-              <div>
-                <p class="text-xs font-medium text-gray-500 dark:text-gray-400">
-                  {{ t('admin.dashboard.accounts') }}
-                </p>
-                <p class="text-xl font-bold text-gray-900 dark:text-white">
-                  {{ stats.total_accounts }}
-                </p>
-                <p class="text-xs">
-                  <span class="text-green-600 dark:text-green-400"
-                    >{{ stats.normal_accounts }} {{ t('common.active') }}</span
-                  >
-                  <span v-if="stats.error_accounts > 0" class="ml-1 text-red-500"
-                    >{{ stats.error_accounts }} {{ t('common.error') }}</span
-                  >
-                </p>
-              </div>
+              <span class="bap-pill" :class="stats.error_accounts > 0 ? 'bap-pill-red' : 'bap-pill-green'">
+                {{ stats.normal_accounts }} {{ t('common.active') }}
+              </span>
+            </div>
+            <div class="mt-4 flex items-center justify-between border-t border-black/[0.04] pt-3 text-xs text-gray-500 dark:border-white/[0.06] dark:text-gray-400">
+              <span v-if="stats.error_accounts > 0" class="font-medium text-rose-500">
+                {{ stats.error_accounts }} {{ t('common.error') }}
+              </span>
+              <span v-else class="text-emerald-600 dark:text-emerald-400">All Nodes Normal</span>
+              <router-link to="/admin/accounts" class="font-medium text-[#4791ff] hover:underline">
+                View &rarr;
+              </router-link>
             </div>
           </div>
 
           <!-- Today Requests -->
-          <div class="card p-4">
-            <div class="flex items-center gap-3">
-              <div class="rounded-lg bg-green-100 p-2 dark:bg-green-900/30">
-                <Icon name="chart" size="md" class="text-green-600 dark:text-green-400" :stroke-width="2" />
+          <div class="bap-stat-card group">
+            <div class="flex items-start justify-between">
+              <div class="flex items-center gap-3">
+                <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 transition-transform group-hover:scale-105 dark:bg-indigo-950/40 dark:text-indigo-400">
+                  <Icon name="chart" size="md" :stroke-width="2" />
+                </div>
+                <div>
+                  <p class="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                    {{ t('admin.dashboard.todayRequests') }}
+                  </p>
+                  <p class="mt-0.5 font-mono text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
+                    {{ formatNumber(stats.today_requests) }}
+                  </p>
+                </div>
               </div>
-              <div>
-                <p class="text-xs font-medium text-gray-500 dark:text-gray-400">
-                  {{ t('admin.dashboard.todayRequests') }}
-                </p>
-                <p class="text-xl font-bold text-gray-900 dark:text-white">
-                  {{ stats.today_requests }}
-                </p>
-                <p class="text-xs text-gray-500 dark:text-gray-400">
-                  {{ t('common.total') }}: {{ formatNumber(stats.total_requests) }}
-                </p>
-              </div>
+              <span class="bap-pill bap-pill-gray">
+                {{ t('dashboard.day') }}
+              </span>
+            </div>
+            <div class="mt-4 flex items-center justify-between border-t border-black/[0.04] pt-3 text-xs text-gray-500 dark:border-white/[0.06] dark:text-gray-400">
+              <span>{{ t('common.total') }}: <span class="font-mono font-medium text-gray-900 dark:text-white">{{ formatNumber(stats.total_requests) }}</span></span>
+              <router-link to="/admin/usage" class="font-medium text-[#4791ff] hover:underline">
+                Logs &rarr;
+              </router-link>
             </div>
           </div>
 
           <!-- New Users Today -->
-          <div class="card p-4">
-            <div class="flex items-center gap-3">
-              <div class="rounded-lg bg-emerald-100 p-2 dark:bg-emerald-900/30">
-                <Icon name="userPlus" size="md" class="text-emerald-600 dark:text-emerald-400" :stroke-width="2" />
+          <div class="bap-stat-card group">
+            <div class="flex items-start justify-between">
+              <div class="flex items-center gap-3">
+                <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 transition-transform group-hover:scale-105 dark:bg-emerald-950/40 dark:text-emerald-400">
+                  <Icon name="userPlus" size="md" :stroke-width="2" />
+                </div>
+                <div>
+                  <p class="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                    {{ t('admin.dashboard.users') }}
+                  </p>
+                  <p class="mt-0.5 font-mono text-2xl font-bold tracking-tight text-emerald-600 dark:text-emerald-400">
+                    +{{ stats.today_new_users }}
+                  </p>
+                </div>
               </div>
-              <div>
-                <p class="text-xs font-medium text-gray-500 dark:text-gray-400">
-                  {{ t('admin.dashboard.users') }}
-                </p>
-                <p class="text-xl font-bold text-emerald-600 dark:text-emerald-400">
-                  +{{ stats.today_new_users }}
-                </p>
-                <p class="text-xs text-gray-500 dark:text-gray-400">
-                  {{ t('common.total') }}: {{ formatNumber(stats.total_users) }}
-                </p>
-              </div>
+              <span class="bap-pill bap-pill-green">
+                New Today
+              </span>
+            </div>
+            <div class="mt-4 flex items-center justify-between border-t border-black/[0.04] pt-3 text-xs text-gray-500 dark:border-white/[0.06] dark:text-gray-400">
+              <span>{{ t('common.total') }}: <span class="font-mono font-medium text-gray-900 dark:text-white">{{ formatNumber(stats.total_users) }}</span></span>
+              <router-link to="/admin/users" class="font-medium text-[#4791ff] hover:underline">
+                Users &rarr;
+              </router-link>
             </div>
           </div>
         </div>
 
-        <!-- Row 2: Token Stats -->
-        <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <!-- Row 2: Token Processing & System Performance -->
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <!-- Today Tokens -->
-          <div class="card p-4">
+          <div class="bap-stat-card group">
             <div class="flex items-center gap-3">
-              <div class="rounded-lg bg-amber-100 p-2 dark:bg-amber-900/30">
-                <Icon name="cube" size="md" class="text-amber-600 dark:text-amber-400" :stroke-width="2" />
+              <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50 text-amber-600 transition-transform group-hover:scale-105 dark:bg-amber-950/40 dark:text-amber-400">
+                <Icon name="cube" size="md" :stroke-width="2" />
               </div>
-              <div>
-                <p class="text-xs font-medium text-gray-500 dark:text-gray-400">
+              <div class="min-w-0 flex-1">
+                <p class="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
                   {{ t('admin.dashboard.todayTokens') }}
                 </p>
-                <p class="text-xl font-bold text-gray-900 dark:text-white">
+                <p class="mt-0.5 font-mono text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
                   {{ formatTokens(stats.today_tokens) }}
                 </p>
-                <p class="text-xs">
-                  <span
-                    class="text-amber-600 dark:text-amber-400"
-                    :title="t('admin.dashboard.actual')"
-                    >${{ formatCost(stats.today_actual_cost) }}</span
-                  >
-                  <span
-                    class="text-gray-400 dark:text-gray-500"
-                    :title="t('admin.dashboard.standard')"
-                  >
-                    / ${{ formatCost(stats.today_cost) }}</span
-                  >
-                </p>
               </div>
+            </div>
+            <div class="mt-4 flex items-center justify-between border-t border-black/[0.04] pt-3 font-mono text-xs text-gray-500 dark:border-white/[0.06] dark:text-gray-400">
+              <span>Cost: <strong class="text-amber-600 dark:text-amber-400">${{ formatCost(stats.today_actual_cost) }}</strong></span>
+              <span class="text-gray-400 dark:text-gray-500">${{ formatCost(stats.today_cost) }}</span>
             </div>
           </div>
 
           <!-- Total Tokens -->
-          <div class="card p-4">
+          <div class="bap-stat-card group">
             <div class="flex items-center gap-3">
-              <div class="rounded-lg bg-indigo-100 p-2 dark:bg-indigo-900/30">
-                <Icon name="database" size="md" class="text-indigo-600 dark:text-indigo-400" :stroke-width="2" />
+              <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 transition-transform group-hover:scale-105 dark:bg-indigo-950/40 dark:text-indigo-400">
+                <Icon name="database" size="md" :stroke-width="2" />
               </div>
-              <div>
-                <p class="text-xs font-medium text-gray-500 dark:text-gray-400">
+              <div class="min-w-0 flex-1">
+                <p class="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
                   {{ t('admin.dashboard.totalTokens') }}
                 </p>
-                <p class="text-xl font-bold text-gray-900 dark:text-white">
+                <p class="mt-0.5 font-mono text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
                   {{ formatTokens(stats.total_tokens) }}
                 </p>
-                <p class="text-xs">
-                  <span
-                    class="text-indigo-600 dark:text-indigo-400"
-                    :title="t('admin.dashboard.actual')"
-                    >${{ formatCost(stats.total_actual_cost) }}</span
-                  >
-                  <span
-                    class="text-gray-400 dark:text-gray-500"
-                    :title="t('admin.dashboard.standard')"
-                  >
-                    / ${{ formatCost(stats.total_cost) }}</span
-                  >
-                </p>
               </div>
+            </div>
+            <div class="mt-4 flex items-center justify-between border-t border-black/[0.04] pt-3 font-mono text-xs text-gray-500 dark:border-white/[0.06] dark:text-gray-400">
+              <span>Cost: <strong class="text-indigo-600 dark:text-indigo-400">${{ formatCost(stats.total_actual_cost) }}</strong></span>
+              <span class="text-gray-400 dark:text-gray-500">${{ formatCost(stats.total_cost) }}</span>
             </div>
           </div>
 
           <!-- Performance (RPM/TPM) -->
-          <div class="card p-4">
+          <div class="bap-stat-card group">
             <div class="flex items-center gap-3">
-              <div class="rounded-lg bg-violet-100 p-2 dark:bg-violet-900/30">
-                <Icon name="bolt" size="md" class="text-violet-600 dark:text-violet-400" :stroke-width="2" />
+              <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-50 text-violet-600 transition-transform group-hover:scale-105 dark:bg-violet-950/40 dark:text-violet-400">
+                <Icon name="bolt" size="md" :stroke-width="2" />
               </div>
-              <div class="flex-1">
-                <p class="text-xs font-medium text-gray-500 dark:text-gray-400">
+              <div class="min-w-0 flex-1">
+                <p class="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
                   {{ t('admin.dashboard.performance') }}
                 </p>
-                <div class="flex items-baseline gap-2">
-                  <p class="text-xl font-bold text-gray-900 dark:text-white">
+                <div class="mt-0.5 flex items-baseline gap-2">
+                  <span class="font-mono text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
                     {{ formatTokens(stats.rpm) }}
-                  </p>
-                  <span class="text-xs text-gray-500 dark:text-gray-400">RPM</span>
-                </div>
-                <div class="flex items-baseline gap-2">
-                  <p class="text-sm font-semibold text-violet-600 dark:text-violet-400">
-                    {{ formatTokens(stats.tpm) }}
-                  </p>
-                  <span class="text-xs text-gray-500 dark:text-gray-400">TPM</span>
+                  </span>
+                  <span class="bap-pill bap-pill-purple text-[10px] uppercase">RPM</span>
                 </div>
               </div>
+            </div>
+            <div class="mt-4 flex items-center justify-between border-t border-black/[0.04] pt-3 text-xs text-gray-500 dark:border-white/[0.06] dark:text-gray-400">
+              <span>Throughput:</span>
+              <span class="font-mono font-semibold text-violet-600 dark:text-violet-400">
+                {{ formatTokens(stats.tpm) }} TPM
+              </span>
             </div>
           </div>
 
           <!-- Avg Response Time -->
-          <div class="card p-4">
+          <div class="bap-stat-card group">
             <div class="flex items-center gap-3">
-              <div class="rounded-lg bg-rose-100 p-2 dark:bg-rose-900/30">
-                <Icon name="clock" size="md" class="text-rose-600 dark:text-rose-400" :stroke-width="2" />
+              <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-50 text-rose-600 transition-transform group-hover:scale-105 dark:bg-rose-950/40 dark:text-rose-400">
+                <Icon name="clock" size="md" :stroke-width="2" />
               </div>
-              <div>
-                <p class="text-xs font-medium text-gray-500 dark:text-gray-400">
+              <div class="min-w-0 flex-1">
+                <p class="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
                   {{ t('admin.dashboard.avgResponse') }}
                 </p>
-                <p class="text-xl font-bold text-gray-900 dark:text-white">
+                <p class="mt-0.5 font-mono text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
                   {{ formatDuration(stats.average_duration_ms) }}
                 </p>
-                <p class="text-xs text-gray-500 dark:text-gray-400">
-                  {{ stats.active_users }} {{ t('admin.dashboard.activeUsers') }}
-                </p>
               </div>
+            </div>
+            <div class="mt-4 flex items-center justify-between border-t border-black/[0.04] pt-3 text-xs text-gray-500 dark:border-white/[0.06] dark:text-gray-400">
+              <span>Active users: <strong class="text-gray-900 dark:text-white">{{ stats.active_users }}</strong></span>
+              <span class="font-medium text-emerald-600 dark:text-emerald-400">Live</span>
             </div>
           </div>
         </div>
@@ -209,29 +266,50 @@
 
         <!-- Charts Section -->
         <div class="space-y-6">
-          <!-- Date Range Filter -->
-          <div class="card p-4">
-            <div class="flex flex-wrap items-center gap-4">
-              <div class="flex items-center gap-2">
-                <span class="text-sm font-medium text-gray-700 dark:text-gray-300"
-                  >{{ t('admin.dashboard.timeRange') }}:</span
-                >
+          <!-- Date Range Filter Toolbar (bestaiprice segmented pill style) -->
+          <div class="bap-card p-3.5 sm:p-4">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <div class="flex items-center gap-2.5">
+                <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-black/[0.04] text-gray-600 dark:bg-white/[0.06] dark:text-gray-300">
+                  <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                </div>
+                <span class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                  {{ t('admin.dashboard.timeRange') }}:
+                </span>
                 <DateRangePicker
                   v-model:start-date="startDate"
                   v-model:end-date="endDate"
                   @change="onDateRangeChange"
                 />
               </div>
-              <div class="ml-auto flex items-center gap-2">
-                <span class="text-sm font-medium text-gray-700 dark:text-gray-300"
-                  >{{ t('admin.dashboard.granularity') }}:</span
-                >
-                <div class="w-28">
-                  <Select
-                    v-model="granularity"
-                    :options="granularityOptions"
-                    @change="loadChartData"
-                  />
+
+              <div class="flex items-center gap-2">
+                <span class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                  {{ t('admin.dashboard.granularity') }}:
+                </span>
+                <div class="inline-flex rounded-xl border border-black/[0.06] bg-black/[0.03] p-1 dark:border-white/[0.08] dark:bg-white/[0.04]">
+                  <button
+                    type="button"
+                    class="rounded-lg px-3 py-1 text-xs font-medium transition-all"
+                    :class="granularity === 'day'
+                      ? 'bg-[#4791ff] text-white shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'"
+                    @click="granularity = 'day'; loadChartData()"
+                  >
+                    {{ t('admin.dashboard.day') }}
+                  </button>
+                  <button
+                    type="button"
+                    class="rounded-lg px-3 py-1 text-xs font-medium transition-all"
+                    :class="granularity === 'hour'
+                      ? 'bg-[#4791ff] text-white shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'"
+                    @click="granularity = 'hour'; loadChartData()"
+                  >
+                    {{ t('admin.dashboard.hour') }}
+                  </button>
                 </div>
               </div>
             </div>
@@ -257,10 +335,16 @@
           </div>
 
           <!-- User Usage Trend (Full Width) -->
-          <div class="card p-4">
-            <h3 class="mb-4 text-sm font-semibold text-gray-900 dark:text-white">
-              {{ t('admin.dashboard.recentUsage') }} (Top 12)
-            </h3>
+          <div class="bap-card p-5">
+            <div class="mb-4 flex items-center justify-between border-b border-black/[0.04] pb-3 dark:border-white/[0.06]">
+              <div class="flex items-center gap-2">
+                <h3 class="text-sm font-semibold tracking-tight text-gray-900 dark:text-white">
+                  {{ t('admin.dashboard.recentUsage') }}
+                </h3>
+                <span class="bap-pill bap-pill-blue text-[10px]">Top 12 Users</span>
+              </div>
+              <span class="text-xs text-gray-400 dark:text-gray-500">Token Consumption</span>
+            </div>
             <div class="h-64">
               <div v-if="userTrendLoading" class="flex h-full items-center justify-center">
                 <LoadingSpinner size="md" />
@@ -268,7 +352,7 @@
               <Line v-else-if="userTrendChartData" :data="userTrendChartData" :options="lineOptions" />
               <div
                 v-else
-                class="flex h-full items-center justify-center text-sm text-gray-500 dark:text-gray-400"
+                class="flex h-full items-center justify-center text-xs text-gray-400 dark:text-gray-500"
               >
                 {{ t('admin.dashboard.noDataAvailable') }}
               </div>
@@ -299,7 +383,6 @@ import AppLayout from '@/components/layout/AppLayout.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import Icon from '@/components/icons/Icon.vue'
 import DateRangePicker from '@/components/common/DateRangePicker.vue'
-import Select from '@/components/common/Select.vue'
 import ModelDistributionChart from '@/components/charts/ModelDistributionChart.vue'
 import TokenUsageTrend from '@/components/charts/TokenUsageTrend.vue'
 import HypervisorDashboardSection from './components/HypervisorDashboardSection.vue'
@@ -368,12 +451,6 @@ const granularity = ref<'day' | 'hour'>('hour')
 const defaultRange = getLast24HoursRangeDates()
 const startDate = ref(defaultRange.start)
 const endDate = ref(defaultRange.end)
-
-// Granularity options for Select component
-const granularityOptions = computed(() => [
-  { value: 'day', label: t('admin.dashboard.day') },
-  { value: 'hour', label: t('admin.dashboard.hour') }
-])
 
 // Dark mode detection
 const isDarkMode = computed(() => {
