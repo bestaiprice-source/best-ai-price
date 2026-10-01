@@ -6,19 +6,21 @@
       { '-translate-x-full lg:translate-x-0': !mobileOpen }
     ]"
   >
-    <!-- Logo/Brand -->
-    <div class="sidebar-header">
-      <!-- Brand Logo with seamless inline SVG fallback -->
-      <BrandLogo :src="siteLogo" alt="Logo" class="h-9 w-9 rounded-xl flex-shrink-0" />
-      <transition name="fade">
-        <div v-if="!sidebarCollapsed" class="flex flex-col">
-          <span class="text-base font-semibold tracking-tight text-[#090c0a]">
-            {{ siteName || 'Best Ai Price' }}
-          </span>
-          <!-- Version Badge -->
-          <VersionBadge :version="siteVersion" />
-        </div>
-      </transition>
+    <!-- Mobile Brand Header (shown when mobile drawer is open) -->
+    <div v-if="mobileOpen" class="flex h-16 items-center justify-between border-b border-black/[0.07] px-4 lg:hidden">
+      <router-link to="/" class="bap-sidebar-brand" @click="closeMobile">
+        <BrandLogo :src="siteLogo" alt="Best Ai Price" class="bap-sidebar-logo" />
+        <span class="bap-sidebar-name">{{ displaySiteName }}</span>
+      </router-link>
+      <button
+        @click="closeMobile"
+        class="rounded-lg p-2 text-[#797a79] hover:bg-black/5 hover:text-[#090c0a]"
+        aria-label="Close Menu"
+      >
+        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
     </div>
 
     <!-- Navigation -->
@@ -103,11 +105,11 @@
     </nav>
 
     <!-- Bottom Section -->
-    <div class="mt-auto border-t border-black/[0.07] p-3">
+    <div class="mt-auto border-t border-black/[0.07] p-3 flex items-center justify-between gap-2">
       <!-- Collapse Button -->
       <button
         @click="toggleSidebar"
-        class="sidebar-link w-full"
+        class="sidebar-link flex-1"
         :title="sidebarCollapsed ? t('nav.expand') : t('nav.collapse')"
       >
         <ChevronDoubleLeftIcon v-if="!sidebarCollapsed" class="h-5 w-5 flex-shrink-0" />
@@ -116,6 +118,9 @@
           <span v-if="!sidebarCollapsed">{{ t('nav.collapse') }}</span>
         </transition>
       </button>
+
+      <!-- Version Badge (in footer) -->
+      <VersionBadge v-if="!sidebarCollapsed" :version="siteVersion" class="flex-shrink-0" />
     </div>
   </aside>
 
@@ -161,6 +166,13 @@ const isAdmin = computed(() => authStore.isAdmin)
 const siteName = computed(() => appStore.siteName)
 const siteLogo = computed(() => appStore.siteLogo)
 const siteVersion = computed(() => appStore.siteVersion)
+const displaySiteName = computed(() => {
+  const name = siteName.value
+  if (!name || name === 'Sub2API') {
+    return 'Best Ai Price'
+  }
+  return name
+})
 
 const DashboardIcon = {
   render: () =>
@@ -694,5 +706,35 @@ onMounted(() => {
   height: 1.25rem;
   stroke: currentColor;
   fill: none;
+}
+
+.bap-sidebar-brand {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  white-space: nowrap;
+  user-select: none;
+  text-decoration: none;
+  height: 40px;
+}
+
+.bap-sidebar-logo {
+  position: absolute;
+  left: 0;
+  top: -14px;
+  width: 52px;
+  height: 52px;
+  flex-shrink: 0;
+}
+
+.bap-sidebar-name {
+  margin-left: 52px;
+  font-family: 'Inter Tight', sans-serif;
+  font-size: 20px;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  font-weight: 500;
+  color: #090c0a;
 }
 </style>

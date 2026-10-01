@@ -1,8 +1,8 @@
 <template>
-  <header class="sticky top-0 z-30 border-b border-black/[0.07] bg-[#ededed]/90 backdrop-blur-md">
-    <div class="flex h-[68px] items-center justify-between px-4 md:px-6">
-      <!-- Left: Mobile Menu Toggle + Page Title -->
-      <div class="flex items-center gap-4">
+  <header class="sticky top-0 z-30 bg-[#ededed] h-[68px] min-h-[68px] transition-colors">
+    <div class="flex h-[68px] items-center justify-between px-3 md:px-6">
+      <!-- Left: Mobile Menu Toggle + Best Ai Price Brand Header + Optional Page Title -->
+      <div class="flex items-center gap-3 sm:gap-6">
         <button
           @click="toggleMobileSidebar"
           class="btn-ghost btn-icon lg:hidden text-[#090c0a]"
@@ -11,8 +11,14 @@
           <Icon name="menu" size="md" />
         </button>
 
-        <div class="hidden lg:block">
-          <h1 class="text-lg font-semibold tracking-tight text-[#090c0a]">
+        <!-- Brand Header: Exact match to bestaiprice.com from api-center -->
+        <router-link to="/" class="bap-header-logo">
+          <BrandLogo :src="siteLogo" alt="Best Ai Price" class="bap-main-logo" />
+          <span class="bap-logo-text">{{ displaySiteName }}</span>
+        </router-link>
+
+        <div v-if="pageTitle && pageTitle !== displaySiteName" class="hidden xl:flex items-center gap-4 pl-4 border-l border-black/[0.08]">
+          <h1 class="text-base font-semibold tracking-tight text-[#090c0a]">
             {{ pageTitle }}
           </h1>
           <p v-if="pageDescription" class="text-xs text-[#797a79]">
@@ -225,6 +231,7 @@ import { useAppStore, useAuthStore, useOnboardingStore } from '@/stores'
 import { useAdminSettingsStore } from '@/stores/adminSettings'
 import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
 import AnnouncementBell from '@/components/common/AnnouncementBell.vue'
+import BrandLogo from '@/components/common/BrandLogo.vue'
 import Icon from '@/components/icons/Icon.vue'
 
 const router = useRouter()
@@ -234,6 +241,15 @@ const appStore = useAppStore()
 const authStore = useAuthStore()
 const adminSettingsStore = useAdminSettingsStore()
 const onboardingStore = useOnboardingStore()
+
+const siteLogo = computed(() => appStore.siteLogo)
+const displaySiteName = computed(() => {
+  const name = appStore.siteName
+  if (!name || name === 'Sub2API') {
+    return 'Best Ai Price'
+  }
+  return name
+})
 
 const user = computed(() => authStore.user)
 const dropdownOpen = ref(false)
@@ -342,5 +358,52 @@ onBeforeUnmount(() => {
 .dropdown-leave-to {
   opacity: 0;
   transform: scale(0.95) translateY(-4px);
+}
+
+.bap-header-logo {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  white-space: nowrap;
+  user-select: none;
+  text-decoration: none;
+  height: 40px;
+  transition: opacity 0.15s ease;
+}
+
+.bap-header-logo:hover {
+  opacity: 0.9;
+}
+
+.bap-main-logo {
+  position: absolute;
+  left: 0;
+  top: -18px;
+  width: 62px;
+  height: 62px;
+  flex-shrink: 0;
+}
+
+.bap-logo-text {
+  margin-left: 62px;
+  font-family: 'Inter Tight', sans-serif;
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  font-weight: 500;
+  color: #090c0a;
+}
+
+@media (max-width: 640px) {
+  .bap-main-logo {
+    top: -10px;
+    width: 44px;
+    height: 44px;
+  }
+  .bap-logo-text {
+    margin-left: 44px;
+    font-size: 20px;
+  }
 }
 </style>

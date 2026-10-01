@@ -491,6 +491,15 @@ sub2api/
 2. **Clean Test Suite**: All unit tests must pass cleanly before pushing (`git push`).
 3. **Pre-Push Documentation Rule**: You MUST update `CLAUDE.md` with any architectural changes, endpoints, or fixes before pushing.
 
+### 8.8 Best Ai Price Design System & Brand Header Architecture
+- **Brand Header Alignment (`bestaiprice.com`)**:
+  - Full-width top header (`AppHeader.vue`) on `#ededed` background with 68px height.
+  - Features the native vector calligraphy "B" with "Ai" pill badge (`BrandLogo.vue`) styled identically to `api-center` (`width: 62px; height: 62px; top: -18px;`).
+  - Brand typography: `Best Ai Price` set in `Inter Tight`, 24px font size, font-weight 500, letter-spacing `-0.01em`, color `#090c0a`.
+  - Body container (`AppLayout.vue`) organizes sidebar (`#f6f6f6`) and main content area (`#ffffff`) as sleek `rounded-2xl` cards directly beneath the top header, reproducing the exact aesthetic of `bestaiprice.com`.
+  - Global `siteName` fallback resolves to `'Best Ai Price'` in `stores/app.ts` whenever unconfigured or set to legacy defaults.
+  - Fully responsive: scales smoothly to mobile with off-canvas sidebar drawer and scalable header branding.
+
 ### Running Backend Tests & Build Verification
 ```bash
 cd backend
@@ -503,5 +512,8 @@ go build ./...
 cd frontend
 npm run lint:check
 npm run typecheck
+npm run test:run
+npm run build
 ```
+
 

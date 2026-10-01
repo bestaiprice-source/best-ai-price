@@ -1,13 +1,13 @@
 <template>
-  <div class="relative flex items-center justify-center overflow-hidden">
+  <div class="relative flex items-center justify-center overflow-visible">
     <img
-      v-if="resolvedSrc && !loadFailed"
+      v-if="!useNativeSvg && resolvedSrc"
       :src="resolvedSrc"
-      :alt="alt || 'Logo'"
+      :alt="alt || 'Best Ai Price'"
       class="h-full w-full object-contain"
       @error="loadFailed = true"
     />
-    <!-- Best Ai Price Native Vector Fallback (Zero network request, cannot 404) -->
+    <!-- Best Ai Price Native Vector Fallback (Zero network request, cannot 404, pixel-sharp vector) -->
     <svg
       v-else
       viewBox="0 0 327 327"
@@ -15,7 +15,7 @@
       xmlns="http://www.w3.org/2000/svg"
       class="h-full w-full object-contain"
       role="img"
-      :aria-label="alt || 'Logo'"
+      :aria-label="alt || 'Best Ai Price'"
     >
       <rect x="230" y="232" width="97" height="68" rx="19" fill="#4791FF" />
       <path
@@ -35,10 +35,12 @@
 import { computed, ref, watch } from 'vue'
 import { resolveAssetUrl } from '@/utils/url'
 
-const props = defineProps<{
+interface Props {
   src?: string | null
   alt?: string
-}>()
+}
+
+const props = defineProps<Props>()
 
 const loadFailed = ref(false)
 
@@ -54,5 +56,13 @@ const resolvedSrc = computed(() => {
     return ''
   }
   return resolveAssetUrl(props.src)
+})
+
+const useNativeSvg = computed(() => {
+  if (!props.src || !props.src.trim() || loadFailed.value) {
+    return true
+  }
+  const clean = props.src.trim().toLowerCase()
+  return clean === '/logo.png' || clean === '/logo.svg' || clean.endsWith('/logo.svg')
 })
 </script>

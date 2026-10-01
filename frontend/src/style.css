@@ -600,15 +600,16 @@
 
   /* ============ 侧边栏 ============ */
   .sidebar {
-    @apply fixed inset-y-0 left-0 z-40;
+    @apply fixed inset-y-0 left-0 z-40 lg:static lg:inset-auto;
+    @apply h-full lg:h-[calc(100vh-80px)] lg:sticky lg:top-[74px];
+    @apply flex flex-col rounded-2xl;
     background-color: #f6f6f6;
-    border-right: 1px solid rgba(0, 0, 0, 0.07);
-    @apply flex flex-col;
-    @apply transition-transform duration-300;
+    border: 1px solid rgba(0, 0, 0, 0.07);
+    @apply transition-all duration-300;
   }
 
   .sidebar-header {
-    @apply h-16 px-6;
+    @apply h-16 px-4;
     @apply flex items-center gap-3;
     border-bottom: 1px solid rgba(0, 0, 0, 0.07);
   }
