@@ -93,6 +93,7 @@ func buildExecutableRuntimeConfig(
 	rawDefs := make([]gatewayctx.RouteDef, 0, 8)
 	rawDefs = append(rawDefs, routes.ExecutableCommonRoutes()...)
 	rawDefs = append(rawDefs, setup.ExecutableRoutes()...)
+	rawDefs = append(rawDefs, routes.ExecutablePublicRoutes(handlers)...)
 	rawDefs = append(rawDefs, routes.ExecutableGatewayRoutes(handlers)...)
 	rawDefs = append(rawDefs, routes.ExecutableAdminRoutes(handlers)...)
 	rawDefs = append(rawDefs, routes.ExecutableAuthRoutes(handlers)...)

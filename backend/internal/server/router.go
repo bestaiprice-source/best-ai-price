@@ -122,6 +122,9 @@ func registerRoutes(
 	routes.RegisterProviderPopularityRoutes(v1, h)
 	routes.RegisterForumRoutes(v1, h, jwtAuth, adminAuth)
 	routes.RegisterGatewayRoutes(r, h, apiKeyAuth, apiKeyService, subscriptionService, opsService, settingService, cfg)
+	if h != nil && h.Gateway != nil {
+		r.GET("/models", h.Gateway.PublicModelsPricing)
+	}
 
 	// Direct write endpoints for auth_providers.json (protected by admin auth)
 	if h != nil && h.Admin != nil && h.Admin.AuthProviders != nil && adminAuth != nil {

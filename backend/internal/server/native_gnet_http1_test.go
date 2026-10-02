@@ -2488,7 +2488,7 @@ func TestNativeGnetHTTPRuntimeServesExecutableAuthMeUnauthorizedWithoutFallbackH
 	require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"code":"UNAUTHORIZED","message":"Authorization header is required"}`, string(body))
+	require.JSONEq(t, `{"code":"UNAUTHORIZED","message":"Authorization header or session cookie is required"}`, string(body))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
@@ -2575,7 +2575,7 @@ func TestNativeGnetHTTPRuntimeServesExecutableUserProfileUnauthorizedWithoutFall
 	require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"code":"UNAUTHORIZED","message":"Authorization header is required"}`, string(body))
+	require.JSONEq(t, `{"code":"UNAUTHORIZED","message":"Authorization header or session cookie is required"}`, string(body))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
@@ -2659,7 +2659,7 @@ func TestNativeGnetHTTPRuntimeServesExecutableKeysUnauthorizedWithoutFallbackHan
 	require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"code":"UNAUTHORIZED","message":"Authorization header is required"}`, string(body))
+	require.JSONEq(t, `{"code":"UNAUTHORIZED","message":"Authorization header or session cookie is required"}`, string(body))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
@@ -2703,7 +2703,7 @@ func TestNativeGnetHTTPRuntimeServesExecutableRedeemUnauthorizedWithoutFallbackH
 	require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"code":"UNAUTHORIZED","message":"Authorization header is required"}`, string(body))
+	require.JSONEq(t, `{"code":"UNAUTHORIZED","message":"Authorization header or session cookie is required"}`, string(body))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
@@ -2746,7 +2746,7 @@ func TestNativeGnetHTTPRuntimeServesExecutableSubscriptionsUnauthorizedWithoutFa
 	require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"code":"UNAUTHORIZED","message":"Authorization header is required"}`, string(body))
+	require.JSONEq(t, `{"code":"UNAUTHORIZED","message":"Authorization header or session cookie is required"}`, string(body))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
@@ -2790,7 +2790,7 @@ func TestNativeGnetHTTPRuntimeServesExecutableSoraGenerateUnauthorizedWithoutFal
 	require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"code":"UNAUTHORIZED","message":"Authorization header is required"}`, string(body))
+	require.JSONEq(t, `{"code":"UNAUTHORIZED","message":"Authorization header or session cookie is required"}`, string(body))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
@@ -2833,7 +2833,7 @@ func TestNativeGnetHTTPRuntimeServesExecutableUsageStatsUnauthorizedWithoutFallb
 	require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"code":"UNAUTHORIZED","message":"Authorization header is required"}`, string(body))
+	require.JSONEq(t, `{"code":"UNAUTHORIZED","message":"Authorization header or session cookie is required"}`, string(body))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
@@ -2876,7 +2876,7 @@ func TestNativeGnetHTTPRuntimeServesExecutableTotpStatusUnauthorizedWithoutFallb
 	require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"code":"UNAUTHORIZED","message":"Authorization header is required"}`, string(body))
+	require.JSONEq(t, `{"code":"UNAUTHORIZED","message":"Authorization header or session cookie is required"}`, string(body))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()

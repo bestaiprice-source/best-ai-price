@@ -373,7 +373,8 @@ sub2api/
 - `POST /v1/messages`: Anthropic Messages API (Claude Code CLI / VS Code).
 - `POST /v1/chat/completions`: OpenAI Chat Completions API.
 - `POST /responses`: Codex / OpenAI Responses API gateway.
-- `GET /v1/models`: Available model catalog.
+- `GET /v1/models`: Available model catalog (OpenAI compatibility format).
+- `GET /api/v1/models` & `GET /models`: Public unauthenticated model catalog & pricing endpoint in BestAIPrice gateway format (`{ code: 0, message: "success", data: [...] }`). Each item includes `canonical_model_id` (e.g. `anthropic/claude-sonnet-5`), `model_id`, `input_price_per_1m` / `input_price`, `output_price_per_1m` / `output_price`, `native_price_usd` and `native_price_unit` (for flat-rate/image/video models like Sora or image generation), and `available` / `status` based on schedulable account pools.
 - `GET /api/v1/data/providers.json`: Parser providers pricing JSON endpoint (also `/api/data/providers.json`, `/data/providers.json`).
 - `GET /api/v1/data/models.json`: Parser models JSON endpoint (also `/api/data/models.json`, `/data/models.json`).
 - `GET /api/v1/data/api_descriptions.json`: Parser API descriptions JSON endpoint (also `/api/data/api_descriptions.json`, `/data/api_descriptions.json`).

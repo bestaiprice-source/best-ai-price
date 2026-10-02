@@ -836,6 +836,24 @@ func (h *GatewayHandler) MessagesGateway(transportCtx gatewayctx.GatewayContext)
 	}
 }
 
+// PublicModelsPricing handles public pricing catalog requests
+// GET /api/v1/models and GET /models
+func (h *GatewayHandler) PublicModelsPricing(c *gin.Context) {
+	h.PublicModelsPricingGateway(gatewayctx.FromGin(c))
+}
+
+func (h *GatewayHandler) PublicModelsPricingGateway(c gatewayctx.GatewayContext) {
+	var items []service.PublicModelPricingItem
+	if h.gatewayService != nil {
+		items = h.gatewayService.GetPublicModelsPricing(c.Request().Context())
+	}
+	c.WriteJSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "success",
+		"data":    items,
+	})
+}
+
 // Models handles listing available models
 // GET /v1/models
 // Returns models based on account configurations (model_mapping whitelist)
