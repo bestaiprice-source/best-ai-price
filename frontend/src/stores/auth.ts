@@ -41,11 +41,11 @@ export const useAuthStore = defineStore('auth', () => {
   // ==================== Actions ====================
 
   /**
-   * Initialize auth state from localStorage
+   * Initialize auth state from localStorage or active cookie session (SSO)
    * Call this on app startup to restore session
    * Also starts auto-refresh and immediately fetches latest user data
    */
-  function checkAuth(): void {
+  async function checkAuth(): Promise<void> {
     const savedToken = localStorage.getItem(AUTH_TOKEN_KEY)
     const savedUser = localStorage.getItem(AUTH_USER_KEY)
     const savedRefreshToken = localStorage.getItem(REFRESH_TOKEN_KEY)
@@ -71,10 +71,21 @@ export const useAuthStore = defineStore('auth', () => {
         if (savedRefreshToken && tokenExpiresAt.value !== null) {
           scheduleTokenRefreshAt(tokenExpiresAt.value)
         }
+        return
       } catch (error) {
         console.error('Failed to parse saved user data:', error)
         clearAuth()
       }
+    }
+
+    // No localStorage token: check for active session (e.g. apicenter SSO cookie)
+    try {
+      const session = await authAPI.getSession()
+      if (session && session.access_token && session.user) {
+        setAuthFromResponse(session)
+      }
+    } catch {
+      // No active session or unauthenticated; continue as guest
     }
   }
 

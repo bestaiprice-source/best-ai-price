@@ -481,6 +481,24 @@ sub2api/
     - **Header**: Height `68px` (`h-[68px]`), background `#ededed`/90 with backdrop blur, border-bottom `border-black/[0.07]`.
     - **Sidebar**: Background `#f6f6f6`, border-right `border-black/[0.07]`, active item `#4791ff` with white text, inactive items `#797a79` with hover `rgba(255, 255, 255, 0.65)`. `BrandLogo.vue` renders custom `siteLogo` or falls back seamlessly to the inline vector Best Ai Price logo (eliminating 404s under reverse-proxy subpaths like `/gateway/`).
 
+### Single Sign-On (SSO) & Shared Session Architecture (`api-center` / `bestaiprice.com`)
+- **Shared Session Context**:
+  - `sub2api` (`https://bestaiprice.com/gateway/`) and `api-center` (`https://bestaiprice.com/`) share the same origin and auth state.
+  - Session cookies configured on domain root (`Path=/`):
+    - `apicenter-access-token`: JWT access token (`httpOnly`, `sameSite: Lax`).
+    - `apicenter-refresh-token`: Refresh token (`httpOnly`, `sameSite: Lax`, maxAge 30 days).
+- **Backend Cookie Extraction & Auth Middleware**:
+  - `internal/server/middleware/jwt_auth.go` (`ApplyJWTAuthContext`): Extracts JWT from `Authorization: Bearer <token>` or falls back to cookie `apicenter-access-token` (and `access_token`).
+  - `internal/server/middleware/admin_auth.go` (`adminAuth`, `ApplyAdminAuthContext`): Accepts admin authentication via `x-api-key`, `Authorization: Bearer <token>`, or cookie `apicenter-access-token`.
+  - `internal/server/middleware/auth_cookie.go`: `SetAuthCookiesContext` and `ClearAuthCookiesContext` manage cookie issuance and revocation across login, registration, refresh, and logout flows.
+- **Session Bootstrap Endpoint (`GET /api/v1/auth/session`)**:
+  - Resolves active authentication session using `Authorization` header or cookie `apicenter-access-token`.
+  - Performs automatic silent token refresh via `apicenter-refresh-token` cookie if the access token has expired.
+  - Returns `SessionResponse`: `{ access_token, refresh_token, expires_in, token_type: "Bearer", user, run_mode }`.
+- **Frontend SSO Hydration**:
+  - `stores/auth.ts` (`checkAuth`): Asynchronously checks `localStorage`, and if empty, queries `GET /api/v1/auth/session` with credentials. If a valid cookie session exists from `api-center`, the frontend automatically hydrates `token` and `user` state without prompting the user for credentials.
+  - `api/client.ts`: Configured with `withCredentials: true` to transmit session cookies on all requests.
+  - `router/index.ts` & `views/auth/LoginView.vue`: Transparently redirect authenticated users from login pages to the dashboard.
 
 ---
 

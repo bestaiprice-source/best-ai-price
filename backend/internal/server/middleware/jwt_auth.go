@@ -28,25 +28,21 @@ func ApplyJWTAuthContext(authService *service.AuthService, userService *service.
 	if c == nil {
 		return false
 	}
-		// 从Authorization header中提取token
+	tokenString := ExtractJWTTokenFromGatewayContext(c)
+	if tokenString == "" {
 		authHeader := c.HeaderValue("Authorization")
-		if authHeader == "" {
-			AbortWithErrorContext(c, 401, "UNAUTHORIZED", "Authorization header is required")
-			return false
-		}
-
-		// 验证Bearer scheme
-		parts := strings.SplitN(authHeader, " ", 2)
-		if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
-			AbortWithErrorContext(c, 401, "INVALID_AUTH_HEADER", "Authorization header format must be 'Bearer {token}'")
-			return false
-		}
-
-		tokenString := strings.TrimSpace(parts[1])
-		if tokenString == "" {
+		if authHeader != "" {
+			parts := strings.SplitN(authHeader, " ", 2)
+			if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
+				AbortWithErrorContext(c, 401, "INVALID_AUTH_HEADER", "Authorization header format must be 'Bearer {token}'")
+				return false
+			}
 			AbortWithErrorContext(c, 401, "EMPTY_TOKEN", "Token cannot be empty")
 			return false
 		}
+		AbortWithErrorContext(c, 401, "UNAUTHORIZED", "Authorization header or session cookie is required")
+		return false
+	}
 
 		// 验证token
 		claims, err := authService.ValidateToken(tokenString)

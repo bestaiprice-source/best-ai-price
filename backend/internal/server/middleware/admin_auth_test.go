@@ -82,6 +82,21 @@ func TestAdminAuthJWTValidatesTokenVersion(t *testing.T) {
 		require.Equal(t, http.StatusOK, w.Code)
 	})
 
+	t.Run("cookie_auth_success", func(t *testing.T) {
+		token, err := authService.GenerateToken(admin)
+		require.NoError(t, err)
+
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/t", nil)
+		req.AddCookie(&http.Cookie{
+			Name:  CookieAccessTokenName,
+			Value: token,
+		})
+		router.ServeHTTP(w, req)
+
+		require.Equal(t, http.StatusOK, w.Code)
+	})
+
 	t.Run("websocket_token_version_mismatch_rejected", func(t *testing.T) {
 		token, err := authService.GenerateToken(&service.User{
 			ID:           admin.ID,

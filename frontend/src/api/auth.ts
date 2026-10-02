@@ -149,6 +149,21 @@ export async function register(userData: RegisterRequest): Promise<AuthResponse>
 }
 
 /**
+ * Session bootstrap response type
+ */
+export interface SessionResponse extends AuthResponse {
+  run_mode?: 'standard' | 'simple'
+}
+
+/**
+ * Get active session bootstrap data via cookie or existing auth token
+ */
+export async function getSession(): Promise<SessionResponse> {
+  const { data } = await apiClient.get<SessionResponse>('/auth/session')
+  return data
+}
+
+/**
  * Get current authenticated user
  * @returns User profile data
  */
@@ -362,6 +377,7 @@ export const authAPI = {
   login2FA,
   isTotp2FARequired,
   register,
+  getSession,
   getCurrentUser,
   logout,
   isAuthenticated,

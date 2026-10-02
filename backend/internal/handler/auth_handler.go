@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/handler/dto"
@@ -116,6 +117,7 @@ func (h *AuthHandler) respondWithTokenPairGateway(c gatewayctx.GatewayContext, u
 			response.ErrorContext(authJSONResponder{ctx: c}, http.StatusInternalServerError, "Failed to generate token")
 			return
 		}
+		middleware2.SetAuthCookiesContext(c, token, "", 0)
 		response.SuccessContext(authJSONResponder{ctx: c}, AuthResponse{
 			AccessToken: token,
 			TokenType:   "Bearer",
@@ -123,6 +125,7 @@ func (h *AuthHandler) respondWithTokenPairGateway(c gatewayctx.GatewayContext, u
 		})
 		return
 	}
+	middleware2.SetAuthCookiesContext(c, tokenPair.AccessToken, tokenPair.RefreshToken, tokenPair.ExpiresIn)
 	response.SuccessContext(authJSONResponder{ctx: c}, AuthResponse{
 		AccessToken:  tokenPair.AccessToken,
 		RefreshToken: tokenPair.RefreshToken,
@@ -619,12 +622,22 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 
 func (h *AuthHandler) RefreshTokenGateway(c gatewayctx.GatewayContext) {
 	var req RefreshTokenRequest
-	if err := c.BindJSON(&req); err != nil {
-		response.ErrorContext(authJSONResponder{ctx: c}, http.StatusBadRequest, "Invalid request: "+err.Error())
+	_ = c.BindJSON(&req)
+
+	refreshToken := req.RefreshToken
+	if refreshToken == "" {
+		if cookieVal, err := c.CookieValue(middleware2.CookieRefreshTokenName); err == nil && strings.TrimSpace(cookieVal) != "" {
+			refreshToken = strings.TrimSpace(cookieVal)
+		} else if cookieVal, err := c.CookieValue("refresh_token"); err == nil && strings.TrimSpace(cookieVal) != "" {
+			refreshToken = strings.TrimSpace(cookieVal)
+		}
+	}
+	if refreshToken == "" {
+		response.ErrorContext(authJSONResponder{ctx: c}, http.StatusBadRequest, "refresh_token is required")
 		return
 	}
 
-	result, err := h.authService.RefreshTokenPair(c.Request().Context(), req.RefreshToken)
+	result, err := h.authService.RefreshTokenPair(c.Request().Context(), refreshToken)
 	if err != nil {
 		response.ErrorFromContext(authJSONResponder{ctx: c}, err)
 		return
@@ -635,6 +648,8 @@ func (h *AuthHandler) RefreshTokenGateway(c gatewayctx.GatewayContext) {
 		response.ErrorContext(authJSONResponder{ctx: c}, http.StatusForbidden, "Backend mode is active. Only admin login is allowed.")
 		return
 	}
+
+	middleware2.SetAuthCookiesContext(c, result.AccessToken, result.RefreshToken, result.ExpiresIn)
 
 	response.SuccessContext(authJSONResponder{ctx: c}, RefreshTokenResponse{
 		AccessToken:  result.AccessToken,
@@ -665,13 +680,24 @@ func (h *AuthHandler) LogoutGateway(c gatewayctx.GatewayContext) {
 	// 允许空请求体（向后兼容）
 	_ = c.BindJSON(&req)
 
+	refreshToken := req.RefreshToken
+	if refreshToken == "" {
+		if cookieVal, err := c.CookieValue(middleware2.CookieRefreshTokenName); err == nil && strings.TrimSpace(cookieVal) != "" {
+			refreshToken = strings.TrimSpace(cookieVal)
+		} else if cookieVal, err := c.CookieValue("refresh_token"); err == nil && strings.TrimSpace(cookieVal) != "" {
+			refreshToken = strings.TrimSpace(cookieVal)
+		}
+	}
+
 	// 如果提供了Refresh Token，撤销它
-	if req.RefreshToken != "" {
-		if err := h.authService.RevokeRefreshToken(c.Request().Context(), req.RefreshToken); err != nil {
+	if refreshToken != "" {
+		if err := h.authService.RevokeRefreshToken(c.Request().Context(), refreshToken); err != nil {
 			slog.Debug("failed to revoke refresh token", "error", err)
 			// 不影响登出流程
 		}
 	}
+
+	middleware2.ClearAuthCookiesContext(c)
 
 	response.SuccessContext(authJSONResponder{ctx: c}, LogoutResponse{
 		Message: "Logged out successfully",
@@ -704,6 +730,108 @@ func (h *AuthHandler) RevokeAllSessionsGateway(c gatewayctx.GatewayContext) {
 
 	response.SuccessContext(authGatewayResponder{ctx: c}, RevokeAllSessionsResponse{
 		Message: "All sessions have been revoked. Please log in again.",
+	})
+}
+
+// SessionResponse represents active session bootstrap data
+type SessionResponse struct {
+	AccessToken  string    `json:"access_token"`
+	RefreshToken string    `json:"refresh_token,omitempty"`
+	ExpiresIn    int       `json:"expires_in,omitempty"`
+	TokenType    string    `json:"token_type"`
+	User         *dto.User `json:"user"`
+	RunMode      string    `json:"run_mode"`
+}
+
+// GetSession retrieves the active user session from Authorization header or cookie.
+// GET /api/v1/auth/session
+func (h *AuthHandler) GetSession(c *gin.Context) {
+	h.GetSessionGateway(gatewayctx.FromGin(c))
+}
+
+func (h *AuthHandler) GetSessionGateway(c gatewayctx.GatewayContext) {
+	if h.authService == nil || h.userService == nil {
+		response.ErrorContext(authJSONResponder{ctx: c}, http.StatusInternalServerError, "Auth services not initialized")
+		return
+	}
+
+	token := middleware2.ExtractJWTTokenFromGatewayContext(c)
+	var activeUser *service.User
+	var accessToken string
+	var refreshToken string
+	var expiresIn int
+
+	if token != "" {
+		claims, err := h.authService.ValidateToken(token)
+		if err == nil {
+			user, err := h.userService.GetByID(c.Request().Context(), claims.UserID)
+			if err == nil && user.IsActive() && claims.TokenVersion == user.TokenVersion {
+				if !(h.settingSvc != nil && h.settingSvc.IsBackendModeEnabled(c.Request().Context()) && !user.IsAdmin()) {
+					activeUser = user
+					accessToken = token
+					if claims.ExpiresAt != nil {
+						expiresIn = int(time.Until(claims.ExpiresAt.Time).Seconds())
+						if expiresIn < 0 {
+							expiresIn = 0
+						}
+					}
+					// Read refresh token from cookie if available
+					if rf, rfErr := c.CookieValue(middleware2.CookieRefreshTokenName); rfErr == nil && strings.TrimSpace(rf) != "" {
+						refreshToken = strings.TrimSpace(rf)
+					} else if rf, rfErr := c.CookieValue("refresh_token"); rfErr == nil && strings.TrimSpace(rf) != "" {
+						refreshToken = strings.TrimSpace(rf)
+					}
+				}
+			}
+		}
+	}
+
+	// If no active session yet, attempt silent refresh if refresh token cookie is present
+	if activeUser == nil {
+		rfToken := ""
+		if rf, err := c.CookieValue(middleware2.CookieRefreshTokenName); err == nil && strings.TrimSpace(rf) != "" {
+			rfToken = strings.TrimSpace(rf)
+		} else if rf, err := c.CookieValue("refresh_token"); err == nil && strings.TrimSpace(rf) != "" {
+			rfToken = strings.TrimSpace(rf)
+		}
+
+		if rfToken != "" {
+			result, err := h.authService.RefreshTokenPair(c.Request().Context(), rfToken)
+			if err == nil {
+				if !(h.settingSvc != nil && h.settingSvc.IsBackendModeEnabled(c.Request().Context()) && result.UserRole != "admin") {
+					claims, cErr := h.authService.ValidateToken(result.AccessToken)
+					if cErr == nil {
+						user, err := h.userService.GetByID(c.Request().Context(), claims.UserID)
+						if err == nil && user.IsActive() {
+							activeUser = user
+							accessToken = result.AccessToken
+							refreshToken = result.RefreshToken
+							expiresIn = result.ExpiresIn
+							middleware2.SetAuthCookiesContext(c, result.AccessToken, result.RefreshToken, result.ExpiresIn)
+						}
+					}
+				}
+			}
+		}
+	}
+
+	if activeUser == nil {
+		response.ErrorContext(authJSONResponder{ctx: c}, http.StatusUnauthorized, "No active session")
+		return
+	}
+
+	runMode := config.RunModeStandard
+	if h.cfg != nil {
+		runMode = h.cfg.RunMode
+	}
+
+	response.SuccessContext(authJSONResponder{ctx: c}, SessionResponse{
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+		ExpiresIn:    expiresIn,
+		TokenType:    "Bearer",
+		User:         dto.UserFromService(activeUser),
+		RunMode:      runMode,
 	})
 }
 

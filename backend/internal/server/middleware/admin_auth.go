@@ -72,6 +72,22 @@ func adminAuth(
 			}
 		}
 
+		// 检查 Cookie（apicenter-access-token / access_token）
+		if cookieVal, err := c.Cookie(CookieAccessTokenName); err == nil && strings.TrimSpace(cookieVal) != "" {
+			if !validateJWTForAdmin(c, strings.TrimSpace(cookieVal), authService, userService) {
+				return
+			}
+			c.Next()
+			return
+		}
+		if cookieVal, err := c.Cookie("access_token"); err == nil && strings.TrimSpace(cookieVal) != "" {
+			if !validateJWTForAdmin(c, strings.TrimSpace(cookieVal), authService, userService) {
+				return
+			}
+			c.Next()
+			return
+		}
+
 		// 无有效认证信息
 		AbortWithError(c, 401, "UNAUTHORIZED", "Authorization required")
 	}
@@ -172,6 +188,20 @@ func ApplyAdminAuthContext(
 			}
 			return true
 		}
+	}
+
+	// 检查 Cookie（apicenter-access-token / access_token）
+	if cookieVal, err := c.CookieValue(CookieAccessTokenName); err == nil && strings.TrimSpace(cookieVal) != "" {
+		if !validateJWTForAdminContext(c, strings.TrimSpace(cookieVal), authService, userService) {
+			return false
+		}
+		return true
+	}
+	if cookieVal, err := c.CookieValue("access_token"); err == nil && strings.TrimSpace(cookieVal) != "" {
+		if !validateJWTForAdminContext(c, strings.TrimSpace(cookieVal), authService, userService) {
+			return false
+		}
+		return true
 	}
 
 	AbortWithErrorContext(c, 401, "UNAUTHORIZED", "Authorization required")

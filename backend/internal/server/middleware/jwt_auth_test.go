@@ -285,3 +285,32 @@ func TestJWTAuth_RevokeAllUserSessionsRevokesExistingAccessToken(t *testing.T) {
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
 	require.Equal(t, "TOKEN_REVOKED", body.Code)
 }
+
+func TestJWTAuth_CookieAuth(t *testing.T) {
+	user := &service.User{
+		ID:           1,
+		Email:        "test@example.com",
+		Role:         "user",
+		Status:       service.StatusActive,
+		Concurrency:  5,
+		TokenVersion: 1,
+	}
+	router, authSvc := newJWTTestEnv(map[int64]*service.User{1: user})
+
+	token, err := authSvc.GenerateToken(user)
+	require.NoError(t, err)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
+	req.AddCookie(&http.Cookie{
+		Name:  CookieAccessTokenName,
+		Value: token,
+	})
+	router.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	var body map[string]any
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
+	require.Equal(t, float64(1), body["user_id"])
+}
+

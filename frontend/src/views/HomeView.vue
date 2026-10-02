@@ -499,11 +499,11 @@ function initTheme() {
   localStorage.setItem('theme', 'light')
 }
 
-onMounted(() => {
+onMounted(async () => {
   initTheme()
 
   // Check auth state
-  authStore.checkAuth()
+  await authStore.checkAuth()
 
   // Ensure public settings are loaded (will use cache if already loaded from injected config)
   if (!appStore.publicSettingsLoaded) {

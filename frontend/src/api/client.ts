@@ -13,6 +13,7 @@ import { getApiBaseUrl } from '@/utils/url'
 export const apiClient: AxiosInstance = axios.create({
   baseURL: getApiBaseUrl(),
   timeout: 30000,
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json'
   }
@@ -158,7 +159,10 @@ apiClient.interceptors.response.use(
       if (status === 401 && !originalRequest._retry) {
         const refreshToken = localStorage.getItem('refresh_token')
         const isAuthEndpoint =
-          url.includes('/auth/login') || url.includes('/auth/register') || url.includes('/auth/refresh')
+          url.includes('/auth/login') ||
+          url.includes('/auth/register') ||
+          url.includes('/auth/refresh') ||
+          url.includes('/auth/session')
 
         // If we have a refresh token and this is not an auth endpoint, try to refresh
         if (refreshToken && !isAuthEndpoint) {
@@ -193,7 +197,10 @@ apiClient.interceptors.response.use(
             const refreshResponse = await axios.post(
               `${getApiBaseUrl()}/auth/refresh`,
               { refresh_token: refreshToken },
-              { headers: { 'Content-Type': 'application/json' } }
+              {
+                withCredentials: true,
+                headers: { 'Content-Type': 'application/json' }
+              }
             )
 
             const refreshData = refreshResponse.data as ApiResponse<{

@@ -20,6 +20,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/oauth"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
 	"github.com/Wei-Shaw/sub2api/internal/server/gatewayctx"
+	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 
 	entsql "entgo.io/ent/dialect/sql"
@@ -1608,6 +1609,9 @@ func (h *AuthHandler) transitionPendingOAuthAccountToChoiceState(
 }
 
 func writeOAuthTokenPairResponse(c *gin.Context, tokenPair *service.TokenPair) {
+	if c != nil && tokenPair != nil {
+		middleware2.SetAuthCookiesContext(gatewayctx.FromGin(c), tokenPair.AccessToken, tokenPair.RefreshToken, tokenPair.ExpiresIn)
+	}
 	c.JSON(http.StatusOK, gin.H{
 		"access_token":  tokenPair.AccessToken,
 		"refresh_token": tokenPair.RefreshToken,
@@ -1619,6 +1623,9 @@ func writeOAuthTokenPairResponse(c *gin.Context, tokenPair *service.TokenPair) {
 func writeOAuthTokenPairResponseGateway(c gatewayctx.GatewayContext, tokenPair *service.TokenPair) {
 	if c == nil {
 		return
+	}
+	if tokenPair != nil {
+		middleware2.SetAuthCookiesContext(c, tokenPair.AccessToken, tokenPair.RefreshToken, tokenPair.ExpiresIn)
 	}
 	c.WriteJSON(http.StatusOK, gin.H{
 		"access_token":  tokenPair.AccessToken,

@@ -9,6 +9,7 @@ const mockLogout = vi.fn()
 const mockGetCurrentUser = vi.fn()
 const mockRegister = vi.fn()
 const mockRefreshToken = vi.fn()
+const mockGetSession = vi.fn()
 
 vi.mock('@/api', () => ({
   authAPI: {
@@ -18,6 +19,7 @@ vi.mock('@/api', () => ({
     getCurrentUser: (...args: any[]) => mockGetCurrentUser(...args),
     register: (...args: any[]) => mockRegister(...args),
     refreshToken: (...args: any[]) => mockRefreshToken(...args),
+    getSession: (...args: any[]) => mockGetSession(...args),
   },
   isTotp2FARequired: (response: any) => response?.requires_2fa === true,
 }))
@@ -210,6 +212,24 @@ describe('useAuthStore', () => {
       store.checkAuth()
 
       expect(store.isAuthenticated).toBe(true)
+    })
+
+    it('localStorage 无数据但存在 SSO session 时自动恢复登录状态', async () => {
+      mockGetSession.mockResolvedValue({
+        access_token: 'sso-access-token',
+        refresh_token: 'sso-refresh-token',
+        expires_in: 3600,
+        token_type: 'Bearer',
+        user: { ...fakeUser }
+      })
+
+      const store = useAuthStore()
+      await store.checkAuth()
+
+      expect(store.token).toBe('sso-access-token')
+      expect(store.user).toEqual(fakeUser)
+      expect(store.isAuthenticated).toBe(true)
+      expect(localStorage.getItem('auth_token')).toBe('sso-access-token')
     })
   })
 

@@ -230,9 +230,14 @@ const errors = reactive({
   turnstile: ''
 })
 
-// ==================== Lifecycle ====================
-
 onMounted(async () => {
+  // If already authenticated (e.g. from active SSO session), redirect immediately
+  if (authStore.isAuthenticated) {
+    const redirectPath = (router.currentRoute.value.query.redirect as string) || (authStore.isAdmin ? '/admin/dashboard' : '/dashboard')
+    router.replace(redirectPath)
+    return
+  }
+
   const expiredFlag = sessionStorage.getItem('auth_expired')
   if (expiredFlag) {
     sessionStorage.removeItem('auth_expired')
