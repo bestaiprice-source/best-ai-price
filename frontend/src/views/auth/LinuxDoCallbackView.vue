@@ -53,9 +53,9 @@
               <p class="text-sm text-red-700 dark:text-red-400">
                 {{ errorMessage }}
               </p>
-              <router-link to="/login" class="btn btn-primary">
+              <a href="/login" class="btn btn-primary">
                 {{ t('auth.linuxdo.backToLogin') }}
-              </router-link>
+              </a>
             </div>
           </div>
         </div>

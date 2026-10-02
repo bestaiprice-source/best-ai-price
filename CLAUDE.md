@@ -495,10 +495,13 @@ sub2api/
   - Resolves active authentication session using `Authorization` header or cookie `apicenter-access-token`.
   - Performs automatic silent token refresh via `apicenter-refresh-token` cookie if the access token has expired.
   - Returns `SessionResponse`: `{ access_token, refresh_token, expires_in, token_type: "Bearer", user, run_mode }`.
-- **Frontend SSO Hydration**:
+- **Frontend SSO Hydration & Portal Redirection**:
   - `stores/auth.ts` (`checkAuth`): Asynchronously checks `localStorage`, and if empty, queries `GET /api/v1/auth/session` with credentials. If a valid cookie session exists from `api-center`, the frontend automatically hydrates `token` and `user` state without prompting the user for credentials.
   - `api/client.ts`: Configured with `withCredentials: true` to transmit session cookies on all requests.
-  - `router/index.ts` & `views/auth/LoginView.vue`: Transparently redirect authenticated users from login pages to the dashboard.
+  - **Portal Delegation (Hidden Standalone Auth Pages)**: Local login and registration pages in `sub2api` are hidden/suppressed in favor of `api-center` portal authentication.
+    - Visiting `/login` or `/register` directly or hitting unauthenticated protected routes (`/dashboard`, `/keys`, `/admin/*`) automatically redirects to `/login` (or `/signup`) on the root domain (`bestaiprice.com`) with `?redirect=` return parameter.
+    - On logout (`AppHeader.vue`), the session is cleared and the browser navigates directly to `/login`.
+    - `LoginView.vue` and `RegisterView.vue` serve as non-intrusive redirection handlers that bounce users to portal authentication or the user dashboard.
 
 ---
 

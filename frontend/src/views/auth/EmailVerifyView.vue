@@ -429,7 +429,7 @@ function handleBack(): void {
   sessionStorage.removeItem('register_data')
 
   // Go back to registration
-  router.push('/register')
+  window.location.href = '/signup'
 }
 
 function buildEmailSuffixNotAllowedMessage(): string {

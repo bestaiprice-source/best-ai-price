@@ -88,13 +88,13 @@
               />
             </svg>
           </router-link>
-          <router-link
+          <a
             v-else
-            to="/login"
+            href="/login"
             class="inline-flex items-center rounded-full bg-gray-900 px-3 py-1 text-xs font-medium text-white transition-colors hover:bg-gray-800 dark:bg-gray-800 dark:hover:bg-gray-700"
           >
             {{ t('home.login') }}
-          </router-link>
+          </a>
         </div>
       </nav>
     </header>
@@ -118,12 +118,21 @@
             <!-- CTA Button -->
             <div>
               <router-link
-                :to="isAuthenticated ? dashboardPath : '/login'"
+                v-if="isAuthenticated"
+                :to="dashboardPath"
                 class="btn btn-primary px-8 py-3 text-base shadow-lg shadow-primary-500/30"
               >
-                {{ isAuthenticated ? t('home.goToDashboard') : t('home.getStarted') }}
+                {{ t('home.goToDashboard') }}
                 <Icon name="arrowRight" size="md" class="ml-2" :stroke-width="2" />
               </router-link>
+              <a
+                v-else
+                href="/login"
+                class="btn btn-primary px-8 py-3 text-base shadow-lg shadow-primary-500/30"
+              >
+                {{ t('home.getStarted') }}
+                <Icon name="arrowRight" size="md" class="ml-2" :stroke-width="2" />
+              </a>
             </div>
           </div>
 

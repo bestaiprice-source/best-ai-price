@@ -30,13 +30,13 @@
         </div>
 
         <div class="text-center">
-          <router-link
-            to="/login"
+          <a
+            href="/login"
             class="inline-flex items-center gap-2 font-medium text-primary-600 transition-colors hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
           >
             <Icon name="arrowLeft" size="sm" />
             {{ t('auth.backToLogin') }}
-          </router-link>
+          </a>
         </div>
       </div>
 
@@ -136,12 +136,12 @@
     <template #footer>
       <p class="text-gray-500 dark:text-dark-400">
         {{ t('auth.rememberedPassword') }}
-        <router-link
-          to="/login"
+        <a
+          href="/login"
           class="font-medium text-primary-600 transition-colors hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
         >
           {{ t('auth.signIn') }}
-        </router-link>
+        </a>
       </p>
     </template>
   </AuthLayout>

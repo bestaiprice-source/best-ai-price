@@ -124,8 +124,8 @@ const detail = ref<UserAffiliateDetail | null>(null)
 
 const inviteLink = computed(() => {
   if (!detail.value) return ''
-  if (typeof window === 'undefined') return `/register?aff=${encodeURIComponent(detail.value.aff_code)}`
-  return `${window.location.origin}/register?aff=${encodeURIComponent(detail.value.aff_code)}`
+  if (typeof window === 'undefined') return `/signup?aff=${encodeURIComponent(detail.value.aff_code)}`
+  return `${window.location.origin}/signup?aff=${encodeURIComponent(detail.value.aff_code)}`
 })
 
 const formattedRate = computed(() => {

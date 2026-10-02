@@ -654,10 +654,34 @@ router.beforeEach(async (to, _from, next) => {
       next(authStore.isAdmin ? '/admin/dashboard' : '/dashboard')
       return
     }
+
+    // Unauthenticated access to login / register: redirect to main portal auth
+    if (!authStore.isAuthenticated) {
+      if (to.path === '/login') {
+        const redirectQuery = to.query.redirect as string | undefined
+        const target = redirectQuery ? `/login?redirect=${encodeURIComponent(redirectQuery)}` : '/login'
+        if (typeof window !== 'undefined') {
+          window.location.href = target
+          return
+        }
+      } else if (to.path === '/register') {
+        const affQuery = to.query.aff as string | undefined
+        const target = affQuery ? `/signup?aff=${encodeURIComponent(affQuery)}` : '/signup'
+        if (typeof window !== 'undefined') {
+          window.location.href = target
+          return
+        }
+      }
+    }
+
     // Backend mode: block public pages for unauthenticated users (except login, key-usage, setup)
     if (appStore.backendModeEnabled && !authStore.isAuthenticated) {
       const isAllowed = BACKEND_MODE_ALLOWED_PATHS.some((p) => to.path === p || to.path.startsWith(p))
       if (!isAllowed) {
+        if (typeof window !== 'undefined') {
+          window.location.href = '/login'
+          return
+        }
         next('/login')
         return
       }
@@ -668,7 +692,12 @@ router.beforeEach(async (to, _from, next) => {
 
   // Route requires authentication
   if (!authStore.isAuthenticated) {
-    // Not authenticated, redirect to login
+    // Not authenticated, redirect to portal login with return path
+    if (typeof window !== 'undefined') {
+      const currentPath = window.location.pathname ? (window.location.pathname + window.location.search) : to.fullPath
+      window.location.href = `/login?redirect=${encodeURIComponent(currentPath)}`
+      return
+    }
     next({
       path: '/login',
       query: { redirect: to.fullPath } // Save intended destination
