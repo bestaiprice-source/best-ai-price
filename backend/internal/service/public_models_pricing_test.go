@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -227,5 +228,96 @@ func TestGetPublicModelsPricing_PlatformFallbackAndPricingTypes(t *testing.T) {
 	assert.True(t, hasAnthropicAvailable)
 	assert.True(t, hasOpenAIAvailable)
 }
+
+type mockGroupRepoForPricing struct {
+	GroupRepository
+	groupsByPlatform map[string][]Group
+	activeGroups     []Group
+}
+
+func (m *mockGroupRepoForPricing) ListActiveByPlatform(ctx context.Context, platform string) ([]Group, error) {
+	return m.groupsByPlatform[platform], nil
+}
+
+func (m *mockGroupRepoForPricing) ListActive(ctx context.Context) ([]Group, error) {
+	return m.activeGroups, nil
+}
+
+func TestGetPublicModelsPricing_WithYunwuGroupMarkup(t *testing.T) {
+	groupRepo := &mockGroupRepoForPricing{
+		groupsByPlatform: map[string][]Group{
+			PlatformYunwu: {
+				{
+					Name:           "Yunwu Public",
+					Platform:       PlatformYunwu,
+					RateMultiplier: 1.25, // 25% markup
+				},
+			},
+		},
+	}
+
+	svc := &GatewayService{
+		groupRepo: groupRepo,
+	}
+
+	assert.Equal(t, 1.25, svc.ResolveYunwuRateMultiplier(context.Background()))
+
+	items := svc.GetPublicModelsPricing(context.Background())
+	require.NotEmpty(t, items)
+
+	byID := make(map[string]PublicModelPricingItem)
+	for _, item := range items {
+		byID[item.CanonicalModelID] = item
+	}
+
+	// anthropic/claude-sonnet-5: base was $3.0 input, $15.0 output
+	// with 1.25 markup: $3.0 * 1.25 = $3.75, $15.0 * 1.25 = $18.75
+	sonnet5, exists := byID["anthropic/claude-sonnet-5"]
+	require.True(t, exists)
+	require.NotNil(t, sonnet5.InputPricePer1M)
+	require.NotNil(t, sonnet5.OutputPricePer1M)
+	assert.Equal(t, 3.75, *sonnet5.InputPricePer1M)
+	assert.Equal(t, 18.75, *sonnet5.OutputPricePer1M)
+
+	// openai/sora: base was $0.10
+	// with 1.25 markup: $0.10 * 1.25 = $0.125
+	sora, exists := byID["openai/sora"]
+	require.True(t, exists)
+	require.NotNil(t, sora.NativePriceUSD)
+	assert.Equal(t, 0.125, *sora.NativePriceUSD)
+}
+
+func TestResolveYunwuRateMultiplier_Fallbacks(t *testing.T) {
+	// 1. Matched by active group name "yunwu"
+	groupRepoByName := &mockGroupRepoForPricing{
+		activeGroups: []Group{
+			{Name: "General Yunwu Group", RateMultiplier: 1.30},
+		},
+	}
+	svc1 := &GatewayService{groupRepo: groupRepoByName}
+	assert.Equal(t, 1.30, svc1.ResolveYunwuRateMultiplier(context.Background()))
+
+	// 2. Fallback to schedulable account RateMultiplier
+	rate := 1.20
+	accRepo := &mockAccountRepoForPricing{
+		schedulable: []Account{
+			{Platform: "yunwu", RateMultiplier: &rate},
+		},
+	}
+	svc2 := &GatewayService{accountRepo: accRepo}
+	assert.Equal(t, 1.20, svc2.ResolveYunwuRateMultiplier(context.Background()))
+
+	// 3. Fallback to config.Default.RateMultiplier
+	// (cfg.Default.RateMultiplier)
+	cfg := &config.Config{}
+	cfg.Default.RateMultiplier = 1.15
+	svc3 := &GatewayService{cfg: cfg}
+	assert.Equal(t, 1.15, svc3.ResolveYunwuRateMultiplier(context.Background()))
+
+	// 4. Default fallback to 1.0 when nothing configured
+	svc4 := &GatewayService{}
+	assert.Equal(t, 1.0, svc4.ResolveYunwuRateMultiplier(context.Background()))
+}
+
 
 

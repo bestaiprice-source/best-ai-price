@@ -231,10 +231,55 @@ var fallbackOfficialPrices = map[string]struct {
 	"minimax/minimax-text-01":       {InputPer1M: 0.20, OutputPer1M: 1.10},
 }
 
-// GetPublicModelsPricing aggregates all available models and their pricing.
+// ResolveYunwuRateMultiplier resolves the effective rate multiplier for the yunwu group.
+func (s *GatewayService) ResolveYunwuRateMultiplier(ctx context.Context) float64 {
+	if s != nil && s.groupRepo != nil {
+		// 1. Look for active group with platform "yunwu"
+		if groups, err := s.groupRepo.ListActiveByPlatform(ctx, PlatformYunwu); err == nil && len(groups) > 0 {
+			for _, g := range groups {
+				if g.RateMultiplier > 0 {
+					return g.RateMultiplier
+				}
+			}
+		}
+
+		// 2. Look for active group with name "yunwu"
+		if groups, err := s.groupRepo.ListActive(ctx); err == nil && len(groups) > 0 {
+			for _, g := range groups {
+				if (strings.EqualFold(g.Name, "yunwu") || strings.EqualFold(g.Platform, "yunwu") || strings.Contains(strings.ToLower(g.Name), "yunwu")) && g.RateMultiplier > 0 {
+					return g.RateMultiplier
+				}
+			}
+		}
+	}
+
+	// 3. Look for schedulable account for platform "yunwu" with rate multiplier
+	if s != nil && s.accountRepo != nil {
+		if accounts, err := s.accountRepo.ListSchedulable(ctx); err == nil && len(accounts) > 0 {
+			for _, acc := range accounts {
+				if (strings.EqualFold(acc.Platform, "yunwu") || strings.EqualFold(acc.Platform, PlatformYunwu)) && acc.RateMultiplier != nil && *acc.RateMultiplier > 0 {
+					return *acc.RateMultiplier
+				}
+			}
+		}
+	}
+
+	// 4. Fallback to default configuration rate multiplier
+	if s != nil && s.cfg != nil && s.cfg.Default.RateMultiplier > 0 {
+		return s.cfg.Default.RateMultiplier
+	}
+
+	return 1.0
+}
+
+// GetPublicModelsPricing aggregates all available models and their selling pricing (including yunwu markup).
 func (s *GatewayService) GetPublicModelsPricing(ctx context.Context) []PublicModelPricingItem {
 	availableSet := make(map[string]bool)
 	schedulablePlatforms := make(map[string]bool)
+	yunwuMultiplier := s.ResolveYunwuRateMultiplier(ctx)
+	if yunwuMultiplier <= 0 {
+		yunwuMultiplier = 1.0
+	}
 
 	if s != nil && s.accountRepo != nil {
 		if models := s.GetAvailableModels(ctx, nil, ""); len(models) > 0 {
@@ -335,19 +380,19 @@ func (s *GatewayService) GetPublicModelsPricing(ctx context.Context) []PublicMod
 
 		if pricing != nil {
 			if pricing.FixedPricePerRequest > 0 {
-				fixed := roundFloat(pricing.FixedPricePerRequest, 4)
+				fixed := roundFloat(pricing.FixedPricePerRequest*yunwuMultiplier, 4)
 				unit := "request"
 				item.NativePriceUSD = &fixed
 				item.NativePriceUnit = &unit
 			} else if pricing.InputPricePerToken > 0 || pricing.OutputPricePerToken > 0 {
-				in1m := roundFloat(pricing.InputPricePerToken*1_000_000, 4)
-				out1m := roundFloat(pricing.OutputPricePerToken*1_000_000, 4)
+				in1m := roundFloat(pricing.InputPricePerToken*1_000_000*yunwuMultiplier, 4)
+				out1m := roundFloat(pricing.OutputPricePerToken*1_000_000*yunwuMultiplier, 4)
 				item.InputPricePer1M = &in1m
 				item.InputPrice = &in1m
 				item.OutputPricePer1M = &out1m
 				item.OutputPrice = &out1m
 			} else if pricing.ImageOutputPricePerToken > 0 {
-				native := roundFloat(pricing.ImageOutputPricePerToken, 4)
+				native := roundFloat(pricing.ImageOutputPricePerToken*yunwuMultiplier, 4)
 				unit := "image"
 				item.NativePriceUSD = &native
 				item.NativePriceUnit = &unit
@@ -358,13 +403,13 @@ func (s *GatewayService) GetPublicModelsPricing(ctx context.Context) []PublicMod
 		if item.InputPricePer1M == nil && item.NativePriceUSD == nil {
 			if fb, exists := fallbackOfficialPrices[cid]; exists {
 				if fb.NativeUSD > 0 {
-					n := fb.NativeUSD
+					n := roundFloat(fb.NativeUSD*yunwuMultiplier, 4)
 					u := fb.NativeUnit
 					item.NativePriceUSD = &n
 					item.NativePriceUnit = &u
 				} else {
-					in1m := fb.InputPer1M
-					out1m := fb.OutputPer1M
+					in1m := roundFloat(fb.InputPer1M*yunwuMultiplier, 4)
+					out1m := roundFloat(fb.OutputPer1M*yunwuMultiplier, 4)
 					item.InputPricePer1M = &in1m
 					item.InputPrice = &in1m
 					item.OutputPricePer1M = &out1m
