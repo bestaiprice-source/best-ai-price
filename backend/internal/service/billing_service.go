@@ -413,6 +413,14 @@ func (s *BillingService) GetYunwuOnlyModelPricing(ctx context.Context, model str
 	return nil, fmt.Errorf("yunwu pricing not found for model: %s", model)
 }
 
+// GetYunwuKnownModelNames returns all model names known from Yunwu pricing service.
+func (s *BillingService) GetYunwuKnownModelNames(ctx context.Context) []string {
+	if s == nil || s.yunwuPricing == nil {
+		return nil
+	}
+	return s.yunwuPricing.GetKnownModelNames(ctx)
+}
+
 
 // CalculateCost 计算使用费用
 func (s *BillingService) CalculateCost(model string, tokens UsageTokens, rateMultiplier float64) (*CostBreakdown, error) {

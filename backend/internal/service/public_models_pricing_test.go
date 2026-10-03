@@ -346,6 +346,62 @@ func TestGetPublicModelsPricing_WithYunwuGroupMarkup(t *testing.T) {
 	assert.Equal(t, 0.125, *sora.NativePriceUSD)
 }
 
+func TestGetPublicModelsPricing_GeminiAndDeepSeekPricing(t *testing.T) {
+	raw := map[string]*YunwuPricingRawItem{
+		"gemini-2.5-flash": {ModelRatio: 0.15, CompletionRatio: 8.34, Available: true},
+		"gemini-3.5-flash": {ModelRatio: 0.75, CompletionRatio: 6.0, Available: true},
+		"deepseek-v3":      {ModelRatio: 0.14495, CompletionRatio: 4.0, Available: true},
+		"deepseek-r1":      {ModelRatio: 0.2899, CompletionRatio: 4.0, Available: true},
+	}
+	billingSvc := helperNewBillingWithYunwuPricing(raw)
+	svc := &GatewayService{billingService: billingSvc}
+	items := svc.GetPublicModelsPricing(context.Background())
+
+	byID := make(map[string]PublicModelPricingItem)
+	for _, item := range items {
+		byID[item.CanonicalModelID] = item
+	}
+
+	// 1. Check gemini-2.5-flash
+	g25, exists := byID["google/gemini-2.5-flash"]
+	require.True(t, exists)
+	require.NotNil(t, g25.InputPricePer1M)
+	require.NotNil(t, g25.OutputPricePer1M)
+
+	// 2. Check gemini-3.5-flash and dashed gemini-3-5-flash
+	g35, exists := byID["google/gemini-3.5-flash"]
+	require.True(t, exists)
+	require.NotNil(t, g35.InputPricePer1M)
+
+	g35Dash, exists := byID["google/gemini-3-5-flash"]
+	require.True(t, exists)
+	require.NotNil(t, g35Dash.InputPricePer1M)
+
+	// 3. Check deepseek-v3 and aliased deepseek-chat
+	d3, exists := byID["deepseek/deepseek-v3"]
+	require.True(t, exists)
+	require.NotNil(t, d3.InputPricePer1M)
+
+	dChat, exists := byID["deepseek/deepseek-chat"]
+	require.True(t, exists)
+	require.NotNil(t, dChat.InputPricePer1M)
+
+	// 4. Check deepseek-r1 and aliased deepseek-reasoner
+	dr1, exists := byID["deepseek/deepseek-r1"]
+	require.True(t, exists)
+	require.NotNil(t, dr1.InputPricePer1M)
+
+	dReasoner, exists := byID["deepseek/deepseek-reasoner"]
+	require.True(t, exists)
+	require.NotNil(t, dReasoner.InputPricePer1M)
+
+	// Test nil safety
+	var nilBilling *BillingService
+	assert.Nil(t, nilBilling.GetYunwuKnownModelNames(context.Background()))
+	emptyBilling := &BillingService{}
+	assert.Nil(t, emptyBilling.GetYunwuKnownModelNames(context.Background()))
+}
+
 func TestResolveYunwuRateMultiplier_Fallbacks(t *testing.T) {
 	// 1. Matched by active group name "yunwu"
 	groupRepoByName := &mockGroupRepoForPricing{

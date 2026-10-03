@@ -128,9 +128,15 @@ func NewYunwuPricingService() *YunwuPricingService {
 		providerPricing: make(map[string]map[string]*YunwuPricingRawItem),
 		providerUpdated: make(map[string]time.Time),
 		aliases: map[string]string{
-			"gemini-3-pro":   "gemini-3-pro-preview",
-			"gemini-3.1-pro": "gemini-3.1-pro-preview",
-			"gemini-3-flash": "gemini-3-flash-preview",
+			"gemini-3-pro":      "gemini-3-pro-preview",
+			"gemini-3.1-pro":    "gemini-3.1-pro-preview",
+			"gemini-3-flash":    "gemini-3-flash-preview",
+			"gemini-1.5-flash":  "gemini-2.5-flash",
+			"gemini-1.5-pro":    "gemini-2.5-pro",
+			"gemini-2.0-flash":  "gemini-2.5-flash",
+			"deepseek-chat":     "deepseek-v3",
+			"deepseek-reasoner": "deepseek-r1",
+			"deepseek-coder":    "deepseek-v3",
 		},
 	}
 }
@@ -158,11 +164,38 @@ func NewYunwuPricingServiceWithClient(pricingURL string, client *http.Client) *Y
 		providerPricing: make(map[string]map[string]*YunwuPricingRawItem),
 		providerUpdated: make(map[string]time.Time),
 		aliases: map[string]string{
-			"gemini-3-pro":   "gemini-3-pro-preview",
-			"gemini-3.1-pro": "gemini-3.1-pro-preview",
-			"gemini-3-flash": "gemini-3-flash-preview",
+			"gemini-3-pro":      "gemini-3-pro-preview",
+			"gemini-3.1-pro":    "gemini-3.1-pro-preview",
+			"gemini-3-flash":    "gemini-3-flash-preview",
+			"gemini-1.5-flash":  "gemini-2.5-flash",
+			"gemini-1.5-pro":    "gemini-2.5-pro",
+			"gemini-2.0-flash":  "gemini-2.5-flash",
+			"deepseek-chat":     "deepseek-v3",
+			"deepseek-reasoner": "deepseek-r1",
+			"deepseek-coder":    "deepseek-v3",
 		},
 	}
+}
+
+// GetKnownModelNames returns all model names known across configured providers.
+func (s *YunwuPricingService) GetKnownModelNames(ctx context.Context) []string {
+	if s == nil {
+		return nil
+	}
+	_, _ = s.FetchPricing(ctx)
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	seen := make(map[string]bool)
+	var names []string
+	for _, pmap := range s.providerPricing {
+		for name := range pmap {
+			if !seen[name] {
+				seen[name] = true
+				names = append(names, name)
+			}
+		}
+	}
+	return names
 }
 
 // SetProviderURL overrides or adds an endpoint URL for a specific provider

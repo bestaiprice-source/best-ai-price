@@ -3,7 +3,13 @@ package service
 import (
 	"context"
 	"math"
+	"regexp"
 	"strings"
+)
+
+var (
+	versionDashRegex = regexp.MustCompile(`(\d+)-(\d+)`)
+	versionDotRegex  = regexp.MustCompile(`(\d+)\.(\d+)`)
 )
 
 // PublicModelPricingItem represents an item in the public models pricing catalog (BestAIPrice format).
@@ -121,17 +127,33 @@ var knownCanonicalModelIDs = []string{
 	"google/gemini-2.0-flash",
 	"google/gemini-2.5-flash",
 	"google/gemini-2-5-flash",
+	"google/gemini-2.5-pro",
 	"google/gemini-1.5-pro",
+	"google/gemini-1.5-flash",
 	"google/gemini-3-flash-preview",
+	"google/gemini-3.1-pro-preview",
 	"google/gemini-3-1-pro-preview",
+	"google/gemini-3.1-flash-lite",
 	"google/gemini-3-1-flash-lite",
+	"google/gemini-3.5-flash",
 	"google/gemini-3-5-flash",
+	"google/gemini-3.5-flash-lite",
 	"google/gemini-3-5-flash-lite",
+	"google/gemini-3.6-flash",
 	"google/gemini-3-6-flash",
+	"google/gemini-3.7-flash",
+	"google/gemini-3.8-flash",
 
 	// DeepSeek
 	"deepseek/deepseek-v3",
 	"deepseek/deepseek-r1",
+	"deepseek/deepseek-chat",
+	"deepseek/deepseek-reasoner",
+	"deepseek/deepseek-v3.1",
+	"deepseek/deepseek-v3.2",
+	"deepseek/deepseek-v4-flash",
+	"deepseek/deepseek-v4-pro",
+	"deepseek/deepseek-v4.1-flash",
 
 	// Moonshot / Kimi
 	"moonshot/kimi-latest",
@@ -261,6 +283,16 @@ func (s *GatewayService) GetPublicModelsPricing(ctx context.Context) []PublicMod
 		}
 	}
 
+	if s != nil && s.billingService != nil {
+		for _, m := range s.billingService.GetYunwuKnownModelNames(ctx) {
+			cid := ToCanonicalModelID(m)
+			if cid != "" && !seen[cid] {
+				seen[cid] = true
+				candidateList = append(candidateList, cid)
+			}
+		}
+	}
+
 	items := make([]PublicModelPricingItem, 0, len(candidateList))
 
 	for _, cid := range candidateList {
@@ -294,7 +326,21 @@ func (s *GatewayService) GetPublicModelsPricing(ctx context.Context) []PublicMod
 		var pricing *ModelPricing
 		if s != nil && s.billingService != nil {
 			raw := rawModelWithoutVersion(slug)
-			candidates := []string{slug, cid, raw, strings.ReplaceAll(slug, "-", "."), strings.ReplaceAll(slug, ".", "-")}
+			vDot := versionDashRegex.ReplaceAllString(slug, "$1.$2")
+			vDash := versionDotRegex.ReplaceAllString(slug, "$1-$2")
+			rawVDot := versionDashRegex.ReplaceAllString(raw, "$1.$2")
+			rawVDash := versionDotRegex.ReplaceAllString(raw, "$1-$2")
+			candidates := []string{
+				slug,
+				cid,
+				vDot,
+				vDash,
+				raw,
+				rawVDot,
+				rawVDash,
+				strings.ReplaceAll(slug, "-", "."),
+				strings.ReplaceAll(slug, ".", "-"),
+			}
 			for _, c := range candidates {
 				if p, err := s.billingService.GetYunwuOnlyModelPricing(ctx, c); err == nil && p != nil {
 					pricing = p
