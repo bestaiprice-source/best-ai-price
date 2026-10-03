@@ -179,13 +179,23 @@ func (s *YunwuPricingService) FetchPricingForProvider(ctx context.Context, provi
 	prov := CanonicalPricingProvider(provider)
 
 	s.mu.RLock()
+	cached, hasCache := s.providerPricing[prov]
+	lastUpdated := s.providerUpdated[prov]
 	endpoint, ok := s.providerURLs[prov]
 	s.mu.RUnlock()
+
+	// If cached pricing exists and is fresh (within 10 minutes), return immediately
+	if hasCache && len(cached) > 0 && time.Since(lastUpdated) < 10*time.Minute {
+		return cached, nil
+	}
 
 	if !ok || endpoint == "" {
 		if prov == "openlux" {
 			endpoint = s.pricingURL
 		} else {
+			if hasCache && len(cached) > 0 {
+				return cached, nil
+			}
 			return nil, fmt.Errorf("no pricing endpoint configured for provider %s", prov)
 		}
 	}
@@ -339,4 +349,35 @@ func (s *YunwuPricingService) GetModelPricing(ctx context.Context, modelName str
 		prov = "openlux"
 	}
 	return s.GetModelPricingForProvider(ctx, prov, modelName)
+}
+
+// GetModelPricingAcrossProviders resolves model pricing across all known/configured Yunwu providers.
+func (s *YunwuPricingService) GetModelPricingAcrossProviders(ctx context.Context, modelName string) (*ModelPricing, bool) {
+	if s == nil {
+		return nil, false
+	}
+	prov := PricingProviderFromContext(ctx)
+	if prov != "" {
+		if p, ok := s.GetModelPricingForProvider(ctx, prov, modelName); ok && p != nil {
+			return p, true
+		}
+	}
+	if p, ok := s.GetModelPricingForProvider(ctx, "openlux", modelName); ok && p != nil {
+		return p, true
+	}
+	s.mu.RLock()
+	providers := make([]string, 0, len(s.providerURLs))
+	for p := range s.providerURLs {
+		if p != "openlux" && p != prov {
+			providers = append(providers, p)
+		}
+	}
+	s.mu.RUnlock()
+
+	for _, p := range providers {
+		if pr, ok := s.GetModelPricingForProvider(ctx, p, modelName); ok && pr != nil {
+			return pr, true
+		}
+	}
+	return nil, false
 }

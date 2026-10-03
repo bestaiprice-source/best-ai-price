@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -397,6 +398,19 @@ func (s *BillingService) GetModelPricingWithContext(ctx context.Context, model s
 func (s *BillingService) GetModelPricingForProvider(ctx context.Context, provider string, model string) (*ModelPricing, error) {
 	ctxWithProv := ContextWithPricingProvider(ctx, provider)
 	return s.GetModelPricingWithContext(ctxWithProv, model)
+}
+
+// GetYunwuOnlyModelPricing retrieves model pricing strictly from Yunwu/upstream provider pricing,
+// bypassing LiteLLM and hardcoded fallback price maps.
+func (s *BillingService) GetYunwuOnlyModelPricing(ctx context.Context, model string) (*ModelPricing, error) {
+	if s == nil || s.yunwuPricing == nil {
+		return nil, errors.New("yunwu pricing service not configured")
+	}
+	model = strings.ToLower(strings.TrimSpace(model))
+	if ywPricing, ok := s.yunwuPricing.GetModelPricingAcrossProviders(ctx, model); ok && ywPricing != nil {
+		return s.applyModelSpecificPricingPolicy(model, ywPricing), nil
+	}
+	return nil, fmt.Errorf("yunwu pricing not found for model: %s", model)
 }
 
 

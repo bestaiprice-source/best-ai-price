@@ -1,9 +1,12 @@
+//go:build unit
+
 package service
 
 import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/stretchr/testify/assert"
@@ -58,65 +61,86 @@ func TestToCanonicalModelID(t *testing.T) {
 	}
 }
 
-func TestGetPublicModelsPricing_FallbackAndDefaults(t *testing.T) {
+func TestGetPublicModelsPricing_UnpricedWhenNoYunwuUpstream(t *testing.T) {
+	// Without upstream Yunwu pricing, models have no price (nil/null) and status is unavailable
 	svc := &GatewayService{}
 	items := svc.GetPublicModelsPricing(context.Background())
 
 	require.NotEmpty(t, items)
 	assert.GreaterOrEqual(t, len(items), len(knownCanonicalModelIDs))
 
-	byID := make(map[string]PublicModelPricingItem)
 	for _, item := range items {
 		require.NotEmpty(t, item.CanonicalModelID)
+		assert.Nil(t, item.InputPricePer1M)
+		assert.Nil(t, item.OutputPricePer1M)
+		assert.Nil(t, item.NativePriceUSD)
+		assert.False(t, item.Available)
+		assert.Equal(t, "unavailable", item.Status)
+	}
+}
+
+func helperNewBillingWithYunwuPricing(raw map[string]*YunwuPricingRawItem) *BillingService {
+	yw := NewYunwuPricingService()
+	yw.providerPricing["openlux"] = raw
+	yw.providerUpdated["openlux"] = time.Now()
+	for p := range yw.providerURLs {
+		yw.providerUpdated[p] = time.Now()
+	}
+	return NewBillingService(nil, nil, yw)
+}
+
+func TestGetPublicModelsPricing_WithYunwuUpstreamPricing(t *testing.T) {
+	// Base token calculation in One API standard: basePerToken = 0.002 / 1000 = 2e-6
+	// For claude-sonnet-5: ModelRatio 1.5 -> $3.0/1M tokens; CompletionRatio 5.0 -> $15.0/1M tokens
+	// For sora: ModelPrice 0.10 -> $0.10 fixed/second
+	raw := map[string]*YunwuPricingRawItem{
+		"claude-sonnet-5": {
+			ModelRatio:      1.5,
+			CompletionRatio: 5.0,
+			Available:       true,
+		},
+		"sora": {
+			ModelPrice: 0.10,
+			Available:  true,
+		},
+	}
+
+	billingSvc := helperNewBillingWithYunwuPricing(raw)
+	svc := &GatewayService{
+		billingService: billingSvc,
+	}
+
+	items := svc.GetPublicModelsPricing(context.Background())
+	require.NotEmpty(t, items)
+
+	byID := make(map[string]PublicModelPricingItem)
+	for _, item := range items {
 		byID[item.CanonicalModelID] = item
 	}
 
-	// 1. Check anthropic/claude-sonnet-5 (from user prompt)
+	// 1. anthropic/claude-sonnet-5 has upstream pricing
 	sonnet5, exists := byID["anthropic/claude-sonnet-5"]
-	require.True(t, exists, "anthropic/claude-sonnet-5 should exist in items")
+	require.True(t, exists)
 	require.NotNil(t, sonnet5.InputPricePer1M)
 	require.NotNil(t, sonnet5.OutputPricePer1M)
 	assert.Equal(t, 3.0, *sonnet5.InputPricePer1M)
 	assert.Equal(t, 15.0, *sonnet5.OutputPricePer1M)
-	assert.Equal(t, "unavailable", sonnet5.Status)
-	assert.False(t, sonnet5.Available)
 
-	// 2. Check openai/gpt-5.5
-	gpt55, exists := byID["openai/gpt-5.5"]
-	require.True(t, exists)
-	require.NotNil(t, gpt55.InputPricePer1M)
-	assert.Equal(t, 2.5, *gpt55.InputPricePer1M)
-	assert.Equal(t, 10.0, *gpt55.OutputPricePer1M)
-
-	// 3. Check flat-rate native price (image & video)
-	gptImage2, exists := byID["openai/gpt-image-2"]
-	require.True(t, exists)
-	require.NotNil(t, gptImage2.NativePriceUSD)
-	require.NotNil(t, gptImage2.NativePriceUnit)
-	assert.Equal(t, 0.04, *gptImage2.NativePriceUSD)
-	assert.Equal(t, "image", *gptImage2.NativePriceUnit)
-	assert.Nil(t, gptImage2.InputPricePer1M)
-
+	// 2. openai/sora has native fixed price
 	sora, exists := byID["openai/sora"]
 	require.True(t, exists)
 	require.NotNil(t, sora.NativePriceUSD)
 	require.NotNil(t, sora.NativePriceUnit)
 	assert.Equal(t, 0.10, *sora.NativePriceUSD)
-	assert.Equal(t, "second", *sora.NativePriceUnit)
+	assert.Equal(t, "request", *sora.NativePriceUnit)
 
-	// 4. Check moonshot/kimi-k3
-	kimiK3, exists := byID["moonshot/kimi-k3"]
+	// 3. Unpriced model has nil prices
+	gpt4o, exists := byID["openai/gpt-4o"]
 	require.True(t, exists)
-	require.NotNil(t, kimiK3.InputPricePer1M)
-	assert.Equal(t, 2.76, *kimiK3.InputPricePer1M)
-	assert.Equal(t, 13.8, *kimiK3.OutputPricePer1M)
-
-	// 5. Check zhipu/glm-5-3
-	glm53, exists := byID["zhipu/glm-5-3"]
-	require.True(t, exists)
-	require.NotNil(t, glm53.InputPricePer1M)
-	assert.Equal(t, 1.104, *glm53.InputPricePer1M)
-	assert.Equal(t, 3.864, *glm53.OutputPricePer1M)
+	assert.Nil(t, gpt4o.InputPricePer1M)
+	assert.Nil(t, gpt4o.OutputPricePer1M)
+	assert.False(t, gpt4o.Available)
+	assert.Equal(t, "unavailable", gpt4o.Status)
 }
 
 func TestRoundFloat(t *testing.T) {
@@ -158,7 +182,20 @@ func TestGetPublicModelsPricing_WithAccountsAndBilling(t *testing.T) {
 		},
 	}
 
-	billingSvc := &BillingService{}
+	raw := map[string]*YunwuPricingRawItem{
+		"claude-3-5-sonnet": {
+			ModelRatio:      1.5,
+			CompletionRatio: 5.0,
+			Available:       true,
+		},
+		"custom-claude": {
+			ModelRatio:      1.5,
+			CompletionRatio: 5.0,
+			Available:       true,
+		},
+	}
+
+	billingSvc := helperNewBillingWithYunwuPricing(raw)
 	svc := &GatewayService{
 		accountRepo:    repo,
 		billingService: billingSvc,
@@ -172,16 +209,18 @@ func TestGetPublicModelsPricing_WithAccountsAndBilling(t *testing.T) {
 		byID[item.CanonicalModelID] = item
 	}
 
-	// claude-3-5-sonnet should now be available
+	// claude-3-5-sonnet should now be available and have price
 	sonnet, exists := byID["anthropic/claude-3-5-sonnet"]
 	require.True(t, exists)
 	assert.True(t, sonnet.Available)
 	assert.Equal(t, "available", sonnet.Status)
+	assert.NotNil(t, sonnet.InputPricePer1M)
 
-	// custom-claude should also be listed
+	// custom-claude should also be listed and available
 	custom, exists := byID["other/custom-claude"]
 	require.True(t, exists)
 	assert.True(t, custom.Available)
+	assert.NotNil(t, custom.InputPricePer1M)
 }
 
 func TestGetPublicModelsPricing_NilServiceSafe(t *testing.T) {
@@ -200,14 +239,20 @@ func TestGetPublicModelsPricing_PlatformFallbackAndPricingTypes(t *testing.T) {
 		},
 	}
 
-	billingSvc := NewBillingService(nil, nil, nil)
-	billingSvc.fallbackPrices["fixed-model"] = &ModelPricing{
-		FixedPricePerRequest: 0.05,
-	}
-	billingSvc.fallbackPrices["image-model"] = &ModelPricing{
-		ImageOutputPricePerToken: 0.02,
+	raw := map[string]*YunwuPricingRawItem{
+		"claude-3-5-sonnet": {
+			ModelRatio:      1.5,
+			CompletionRatio: 5.0,
+			Available:       true,
+		},
+		"gpt-4o": {
+			ModelRatio:      1.25,
+			CompletionRatio: 4.0,
+			Available:       true,
+		},
 	}
 
+	billingSvc := helperNewBillingWithYunwuPricing(raw)
 	svc := &GatewayService{
 		accountRepo:    repo,
 		billingService: billingSvc,
@@ -256,8 +301,22 @@ func TestGetPublicModelsPricing_WithYunwuGroupMarkup(t *testing.T) {
 		},
 	}
 
+	raw := map[string]*YunwuPricingRawItem{
+		"claude-sonnet-5": {
+			ModelRatio:      1.5,
+			CompletionRatio: 5.0,
+			Available:       true,
+		},
+		"sora": {
+			ModelPrice: 0.10,
+			Available:  true,
+		},
+	}
+	billingSvc := helperNewBillingWithYunwuPricing(raw)
+
 	svc := &GatewayService{
-		groupRepo: groupRepo,
+		groupRepo:      groupRepo,
+		billingService: billingSvc,
 	}
 
 	assert.Equal(t, 1.25, svc.ResolveYunwuRateMultiplier(context.Background()))

@@ -163,74 +163,6 @@ var knownCanonicalModelIDs = []string{
 	"minimax/minimax-text-01",
 }
 
-var fallbackOfficialPrices = map[string]struct {
-	InputPer1M  float64
-	OutputPer1M float64
-	NativeUSD   float64
-	NativeUnit  string
-}{
-	"anthropic/claude-3-7-sonnet":   {InputPer1M: 3.0, OutputPer1M: 15.0},
-	"anthropic/claude-3-5-sonnet":   {InputPer1M: 3.0, OutputPer1M: 15.0},
-	"anthropic/claude-3-5-haiku":    {InputPer1M: 0.8, OutputPer1M: 4.0},
-	"anthropic/claude-3-opus":       {InputPer1M: 15.0, OutputPer1M: 75.0},
-	"anthropic/claude-sonnet-4-6":   {InputPer1M: 3.0, OutputPer1M: 15.0},
-	"anthropic/claude-sonnet-5":     {InputPer1M: 3.0, OutputPer1M: 15.0},
-	"anthropic/claude-opus-4-6":     {InputPer1M: 15.0, OutputPer1M: 75.0},
-	"anthropic/claude-opus-4-7":     {InputPer1M: 15.0, OutputPer1M: 75.0},
-	"anthropic/claude-opus-4-8":     {InputPer1M: 15.0, OutputPer1M: 75.0},
-	"anthropic/claude-opus-5":       {InputPer1M: 15.0, OutputPer1M: 75.0},
-	"anthropic/claude-haiku-4-5":    {InputPer1M: 0.8, OutputPer1M: 4.0},
-	"anthropic/claude-fable-5":      {InputPer1M: 3.0, OutputPer1M: 15.0},
-	"openai/gpt-4o":                 {InputPer1M: 2.5, OutputPer1M: 10.0},
-	"openai/gpt-4o-mini":            {InputPer1M: 0.15, OutputPer1M: 0.6},
-	"openai/o1":                     {InputPer1M: 15.0, OutputPer1M: 60.0},
-	"openai/o1-mini":                {InputPer1M: 1.10, OutputPer1M: 4.40},
-	"openai/o3-mini":                {InputPer1M: 1.10, OutputPer1M: 4.40},
-	"openai/chatgpt-4o-latest":      {InputPer1M: 5.0, OutputPer1M: 15.0},
-	"openai/gpt-5":                  {InputPer1M: 2.5, OutputPer1M: 10.0},
-	"openai/gpt-5.1":                {InputPer1M: 2.5, OutputPer1M: 10.0},
-	"openai/gpt-5.2":                {InputPer1M: 2.5, OutputPer1M: 10.0},
-	"openai/gpt-5.3-codex":          {InputPer1M: 2.5, OutputPer1M: 10.0},
-	"openai/gpt-5.4":                {InputPer1M: 2.5, OutputPer1M: 10.0},
-	"openai/gpt-5.5":                {InputPer1M: 2.5, OutputPer1M: 10.0},
-	"openai/gpt-5.6-luna":           {InputPer1M: 2.5, OutputPer1M: 10.0},
-	"openai/gpt-5.6-sol":            {InputPer1M: 2.5, OutputPer1M: 10.0},
-	"openai/gpt-5.6-terra":          {InputPer1M: 2.5, OutputPer1M: 10.0},
-	"openai/gpt-image-2":            {NativeUSD: 0.04, NativeUnit: "image"},
-	"openai/sora":                   {NativeUSD: 0.10, NativeUnit: "second"},
-	"google/gemini-2.0-flash":       {InputPer1M: 0.10, OutputPer1M: 0.40},
-	"google/gemini-2.5-flash":       {InputPer1M: 0.075, OutputPer1M: 0.30},
-	"google/gemini-2-5-flash":       {InputPer1M: 0.075, OutputPer1M: 0.30},
-	"google/gemini-1.5-pro":         {InputPer1M: 1.25, OutputPer1M: 5.0},
-	"google/gemini-3-flash-preview": {InputPer1M: 0.10, OutputPer1M: 0.40},
-	"google/gemini-3-1-pro-preview": {InputPer1M: 1.25, OutputPer1M: 5.0},
-	"google/gemini-3-1-flash-lite":  {InputPer1M: 0.075, OutputPer1M: 0.30},
-	"google/gemini-3-5-flash":       {InputPer1M: 0.075, OutputPer1M: 0.30},
-	"google/gemini-3-5-flash-lite":  {InputPer1M: 0.075, OutputPer1M: 0.30},
-	"google/gemini-3-6-flash":       {InputPer1M: 0.075, OutputPer1M: 0.30},
-	"deepseek/deepseek-v3":          {InputPer1M: 0.14, OutputPer1M: 0.28},
-	"deepseek/deepseek-r1":          {InputPer1M: 0.55, OutputPer1M: 2.19},
-	"moonshot/kimi-latest":          {InputPer1M: 1.0, OutputPer1M: 5.0},
-	"moonshot/kimi-k1.5":            {InputPer1M: 1.0, OutputPer1M: 5.0},
-	"moonshot/kimi-k2-6":            {InputPer1M: 1.5, OutputPer1M: 7.5},
-	"moonshot/kimi-k2-7-code":       {InputPer1M: 1.5, OutputPer1M: 7.5},
-	"moonshot/kimi-k3":              {InputPer1M: 2.76, OutputPer1M: 13.8},
-	"zhipu/glm-4":                   {InputPer1M: 1.0, OutputPer1M: 3.0},
-	"zhipu/glm-4-5-air":             {InputPer1M: 0.5, OutputPer1M: 1.5},
-	"zhipu/glm-4-5v":                {InputPer1M: 0.8, OutputPer1M: 2.5},
-	"zhipu/glm-5-1":                 {InputPer1M: 1.0, OutputPer1M: 3.5},
-	"zhipu/glm-5-2":                 {InputPer1M: 1.0, OutputPer1M: 3.5},
-	"zhipu/glm-5-3":                 {InputPer1M: 1.104, OutputPer1M: 3.864},
-	"zhipu/glm-asr":                 {NativeUSD: 0.001, NativeUnit: "second"},
-	"zhipu/glm-image":               {NativeUSD: 0.02, NativeUnit: "image"},
-	"qwen/qwen-2.5-72b":             {InputPer1M: 0.40, OutputPer1M: 1.20},
-	"qwen/qwen-max":                 {InputPer1M: 1.60, OutputPer1M: 6.40},
-	"qwen/qwen-plus":                {InputPer1M: 0.40, OutputPer1M: 1.20},
-	"xai/grok-2":                    {InputPer1M: 2.0, OutputPer1M: 10.0},
-	"xai/grok-beta":                 {InputPer1M: 5.0, OutputPer1M: 15.0},
-	"minimax/minimax-text-01":       {InputPer1M: 0.20, OutputPer1M: 1.10},
-}
-
 // ResolveYunwuRateMultiplier resolves the effective rate multiplier for the yunwu group.
 func (s *GatewayService) ResolveYunwuRateMultiplier(ctx context.Context) float64 {
 	if s != nil && s.groupRepo != nil {
@@ -358,20 +290,13 @@ func (s *GatewayService) GetPublicModelsPricing(ctx context.Context) []PublicMod
 			}
 		}
 
-		item.Available = isAvailable
-		if isAvailable {
-			item.Status = "available"
-		} else {
-			item.Status = "unavailable"
-		}
-
-		// Resolve pricing from billingService
+		// Resolve pricing strictly from upstream Yunwu providers (no LiteLLM, no built-in static table)
 		var pricing *ModelPricing
 		if s != nil && s.billingService != nil {
-			// Try slug, cid, normalized dot/dash variants
-			candidates := []string{slug, cid, strings.ReplaceAll(slug, "-", "."), strings.ReplaceAll(slug, ".", "-")}
+			raw := rawModelWithoutVersion(slug)
+			candidates := []string{slug, cid, raw, strings.ReplaceAll(slug, "-", "."), strings.ReplaceAll(slug, ".", "-")}
 			for _, c := range candidates {
-				if p, err := s.billingService.GetModelPricingWithContext(ctx, c); err == nil && p != nil {
+				if p, err := s.billingService.GetYunwuOnlyModelPricing(ctx, c); err == nil && p != nil {
 					pricing = p
 					break
 				}
@@ -399,22 +324,16 @@ func (s *GatewayService) GetPublicModelsPricing(ctx context.Context) []PublicMod
 			}
 		}
 
-		// Fallback to official pricing table if not resolved
+		// If no upstream provider pricing exists, the model is unpriced (null) and unavailable
 		if item.InputPricePer1M == nil && item.NativePriceUSD == nil {
-			if fb, exists := fallbackOfficialPrices[cid]; exists {
-				if fb.NativeUSD > 0 {
-					n := roundFloat(fb.NativeUSD*yunwuMultiplier, 4)
-					u := fb.NativeUnit
-					item.NativePriceUSD = &n
-					item.NativePriceUnit = &u
-				} else {
-					in1m := roundFloat(fb.InputPer1M*yunwuMultiplier, 4)
-					out1m := roundFloat(fb.OutputPer1M*yunwuMultiplier, 4)
-					item.InputPricePer1M = &in1m
-					item.InputPrice = &in1m
-					item.OutputPricePer1M = &out1m
-					item.OutputPrice = &out1m
-				}
+			item.Available = false
+			item.Status = "unavailable"
+		} else {
+			item.Available = isAvailable
+			if isAvailable {
+				item.Status = "available"
+			} else {
+				item.Status = "unavailable"
 			}
 		}
 
