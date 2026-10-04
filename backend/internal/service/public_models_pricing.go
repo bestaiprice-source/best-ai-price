@@ -185,8 +185,30 @@ var knownCanonicalModelIDs = []string{
 	"minimax/minimax-text-01",
 }
 
+type rateMultiplierContextKey struct{}
+
+// ContextWithRateMultiplier attaches an explicit rate multiplier to context
+func ContextWithRateMultiplier(ctx context.Context, multiplier float64) context.Context {
+	return context.WithValue(ctx, rateMultiplierContextKey{}, multiplier)
+}
+
+// RateMultiplierFromContext extracts explicit rate multiplier from context if present
+func RateMultiplierFromContext(ctx context.Context) (float64, bool) {
+	if ctx == nil {
+		return 0, false
+	}
+	if v, ok := ctx.Value(rateMultiplierContextKey{}).(float64); ok {
+		return v, true
+	}
+	return 0, false
+}
+
 // ResolveYunwuRateMultiplier resolves the effective rate multiplier for the yunwu group.
 func (s *GatewayService) ResolveYunwuRateMultiplier(ctx context.Context) float64 {
+	if m, ok := RateMultiplierFromContext(ctx); ok && m > 0 {
+		return m
+	}
+
 	if s != nil && s.groupRepo != nil {
 		// 1. Look for active group with platform "yunwu"
 		if groups, err := s.groupRepo.ListActiveByPlatform(ctx, PlatformYunwu); err == nil && len(groups) > 0 {
@@ -325,27 +347,10 @@ func (s *GatewayService) GetPublicModelsPricing(ctx context.Context) []PublicMod
 		// Resolve pricing strictly from upstream Yunwu providers (no LiteLLM, no built-in static table)
 		var pricing *ModelPricing
 		if s != nil && s.billingService != nil {
-			raw := rawModelWithoutVersion(slug)
-			vDot := versionDashRegex.ReplaceAllString(slug, "$1.$2")
-			vDash := versionDotRegex.ReplaceAllString(slug, "$1-$2")
-			rawVDot := versionDashRegex.ReplaceAllString(raw, "$1.$2")
-			rawVDash := versionDotRegex.ReplaceAllString(raw, "$1-$2")
-			candidates := []string{
-				slug,
-				cid,
-				vDot,
-				vDash,
-				raw,
-				rawVDot,
-				rawVDash,
-				strings.ReplaceAll(slug, "-", "."),
-				strings.ReplaceAll(slug, ".", "-"),
-			}
-			for _, c := range candidates {
-				if p, err := s.billingService.GetYunwuOnlyModelPricing(ctx, c); err == nil && p != nil {
-					pricing = p
-					break
-				}
+			if p, err := s.billingService.GetYunwuOnlyModelPricing(ctx, cid); err == nil && p != nil {
+				pricing = p
+			} else if p, err := s.billingService.GetYunwuOnlyModelPricing(ctx, slug); err == nil && p != nil {
+				pricing = p
 			}
 		}
 

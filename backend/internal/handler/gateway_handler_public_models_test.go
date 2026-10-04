@@ -46,14 +46,8 @@ func TestGatewayHandler_PublicModelsPricing_Gin(t *testing.T) {
 		if item.CanonicalModelID == "anthropic/claude-sonnet-5" {
 			foundSonnet5 = true
 			assert.Equal(t, "anthropic/claude-sonnet-5", item.ModelID)
-			require.NotNil(t, item.InputPricePer1M)
-			assert.Equal(t, 3.0, *item.InputPricePer1M)
-			require.NotNil(t, item.InputPrice)
-			assert.Equal(t, 3.0, *item.InputPrice)
-			require.NotNil(t, item.OutputPricePer1M)
-			assert.Equal(t, 15.0, *item.OutputPricePer1M)
-			require.NotNil(t, item.OutputPrice)
-			assert.Equal(t, 15.0, *item.OutputPrice)
+			assert.Nil(t, item.InputPricePer1M)
+			assert.Nil(t, item.OutputPricePer1M)
 			assert.Equal(t, "unavailable", item.Status)
 			assert.False(t, item.Available)
 			break

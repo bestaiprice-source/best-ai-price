@@ -39,6 +39,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
+
+	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/yunwu"
 )
 
 const (
@@ -7869,6 +7871,11 @@ func (s *GatewayService) getUserGroupRateMultiplier(ctx context.Context, userID,
 	return resolver.Resolve(ctx, userID, groupID, groupDefaultMultiplier)
 }
 
+// GetUserGroupRateMultiplier resolves the effective rate multiplier for a user in a specific group.
+func (s *GatewayService) GetUserGroupRateMultiplier(ctx context.Context, userID, groupID int64, groupDefaultMultiplier float64) float64 {
+	return s.getUserGroupRateMultiplier(ctx, userID, groupID, groupDefaultMultiplier)
+}
+
 // RecordUsageInput 记录使用量的输入参数
 type RecordUsageInput struct {
 	Result             *ForwardResult
@@ -8244,7 +8251,13 @@ func (s *GatewayService) RecordUsage(ctx context.Context, input *RecordUsageInpu
 			CacheCreation1hTokens: result.Usage.CacheCreation1hTokens,
 		}
 		var err error
-		cost, err = s.billingService.CalculateCostWithContext(ctx, billingModel, tokens, multiplier, "")
+		billingCtx := ctx
+		if account != nil && (account.Platform == PlatformYunwu || strings.EqualFold(account.Platform, "yunwu")) {
+			billingCtx = ContextWithPricingProvider(billingCtx, yunwu.ParseNodeProvider(account.Extra))
+		} else if apiKey != nil && apiKey.Group != nil && (apiKey.Group.Platform == PlatformYunwu || strings.EqualFold(apiKey.Group.Platform, "yunwu")) {
+			billingCtx = ContextWithPricingProvider(billingCtx, "openlux")
+		}
+		cost, err = s.billingService.CalculateCostWithContext(billingCtx, billingModel, tokens, multiplier, "")
 		if err != nil {
 			logger.L().With(
 				zap.String("component", "service.gateway"),
@@ -8436,7 +8449,13 @@ func (s *GatewayService) RecordUsageWithLongContext(ctx context.Context, input *
 			CacheCreation1hTokens: result.Usage.CacheCreation1hTokens,
 		}
 		var err error
-		cost, err = s.billingService.CalculateCostWithLongContext(billingModel, tokens, multiplier, input.LongContextThreshold, input.LongContextMultiplier)
+		billingCtx := ctx
+		if account != nil && (account.Platform == PlatformYunwu || strings.EqualFold(account.Platform, "yunwu")) {
+			billingCtx = ContextWithPricingProvider(billingCtx, yunwu.ParseNodeProvider(account.Extra))
+		} else if apiKey != nil && apiKey.Group != nil && (apiKey.Group.Platform == PlatformYunwu || strings.EqualFold(apiKey.Group.Platform, "yunwu")) {
+			billingCtx = ContextWithPricingProvider(billingCtx, "openlux")
+		}
+		cost, err = s.billingService.CalculateCostWithLongContextAndContext(billingCtx, billingModel, tokens, multiplier, input.LongContextThreshold, input.LongContextMultiplier)
 		if err != nil {
 			logger.L().With(
 				zap.String("component", "service.gateway"),

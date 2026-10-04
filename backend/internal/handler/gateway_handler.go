@@ -845,7 +845,20 @@ func (h *GatewayHandler) PublicModelsPricing(c *gin.Context) {
 func (h *GatewayHandler) PublicModelsPricingGateway(c gatewayctx.GatewayContext) {
 	var items []service.PublicModelPricingItem
 	if h.gatewayService != nil {
-		items = h.gatewayService.GetPublicModelsPricing(c.Request().Context())
+		ctx := c.Request().Context()
+		if apiKey, ok := middleware2.GetAPIKeyFromGatewayContext(c); ok && apiKey != nil {
+			var groupMultiplier float64
+			if apiKey.Group != nil && apiKey.Group.RateMultiplier > 0 {
+				groupMultiplier = apiKey.Group.RateMultiplier
+			}
+			if apiKey.GroupID != nil && apiKey.UserID > 0 {
+				groupMultiplier = h.gatewayService.GetUserGroupRateMultiplier(ctx, apiKey.UserID, *apiKey.GroupID, groupMultiplier)
+			}
+			if groupMultiplier > 0 {
+				ctx = service.ContextWithRateMultiplier(ctx, groupMultiplier)
+			}
+		}
+		items = h.gatewayService.GetPublicModelsPricing(ctx)
 	}
 	c.WriteJSON(http.StatusOK, gin.H{
 		"code":    0,

@@ -352,9 +352,14 @@ func (s *BillingService) GetModelPricingWithContext(ctx context.Context, model s
 
 	// 1. 优先从 Yunwu / OpenLux 实时动态价格获取
 	if s.yunwuPricing != nil {
-		if ywPricing, ok := s.yunwuPricing.GetModelPricing(ctx, model); ok && ywPricing != nil {
+		if ywPricing, ok := s.yunwuPricing.GetModelPricingAcrossProviders(ctx, model); ok && ywPricing != nil {
 			return s.applyModelSpecificPricingPolicy(model, ywPricing), nil
 		}
+	}
+
+	// 若上下文明确指定了上游定价提供方（例如 yunwu 节点账号），则禁止回退到 LiteLLM 官方价格，避免计费与目录价格产生偏差
+	if PricingProviderFromContext(ctx) != "" {
+		return nil, fmt.Errorf("pricing not found in upstream provider for model: %s", model)
 	}
 
 	// 2. 其次从 LiteLLM 动态价格服务获取
@@ -550,8 +555,12 @@ func (s *BillingService) shouldApplySessionLongContextPricing(tokens UsageTokens
 }
 
 func isOpenAIGPT54Model(model string) bool {
-	normalized := normalizeCodexModel(strings.TrimSpace(strings.ToLower(model)))
-	return normalized == "gpt-5.4"
+	m := strings.ToLower(strings.TrimSpace(model))
+	if strings.Contains(m, "/") {
+		parts := strings.Split(m, "/")
+		m = parts[len(parts)-1]
+	}
+	return m == "gpt-5.4" || strings.HasPrefix(m, "gpt-5.4-")
 }
 
 // CalculateCostWithConfig 使用配置中的默认倍率计算费用
@@ -571,15 +580,20 @@ func (s *BillingService) CalculateCostWithConfig(model string, tokens UsageToken
 // 拆分为：范围内 (200k, 0) + 范围外 (10k, 10k)
 // 范围内正常计费，范围外 × 2 计费
 func (s *BillingService) CalculateCostWithLongContext(model string, tokens UsageTokens, rateMultiplier float64, threshold int, extraMultiplier float64) (*CostBreakdown, error) {
+	return s.CalculateCostWithLongContextAndContext(context.Background(), model, tokens, rateMultiplier, threshold, extraMultiplier)
+}
+
+// CalculateCostWithLongContextAndContext 计算费用，支持请求上下文与长上下文双倍计费
+func (s *BillingService) CalculateCostWithLongContextAndContext(ctx context.Context, model string, tokens UsageTokens, rateMultiplier float64, threshold int, extraMultiplier float64) (*CostBreakdown, error) {
 	// 未启用长上下文计费，直接走正常计费
 	if threshold <= 0 || extraMultiplier <= 1 {
-		return s.CalculateCost(model, tokens, rateMultiplier)
+		return s.CalculateCostWithContext(ctx, model, tokens, rateMultiplier, "")
 	}
 
 	// 计算总输入 token（缓存读取 + 新输入）
 	total := tokens.CacheReadTokens + tokens.InputTokens
 	if total <= threshold {
-		return s.CalculateCost(model, tokens, rateMultiplier)
+		return s.CalculateCostWithContext(ctx, model, tokens, rateMultiplier, "")
 	}
 
 	// 拆分成范围内和范围外
@@ -609,7 +623,7 @@ func (s *BillingService) CalculateCostWithLongContext(model string, tokens Usage
 		CacheCreation5mTokens: tokens.CacheCreation5mTokens,
 		CacheCreation1hTokens: tokens.CacheCreation1hTokens,
 	}
-	inRangeCost, err := s.CalculateCost(model, inRangeTokens, rateMultiplier)
+	inRangeCost, err := s.CalculateCostWithContext(ctx, model, inRangeTokens, rateMultiplier, "")
 	if err != nil {
 		return nil, err
 	}
@@ -619,7 +633,7 @@ func (s *BillingService) CalculateCostWithLongContext(model string, tokens Usage
 		InputTokens:     outRangeInputTokens,
 		CacheReadTokens: outRangeCacheTokens,
 	}
-	outRangeCost, err := s.CalculateCost(model, outRangeTokens, rateMultiplier*extraMultiplier)
+	outRangeCost, err := s.CalculateCostWithContext(ctx, model, outRangeTokens, rateMultiplier*extraMultiplier, "")
 	if err != nil {
 		return inRangeCost, fmt.Errorf("out-range cost: %w", err)
 	}

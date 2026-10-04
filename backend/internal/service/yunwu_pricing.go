@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -103,6 +104,36 @@ type YunwuPricingService struct {
 	aliases         map[string]string
 }
 
+var defaultAliases = map[string]string{
+	"gemini-3-pro":             "gemini-3-pro-preview",
+	"gemini-3.1-pro":           "gemini-3.1-pro-preview",
+	"gemini-3-flash":           "gemini-3-flash-preview",
+	"gemini-1.5-flash":         "gemini-2.5-flash",
+	"gemini-1.5-pro":           "gemini-2.5-pro",
+	"gemini-2.0-flash":         "gemini-2.5-flash",
+	"deepseek-chat":            "deepseek-v3",
+	"deepseek-reasoner":        "deepseek-r1",
+	"deepseek-coder":           "deepseek-v3",
+	"claude-3-5-sonnet-latest": "claude-3-5-sonnet",
+	"claude-3-5-haiku-latest":  "claude-3-5-haiku",
+	"claude-3-opus-latest":     "claude-3-opus",
+	"gpt-4o-latest":            "chatgpt-4o-latest",
+}
+
+var (
+	modelDateSnapshotRegex = regexp.MustCompile(`-\d{8}$`)
+	modelVersionDashRegex  = regexp.MustCompile(`(\d+)-(\d+)`)
+	modelVersionDotRegex   = regexp.MustCompile(`(\d+)\.(\d+)`)
+)
+
+func copyDefaultAliases() map[string]string {
+	m := make(map[string]string, len(defaultAliases))
+	for k, v := range defaultAliases {
+		m[k] = v
+	}
+	return m
+}
+
 // NewYunwuPricingService creates a new Yunwu pricing service
 func NewYunwuPricingService() *YunwuPricingService {
 	url := strings.TrimSpace(os.Getenv("YUNWU_PRICING_URL"))
@@ -127,17 +158,7 @@ func NewYunwuPricingService() *YunwuPricingService {
 		},
 		providerPricing: make(map[string]map[string]*YunwuPricingRawItem),
 		providerUpdated: make(map[string]time.Time),
-		aliases: map[string]string{
-			"gemini-3-pro":      "gemini-3-pro-preview",
-			"gemini-3.1-pro":    "gemini-3.1-pro-preview",
-			"gemini-3-flash":    "gemini-3-flash-preview",
-			"gemini-1.5-flash":  "gemini-2.5-flash",
-			"gemini-1.5-pro":    "gemini-2.5-pro",
-			"gemini-2.0-flash":  "gemini-2.5-flash",
-			"deepseek-chat":     "deepseek-v3",
-			"deepseek-reasoner": "deepseek-r1",
-			"deepseek-coder":    "deepseek-v3",
-		},
+		aliases:         copyDefaultAliases(),
 	}
 }
 
@@ -147,13 +168,12 @@ func NewYunwuPricingServiceWithClient(pricingURL string, client *http.Client) *Y
 		client = &http.Client{Timeout: 10 * time.Second}
 	}
 	url := pricingURL
+	providerURLs := make(map[string]string)
 	if url == "" {
 		url = DefaultYunwuPricingURL
-	}
-
-	providerURLs := make(map[string]string)
-	for k, v := range DefaultProviderPricingURLs {
-		providerURLs[k] = v
+		for k, v := range DefaultProviderPricingURLs {
+			providerURLs[k] = v
+		}
 	}
 	providerURLs["openlux"] = url
 
@@ -163,17 +183,7 @@ func NewYunwuPricingServiceWithClient(pricingURL string, client *http.Client) *Y
 		httpClient:      client,
 		providerPricing: make(map[string]map[string]*YunwuPricingRawItem),
 		providerUpdated: make(map[string]time.Time),
-		aliases: map[string]string{
-			"gemini-3-pro":      "gemini-3-pro-preview",
-			"gemini-3.1-pro":    "gemini-3.1-pro-preview",
-			"gemini-3-flash":    "gemini-3-flash-preview",
-			"gemini-1.5-flash":  "gemini-2.5-flash",
-			"gemini-1.5-pro":    "gemini-2.5-pro",
-			"gemini-2.0-flash":  "gemini-2.5-flash",
-			"deepseek-chat":     "deepseek-v3",
-			"deepseek-reasoner": "deepseek-r1",
-			"deepseek-coder":    "deepseek-v3",
-		},
+		aliases:         copyDefaultAliases(),
 	}
 }
 
@@ -303,6 +313,88 @@ func (s *YunwuPricingService) FetchPricing(ctx context.Context) (map[string]*Yun
 	return s.FetchPricingForProvider(ctx, "openlux")
 }
 
+// ResolveModelCandidates generates prioritized candidate model names for upstream price lookups.
+func (s *YunwuPricingService) ResolveModelCandidates(modelName string) []string {
+	raw := strings.ToLower(strings.TrimSpace(modelName))
+	if raw == "" {
+		return nil
+	}
+
+	seen := make(map[string]bool)
+	var candidates []string
+
+	add := func(name string) {
+		name = strings.ToLower(strings.TrimSpace(name))
+		if name != "" && !seen[name] {
+			seen[name] = true
+			candidates = append(candidates, name)
+		}
+	}
+
+	// 1. Exact raw model
+	add(raw)
+
+	// 2. Strip slash prefixes (e.g. "google/gemini-2.5-flash" -> "gemini-2.5-flash", "models/gemini-1.5-pro" -> "gemini-1.5-pro")
+	if strings.Contains(raw, "/") {
+		parts := strings.Split(raw, "/")
+		add(parts[len(parts)-1])
+	}
+	prefixesToTrim := []string{
+		"models/",
+		"anthropic/", "openai/", "google/", "deepseek/",
+		"moonshot/", "zhipu/", "qwen/", "xai/", "minimax/",
+		"meta/", "mistral/", "bytedance/", "kuaishou/", "other/",
+	}
+	for _, p := range prefixesToTrim {
+		if strings.HasPrefix(raw, p) {
+			add(strings.TrimPrefix(raw, p))
+		}
+	}
+
+	// 3. Date snapshots, underscore replacements & dot/dash version variations
+	initialLen := len(candidates)
+	for i := 0; i < initialLen; i++ {
+		c := candidates[i]
+		if strings.Contains(c, "_") {
+			add(strings.ReplaceAll(c, "_", "-"))
+			add(strings.ReplaceAll(c, "_", "."))
+		}
+		if modelDateSnapshotRegex.MatchString(c) {
+			add(modelDateSnapshotRegex.ReplaceAllString(c, ""))
+		}
+		if modelVersionDashRegex.MatchString(c) {
+			add(modelVersionDashRegex.ReplaceAllString(c, "$1.$2"))
+		}
+		if modelVersionDotRegex.MatchString(c) {
+			add(modelVersionDotRegex.ReplaceAllString(c, "$1-$2"))
+		}
+		add(strings.ReplaceAll(c, "-", "."))
+		add(strings.ReplaceAll(c, ".", "-"))
+	}
+
+	// 4. Aliases
+	aliases := defaultAliases
+	if s != nil && len(s.aliases) > 0 {
+		aliases = s.aliases
+	}
+	aliasLen := len(candidates)
+	for i := 0; i < aliasLen; i++ {
+		c := candidates[i]
+		if target, ok := aliases[c]; ok && target != "" {
+			tClean := strings.ToLower(strings.TrimSpace(target))
+			add(tClean)
+			if modelVersionDashRegex.MatchString(tClean) {
+				add(modelVersionDashRegex.ReplaceAllString(tClean, "$1.$2"))
+			}
+			if modelVersionDotRegex.MatchString(tClean) {
+				add(modelVersionDotRegex.ReplaceAllString(tClean, "$1-$2"))
+			}
+		}
+	}
+
+	return candidates
+}
+
 // GetModelPricingForProvider resolves model pricing for a specific provider.
 func (s *YunwuPricingService) GetModelPricingForProvider(ctx context.Context, provider string, modelName string) (*ModelPricing, bool) {
 	if modelName == "" {
@@ -314,25 +406,16 @@ func (s *YunwuPricingService) GetModelPricingForProvider(ctx context.Context, pr
 		return nil, false
 	}
 
-	normModel := strings.ToLower(strings.TrimSpace(modelName))
-
-	// Check direct match
-	item, ok := prices[normModel]
-	if !ok {
-		// Check configured aliases (e.g. gemini-3-pro -> gemini-3-pro-preview)
-		if target, hasAlias := s.aliases[normModel]; hasAlias {
-			item, ok = prices[strings.ToLower(target)]
-		}
-	}
-	if !ok {
-		// Strip common prefixes like models/
-		if strings.HasPrefix(normModel, "models/") {
-			trimmed := strings.TrimPrefix(normModel, "models/")
-			item, ok = prices[trimmed]
+	candidates := s.ResolveModelCandidates(modelName)
+	var item *YunwuPricingRawItem
+	for _, c := range candidates {
+		if raw, ok := prices[c]; ok && raw != nil {
+			item = raw
+			break
 		}
 	}
 
-	if !ok || item == nil {
+	if item == nil {
 		return nil, false
 	}
 
@@ -375,13 +458,9 @@ func (s *YunwuPricingService) GetModelPricingForProvider(ctx context.Context, pr
 
 // GetModelPricing resolves model pricing according to Yunwu rates.
 // If a provider is specified in context, it resolves pricing strictly for that provider.
-// Otherwise it defaults to OpenLux.
+// Otherwise it searches across all configured providers starting with OpenLux.
 func (s *YunwuPricingService) GetModelPricing(ctx context.Context, modelName string) (*ModelPricing, bool) {
-	prov := PricingProviderFromContext(ctx)
-	if prov == "" {
-		prov = "openlux"
-	}
-	return s.GetModelPricingForProvider(ctx, prov, modelName)
+	return s.GetModelPricingAcrossProviders(ctx, modelName)
 }
 
 // GetModelPricingAcrossProviders resolves model pricing across all known/configured Yunwu providers.

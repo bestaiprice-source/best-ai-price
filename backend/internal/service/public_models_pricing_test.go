@@ -81,10 +81,12 @@ func TestGetPublicModelsPricing_UnpricedWhenNoYunwuUpstream(t *testing.T) {
 
 func helperNewBillingWithYunwuPricing(raw map[string]*YunwuPricingRawItem) *BillingService {
 	yw := NewYunwuPricingService()
-	yw.providerPricing["openlux"] = raw
-	yw.providerUpdated["openlux"] = time.Now()
-	for p := range yw.providerURLs {
-		yw.providerUpdated[p] = time.Now()
+	yw.providerURLs = map[string]string{"openlux": "mock"}
+	yw.providerPricing = map[string]map[string]*YunwuPricingRawItem{
+		"openlux": raw,
+	}
+	yw.providerUpdated = map[string]time.Time{
+		"openlux": time.Now(),
 	}
 	return NewBillingService(nil, nil, yw)
 }
@@ -432,6 +434,97 @@ func TestResolveYunwuRateMultiplier_Fallbacks(t *testing.T) {
 	// 4. Default fallback to 1.0 when nothing configured
 	svc4 := &GatewayService{}
 	assert.Equal(t, 1.0, svc4.ResolveYunwuRateMultiplier(context.Background()))
+
+	// 5. Explicit multiplier in context overrides repository/config
+	ctxWithRate := ContextWithRateMultiplier(context.Background(), 1.55)
+	assert.Equal(t, 1.55, svc1.ResolveYunwuRateMultiplier(ctxWithRate))
+}
+
+func TestVerifyCatalogMatchesBillingExact(t *testing.T) {
+	raw := map[string]*YunwuPricingRawItem{
+		"claude-3-5-sonnet": {ModelRatio: 1.5, CompletionRatio: 5.0, Available: true},
+		"gemini-2.5-flash":  {ModelRatio: 0.15, CompletionRatio: 8.34, Available: true},
+		"gemini-3.5-flash":  {ModelRatio: 0.75, CompletionRatio: 6.0, Available: true},
+		"deepseek-v3":       {ModelRatio: 0.14495, CompletionRatio: 4.0, Available: true},
+		"deepseek-r1":       {ModelRatio: 0.2899, CompletionRatio: 4.0, Available: true},
+		"midjourney":        {ModelPrice: 0.05, Available: true},
+	}
+	billingSvc := helperNewBillingWithYunwuPricing(raw)
+
+	groupRepo := &mockGroupRepoForPricing{
+		activeGroups: []Group{
+			{Name: "yunwu", Platform: PlatformYunwu, RateMultiplier: 1.25},
+		},
+	}
+	svc := &GatewayService{
+		billingService: billingSvc,
+		groupRepo:      groupRepo,
+	}
+
+	ctx := context.Background()
+	items := svc.GetPublicModelsPricing(ctx)
+	require.NotEmpty(t, items)
+
+	for _, item := range items {
+		if item.InputPricePer1M == nil && item.NativePriceUSD == nil {
+			continue
+		}
+
+		if item.InputPricePer1M != nil {
+			// Simulate 10,000 input & output tokens billing request to verify unit token rate parity
+			cost, err := billingSvc.CalculateCostWithContext(ctx, item.CanonicalModelID, UsageTokens{
+				InputTokens:  10_000,
+				OutputTokens: 10_000,
+			}, 1.25, "")
+			require.NoError(t, err, "billing should succeed for %s", item.CanonicalModelID)
+
+			billedInput1M := (cost.InputCost / 10_000.0) * 1_000_000 * 1.25
+			billedOutput1M := (cost.OutputCost / 10_000.0) * 1_000_000 * 1.25
+
+			assert.InDeltaf(t, *item.InputPricePer1M, billedInput1M, 1e-4,
+				"Catalog input price for %s (%f) must exactly match billing deduction (%f)",
+				item.CanonicalModelID, *item.InputPricePer1M, billedInput1M)
+			assert.InDeltaf(t, *item.OutputPricePer1M, billedOutput1M, 1e-4,
+				"Catalog output price for %s (%f) must exactly match billing deduction (%f)",
+				item.CanonicalModelID, *item.OutputPricePer1M, billedOutput1M)
+		}
+
+		if item.NativePriceUSD != nil {
+			cost, err := billingSvc.CalculateCostWithContext(ctx, item.CanonicalModelID, UsageTokens{}, 1.25, "")
+			require.NoError(t, err, "billing should succeed for native price model %s", item.CanonicalModelID)
+			assert.InDeltaf(t, *item.NativePriceUSD, cost.ActualCost, 1e-4,
+				"Catalog native price for %s (%f) must exactly match billing deduction (%f)",
+				item.CanonicalModelID, *item.NativePriceUSD, cost.ActualCost)
+		}
+	}
+
+	// Verify alias and prefix normalization yields identical billing results
+	// 1. Google Gemini
+	costCanonical, err := billingSvc.CalculateCostWithContext(ctx, "google/gemini-2.5-flash", UsageTokens{InputTokens: 1000}, 1.25, "")
+	require.NoError(t, err)
+	costSlug, err := billingSvc.CalculateCostWithContext(ctx, "gemini-2.5-flash", UsageTokens{InputTokens: 1000}, 1.25, "")
+	require.NoError(t, err)
+	costDashed, err := billingSvc.CalculateCostWithContext(ctx, "gemini-2-5-flash", UsageTokens{InputTokens: 1000}, 1.25, "")
+	require.NoError(t, err)
+	assert.Equal(t, costCanonical.ActualCost, costSlug.ActualCost)
+	assert.Equal(t, costCanonical.ActualCost, costDashed.ActualCost)
+
+	// 2. DeepSeek
+	costD3, err := billingSvc.CalculateCostWithContext(ctx, "deepseek/deepseek-v3", UsageTokens{InputTokens: 1000}, 1.25, "")
+	require.NoError(t, err)
+	costChat, err := billingSvc.CalculateCostWithContext(ctx, "deepseek-chat", UsageTokens{InputTokens: 1000}, 1.25, "")
+	require.NoError(t, err)
+	costChatWithVendor, err := billingSvc.CalculateCostWithContext(ctx, "deepseek/deepseek-chat", UsageTokens{InputTokens: 1000}, 1.25, "")
+	require.NoError(t, err)
+	assert.Equal(t, costD3.ActualCost, costChat.ActualCost)
+	assert.Equal(t, costD3.ActualCost, costChatWithVendor.ActualCost)
+
+	// 3. Anthropic with date snapshot
+	costSonnet, err := billingSvc.CalculateCostWithContext(ctx, "anthropic/claude-3-5-sonnet", UsageTokens{InputTokens: 1000}, 1.25, "")
+	require.NoError(t, err)
+	costSonnetSnapshot, err := billingSvc.CalculateCostWithContext(ctx, "claude-3-5-sonnet-20241022", UsageTokens{InputTokens: 1000}, 1.25, "")
+	require.NoError(t, err)
+	assert.Equal(t, costSonnet.ActualCost, costSonnetSnapshot.ActualCost)
 }
 
 
