@@ -231,3 +231,185 @@ func ParseNodeProvider(extra map[string]any) string {
 	}
 	return DefaultProvider
 }
+
+// CanonicalModelAliases maps vendor-prefixed or alias model IDs to canonical base IDs.
+var CanonicalModelAliases = map[string]string{
+	"deepseek/deepseek-chat":               "deepseek-chat",
+	"deepseek/deepseek-reasoner":           "deepseek-reasoner",
+	"deepseek-chat":                        "deepseek-chat",
+	"deepseek-reasoner":                    "deepseek-reasoner",
+	"anthropic/claude-3-7-sonnet":          "claude-3-7-sonnet",
+	"anthropic/claude-3-7-sonnet-20250219": "claude-3-7-sonnet",
+	"anthropic/claude-3.7-sonnet":          "claude-3-7-sonnet",
+	"claude-3.7-sonnet":                    "claude-3-7-sonnet",
+	"anthropic/claude-3-5-sonnet":          "claude-3-5-sonnet",
+	"anthropic/claude-3-5-sonnet-20241022": "claude-3-5-sonnet",
+	"anthropic/claude-3.5-sonnet":          "claude-3-5-sonnet",
+	"claude-3.5-sonnet":                    "claude-3-5-sonnet",
+	"anthropic/claude-3-5-haiku":           "claude-3-5-haiku",
+	"anthropic/claude-3-opus":              "claude-3-opus",
+	"anthropic/claude-3-haiku":             "claude-3-haiku",
+	"openai/gpt-4o":                        "gpt-4o",
+	"openai/gpt-4o-mini":                   "gpt-4o-mini",
+	"openai/o1":                            "o1",
+	"openai/o1-mini":                       "o1-mini",
+	"openai/o3-mini":                       "o3-mini",
+	"openai/chatgpt-4o-latest":             "chatgpt-4o-latest",
+	"google/gemini-2.5-pro":                "gemini-2.5-pro",
+	"google/gemini-2.5-flash":              "gemini-2.5-flash",
+	"google/gemini-2.0-flash":              "gemini-2.0-flash",
+	"google/gemini-1.5-pro":                "gemini-1.5-pro",
+	"google/gemini-1.5-flash":              "gemini-1.5-flash",
+	"google/gemini-3-pro":                  "gemini-3-pro",
+	"google/gemini-3.1-pro":                "gemini-3.1-pro",
+	"google/gemini-3-flash":                "gemini-3-flash",
+	"moonshot/kimi-k1.5":                   "kimi-k1.5",
+}
+
+// DefaultUpstreamModelMapping defines mappings from canonical models to upstream provider models.
+var DefaultUpstreamModelMapping = map[string]string{
+	"deepseek-chat":     "deepseek-v3",
+	"deepseek-reasoner": "deepseek-r1",
+	"gemini-3-pro":      "gemini-3-pro-preview",
+	"gemini-3.1-pro":    "gemini-3.1-pro-preview",
+	"gemini-3-flash":    "gemini-3-flash-preview",
+}
+
+// ProviderUpstreamModelMapping allows provider-specific upstream overrides.
+var ProviderUpstreamModelMapping = map[string]map[string]string{
+	ProviderOpenLux: {
+		"deepseek-chat":     "deepseek-v3",
+		"deepseek-reasoner": "deepseek-r1",
+	},
+	ProviderAPITop: {
+		"deepseek-chat":     "deepseek-v3",
+		"deepseek-reasoner": "deepseek-r1",
+	},
+	ProviderPortdan: {
+		"deepseek-chat":     "deepseek-v3",
+		"deepseek-reasoner": "deepseek-r1",
+	},
+}
+
+// StripVendorPrefix removes standard provider/vendor prefixes such as "anthropic/", "openai/", "google/", "deepseek/", etc.
+func StripVendorPrefix(model string) string {
+	m := strings.TrimSpace(model)
+	if idx := strings.Index(m, "/"); idx != -1 {
+		prefix := strings.ToLower(m[:idx])
+		switch prefix {
+		case "anthropic", "openai", "google", "deepseek", "moonshot", "meta-llama", "qwen", "mistral", "cohere", "minimax", "zhipu":
+			return m[idx+1:]
+		}
+	}
+	return m
+}
+
+// matchWildcardMapping checks if a requested model matches a pattern (e.g. "anthropic/*" -> "*")
+func matchWildcardMapping(pattern, target, model string) (string, bool) {
+	if pattern == model {
+		return target, true
+	}
+	if strings.HasSuffix(pattern, "/*") {
+		prefix := strings.TrimSuffix(pattern, "/*") + "/"
+		if strings.HasPrefix(model, prefix) {
+			suffix := strings.TrimPrefix(model, prefix)
+			if target == "*" {
+				return suffix, true
+			}
+			if strings.HasSuffix(target, "/*") {
+				targetPrefix := strings.TrimSuffix(target, "/*") + "/"
+				return targetPrefix + suffix, true
+			}
+			return target, true
+		}
+	}
+	return "", false
+}
+
+// ParseAccountModelMapping extracts model mapping table from account Extra metadata.
+func ParseAccountModelMapping(extra map[string]any) map[string]string {
+	if extra == nil {
+		return nil
+	}
+	raw, ok := extra["model_mapping"]
+	if !ok || raw == nil {
+		return nil
+	}
+	switch m := raw.(type) {
+	case map[string]string:
+		return m
+	case map[string]any:
+		res := make(map[string]string, len(m))
+		for k, v := range m {
+			if s, ok := v.(string); ok && strings.TrimSpace(s) != "" {
+				res[k] = strings.TrimSpace(s)
+			}
+		}
+		return res
+	}
+	return nil
+}
+
+// ResolveUpstreamModelID resolves a client-requested model ID to the upstream provider's model ID.
+// 1. Checks account-level model_mapping (exact and wildcard)
+// 2. Checks provider-specific upstream mapping
+// 3. Checks default upstream mapping
+// 4. Checks canonical model aliases and strips vendor prefix if needed
+func ResolveUpstreamModelID(provider string, requestedModel string, accountModelMapping map[string]string) string {
+	m := strings.TrimSpace(requestedModel)
+	if m == "" {
+		return ""
+	}
+
+	// 1. Account-level model_mapping (if configured)
+	if len(accountModelMapping) > 0 {
+		// Exact match
+		if target, ok := accountModelMapping[m]; ok && strings.TrimSpace(target) != "" {
+			m = strings.TrimSpace(target)
+		} else {
+			// Wildcard match
+			for pattern, target := range accountModelMapping {
+				if mapped, ok := matchWildcardMapping(pattern, target, m); ok {
+					m = mapped
+					break
+				}
+			}
+		}
+	}
+
+	// 2. Provider-specific upstream mapping
+	prov := CanonicalProvider(provider)
+	if pMap, ok := ProviderUpstreamModelMapping[prov]; ok {
+		if upstream, ok := pMap[m]; ok && upstream != "" {
+			return upstream
+		}
+		if upstream, ok := pMap[strings.ToLower(m)]; ok && upstream != "" {
+			return upstream
+		}
+		// Try stripped vendor prefix
+		stripped := StripVendorPrefix(m)
+		if upstream, ok := pMap[stripped]; ok && upstream != "" {
+			return upstream
+		}
+	}
+
+	// 3. Default upstream mapping
+	if upstream, ok := DefaultUpstreamModelMapping[m]; ok && upstream != "" {
+		return upstream
+	}
+	if upstream, ok := DefaultUpstreamModelMapping[strings.ToLower(m)]; ok && upstream != "" {
+		return upstream
+	}
+	stripped := StripVendorPrefix(m)
+	if upstream, ok := DefaultUpstreamModelMapping[stripped]; ok && upstream != "" {
+		return upstream
+	}
+
+	// 4. Canonical model aliases (or stripped vendor prefix)
+	if canon, ok := CanonicalModelAliases[strings.ToLower(m)]; ok && canon != "" {
+		return canon
+	}
+
+	return stripped
+}
+

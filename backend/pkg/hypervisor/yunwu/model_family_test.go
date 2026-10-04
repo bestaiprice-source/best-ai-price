@@ -171,3 +171,72 @@ func TestParseNodeProvider(t *testing.T) {
 	assert.Equal(t, "https://api.openlux.ai/v1", DefaultBaseURLForProvider("unknown-provider"))
 	assert.Equal(t, "openlux", CanonicalProvider(""))
 }
+
+func TestStripVendorPrefix(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"anthropic/claude-3-7-sonnet", "claude-3-7-sonnet"},
+		{"openai/gpt-4o", "gpt-4o"},
+		{"google/gemini-2.5-pro", "gemini-2.5-pro"},
+		{"deepseek/deepseek-chat", "deepseek-chat"},
+		{"moonshot/kimi-k1.5", "kimi-k1.5"},
+		{"meta-llama/llama-3.3-70b-instruct", "llama-3.3-70b-instruct"},
+		{"qwen/qwen-2.5-72b-instruct", "qwen-2.5-72b-instruct"},
+		{"claude-3-7-sonnet", "claude-3-7-sonnet"},
+		{"custom-vendor/some-model", "custom-vendor/some-model"},
+		{"", ""},
+	}
+	for _, tt := range tests {
+		assert.Equal(t, tt.expected, StripVendorPrefix(tt.input))
+	}
+}
+
+func TestParseAccountModelMapping(t *testing.T) {
+	assert.Nil(t, ParseAccountModelMapping(nil))
+	assert.Nil(t, ParseAccountModelMapping(map[string]any{}))
+
+	// map[string]string
+	m1 := map[string]any{
+		"model_mapping": map[string]string{"anthropic/*": "*", "deepseek-chat": "deepseek-v3"},
+	}
+	parsed1 := ParseAccountModelMapping(m1)
+	assert.Equal(t, "*", parsed1["anthropic/*"])
+	assert.Equal(t, "deepseek-v3", parsed1["deepseek-chat"])
+
+	// map[string]any (e.g. from JSON unmarshaling)
+	m2 := map[string]any{
+		"model_mapping": map[string]any{"claude-custom": "claude-3-7-sonnet"},
+	}
+	parsed2 := ParseAccountModelMapping(m2)
+	assert.Equal(t, "claude-3-7-sonnet", parsed2["claude-custom"])
+}
+
+func TestResolveUpstreamModelID(t *testing.T) {
+	// Canonical aliases & prefix stripping
+	assert.Equal(t, "claude-3-7-sonnet", ResolveUpstreamModelID("openlux", "anthropic/claude-3-7-sonnet", nil))
+	assert.Equal(t, "claude-3-7-sonnet", ResolveUpstreamModelID("openlux", "claude-3.7-sonnet", nil))
+	assert.Equal(t, "claude-3-5-sonnet", ResolveUpstreamModelID("openlux", "anthropic/claude-3.5-sonnet", nil))
+	assert.Equal(t, "gpt-4o", ResolveUpstreamModelID("openlux", "openai/gpt-4o", nil))
+	assert.Equal(t, "gemini-2.5-flash", ResolveUpstreamModelID("openlux", "google/gemini-2.5-flash", nil))
+
+	// Upstream default mappings
+	assert.Equal(t, "deepseek-v3", ResolveUpstreamModelID("openlux", "deepseek/deepseek-chat", nil))
+	assert.Equal(t, "deepseek-v3", ResolveUpstreamModelID("portdan", "deepseek-chat", nil))
+	assert.Equal(t, "deepseek-r1", ResolveUpstreamModelID("api-top", "deepseek/deepseek-reasoner", nil))
+	assert.Equal(t, "deepseek-r1", ResolveUpstreamModelID("openlux", "deepseek-reasoner", nil))
+	assert.Equal(t, "gemini-3-pro-preview", ResolveUpstreamModelID("openlux", "google/gemini-3-pro", nil))
+	assert.Equal(t, "gemini-3-flash-preview", ResolveUpstreamModelID("openlux", "gemini-3-flash", nil))
+
+	// Account-level mapping overrides
+	accMapping := map[string]string{
+		"anthropic/*":      "*",
+		"deepseek-chat":    "custom-deepseek",
+		"google/gemini-pro": "gemini-custom-pro",
+	}
+	assert.Equal(t, "claude-3-7-sonnet", ResolveUpstreamModelID("openlux", "anthropic/claude-3-7-sonnet", accMapping))
+	assert.Equal(t, "custom-deepseek", ResolveUpstreamModelID("openlux", "deepseek-chat", accMapping))
+	assert.Equal(t, "gemini-custom-pro", ResolveUpstreamModelID("openlux", "google/gemini-pro", accMapping))
+}
+

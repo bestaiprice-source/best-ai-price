@@ -558,6 +558,35 @@ func TestYunwuContextCompilationEmptyContext(t *testing.T) {
 	assert.Equal(t, string(payload), string(result))
 }
 
+func TestPrepareNodePayload(t *testing.T) {
+	store := setupTestYunwuStore(t)
+	yh := NewYunwuHypervisor(store, &mockYunwuRuntime{})
+
+	node := &health.ExecutionNode{
+		NodeID:   "node-test-1",
+		Provider: "openlux",
+	}
+
+	// Canonical anthropic model -> stripped
+	payload := []byte(`{"model":"anthropic/claude-3-7-sonnet","messages":[{"role":"user","content":"hi"}]}`)
+	prepared := yh.prepareNodePayload(context.Background(), node, payload)
+	var bodyMap map[string]any
+	require.NoError(t, json.Unmarshal(prepared, &bodyMap))
+	assert.Equal(t, "claude-3-7-sonnet", bodyMap["model"])
+
+	// Canonical deepseek model -> deepseek-v3
+	payloadDS := []byte(`{"model":"deepseek/deepseek-chat","messages":[{"role":"user","content":"hi"}]}`)
+	preparedDS := yh.prepareNodePayload(context.Background(), node, payloadDS)
+	var bodyMapDS map[string]any
+	require.NoError(t, json.Unmarshal(preparedDS, &bodyMapDS))
+	assert.Equal(t, "deepseek-v3", bodyMapDS["model"])
+
+	// Nil node -> unchanged
+	unchanged := yh.prepareNodePayload(context.Background(), nil, payload)
+	assert.Equal(t, string(payload), string(unchanged))
+}
+
+
 func TestCalculateBilledMicroUSDRoundsUp(t *testing.T) {
 	assert.Equal(t, int64(3), CalculateBilledMicroUSD(1, 1, 0.0011, 0.0011))
 	assert.Equal(t, int64(10000), CalculateBilledMicroUSD(1000, 2000, 0.002, 0.004))

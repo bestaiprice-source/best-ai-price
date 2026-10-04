@@ -74,7 +74,7 @@ func (h *OpenAIGatewayHandler) ImagesGateway(c gatewayctx.GatewayContext) {
 		return
 	}
 
-	if apiKey.Group != nil && apiKey.Group.Platform == service.PlatformYunwu {
+	if apiKeyIsYunwu(apiKey) {
 		if h.hypervisorEngine == nil || h.hypervisorEngine.YunwuEngine() == nil {
 			h.errorResponseGateway(c, http.StatusServiceUnavailable, "api_error", "Yunwu hypervisor is not initialized")
 			return

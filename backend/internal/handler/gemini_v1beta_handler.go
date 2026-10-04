@@ -83,7 +83,7 @@ func (h *GatewayHandler) GeminiLiveGateway(c gatewayctx.GatewayContext) {
 		return
 	}
 	apiKey, ok := middleware.GetAPIKeyFromGatewayContext(c)
-	if !ok || apiKey == nil || apiKey.Group == nil || apiKey.Group.Platform != service.PlatformYunwu {
+	if !ok || apiKey == nil || !apiKeyIsYunwu(apiKey) {
 		googleErrorContext(c, http.StatusBadRequest, "A Yunwu group is required for Gemini Live")
 		return
 	}
@@ -167,7 +167,7 @@ func (h *GatewayHandler) GeminiAuthToken(c *gin.Context) {
 
 func (h *GatewayHandler) GeminiAuthTokenGateway(c gatewayctx.GatewayContext) {
 	apiKey, ok := middleware.GetAPIKeyFromGatewayContext(c)
-	if !ok || apiKey == nil || apiKey.Group == nil || apiKey.Group.Platform != service.PlatformYunwu {
+	if !ok || apiKey == nil || !apiKeyIsYunwu(apiKey) {
 		googleErrorContext(c, http.StatusBadRequest, "A Yunwu group is required for Gemini auth tokens")
 		return
 	}
@@ -239,7 +239,7 @@ func (h *GatewayHandler) GeminiV1BetaResource(c *gin.Context) {
 // resources used by batch generation, caching, generated media and File Search.
 func (h *GatewayHandler) GeminiV1BetaResourceGateway(c gatewayctx.GatewayContext) {
 	apiKey, ok := middleware.GetAPIKeyFromGatewayContext(c)
-	if !ok || apiKey == nil || apiKey.Group == nil || apiKey.Group.Platform != service.PlatformYunwu {
+	if !ok || apiKey == nil || !apiKeyIsYunwu(apiKey) {
 		googleErrorContext(c, http.StatusBadRequest, "A Yunwu group is required for this Gemini resource")
 		return
 	}
@@ -295,7 +295,7 @@ func (h *GatewayHandler) GeminiV1BetaResourceGateway(c gatewayctx.GatewayContext
 // Interactions API, including stored/background interactions and SSE output.
 func (h *GatewayHandler) GeminiInteractionGateway(c gatewayctx.GatewayContext) {
 	apiKey, ok := middleware.GetAPIKeyFromGatewayContext(c)
-	if !ok || apiKey == nil || apiKey.Group == nil || apiKey.Group.Platform != service.PlatformYunwu {
+	if !ok || apiKey == nil || !apiKeyIsYunwu(apiKey) {
 		googleErrorContext(c, http.StatusBadRequest, "A Yunwu group is required for Gemini Interactions")
 		return
 	}
@@ -358,7 +358,8 @@ func (h *GatewayHandler) GeminiV1BetaListModelsGateway(transportCtx gatewayctx.G
 	}
 	// 检查平台：优先使用强制平台（/antigravity 路由），否则要求 gemini 分组
 	forcePlatform, hasForcePlatform := middleware.GetForcePlatformFromGatewayContext(transportCtx)
-	if !hasForcePlatform && (apiKey.Group == nil || (apiKey.Group.Platform != service.PlatformGemini && apiKey.Group.Platform != service.PlatformYunwu)) {
+	isYunwu := apiKeyIsYunwu(apiKey)
+	if !hasForcePlatform && !isYunwu && (apiKey.Group == nil || apiKey.Group.Platform != service.PlatformGemini) {
 		googleErrorContext(transportCtx, http.StatusBadRequest, "API key group platform is not gemini or yunwu")
 		return
 	}
@@ -370,7 +371,7 @@ func (h *GatewayHandler) GeminiV1BetaListModelsGateway(transportCtx gatewayctx.G
 		transportCtx.WriteJSON(http.StatusOK, fallback)
 		return
 	}
-	if !hasForcePlatform && apiKey.Group.Platform == service.PlatformYunwu {
+	if !hasForcePlatform && isYunwu {
 		h.forwardYunwuGeminiGET(transportCtx, "/v1beta/models")
 		return
 	}
@@ -431,7 +432,8 @@ func (h *GatewayHandler) GeminiV1BetaGetModelGateway(transportCtx gatewayctx.Gat
 	}
 	// 检查平台：优先使用强制平台（/antigravity 路由），否则要求 gemini 分组
 	forcePlatform, hasForcePlatform := middleware.GetForcePlatformFromGatewayContext(transportCtx)
-	if !hasForcePlatform && (apiKey.Group == nil || (apiKey.Group.Platform != service.PlatformGemini && apiKey.Group.Platform != service.PlatformYunwu)) {
+	isYunwu := apiKeyIsYunwu(apiKey)
+	if !hasForcePlatform && !isYunwu && (apiKey.Group == nil || apiKey.Group.Platform != service.PlatformGemini) {
 		googleErrorContext(transportCtx, http.StatusBadRequest, "API key group platform is not gemini or yunwu")
 		return
 	}
@@ -451,7 +453,7 @@ func (h *GatewayHandler) GeminiV1BetaGetModelGateway(transportCtx gatewayctx.Gat
 		transportCtx.WriteJSON(http.StatusOK, antigravity.FallbackGeminiModel(modelName))
 		return
 	}
-	if !hasForcePlatform && apiKey.Group.Platform == service.PlatformYunwu {
+	if !hasForcePlatform && isYunwu {
 		h.forwardYunwuGeminiGET(transportCtx, "/v1beta/models/"+url.PathEscape(modelName))
 		return
 	}
@@ -520,7 +522,7 @@ func (h *GatewayHandler) GeminiV1BetaOperation(c *gin.Context) {
 
 func (h *GatewayHandler) GeminiV1BetaOperationGateway(c gatewayctx.GatewayContext) {
 	apiKey, ok := middleware.GetAPIKeyFromGatewayContext(c)
-	if !ok || apiKey == nil || apiKey.Group == nil || apiKey.Group.Platform != service.PlatformYunwu {
+	if !ok || apiKey == nil || !apiKeyIsYunwu(apiKey) {
 		googleErrorContext(c, http.StatusBadRequest, "A Yunwu group is required for Gemini media operations")
 		return
 	}
@@ -568,7 +570,7 @@ func (h *GatewayHandler) GeminiV1BetaFile(c *gin.Context) {
 
 func (h *GatewayHandler) GeminiV1BetaFileGateway(c gatewayctx.GatewayContext) {
 	apiKey, ok := middleware.GetAPIKeyFromGatewayContext(c)
-	if !ok || apiKey == nil || apiKey.Group == nil || apiKey.Group.Platform != service.PlatformYunwu {
+	if !ok || apiKey == nil || !apiKeyIsYunwu(apiKey) {
 		googleErrorContext(c, http.StatusBadRequest, "A Yunwu group is required for Gemini Files API")
 		return
 	}
@@ -634,11 +636,12 @@ func (h *GatewayHandler) GeminiV1BetaModelsGateway(transportCtx gatewayctx.Gatew
 	// preserving the native Gemini request/response schema byte-for-byte.
 	useYunwu := false
 	if !middleware.HasForcePlatformContext(transportCtx) {
-		if apiKey.Group == nil || (apiKey.Group.Platform != service.PlatformGemini && apiKey.Group.Platform != service.PlatformYunwu) {
+		isYunwu := apiKeyIsYunwu(apiKey)
+		if !isYunwu && (apiKey.Group == nil || apiKey.Group.Platform != service.PlatformGemini) {
 			googleErrorContext(transportCtx, http.StatusBadRequest, "API key group platform is not gemini or yunwu")
 			return
 		}
-		useYunwu = apiKey.Group.Platform == service.PlatformYunwu
+		useYunwu = isYunwu
 	}
 
 	modelName, action, err := parseGeminiModelAction(strings.TrimPrefix(transportCtx.PathParam("modelAction"), "/"))

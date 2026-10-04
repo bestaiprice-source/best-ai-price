@@ -136,7 +136,14 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 		h.handleHypervisorMessages(c)
 		return
 	}
-	h.MessagesGateway(gatewayctx.FromGin(c))
+	transportCtx := gatewayctx.FromGin(c)
+	if apiKey, ok := middleware2.GetAPIKeyFromGatewayContext(transportCtx); ok && apiKey != nil {
+		if apiKeyIsYunwu(apiKey) {
+			h.handleHypervisorMessages(c)
+			return
+		}
+	}
+	h.MessagesGateway(transportCtx)
 }
 
 func (h *GatewayHandler) handleHypervisorMessages(c *gin.Context) {

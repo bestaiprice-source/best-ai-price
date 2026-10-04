@@ -461,7 +461,10 @@ func (r *AnthropicRuntime) Execute(ctx context.Context, nodeID string, reqPayloa
 		var bodyMap map[string]any
 		if json.Unmarshal(reqPayload, &bodyMap) == nil {
 			modelStr, _ := bodyMap["model"].(string)
-			modelLower := strings.ToLower(modelStr)
+			modelLower := strings.ToLower(strings.TrimSpace(modelStr))
+			if idx := strings.Index(modelLower, "/"); idx != -1 {
+				modelLower = modelLower[idx+1:]
+			}
 			protocol, _ := acc.Extra["yunwu_protocol"].(string)
 			protocol = strings.ToLower(strings.TrimSpace(protocol))
 			if protocol == "openai" || protocol == "responses" || protocol == "gemini" ||

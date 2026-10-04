@@ -425,7 +425,8 @@ func (yh *YunwuHypervisor) HandleRequest(
 			reqPayload = yh.compileAndInjectContext(sess, reqPayload)
 		}
 
-		meta, execErr = yh.rt.Execute(ctx, selectedNode.NodeID, reqPayload, responseWriter)
+		effectivePayload := yh.prepareNodePayload(ctx, selectedNode, reqPayload)
+		meta, execErr = yh.rt.Execute(ctx, selectedNode.NodeID, effectivePayload, responseWriter)
 
 		// 8. If successful, break
 		if execErr == nil {
@@ -1659,3 +1660,49 @@ func toolCallsToString(toolCalls []session.ToolCall) string {
 	}
 	return result
 }
+
+// prepareNodePayload rewrites the model field in the request payload from canonical ID / alias
+// to the upstream model ID appropriate for the selected execution node's provider.
+func (yh *YunwuHypervisor) prepareNodePayload(ctx context.Context, node *health.ExecutionNode, payload []byte) []byte {
+	if node == nil || len(payload) == 0 {
+		return payload
+	}
+	var bodyMap map[string]any
+	if err := json.Unmarshal(payload, &bodyMap); err != nil {
+		return payload
+	}
+	modelVal, ok := bodyMap["model"]
+	if !ok || modelVal == nil {
+		return payload
+	}
+	modelStr, ok := modelVal.(string)
+	if !ok || strings.TrimSpace(modelStr) == "" {
+		return payload
+	}
+
+	var accountMapping map[string]string
+	if yh.store != nil && yh.store.DB() != nil && node.NodeID != "" {
+		if id, parseErr := strconv.ParseInt(node.NodeID, 10, 64); parseErr == nil {
+			if acc, accErr := yh.store.DB().Account.Get(ctx, id); accErr == nil && acc != nil {
+				accountMapping = ParseAccountModelMapping(acc.Extra)
+			}
+		}
+	}
+
+	upstreamModel := ResolveUpstreamModelID(node.Provider, modelStr, accountMapping)
+	if upstreamModel != "" && upstreamModel != modelStr {
+		bodyMap["model"] = upstreamModel
+		if updated, err := json.Marshal(bodyMap); err == nil {
+			slog.Debug("[YunwuHypervisor] Resolved canonical model to upstream model",
+				"node_id", node.NodeID,
+				"provider", node.Provider,
+				"requested_model", modelStr,
+				"upstream_model", upstreamModel,
+			)
+			return updated
+		}
+	}
+
+	return payload
+}
+

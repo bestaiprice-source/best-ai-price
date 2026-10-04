@@ -437,8 +437,7 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 
 	transportCtx := gatewayctx.FromGin(c)
 	if apiKey, ok := middleware2.GetAPIKeyFromGatewayContext(transportCtx); ok && apiKey != nil {
-		isYunwu := apiKey.Group != nil && apiKey.Group.Platform == "yunwu"
-		if isYunwu {
+		if apiKeyIsYunwu(apiKey) {
 			h.handleHypervisorChatCompletions(c)
 			return
 		}

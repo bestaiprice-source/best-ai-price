@@ -113,6 +113,10 @@ func NewProviderPriceManager(store *storage.Storage, decryptor credentials.Ciphe
 			"claude-3-7-sonnet-20250219": "claude-3-7-sonnet",
 			"claude-3-opus-20240229":     "claude-3-opus",
 			"claude-3-haiku-20240307":    "claude-3-haiku",
+			"deepseek-chat":              "deepseek-v3",
+			"deepseek-v3":                "deepseek-chat",
+			"deepseek-reasoner":          "deepseek-r1",
+			"deepseek-r1":                "deepseek-reasoner",
 		},
 	}
 }
@@ -161,6 +165,17 @@ func (ppm *ProviderPriceManager) lookupModelInPrices(prices map[string]ProviderM
 		trimmed := strings.TrimPrefix(norm, "models/")
 		if p, ok := prices[trimmed]; ok && (p.Available || p.InputPricePer1k > 0 || p.OutputPricePer1k > 0) {
 			return p, true
+		}
+	}
+	// Strip vendor prefix (e.g., "anthropic/claude-3-7-sonnet" -> "claude-3-7-sonnet")
+	if stripped := StripVendorPrefix(norm); stripped != norm {
+		if p, ok := prices[stripped]; ok && (p.Available || p.InputPricePer1k > 0 || p.OutputPricePer1k > 0) {
+			return p, true
+		}
+		if target, ok := ppm.aliases[stripped]; ok {
+			if p, ok := prices[strings.ToLower(target)]; ok && (p.Available || p.InputPricePer1k > 0 || p.OutputPricePer1k > 0) {
+				return p, true
+			}
 		}
 	}
 	// Check configured aliases

@@ -17,6 +17,33 @@ func normalizeAPIKeyAllowedModelID(model string) string {
 	return model
 }
 
+func stripModelVendorPrefix(m string) string {
+	m = strings.ToLower(strings.TrimSpace(m))
+	if idx := strings.Index(m, "/"); idx != -1 {
+		prefix := m[:idx]
+		switch prefix {
+		case "anthropic", "openai", "google", "deepseek", "moonshot", "meta-llama", "qwen", "mistral", "cohere", "minimax", "zhipu":
+			return m[idx+1:]
+		}
+	}
+	return m
+}
+
+func apiKeyIsYunwu(apiKey *service.APIKey) bool {
+	if apiKey == nil {
+		return false
+	}
+	if apiKey.Group != nil && (apiKey.Group.Platform == service.PlatformYunwu || strings.EqualFold(apiKey.Group.Name, "yunwu")) {
+		return true
+	}
+	for _, g := range apiKey.Groups {
+		if g != nil && (g.Platform == service.PlatformYunwu || strings.EqualFold(g.Name, "yunwu")) {
+			return true
+		}
+	}
+	return false
+}
+
 func apiKeyAllowsRequestedModel(apiKey *service.APIKey, model string) bool {
 	if apiKey == nil || len(apiKey.AllowedModels) == 0 {
 		return true
@@ -25,8 +52,16 @@ func apiKeyAllowsRequestedModel(apiKey *service.APIKey, model string) bool {
 	if requested == "" {
 		return true
 	}
+	strippedRequested := stripModelVendorPrefix(requested)
 	for _, allowed := range apiKey.AllowedModels {
-		if normalizeAPIKeyAllowedModelID(allowed) == requested {
+		if strings.TrimSpace(allowed) == "*" {
+			return true
+		}
+		normAllowed := normalizeAPIKeyAllowedModelID(allowed)
+		if normAllowed == requested {
+			return true
+		}
+		if strippedRequested != "" && stripModelVendorPrefix(normAllowed) == strippedRequested {
 			return true
 		}
 	}

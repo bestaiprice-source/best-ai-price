@@ -25,7 +25,14 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 		h.handleHypervisorChatCompletions(c)
 		return
 	}
-	h.ChatCompletionsGateway(gatewayctx.FromGin(c))
+	transportCtx := gatewayctx.FromGin(c)
+	if apiKey, ok := middleware2.GetAPIKeyFromGatewayContext(transportCtx); ok && apiKey != nil {
+		if apiKeyIsYunwu(apiKey) {
+			h.handleHypervisorChatCompletions(c)
+			return
+		}
+	}
+	h.ChatCompletionsGateway(transportCtx)
 }
 
 func (h *OpenAIGatewayHandler) ChatCompletionsGateway(c gatewayctx.GatewayContext) {

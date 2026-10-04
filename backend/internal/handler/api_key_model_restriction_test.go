@@ -9,16 +9,65 @@ import (
 )
 
 func TestAPIKeyAllowsRequestedModel(t *testing.T) {
-	apiKey := &service.APIKey{AllowedModels: []string{"gpt-5.4", "gemini-2.5-pro"}}
+	apiKey := &service.APIKey{AllowedModels: []string{"gpt-5.4", "gemini-2.5-pro", "anthropic/claude-3-7-sonnet"}}
 
 	if !apiKeyAllowsRequestedModel(apiKey, "gpt-5.4") {
 		t.Fatalf("expected exact model to be allowed")
 	}
+	if !apiKeyAllowsRequestedModel(apiKey, "openai/gpt-5.4") {
+		t.Fatalf("expected openai/ prefixed model to be allowed")
+	}
 	if !apiKeyAllowsRequestedModel(apiKey, "models/gemini-2.5-pro") {
 		t.Fatalf("expected models/ prefixed gemini model to be allowed")
 	}
+	if !apiKeyAllowsRequestedModel(apiKey, "google/gemini-2.5-pro") {
+		t.Fatalf("expected google/ prefixed gemini model to be allowed")
+	}
+	if !apiKeyAllowsRequestedModel(apiKey, "claude-3-7-sonnet") {
+		t.Fatalf("expected stripped claude model to be allowed when canonical configured")
+	}
 	if apiKeyAllowsRequestedModel(apiKey, "gpt-5.5") {
 		t.Fatalf("expected non-allowlisted model to be rejected")
+	}
+
+	// Wildcard
+	wildcardKey := &service.APIKey{AllowedModels: []string{"*"}}
+	if !apiKeyAllowsRequestedModel(wildcardKey, "any-model") {
+		t.Fatalf("expected wildcard key to allow any model")
+	}
+}
+
+func TestAPIKeyIsYunwu(t *testing.T) {
+	if apiKeyIsYunwu(nil) {
+		t.Fatalf("expected nil apiKey to not be yunwu")
+	}
+
+	keyWithGroup := &service.APIKey{
+		Group: &service.Group{Platform: "yunwu", Name: "Default Yunwu"},
+	}
+	if !apiKeyIsYunwu(keyWithGroup) {
+		t.Fatalf("expected key with yunwu group platform to be yunwu")
+	}
+
+	keyWithMultiGroup := &service.APIKey{
+		Group: &service.Group{Platform: "openai"},
+		Groups: []*service.Group{
+			{Platform: "openai"},
+			{Platform: "yunwu", Name: "BestAIPrice Yunwu"},
+		},
+	}
+	if !apiKeyIsYunwu(keyWithMultiGroup) {
+		t.Fatalf("expected key with yunwu in Groups to be yunwu")
+	}
+
+	nonYunwuKey := &service.APIKey{
+		Group: &service.Group{Platform: "openai"},
+		Groups: []*service.Group{
+			{Platform: "openai"},
+		},
+	}
+	if apiKeyIsYunwu(nonYunwuKey) {
+		t.Fatalf("expected non-yunwu key to not be yunwu")
 	}
 }
 

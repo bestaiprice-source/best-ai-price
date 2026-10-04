@@ -52,6 +52,29 @@ Welcome to **sub2api** and the **AI Session Hypervisor (ASH / Yunwu Engine)** re
     6. `custom`: Arbitrary user-defined upstream provider key and endpoint.
   - `DefaultBaseURLForProvider(provider)` resolves provider-specific default base URLs in backend node management, tests, and balance sync fallback.
   - Admin UI (`EditAccountModal.vue`, `CreateAccountModal.vue`, `GroupsView.vue`) exposes provider dropdown presets with auto-filling Base URLs and model family routing.
+- **Unified Gateway Routing & Canonical Model Resolver (`pkg/hypervisor/yunwu/model_family.go`)**:
+  - Implements the complete BestAIPrice / Sub2API routing scheme:
+    ```text
+    Client → api.bestaiprice.com → auth by BestAIPrice key → model resolver → pricing/balance check → Primary provider → response
+                                                                                     ↘ on provider failure → Backup provider
+    ```
+  - **Single API Key for All Permitted Models**:
+    - A single user API key operates across all permitted models in the `yunwu` group.
+    - Gateway handlers (`gateway_handler.go`, `openai_chat_completions.go`, `openai_gateway_handler.go`, `gemini_v1beta_handler.go`, `openai_images.go`) automatically detect keys associated with the `yunwu` group (checking both `apiKey.Group` and `apiKey.Groups` via `apiKeyIsYunwu(apiKey)`) and route directly through the isolated Hypervisor `YunwuEngine`.
+    - Supports compatible routes and formats: Anthropic `/v1/messages`, OpenAI `/v1/chat/completions`, Codex `/responses`, Gemini `/v1beta/...`, and OpenAI Images `/v1/images/generations`.
+  - **Canonical Model IDs & Upstream Resolution**:
+    - For each public model, stores canonical model IDs and resolves them to provider-specific upstream model IDs (`ResolveUpstreamModelID`).
+    - Strips vendor prefixes (`anthropic/`, `openai/`, `google/`, `deepseek/`, `moonshot/`, `meta-llama/`, `qwen/`).
+    - Resolves canonical provider model aliases:
+      - `deepseek/deepseek-chat` / `deepseek-chat` → `deepseek-v3`
+      - `deepseek/deepseek-reasoner` / `deepseek-reasoner` → `deepseek-r1`
+      - `google/gemini-3-pro` → `gemini-3-pro-preview`
+      - `google/gemini-3.1-pro` → `gemini-3.1-pro-preview`
+      - `google/gemini-3-flash` → `gemini-3-flash-preview`
+    - Per-node custom `model_mapping` support in `account.Extra["model_mapping"]` (supporting both exact match and wildcard mappings like `"anthropic/*": "*"`).
+  - **Dynamic Payload Rewriting (`prepareNodePayload`)**:
+    - Before upstream dispatch, `prepareNodePayload` dynamically rewrites `bodyMap["model"]` to the upstream model ID required by the selected execution node's provider.
+    - If failover occurs to a backup provider, `prepareNodePayload` re-maps the model to the backup provider's specific upstream model ID on retry.
 - **Per-Node Model Family Routing (`pkg/hypervisor/yunwu/model_family.go`)**:
   - Each node can be independently configured in Admin UI to route any subset of five primary model families:
     1. `claude`: Claude models (`claude-3-5-sonnet`, `claude-3-7-sonnet`, `claude-3-opus`, etc., Anthropic messages protocol).
