@@ -605,7 +605,7 @@ const adminNavItems = computed((): NavItem[] => {
     { path: '/admin/users', label: t('nav.users'), icon: UsersIcon, hideInSimpleMode: true },
     { path: '/admin/groups', label: t('nav.groups'), icon: FolderIcon, hideInSimpleMode: true },
     { path: '/admin/channels/pricing', label: 'Channel Pricing', icon: ChannelIcon, hideInSimpleMode: true },
-    { path: '/admin/vendors', label: 'Vendors Pricing', icon: GlobeIcon, hideInSimpleMode: true },
+    { path: '/admin/providers', label: t('nav.providers'), icon: GlobeIcon, hideInSimpleMode: true },
     ...(channelMonitorEnabled.value
       ? [{ path: '/admin/channels/monitor', label: 'Channel Monitor', icon: SignalIcon, hideInSimpleMode: true }]
       : []),

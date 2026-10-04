@@ -355,6 +355,7 @@ export default {
     groups: 'Groups',
     subscriptions: 'Subscriptions',
     accounts: 'Accounts',
+    providers: 'Providers',
     proxies: 'Proxies',
     redeemCodes: 'Redeem Codes',
     ops: 'Ops',
@@ -1997,6 +1998,12 @@ export default {
         },
         tip: 'Tip: Only groups with billing type "Subscription" and status "Active" appear in the group dropdown. If no options are available, create one in Group Management first.'
       }
+    },
+
+    // Providers
+    providers: {
+      title: 'Providers',
+      description: 'Manage external API providers, balances, credentials, and model mappings'
     },
 
     // Accounts

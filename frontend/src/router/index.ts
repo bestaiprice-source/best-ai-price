@@ -331,16 +331,20 @@ const routes: RouteRecordRaw[] = [
 
   // ==================== Admin Routes ====================
   {
-    path: '/admin/vendors',
-    name: 'AdminVendors',
-    component: () => import('@/views/admin/VendorsPricingView.vue'),
+    path: '/admin/providers',
+    name: 'AdminProviders',
+    component: () => import('@/views/admin/ProvidersView.vue'),
     meta: {
       requiresAuth: true,
       requiresAdmin: true,
-      title: 'Vendors Pricing',
-      titleKey: 'admin.vendors.title',
-      descriptionKey: 'admin.vendors.description'
+      title: 'Providers',
+      titleKey: 'admin.providers.title',
+      descriptionKey: 'admin.providers.description'
     }
+  },
+  {
+    path: '/admin/vendors',
+    redirect: '/admin/providers'
   },
   {
     path: '/admin',

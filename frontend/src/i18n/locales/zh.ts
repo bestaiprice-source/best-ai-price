@@ -355,6 +355,7 @@ export default {
     groups: '分组管理',
     subscriptions: '订阅管理',
     accounts: '账号管理',
+    providers: '供应商 / Поставщики',
     proxies: 'IP管理',
     redeemCodes: '兑换码',
     ops: '运维监控',
@@ -2076,6 +2077,12 @@ export default {
         },
         tip: '提示：订阅分组下拉列表中只会显示计费类型为「订阅」且状态为「正常」的分组。如果没有可选项，请先到分组管理中创建。'
       }
+    },
+
+    // Providers
+    providers: {
+      title: '供应商 / Поставщики',
+      description: '管理外部 API 供应商、余额、凭据和模型映射'
     },
 
     // Accounts Management

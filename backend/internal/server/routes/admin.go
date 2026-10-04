@@ -367,6 +367,19 @@ func ExecutableAdminRoutes(h *handler.Handlers) []gatewayctx.RouteDef {
 			gatewayctx.RouteDef{Method: http.MethodGet, Path: "/api/v1/admin/accounts/data/tasks/:task_id", Handler: h.Admin.Account.GetImportTaskGateway, Middleware: []string{"request_logger", "cors", "security_headers", "client_request_id", "admin_auth"}},
 		)
 	}
+	if h.Admin.Provider != nil {
+		out = append(out,
+			gatewayctx.RouteDef{Method: http.MethodGet, Path: "/api/v1/admin/providers", Handler: h.Admin.Provider.ListGateway, Middleware: []string{"request_logger", "cors", "security_headers", "client_request_id", "admin_auth"}},
+			gatewayctx.RouteDef{Method: http.MethodPost, Path: "/api/v1/admin/providers", Handler: h.Admin.Provider.CreateGateway, Middleware: []string{"request_logger", "cors", "security_headers", "client_request_id", "admin_auth"}},
+			gatewayctx.RouteDef{Method: http.MethodGet, Path: "/api/v1/admin/providers/:id", Handler: h.Admin.Provider.GetByIDGateway, Middleware: []string{"request_logger", "cors", "security_headers", "client_request_id", "admin_auth"}},
+			gatewayctx.RouteDef{Method: http.MethodPut, Path: "/api/v1/admin/providers/:id", Handler: h.Admin.Provider.UpdateGateway, Middleware: []string{"request_logger", "cors", "security_headers", "client_request_id", "admin_auth"}},
+			gatewayctx.RouteDef{Method: http.MethodDelete, Path: "/api/v1/admin/providers/:id", Handler: h.Admin.Provider.DeleteGateway, Middleware: []string{"request_logger", "cors", "security_headers", "client_request_id", "admin_auth"}},
+			gatewayctx.RouteDef{Method: http.MethodPost, Path: "/api/v1/admin/providers/:id/sync-balance", Handler: h.Admin.Provider.SyncBalanceGateway, Middleware: []string{"request_logger", "cors", "security_headers", "client_request_id", "admin_auth"}},
+			gatewayctx.RouteDef{Method: http.MethodPost, Path: "/api/v1/admin/providers/:id/test", Handler: h.Admin.Provider.TestConnectionGateway, Middleware: []string{"request_logger", "cors", "security_headers", "client_request_id", "admin_auth"}},
+			gatewayctx.RouteDef{Method: http.MethodPost, Path: "/api/v1/admin/providers/sync-all", Handler: h.Admin.Provider.SyncAllBalancesGateway, Middleware: []string{"request_logger", "cors", "security_headers", "client_request_id", "admin_auth"}},
+			gatewayctx.RouteDef{Method: http.MethodPost, Path: "/api/v1/admin/providers/test", Handler: h.Admin.Provider.TestDraftConnectionGateway, Middleware: []string{"request_logger", "cors", "security_headers", "client_request_id", "admin_auth"}},
+		)
+	}
 	if h.Admin.OAuth != nil {
 		out = append(out,
 			gatewayctx.RouteDef{Method: http.MethodPost, Path: "/api/v1/admin/accounts/generate-auth-url", Handler: h.Admin.OAuth.GenerateAuthURLGateway, Middleware: []string{"request_logger", "cors", "security_headers", "client_request_id", "admin_auth"}},
@@ -485,6 +498,9 @@ func RegisterAdminRoutes(
 		// Вендоры (Vendors)
 		registerVendorRoutes(admin, h)
 
+		// Поставщики (Providers)
+		registerProviderRoutes(admin, h)
+
 		// 用户属性管理
 		registerUserAttributeRoutes(admin, h)
 
@@ -519,6 +535,24 @@ func registerVendorRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	admin.POST("/vendors", h.AdminVendor.AddVendor)
 	admin.POST("/vendors/scrape-by-url", h.AdminVendor.ScrapeVendorByUrl)
 	admin.POST("/vendors/:id/scrape", h.AdminVendor.ScrapeVendor)
+}
+
+func registerProviderRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	if h.Admin == nil || h.Admin.Provider == nil {
+		return
+	}
+	providers := admin.Group("/providers")
+	{
+		providers.GET("", h.Admin.Provider.List)
+		providers.POST("", h.Admin.Provider.Create)
+		providers.GET("/:id", h.Admin.Provider.GetByID)
+		providers.PUT("/:id", h.Admin.Provider.Update)
+		providers.DELETE("/:id", h.Admin.Provider.Delete)
+		providers.POST("/:id/sync-balance", h.Admin.Provider.SyncBalance)
+		providers.POST("/:id/test", h.Admin.Provider.TestConnection)
+		providers.POST("/sync-all", h.Admin.Provider.SyncAllBalances)
+		providers.POST("/test", h.Admin.Provider.TestDraftConnection)
+	}
 }
 
 func registerOpsRoutes(admin *gin.RouterGroup, h *handler.Handlers) {

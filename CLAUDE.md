@@ -208,6 +208,42 @@ Welcome to **sub2api** and the **AI Session Hypervisor (ASH / Yunwu Engine)** re
   - **Payment Webhook Ingress & Resolution Hardening**:
     - `PaymentWebhookHandler` enforces strict order number format validation (`isValidOutTradeNo`) prior to executing database queries or provider candidate lookups. Rejects empty, over-length (>64 chars), or malformed inputs with HTTP 400 immediately.
     - Stripe multi-instance resolution and event parsing extracts `orderId`, `order_id`, `out_trade_no`, `outTradeNo`, `orderNo`, and `client_reference_id` from metadata. If instance resolution fails, returns HTTP 500 (retryable) instead of silently acknowledging with 200 OK. Missing order IDs log explicit warnings before acking to prevent provider retry floods.
+
+### 2.4 Unified AI Providers Section & Architecture (`/admin/providers`)
+- **Concept & Business Goal**:
+  - In the admin panel, the unified section «Поставщики» (Providers) at `/admin/providers` acts as the single pane of glass for all external upstream AI API services where BestAIPrice maintains an account, balance, and credentials (e.g., OpenLux, Portdan, Yuanqiaoyun, API-Top, X-LLM, Custom).
+  - Replaces the obsolete web-scraping `/admin/vendors` view. Backward-compatible router redirects `/admin/vendors` $\to$ `/admin/providers`.
+- **Provider Entity & Schema Alignment**:
+  - Directly maps onto the `Account` table with `platform = "yunwu"`, ensuring seamless participation in the Hypervisor scheduler, failover, balance reconciliation, and runtime metrics without schema migrations.
+  - **Key Attributes**:
+    - `provider_name`: Human-readable provider name (e.g. `OpenLux AI`, `Portdan`, `API-Top`).
+    - `domain`: Base hostname or domain (e.g. `api.openlux.ai`, auto-parsed from `base_url` if omitted).
+    - `base_url`: Upstream API root endpoint (e.g. `https://api.openlux.ai/v1`).
+    - `protocol`: Communication protocol (`openai`, `anthropic`, `gemini`, `responses`).
+    - `api_key` / Credentials: Encrypted at rest using `credentials.Cipher` (AES-256-GCM); masked (`12-***90` / `sk-***`) in all administrative list and detail responses.
+    - `supported_model_families`: Whitelist of supported model families (`claude`, `gpt`, `gemini`, `kimi`, `other`, `deepseek`) persisted in `extra["supported_model_families"]`.
+    - `model_mapping`: Canonical $\leftrightarrow$ Upstream model ID translation map (e.g. `claude-3-7-sonnet` $\to$ `claude-3-7-sonnet-20250219`) stored in `extra["model_mapping"]`.
+    - `balance_usd`: Real-time synced or cached balance in USD.
+    - `balance_source`: Upstream source identifier (e.g. `credit_grants`, `token_allowance`, `sub2api_usage`).
+    - `last_synced_at`: RFC3339 timestamp of last successful balance reconciliation.
+    - `min_balance_usd`: Configurable low-balance threshold (defaults to `$20.00`) stored in `extra["min_balance_usd"]`.
+    - `state`: Computed status badge: `Healthy`, `Degraded`, `Down`, `Invalid key`, `Low balance`, or `Disabled`.
+    - `metrics`: Live operational performance (`latency_ms`, `error_rate`, `requests`, `spend_usd`) aggregated from Redis node runtime (`ash:node:{nodeID}:runtime`).
+    - `status`: Activation toggle (`active` / `disabled`).
+- **Endpoints (`/api/v1/admin/providers`)**:
+  - `GET /api/v1/admin/providers`: Paginated provider list with search, status, and state filters, plus summary KPI metrics (`total_providers`, `active_providers`, `low_balance_providers`, `total_balance_usd`, `total_spend_usd`).
+  - `GET /api/v1/admin/providers/:id`: Provider detail by ID.
+  - `POST /api/v1/admin/providers`: Create new upstream provider with encrypted credentials.
+  - `PUT /api/v1/admin/providers/:id`: Update provider configuration and credentials.
+  - `DELETE /api/v1/admin/providers/:id`: Delete provider node.
+  - `POST /api/v1/admin/providers/:id/sync-balance`: Single provider real-time balance synchronization via `yunwu.StatsWorker`. Triggers Telegram alert if balance drops below `min_balance_usd`.
+  - `POST /api/v1/admin/providers/sync-all`: Cluster-wide parallel batch balance synchronization across all active providers (bounded concurrency: 5).
+  - `POST /api/v1/admin/providers/:id/test`: Live connectivity and latency test against upstream models endpoint.
+  - `POST /api/v1/admin/providers/test-draft`: Test connectivity for unpersisted/draft credentials and endpoints from the creation modal.
+- **Frontend Implementation**:
+  - API Client: `frontend/src/api/admin/providers.ts`.
+  - Main View: `frontend/src/views/admin/ProvidersView.vue` with rich aesthetics, KPI cards, live search, state badges, preset dropdowns, credential masking with show/hide password toggle, and model mapping matrix.
+  - Sidebar: Integrated into `frontend/src/components/layout/AppSidebar.vue` under "Поставщики" (`nav.providers`).
     - `checkCancelRateLimit` in `payment_order_lifecycle.go` fails closed with HTTP 500 on database error rather than bypassing rate limiting.
     - NOWPayments status mapping: `sending`, `confirming`, and `waiting` map to `ProviderStatusPending`. Only `finished` and `confirmed` mark orders as paid.
   - **Deterministic & Idempotent Refund Operations**:

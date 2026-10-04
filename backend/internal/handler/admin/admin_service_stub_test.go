@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/usagestats"
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -190,19 +191,40 @@ func (s *stubAdminService) BatchSetGroupRateMultipliers(_ context.Context, _ int
 }
 
 func (s *stubAdminService) ListAccounts(ctx context.Context, page, pageSize int, platform, accountType, status, search, plan, oauthType, tierID string, groupID int64) ([]service.Account, int64, error) {
-	return s.accounts, int64(len(s.accounts)), nil
+	var filtered []service.Account
+	for _, a := range s.accounts {
+		if platform != "" && !strings.EqualFold(a.Platform, platform) {
+			continue
+		}
+		if status != "" && status != "all" && !strings.EqualFold(a.Status, status) {
+			continue
+		}
+		if search != "" && !strings.Contains(strings.ToLower(a.Name), strings.ToLower(search)) {
+			continue
+		}
+		filtered = append(filtered, a)
+	}
+	return filtered, int64(len(filtered)), nil
 }
 
 func (s *stubAdminService) GetAccount(ctx context.Context, id int64) (*service.Account, error) {
-	account := service.Account{ID: id, Name: "account", Status: service.StatusActive}
-	return &account, nil
+	for i := range s.accounts {
+		if s.accounts[i].ID == id {
+			return &s.accounts[i], nil
+		}
+	}
+	return nil, infraerrors.NotFound("ACCOUNT_NOT_FOUND", "Account not found")
 }
 
 func (s *stubAdminService) GetAccountsByIDs(ctx context.Context, ids []int64) ([]*service.Account, error) {
 	out := make([]*service.Account, 0, len(ids))
 	for _, id := range ids {
-		account := service.Account{ID: id, Name: "account", Status: service.StatusActive}
-		out = append(out, &account)
+		for i := range s.accounts {
+			if s.accounts[i].ID == id {
+				out = append(out, &s.accounts[i])
+				break
+			}
+		}
 	}
 	return out, nil
 }
@@ -214,7 +236,25 @@ func (s *stubAdminService) CreateAccount(ctx context.Context, input *service.Cre
 	if s.createAccountErr != nil {
 		return nil, s.createAccountErr
 	}
-	account := service.Account{ID: 300, Name: input.Name, Status: service.StatusActive}
+	now := time.Now().UTC()
+	priority := input.Priority
+	concurrency := input.Concurrency
+	account := service.Account{
+		ID:          int64(300 + len(s.createdAccounts)),
+		Name:        input.Name,
+		Notes:       input.Notes,
+		Platform:    input.Platform,
+		Type:        input.Type,
+		Credentials: input.Credentials,
+		Extra:       input.Extra,
+		GroupIDs:    input.GroupIDs,
+		Priority:    priority,
+		Concurrency: concurrency,
+		Status:      service.StatusActive,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}
+	s.accounts = append(s.accounts, account)
 	return &account, nil
 }
 
@@ -222,11 +262,37 @@ func (s *stubAdminService) UpdateAccount(ctx context.Context, id int64, input *s
 	if s.updateAccountErr != nil {
 		return nil, s.updateAccountErr
 	}
-	account := service.Account{ID: id, Name: input.Name, Status: service.StatusActive}
-	return &account, nil
+	for i := range s.accounts {
+		if s.accounts[i].ID == id {
+			if input.Name != "" {
+				s.accounts[i].Name = input.Name
+			}
+			if input.Status != "" {
+				s.accounts[i].Status = input.Status
+			}
+			if input.Extra != nil {
+				s.accounts[i].Extra = input.Extra
+			}
+			if input.Credentials != nil {
+				s.accounts[i].Credentials = input.Credentials
+			}
+			if input.GroupIDs != nil {
+				s.accounts[i].GroupIDs = *input.GroupIDs
+			}
+			s.accounts[i].UpdatedAt = time.Now().UTC()
+			return &s.accounts[i], nil
+		}
+	}
+	return nil, infraerrors.NotFound("ACCOUNT_NOT_FOUND", "Account not found")
 }
 
 func (s *stubAdminService) DeleteAccount(ctx context.Context, id int64) error {
+	for i := range s.accounts {
+		if s.accounts[i].ID == id {
+			s.accounts = append(s.accounts[:i], s.accounts[i+1:]...)
+			return nil
+		}
+	}
 	return nil
 }
 
