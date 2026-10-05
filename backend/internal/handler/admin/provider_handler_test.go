@@ -105,6 +105,7 @@ func TestProviderHandler_CRUD(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	client := setupTestEntClient(t)
 	stubAdmin := newStubAdminService()
+	stubAdmin.accounts = nil
 	encryptor := &dummyEncryptor{}
 
 	h := NewProviderHandler(stubAdmin, client, nil, encryptor, nil)
@@ -577,3 +578,143 @@ func TestProviderHandler_EdgeCases(t *testing.T) {
 		require.Equal(t, http.StatusBadRequest, rec.Code)
 	}
 }
+
+func TestProviderHandler_AllExecutionNodesAsProviders(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	client := setupTestEntClient(t)
+	stubAdmin := newStubAdminService()
+	now := time.Now().UTC()
+	stubAdmin.accounts = []service.Account{
+		{
+			ID:       1,
+			Name:     "Anthropic Node",
+			Platform: domain.PlatformAnthropic,
+			Type:     service.AccountTypeAPIKey,
+			Status:   service.StatusActive,
+			Extra: map[string]any{
+				"alert_threshold": 15.0,
+				"balance":         80.0,
+			},
+			Credentials: map[string]any{
+				"api_key": "sk-ant-test-key-12345",
+			},
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
+		{
+			ID:       2,
+			Name:     "OpenAI Node",
+			Platform: domain.PlatformOpenAI,
+			Type:     service.AccountTypeAPIKey,
+			Status:   service.StatusActive,
+			Extra: map[string]any{
+				"cost_threshold": 25.0,
+				"balance_usd":    50.0,
+			},
+			Credentials: map[string]any{
+				"api_key": "sk-proj-test-key-67890",
+			},
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
+		{
+			ID:       3,
+			Name:     "Gemini Node",
+			Platform: domain.PlatformGemini,
+			Type:     service.AccountTypeAPIKey,
+			Status:   service.StatusActive,
+			Extra: map[string]any{
+				"threshold":       10.0,
+				"total_available": 100.0,
+			},
+			Credentials: map[string]any{
+				"token": "AIzaSy-test-gemini-key",
+			},
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
+		{
+			ID:       4,
+			Name:     "Antigravity Node",
+			Platform: domain.PlatformAntigravity,
+			Type:     service.AccountTypeAPIKey,
+			Status:   service.StatusActive,
+			Extra: map[string]any{
+				"limit":       45.0,
+				"balance_usd": 120.0,
+			},
+			Credentials: map[string]any{
+				"access_token": "antigravity-token-xyz",
+			},
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
+	}
+	encryptor := &dummyEncryptor{}
+
+	h := NewProviderHandler(stubAdmin, client, nil, encryptor, nil)
+	r := gin.New()
+	r.GET("/api/v1/admin/providers", h.List)
+	r.GET("/api/v1/admin/providers/:id", h.GetByID)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/providers", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var resp struct {
+		Code int                  `json:"code"`
+		Data ProviderListResponse `json:"data"`
+	}
+	err := json.Unmarshal(rec.Body.Bytes(), &resp)
+	require.NoError(t, err)
+	require.Equal(t, 4, resp.Data.Summary.TotalProviders)
+	require.Equal(t, 4, len(resp.Data.Items))
+
+	// Verify each provider has correct parameters derived from the node
+	foundAnthropic := false
+	foundOpenAI := false
+	foundGemini := false
+	foundAntigravity := false
+
+	for _, item := range resp.Data.Items {
+		switch item.ID {
+		case 1:
+			foundAnthropic = true
+			require.Equal(t, "Anthropic Node", item.ProviderName)
+			require.Equal(t, "anthropic", item.Protocol)
+			require.Equal(t, 15.0, item.MinBalanceUSD)
+			require.Equal(t, 80.0, item.BalanceUSD)
+			require.Equal(t, "https://api.anthropic.com", item.BaseURL)
+			require.Contains(t, item.SupportedModelFamilies, "claude")
+		case 2:
+			foundOpenAI = true
+			require.Equal(t, "OpenAI Node", item.ProviderName)
+			require.Equal(t, "openai", item.Protocol)
+			require.Equal(t, 25.0, item.MinBalanceUSD)
+			require.Equal(t, 50.0, item.BalanceUSD)
+			require.Equal(t, "https://api.openai.com/v1", item.BaseURL)
+			require.Contains(t, item.SupportedModelFamilies, "gpt")
+		case 3:
+			foundGemini = true
+			require.Equal(t, "Gemini Node", item.ProviderName)
+			require.Equal(t, "gemini", item.Protocol)
+			require.Equal(t, 10.0, item.MinBalanceUSD)
+			require.Equal(t, 100.0, item.BalanceUSD)
+			require.Equal(t, "https://generativelanguage.googleapis.com", item.BaseURL)
+			require.Contains(t, item.SupportedModelFamilies, "gemini")
+		case 4:
+			foundAntigravity = true
+			require.Equal(t, "Antigravity Node", item.ProviderName)
+			require.Equal(t, 45.0, item.MinBalanceUSD)
+			require.Equal(t, 120.0, item.BalanceUSD)
+			require.Equal(t, "https://api.antigravity.ai", item.BaseURL)
+		}
+	}
+
+	require.True(t, foundAnthropic)
+	require.True(t, foundOpenAI)
+	require.True(t, foundGemini)
+	require.True(t, foundAntigravity)
+}
+

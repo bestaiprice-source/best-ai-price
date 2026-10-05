@@ -247,9 +247,26 @@ func (h *ProviderHandler) accountToProviderResponse(ctx context.Context, acc *se
 	}
 
 	prov := yunwu.ParseNodeProvider(extra)
+	if prov == "openlux" && acc.Platform != "" && acc.Platform != domain.PlatformYunwu {
+		prov = acc.Platform
+	}
+
 	baseURL, _ := extra["base_url"].(string)
 	if baseURL == "" {
-		baseURL = yunwu.DefaultBaseURLForProvider(prov)
+		switch strings.ToLower(acc.Platform) {
+		case domain.PlatformAnthropic:
+			baseURL = "https://api.anthropic.com"
+		case domain.PlatformOpenAI:
+			baseURL = "https://api.openai.com/v1"
+		case domain.PlatformGemini:
+			baseURL = "https://generativelanguage.googleapis.com"
+		case domain.PlatformAntigravity:
+			baseURL = "https://api.antigravity.ai"
+		case domain.PlatformSora:
+			baseURL = "https://api.openai.com/v1"
+		default:
+			baseURL = yunwu.DefaultBaseURLForProvider(prov)
+		}
 	}
 
 	domainStr, _ := extra["domain"].(string)
@@ -257,12 +274,34 @@ func (h *ProviderHandler) accountToProviderResponse(ctx context.Context, acc *se
 
 	protocol, _ := extra["yunwu_protocol"].(string)
 	if protocol == "" {
-		protocol = "openai"
+		if p, ok := extra["protocol"].(string); ok && p != "" {
+			protocol = p
+		} else {
+			switch strings.ToLower(acc.Platform) {
+			case domain.PlatformAnthropic:
+				protocol = "anthropic"
+			case domain.PlatformGemini:
+				protocol = "gemini"
+			case domain.PlatformOpenAI:
+				protocol = "openai"
+			default:
+				protocol = "openai"
+			}
+		}
 	}
 
 	modelFamilies := yunwu.ParseNodeModelFamilies(extra)
 	if len(modelFamilies) == 0 {
-		modelFamilies = []string{"claude", "gpt"}
+		switch strings.ToLower(acc.Platform) {
+		case domain.PlatformAnthropic:
+			modelFamilies = []string{"claude"}
+		case domain.PlatformOpenAI:
+			modelFamilies = []string{"gpt"}
+		case domain.PlatformGemini:
+			modelFamilies = []string{"gemini"}
+		default:
+			modelFamilies = []string{"claude", "gpt"}
+		}
 	}
 
 	modelMapping := make(map[string]string)
@@ -279,10 +318,22 @@ func (h *ProviderHandler) accountToProviderResponse(ctx context.Context, acc *se
 	minBalanceUSD := 20.0
 	if mb, ok := extra["min_balance_usd"].(float64); ok && mb >= 0 {
 		minBalanceUSD = mb
+	} else if mb, ok := extra["alert_threshold"].(float64); ok && mb >= 0 {
+		minBalanceUSD = mb
+	} else if mb, ok := extra["limit"].(float64); ok && mb >= 0 {
+		minBalanceUSD = mb
+	} else if mb, ok := extra["cost_threshold"].(float64); ok && mb >= 0 {
+		minBalanceUSD = mb
+	} else if mb, ok := extra["threshold"].(float64); ok && mb >= 0 {
+		minBalanceUSD = mb
 	}
 
 	balanceUSD := 0.0
 	if b, ok := extra["balance_usd"].(float64); ok {
+		balanceUSD = b
+	} else if b, ok := extra["balance"].(float64); ok {
+		balanceUSD = b
+	} else if b, ok := extra["total_available"].(float64); ok {
 		balanceUSD = b
 	}
 
@@ -296,17 +347,23 @@ func (h *ProviderHandler) accountToProviderResponse(ctx context.Context, acc *se
 		lastSyncedAt = &syncStr
 	}
 
-	// Pull API key and mask it
+	// Pull API key / token and mask it
 	apiKeyMasked := ""
 	if acc.Credentials != nil {
 		rawKey := ""
-		if k, ok := acc.Credentials["api_key"].(string); ok {
-			rawKey = k
+		for _, keyName := range []string{"api_key", "token", "access_token", "setup_token", "session_key", "refresh_token"} {
+			if k, ok := acc.Credentials[keyName].(string); ok && k != "" {
+				rawKey = k
+				break
+			}
 		}
 		if strings.HasPrefix(rawKey, credentials.EnvelopePrefix) && h.secretEncryptor != nil {
 			if decrypted, err := credentials.DecryptMap(acc.Credentials, h.secretEncryptor); err == nil {
-				if k, ok := decrypted["api_key"].(string); ok {
-					rawKey = k
+				for _, keyName := range []string{"api_key", "token", "access_token", "setup_token", "session_key", "refresh_token"} {
+					if k, ok := decrypted[keyName].(string); ok && k != "" {
+						rawKey = k
+						break
+					}
 				}
 			}
 		}
@@ -410,8 +467,8 @@ func (h *ProviderHandler) ListGateway(c gatewayctx.GatewayContext) {
 	stateFilter := strings.TrimSpace(c.QueryValue("state"))
 	searchQuery := strings.TrimSpace(c.QueryValue("search"))
 
-	// Query accounts using adminService
-	accounts, _, err := h.adminService.ListAccounts(ctx, 1, 1000, domain.PlatformYunwu, "", statusFilter, searchQuery, "", "", "", 0)
+	// Query accounts across all platforms (all execution nodes) using adminService
+	accounts, _, err := h.adminService.ListAccounts(ctx, 1, 1000, "", "", statusFilter, searchQuery, "", "", "", 0)
 	if err != nil {
 		response.ErrorFromContext(gatewayJSONResponder{ctx: c}, err)
 		return
@@ -483,7 +540,7 @@ func (h *ProviderHandler) GetByIDGateway(c gatewayctx.GatewayContext) {
 	}
 
 	acc, err := h.adminService.GetAccount(ctx, id)
-	if err != nil || acc == nil || !strings.EqualFold(acc.Platform, domain.PlatformYunwu) {
+	if err != nil || acc == nil {
 		response.ErrorFromContext(gatewayJSONResponder{ctx: c}, infraerrors.NotFound("PROVIDER_NOT_FOUND", "Provider not found"))
 		return
 	}
@@ -647,7 +704,7 @@ func (h *ProviderHandler) UpdateGateway(c gatewayctx.GatewayContext) {
 	}
 
 	acc, err := h.adminService.GetAccount(ctx, id)
-	if err != nil || acc == nil || !strings.EqualFold(acc.Platform, domain.PlatformYunwu) {
+	if err != nil || acc == nil {
 		response.ErrorFromContext(gatewayJSONResponder{ctx: c}, infraerrors.NotFound("PROVIDER_NOT_FOUND", "Provider not found"))
 		return
 	}
@@ -768,7 +825,7 @@ func (h *ProviderHandler) SyncBalanceGateway(c gatewayctx.GatewayContext) {
 	}
 
 	acc, err := h.adminService.GetAccount(ctx, id)
-	if err != nil || acc == nil || !strings.EqualFold(acc.Platform, domain.PlatformYunwu) {
+	if err != nil || acc == nil {
 		response.ErrorFromContext(gatewayJSONResponder{ctx: c}, infraerrors.NotFound("PROVIDER_NOT_FOUND", "Provider not found"))
 		return
 	}
@@ -784,16 +841,36 @@ func (h *ProviderHandler) SyncBalanceGateway(c gatewayctx.GatewayContext) {
 		return
 	}
 
-	apiKey, _ := decrypted["api_key"].(string)
+	apiKey := ""
+	for _, keyName := range []string{"api_key", "token", "access_token", "setup_token", "session_key", "refresh_token"} {
+		if k, ok := decrypted[keyName].(string); ok && k != "" {
+			apiKey = k
+			break
+		}
+	}
 	if apiKey == "" {
 		response.ErrorFromContext(gatewayJSONResponder{ctx: c}, infraerrors.BadRequest("NO_API_KEY", "Provider has no API key configured"))
 		return
 	}
 
 	prov := yunwu.ParseNodeProvider(acc.Extra)
+	if prov == "openlux" && acc.Platform != "" && acc.Platform != domain.PlatformYunwu {
+		prov = acc.Platform
+	}
 	baseURL, _ := acc.Extra["base_url"].(string)
 	if baseURL == "" {
-		baseURL = yunwu.DefaultBaseURLForProvider(prov)
+		switch strings.ToLower(acc.Platform) {
+		case domain.PlatformAnthropic:
+			baseURL = "https://api.anthropic.com"
+		case domain.PlatformOpenAI:
+			baseURL = "https://api.openai.com/v1"
+		case domain.PlatformGemini:
+			baseURL = "https://generativelanguage.googleapis.com"
+		case domain.PlatformAntigravity:
+			baseURL = "https://api.antigravity.ai"
+		default:
+			baseURL = yunwu.DefaultBaseURLForProvider(prov)
+		}
 	}
 
 	nodeID := strconv.FormatInt(id, 10)
@@ -855,7 +932,7 @@ func (h *ProviderHandler) SyncAllBalancesGateway(c gatewayctx.GatewayContext) {
 		return
 	}
 
-	accounts, _, err := h.adminService.ListAccounts(ctx, 1, 1000, domain.PlatformYunwu, "", "active", "", "", "", "", 0)
+	accounts, _, err := h.adminService.ListAccounts(ctx, 1, 1000, "", "", "active", "", "", "", "", 0)
 	if err != nil {
 		response.ErrorFromContext(gatewayJSONResponder{ctx: c}, err)
 		return
@@ -885,7 +962,13 @@ func (h *ProviderHandler) SyncAllBalancesGateway(c gatewayctx.GatewayContext) {
 				return
 			}
 
-			apiKey, _ := decrypted["api_key"].(string)
+			apiKey := ""
+			for _, keyName := range []string{"api_key", "token", "access_token", "setup_token", "session_key", "refresh_token"} {
+				if k, ok := decrypted[keyName].(string); ok && k != "" {
+					apiKey = k
+					break
+				}
+			}
 			if apiKey == "" {
 				mu.Lock()
 				summary.Failed++
@@ -894,9 +977,23 @@ func (h *ProviderHandler) SyncAllBalancesGateway(c gatewayctx.GatewayContext) {
 			}
 
 			prov := yunwu.ParseNodeProvider(a.Extra)
+			if prov == "openlux" && a.Platform != "" && a.Platform != domain.PlatformYunwu {
+				prov = a.Platform
+			}
 			baseURL, _ := a.Extra["base_url"].(string)
 			if baseURL == "" {
-				baseURL = yunwu.DefaultBaseURLForProvider(prov)
+				switch strings.ToLower(a.Platform) {
+				case domain.PlatformAnthropic:
+					baseURL = "https://api.anthropic.com"
+				case domain.PlatformOpenAI:
+					baseURL = "https://api.openai.com/v1"
+				case domain.PlatformGemini:
+					baseURL = "https://generativelanguage.googleapis.com"
+				case domain.PlatformAntigravity:
+					baseURL = "https://api.antigravity.ai"
+				default:
+					baseURL = yunwu.DefaultBaseURLForProvider(prov)
+				}
 			}
 
 			nodeID := strconv.FormatInt(a.ID, 10)
@@ -959,7 +1056,7 @@ func (h *ProviderHandler) TestConnectionGateway(c gatewayctx.GatewayContext) {
 	}
 
 	acc, err := h.adminService.GetAccount(ctx, id)
-	if err != nil || acc == nil || !strings.EqualFold(acc.Platform, domain.PlatformYunwu) {
+	if err != nil || acc == nil {
 		response.ErrorFromContext(gatewayJSONResponder{ctx: c}, infraerrors.NotFound("PROVIDER_NOT_FOUND", "Provider not found"))
 		return
 	}
@@ -970,10 +1067,27 @@ func (h *ProviderHandler) TestConnectionGateway(c gatewayctx.GatewayContext) {
 		return
 	}
 
-	apiKey, _ := decrypted["api_key"].(string)
+	apiKey := ""
+	for _, keyName := range []string{"api_key", "token", "access_token", "setup_token", "session_key", "refresh_token"} {
+		if k, ok := decrypted[keyName].(string); ok && k != "" {
+			apiKey = k
+			break
+		}
+	}
 	baseURL, _ := acc.Extra["base_url"].(string)
 	if baseURL == "" {
-		baseURL = yunwu.DefaultBaseURLForProvider(yunwu.ParseNodeProvider(acc.Extra))
+		switch strings.ToLower(acc.Platform) {
+		case domain.PlatformAnthropic:
+			baseURL = "https://api.anthropic.com"
+		case domain.PlatformOpenAI:
+			baseURL = "https://api.openai.com/v1"
+		case domain.PlatformGemini:
+			baseURL = "https://generativelanguage.googleapis.com"
+		case domain.PlatformAntigravity:
+			baseURL = "https://api.antigravity.ai"
+		default:
+			baseURL = yunwu.DefaultBaseURLForProvider(yunwu.ParseNodeProvider(acc.Extra))
+		}
 	}
 
 	res := h.performConnectionTest(ctx, baseURL, apiKey)
@@ -1024,6 +1138,7 @@ func (h *ProviderHandler) performConnectionTest(ctx context.Context, baseURL, ap
 
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 	req.Header.Set("x-api-key", apiKey)
+	req.Header.Set("anthropic-version", "2023-06-01")
 	req.Header.Set("Accept", "application/json")
 
 	start := time.Now()

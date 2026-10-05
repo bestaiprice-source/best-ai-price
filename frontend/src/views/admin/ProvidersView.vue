@@ -182,7 +182,25 @@
                   <div class="flex flex-col items-center justify-center gap-2">
                     <Icon name="grid" size="lg" class="text-gray-300 dark:text-gray-600" />
                     <span class="text-base font-medium">Поставщики не найдены</span>
-                    <span class="text-xs">Нажмите «Добавить поставщика», чтобы подключить новый API-сервис</span>
+                    <span class="text-xs text-gray-400 max-w-md text-center">
+                      Список поставщиков формируется автоматически на основе настроенных нод исполнения (Anthropic, OpenAI, Gemini, Antigravity, Yunwu).
+                    </span>
+                    <div class="mt-2 flex items-center gap-3">
+                      <router-link
+                        to="/admin/accounts"
+                        class="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-dark-700 dark:bg-dark-800 dark:text-gray-200 dark:hover:bg-dark-750"
+                      >
+                        <Icon name="server" size="sm" />
+                        Перейти к нодам
+                      </router-link>
+                      <button
+                        v-if="filters.search || filters.status || filters.state"
+                        @click="resetFilters"
+                        class="text-xs text-primary-500 hover:underline"
+                      >
+                        Сбросить фильтры
+                      </button>
+                    </div>
                   </div>
                 </td>
               </tr>
@@ -781,6 +799,14 @@ function handleSearchInput() {
     currentPage.value = 1
     fetchData()
   }, 350)
+}
+
+function resetFilters() {
+  filters.search = ''
+  filters.status = ''
+  filters.state = ''
+  currentPage.value = 1
+  fetchData()
 }
 
 // Model Families

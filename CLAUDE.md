@@ -214,11 +214,14 @@ Welcome to **sub2api** and the **AI Session Hypervisor (ASH / Yunwu Engine)** re
   - In the admin panel, the unified section «Поставщики» (Providers) at `/admin/providers` acts as the single pane of glass for all external upstream AI API services where BestAIPrice maintains an account, balance, and credentials (e.g., OpenLux, Portdan, Yuanqiaoyun, API-Top, X-LLM, Custom).
   - Replaces the obsolete web-scraping `/admin/vendors` view. Backward-compatible router redirects `/admin/vendors` $\to$ `/admin/providers`.
 - **Provider Entity & Schema Alignment**:
-  - Directly maps onto the `Account` table with `platform = "yunwu"`, ensuring seamless participation in the Hypervisor scheduler, failover, balance reconciliation, and runtime metrics without schema migrations.
+  - Automatically discovers and maps all execution nodes in the `Account` table across all platforms (`anthropic`, `openai`, `gemini`, `antigravity`, `sora`, `yunwu`, etc.) as upstream providers without requiring manual duplicate creation.
+  - Seamlessly participates in Hypervisor scheduling, failover, balance reconciliation, and runtime metrics without schema migrations.
+  - **Threshold Auto-Discovery**: Resolves minimum balance threshold from node configuration in order: `min_balance_usd`, `alert_threshold`, `limit`, `cost_threshold`, `threshold` (defaulting to `$20.00`).
+  - **Credential Resolution**: Supports encrypted credentials across standard keys: `api_key`, `token`, `access_token`, `setup_token`, `session_key`, `refresh_token`.
   - **Key Attributes**:
-    - `provider_name`: Human-readable provider name (e.g. `OpenLux AI`, `Portdan`, `API-Top`).
-    - `domain`: Base hostname or domain (e.g. `api.openlux.ai`, auto-parsed from `base_url` if omitted).
-    - `base_url`: Upstream API root endpoint (e.g. `https://api.openlux.ai/v1`).
+    - `provider_name`: Human-readable provider / node name (e.g. `Anthropic Node`, `OpenLux AI`, `Portdan`, `Gemini Flash`).
+    - `domain`: Base hostname or domain (e.g. `api.anthropic.com`, `api.openlux.ai`, auto-parsed from `base_url` if omitted).
+    - `base_url`: Upstream API root endpoint (e.g. `https://api.anthropic.com`, `https://api.openai.com/v1`, `https://api.openlux.ai/v1`).
     - `protocol`: Communication protocol (`openai`, `anthropic`, `gemini`, `responses`).
     - `api_key` / Credentials: Encrypted at rest using `credentials.Cipher` (AES-256-GCM); masked (`12-***90` / `sk-***`) in all administrative list and detail responses.
     - `supported_model_families`: Whitelist of supported model families (`claude`, `gpt`, `gemini`, `kimi`, `other`, `deepseek`) persisted in `extra["supported_model_families"]`.
@@ -226,7 +229,7 @@ Welcome to **sub2api** and the **AI Session Hypervisor (ASH / Yunwu Engine)** re
     - `balance_usd`: Real-time synced or cached balance in USD.
     - `balance_source`: Upstream source identifier (e.g. `credit_grants`, `token_allowance`, `sub2api_usage`).
     - `last_synced_at`: RFC3339 timestamp of last successful balance reconciliation.
-    - `min_balance_usd`: Configurable low-balance threshold (defaults to `$20.00`) stored in `extra["min_balance_usd"]`.
+    - `min_balance_usd`: Configurable low-balance threshold (defaults to `$20.00`) resolved from `extra`.
     - `state`: Computed status badge: `Healthy`, `Degraded`, `Down`, `Invalid key`, `Low balance`, or `Disabled`.
     - `metrics`: Live operational performance (`latency_ms`, `error_rate`, `requests`, `spend_usd`) aggregated from Redis node runtime (`ash:node:{nodeID}:runtime`).
     - `status`: Activation toggle (`active` / `disabled`).
