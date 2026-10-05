@@ -587,45 +587,55 @@ func TestProviderHandler_AllExecutionNodesAsProviders(t *testing.T) {
 	stubAdmin.accounts = []service.Account{
 		{
 			ID:       1,
-			Name:     "Anthropic Node",
-			Platform: domain.PlatformAnthropic,
+			Name:     "OpenLux Node",
+			Platform: domain.PlatformYunwu,
 			Type:     service.AccountTypeAPIKey,
 			Status:   service.StatusActive,
 			Extra: map[string]any{
+				"provider":        "openlux",
 				"alert_threshold": 15.0,
 				"balance":         80.0,
 			},
 			Credentials: map[string]any{
-				"api_key": "sk-ant-test-key-12345",
+				"api_key": "sk-openlux-test-key-12345",
 			},
 			CreatedAt: now,
 			UpdatedAt: now,
 		},
 		{
 			ID:       2,
-			Name:     "OpenAI Node",
-			Platform: domain.PlatformOpenAI,
+			Name:     "Portdan Node",
+			Platform: domain.PlatformYunwu,
 			Type:     service.AccountTypeAPIKey,
 			Status:   service.StatusActive,
 			Extra: map[string]any{
+				"provider":       "portdan",
 				"cost_threshold": 25.0,
 				"balance_usd":    50.0,
 			},
 			Credentials: map[string]any{
-				"api_key": "sk-proj-test-key-67890",
+				"api_key": "sk-portdan-test-key-67890",
 			},
 			CreatedAt: now,
 			UpdatedAt: now,
 		},
 		{
 			ID:       3,
-			Name:     "Gemini Node",
-			Platform: domain.PlatformGemini,
+			Name:     "Yuanqiaoyun Node in Yunwu Group",
+			Platform: "custom",
 			Type:     service.AccountTypeAPIKey,
 			Status:   service.StatusActive,
+			Groups: []*service.Group{
+				{
+					ID:       10,
+					Name:     "yunwu-default",
+					Platform: domain.PlatformYunwu,
+				},
+			},
 			Extra: map[string]any{
 				"threshold":       10.0,
 				"total_available": 100.0,
+				"base_url":        "https://api.yuanqiaoyun.com/v1",
 			},
 			Credentials: map[string]any{
 				"token": "AIzaSy-test-gemini-key",
@@ -634,17 +644,35 @@ func TestProviderHandler_AllExecutionNodesAsProviders(t *testing.T) {
 			UpdatedAt: now,
 		},
 		{
+			// Official direct Anthropic node (not in yunwu group) - MUST BE EXCLUDED
 			ID:       4,
-			Name:     "Antigravity Node",
-			Platform: domain.PlatformAntigravity,
+			Name:     "Official Anthropic OAuth",
+			Platform: domain.PlatformAnthropic,
+			Type:     service.AccountTypeOAuth,
+			Status:   service.StatusActive,
+			Groups: []*service.Group{
+				{
+					ID:       20,
+					Name:     "anthropic-default",
+					Platform: domain.PlatformAnthropic,
+				},
+			},
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
+		{
+			// Official direct OpenAI node (not in yunwu group) - MUST BE EXCLUDED
+			ID:       5,
+			Name:     "Official OpenAI Direct",
+			Platform: domain.PlatformOpenAI,
 			Type:     service.AccountTypeAPIKey,
 			Status:   service.StatusActive,
-			Extra: map[string]any{
-				"limit":       45.0,
-				"balance_usd": 120.0,
-			},
-			Credentials: map[string]any{
-				"access_token": "antigravity-token-xyz",
+			Groups: []*service.Group{
+				{
+					ID:       30,
+					Name:     "openai-default",
+					Platform: domain.PlatformOpenAI,
+				},
 			},
 			CreatedAt: now,
 			UpdatedAt: now,
@@ -668,53 +696,46 @@ func TestProviderHandler_AllExecutionNodesAsProviders(t *testing.T) {
 	}
 	err := json.Unmarshal(rec.Body.Bytes(), &resp)
 	require.NoError(t, err)
-	require.Equal(t, 4, resp.Data.Summary.TotalProviders)
-	require.Equal(t, 4, len(resp.Data.Items))
+	// Only the 3 unofficial yunwu accounts should be returned, NOT the official accounts
+	require.Equal(t, 3, resp.Data.Summary.TotalProviders)
+	require.Equal(t, 3, len(resp.Data.Items))
 
-	// Verify each provider has correct parameters derived from the node
-	foundAnthropic := false
-	foundOpenAI := false
-	foundGemini := false
-	foundAntigravity := false
+	foundOpenLux := false
+	foundPortdan := false
+	foundYuanqiaoyun := false
 
 	for _, item := range resp.Data.Items {
 		switch item.ID {
 		case 1:
-			foundAnthropic = true
-			require.Equal(t, "Anthropic Node", item.ProviderName)
-			require.Equal(t, "anthropic", item.Protocol)
+			foundOpenLux = true
+			require.Equal(t, "OpenLux Node", item.ProviderName)
 			require.Equal(t, 15.0, item.MinBalanceUSD)
 			require.Equal(t, 80.0, item.BalanceUSD)
-			require.Equal(t, "https://api.anthropic.com", item.BaseURL)
-			require.Contains(t, item.SupportedModelFamilies, "claude")
 		case 2:
-			foundOpenAI = true
-			require.Equal(t, "OpenAI Node", item.ProviderName)
-			require.Equal(t, "openai", item.Protocol)
+			foundPortdan = true
+			require.Equal(t, "Portdan Node", item.ProviderName)
 			require.Equal(t, 25.0, item.MinBalanceUSD)
 			require.Equal(t, 50.0, item.BalanceUSD)
-			require.Equal(t, "https://api.openai.com/v1", item.BaseURL)
-			require.Contains(t, item.SupportedModelFamilies, "gpt")
 		case 3:
-			foundGemini = true
-			require.Equal(t, "Gemini Node", item.ProviderName)
-			require.Equal(t, "gemini", item.Protocol)
+			foundYuanqiaoyun = true
+			require.Equal(t, "Yuanqiaoyun Node in Yunwu Group", item.ProviderName)
 			require.Equal(t, 10.0, item.MinBalanceUSD)
 			require.Equal(t, 100.0, item.BalanceUSD)
-			require.Equal(t, "https://generativelanguage.googleapis.com", item.BaseURL)
-			require.Contains(t, item.SupportedModelFamilies, "gemini")
-		case 4:
-			foundAntigravity = true
-			require.Equal(t, "Antigravity Node", item.ProviderName)
-			require.Equal(t, 45.0, item.MinBalanceUSD)
-			require.Equal(t, 120.0, item.BalanceUSD)
-			require.Equal(t, "https://api.antigravity.ai", item.BaseURL)
+		case 4, 5:
+			t.Fatalf("Official node %d should NOT be in providers list", item.ID)
 		}
 	}
 
-	require.True(t, foundAnthropic)
-	require.True(t, foundOpenAI)
-	require.True(t, foundGemini)
-	require.True(t, foundAntigravity)
+	require.True(t, foundOpenLux)
+	require.True(t, foundPortdan)
+	require.True(t, foundYuanqiaoyun)
+
+	// Direct GetByID on official node should return 404
+	{
+		reqOfficial := httptest.NewRequest(http.MethodGet, "/api/v1/admin/providers/4", nil)
+		recOfficial := httptest.NewRecorder()
+		r.ServeHTTP(recOfficial, reqOfficial)
+		require.Equal(t, http.StatusNotFound, recOfficial.Code)
+	}
 }
 

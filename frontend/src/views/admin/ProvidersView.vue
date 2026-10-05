@@ -8,7 +8,7 @@
             Поставщики (AI Providers)
           </h1>
           <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            Автоматический мониторинг поставщиков, балансов и порогов на основе нод исполнения
+            Автоматический мониторинг неофициальных поставщиков группы Yunwu на основе нод исполнения
           </p>
         </div>
         <div class="flex flex-wrap items-center gap-3">
@@ -193,9 +193,9 @@
                 <td colspan="8" class="px-5 py-12 text-center text-gray-500 dark:text-gray-400">
                   <div class="flex flex-col items-center justify-center gap-2">
                     <Icon name="grid" size="lg" class="text-gray-300 dark:text-gray-600" />
-                    <span class="text-base font-medium">Поставщики не найдены</span>
+                    <span class="text-base font-medium">Поставщики группы Yunwu не найдены</span>
                     <span class="text-xs text-gray-400 max-w-md text-center">
-                      Список поставщиков формируется автоматически на основе настроенных нод исполнения (Anthropic, OpenAI, Gemini, Antigravity, Yunwu).
+                      В этом разделе отображаются только сторонние и неофициальные поставщики группы Yunwu (OpenLux, Portdan, Yuanqiaoyun, API-Top, X-LLM и др.). Официальные аккаунты (Claude, OpenAI, Gemini) настраиваются в разделе «Ноды».
                     </span>
                     <div class="mt-2 flex items-center gap-3">
                       <router-link

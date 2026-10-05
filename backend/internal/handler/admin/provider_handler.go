@@ -236,9 +236,35 @@ func determineProviderState(accStatus string, hasError bool, balanceUSD, minBala
 	return "Healthy"
 }
 
+// isUnofficialYunwuAccount returns true if an account is an unofficial upstream provider node
+// (platform is yunwu, bound to a yunwu group, or explicitly configured with an unofficial provider).
+func isUnofficialYunwuAccount(acc *service.Account) bool {
+	if acc == nil {
+		return false
+	}
+	// Direct platform match for yunwu
+	if strings.EqualFold(acc.Platform, domain.PlatformYunwu) {
+		return true
+	}
+	// Bound to a Yunwu group
+	for _, g := range acc.Groups {
+		if g != nil && (strings.EqualFold(g.Platform, domain.PlatformYunwu) || strings.Contains(strings.ToLower(g.Name), domain.PlatformYunwu)) {
+			return true
+		}
+	}
+	// Extra provider field explicitly referencing a recognized unofficial provider
+	if p, ok := acc.Extra["provider"].(string); ok && p != "" {
+		canon := yunwu.CanonicalProvider(p)
+		if canon == yunwu.ProviderOpenLux || canon == yunwu.ProviderPortdan || canon == yunwu.ProviderAPITop || canon == yunwu.ProviderYuanqiaoyun || canon == yunwu.ProviderXLLM {
+			return true
+		}
+	}
+	return false
+}
+
 // accountToProviderResponse transforms a service.Account into a complete ProviderResponse.
 func (h *ProviderHandler) accountToProviderResponse(ctx context.Context, acc *service.Account) *ProviderResponse {
-	if acc == nil {
+	if acc == nil || !isUnofficialYunwuAccount(acc) {
 		return nil
 	}
 
@@ -542,7 +568,7 @@ func (h *ProviderHandler) GetByIDGateway(c gatewayctx.GatewayContext) {
 	}
 
 	acc, err := h.adminService.GetAccount(ctx, id)
-	if err != nil || acc == nil {
+	if err != nil || acc == nil || !isUnofficialYunwuAccount(acc) {
 		response.ErrorFromContext(gatewayJSONResponder{ctx: c}, infraerrors.NotFound("PROVIDER_NOT_FOUND", "Provider not found"))
 		return
 	}
@@ -706,7 +732,7 @@ func (h *ProviderHandler) UpdateGateway(c gatewayctx.GatewayContext) {
 	}
 
 	acc, err := h.adminService.GetAccount(ctx, id)
-	if err != nil || acc == nil {
+	if err != nil || acc == nil || !isUnofficialYunwuAccount(acc) {
 		response.ErrorFromContext(gatewayJSONResponder{ctx: c}, infraerrors.NotFound("PROVIDER_NOT_FOUND", "Provider not found"))
 		return
 	}
@@ -827,7 +853,7 @@ func (h *ProviderHandler) SyncBalanceGateway(c gatewayctx.GatewayContext) {
 	}
 
 	acc, err := h.adminService.GetAccount(ctx, id)
-	if err != nil || acc == nil {
+	if err != nil || acc == nil || !isUnofficialYunwuAccount(acc) {
 		response.ErrorFromContext(gatewayJSONResponder{ctx: c}, infraerrors.NotFound("PROVIDER_NOT_FOUND", "Provider not found"))
 		return
 	}
@@ -939,6 +965,14 @@ func (h *ProviderHandler) SyncAllBalancesGateway(c gatewayctx.GatewayContext) {
 		response.ErrorFromContext(gatewayJSONResponder{ctx: c}, err)
 		return
 	}
+
+	var unofficialAccounts []service.Account
+	for i := range accounts {
+		if isUnofficialYunwuAccount(&accounts[i]) {
+			unofficialAccounts = append(unofficialAccounts, accounts[i])
+		}
+	}
+	accounts = unofficialAccounts
 
 	var mu sync.Mutex
 	summary := BatchSyncSummary{
@@ -1058,7 +1092,7 @@ func (h *ProviderHandler) TestConnectionGateway(c gatewayctx.GatewayContext) {
 	}
 
 	acc, err := h.adminService.GetAccount(ctx, id)
-	if err != nil || acc == nil {
+	if err != nil || acc == nil || !isUnofficialYunwuAccount(acc) {
 		response.ErrorFromContext(gatewayJSONResponder{ctx: c}, infraerrors.NotFound("PROVIDER_NOT_FOUND", "Provider not found"))
 		return
 	}
