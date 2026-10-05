@@ -8,7 +8,7 @@
             Поставщики (AI Providers)
           </h1>
           <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            Управление внешними API-сервисами, ключами, балансами и маршрутизацией запросов
+            Автоматический мониторинг поставщиков, балансов и порогов на основе нод исполнения
           </p>
         </div>
         <div class="flex flex-wrap items-center gap-3">
@@ -20,20 +20,24 @@
             <Icon name="sync" size="sm" :class="{ 'animate-spin': isSyncingAll }" />
             <span>{{ isSyncingAll ? 'Синхронизация...' : 'Синхронизировать все' }}</span>
           </button>
-          <button
-            @click="openCreateModal"
+          <router-link
+            to="/admin/accounts"
             class="inline-flex items-center gap-2 rounded-xl bg-primary-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-all hover:bg-primary-500 hover:shadow-md dark:bg-primary-500 dark:hover:bg-primary-400"
           >
-            <Icon name="plus" size="sm" />
-            <span>Добавить поставщика</span>
-          </button>
+            <Icon name="server" size="sm" />
+            <span>Управление нодами</span>
+          </router-link>
         </div>
       </div>
 
       <!-- KPI Summary Cards -->
       <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <!-- Total Providers -->
-        <div class="relative overflow-hidden rounded-2xl border border-gray-200/80 bg-white/70 p-5 shadow-sm backdrop-blur-sm dark:border-dark-700/80 dark:bg-dark-800/70">
+        <div
+          @click="resetFilters"
+          title="Сбросить фильтры и показать все"
+          class="relative cursor-pointer overflow-hidden rounded-2xl border border-gray-200/80 bg-white/70 p-5 shadow-sm backdrop-blur-sm transition-transform hover:scale-[1.01] dark:border-dark-700/80 dark:bg-dark-800/70"
+        >
           <div class="flex items-center justify-between">
             <span class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Всего поставщиков</span>
             <div class="rounded-xl bg-blue-500/10 p-2.5 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400">
@@ -45,7 +49,11 @@
         </div>
 
         <!-- Active Providers -->
-        <div class="relative overflow-hidden rounded-2xl border border-gray-200/80 bg-white/70 p-5 shadow-sm backdrop-blur-sm dark:border-dark-700/80 dark:bg-dark-800/70">
+        <div
+          @click="filters.status = 'active'; filters.state = ''; fetchData()"
+          title="Фильтр: только активные"
+          class="relative cursor-pointer overflow-hidden rounded-2xl border border-gray-200/80 bg-white/70 p-5 shadow-sm backdrop-blur-sm transition-transform hover:scale-[1.01] dark:border-dark-700/80 dark:bg-dark-800/70"
+        >
           <div class="flex items-center justify-between">
             <span class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Активные</span>
             <div class="rounded-xl bg-emerald-500/10 p-2.5 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400">
@@ -57,8 +65,12 @@
         </div>
 
         <!-- Low Balance Alert -->
-        <div class="relative overflow-hidden rounded-2xl border border-gray-200/80 bg-white/70 p-5 shadow-sm backdrop-blur-sm dark:border-dark-700/80 dark:bg-dark-800/70"
-             :class="{ 'ring-2 ring-red-500/30': summaryStats.low_balance_providers > 0 }">
+        <div
+          @click="filters.state = 'Low balance'; filters.status = ''; fetchData()"
+          title="Фильтр: низкий баланс"
+          class="relative cursor-pointer overflow-hidden rounded-2xl border border-gray-200/80 bg-white/70 p-5 shadow-sm backdrop-blur-sm transition-transform hover:scale-[1.01] dark:border-dark-700/80 dark:bg-dark-800/70"
+          :class="{ 'ring-2 ring-red-500/30': summaryStats.low_balance_providers > 0 }"
+        >
           <div class="flex items-center justify-between">
             <span class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Низкий баланс</span>
             <div :class="[
@@ -903,7 +915,7 @@ async function fetchData() {
       status: filters.status || undefined,
       state: filters.state || undefined
     })
-    providers.value = res.providers || []
+    providers.value = (res.items && res.items.length > 0 ? res.items : res.providers) || []
     totalProviders.value = res.total || 0
     if (res.summary) {
       summaryStats.value = res.summary
@@ -930,23 +942,7 @@ function applyPreset(preset: typeof presets[0]) {
   form.supported_model_families = [...preset.families]
 }
 
-// Create / Edit Modal
-function openCreateModal() {
-  editingProvider.value = null
-  selectedPresetId.value = null
-  showApiKey.value = false
-  draftTestResult.value = null
-  form.provider_name = ''
-  form.domain = ''
-  form.protocol = 'openai'
-  form.base_url = ''
-  form.api_key = ''
-  form.min_balance_usd = 20
-  form.status = 'active'
-  form.supported_model_families = ['claude', 'gpt']
-  mappingRows.value = []
-  showEditModal.value = true
-}
+// Edit Modal
 
 function openEditModal(provider: Provider) {
   editingProvider.value = provider

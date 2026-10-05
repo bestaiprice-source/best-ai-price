@@ -42,7 +42,8 @@ export interface ProviderSummaryStats {
 }
 
 export interface ProviderListResponse {
-  providers: Provider[]
+  items?: Provider[]
+  providers?: Provider[]
   total: number
   page: number
   page_size: number

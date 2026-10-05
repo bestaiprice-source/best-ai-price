@@ -122,11 +122,12 @@ type ProviderResponse struct {
 }
 
 type ProviderListResponse struct {
-	Summary ProviderSummaryStats `json:"summary"`
-	Items   []*ProviderResponse  `json:"items"`
-	Total   int64                `json:"total"`
-	Page    int                  `json:"page"`
-	PageSize int                 `json:"page_size"`
+	Summary   ProviderSummaryStats `json:"summary"`
+	Items     []*ProviderResponse  `json:"items"`
+	Providers []*ProviderResponse  `json:"providers"`
+	Total     int64                `json:"total"`
+	Page      int                  `json:"page"`
+	PageSize  int                  `json:"page_size"`
 }
 
 type CreateProviderRequest struct {
@@ -516,11 +517,12 @@ func (h *ProviderHandler) ListGateway(c gatewayctx.GatewayContext) {
 	paginatedItems := allItems[start:end]
 
 	resp := ProviderListResponse{
-		Summary:  summary,
-		Items:    paginatedItems,
-		Total:    total,
-		Page:     page,
-		PageSize: pageSize,
+		Summary:   summary,
+		Items:     paginatedItems,
+		Providers: paginatedItems,
+		Total:     total,
+		Page:      page,
+		PageSize:  pageSize,
 	}
 
 	response.SuccessContext(gatewayJSONResponder{ctx: c}, resp)
