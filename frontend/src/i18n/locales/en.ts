@@ -356,7 +356,7 @@ export default {
     subscriptions: 'Subscriptions',
     accounts: 'Accounts',
     providers: 'Providers',
-    vendors: 'Price Checker & Margins',
+    vendors: 'Cheaper Alternatives',
     proxies: 'Proxies',
     redeemCodes: 'Redeem Codes',
     ops: 'Ops',

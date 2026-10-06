@@ -22,7 +22,7 @@
             class="inline-flex items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-sm font-medium text-indigo-700 shadow-sm transition-all hover:bg-indigo-100 hover:shadow dark:border-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-300 dark:hover:bg-indigo-900/50"
           >
             <Icon name="lightbulb" size="sm" />
-            <span>Price Checker & Margins</span>
+            <span>Cheaper Alternatives</span>
           </router-link>
           <router-link
             to="/admin/accounts"

@@ -356,7 +356,7 @@ export default {
     subscriptions: '订阅管理',
     accounts: '账号管理',
     providers: '供应商',
-    vendors: '比价与利润率',
+    vendors: '更便宜替代方案',
     proxies: 'IP管理',
     redeemCodes: '兑换码',
     ops: '运维监控',
