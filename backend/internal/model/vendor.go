@@ -66,6 +66,7 @@ func (p *PaymentMethodList) Scan(value interface{}) error {
 // CheaperProviderOpportunity represents an identified cheaper upstream candidate for a model
 type CheaperProviderOpportunity struct {
 	ID                     string    `json:"id" db:"id"`
+	ModelFamily            string    `json:"model_family" db:"model_family"`
 	CanonicalModelID       string    `json:"canonical_model_id" db:"canonical_model_id"`
 	ModelName              string    `json:"model_name" db:"model_name"`
 	CurrentPrimaryProvider string    `json:"current_primary_provider" db:"current_primary_provider"`

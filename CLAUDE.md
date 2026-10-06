@@ -152,12 +152,11 @@ Welcome to **sub2api** and the **AI Session Hypervisor (ASH / Yunwu Engine)** re
     - Frontend: `VendorsPricingView.vue` provides tabbed navigation between "Providers & Pricing", "Gross Margin Analytics", and "Cheaper Alternatives" with KPI summary cards, breakdown tables, margin health badges, and modal price history views.
   - **Cheaper Provider Checker (`ash_cheaper_provider_opportunities`, `CheaperProviderService`)**:
     - Uses candidate pricing database from `https://bestaiprice.com/gateway/data/providers.json`.
-    - Compares active Primary/Backup routes (`Group.ModelRouting` & `ash_vendor_models`) with candidate providers for matching canonical models.
-    - Compares strictly normalized pricing with identical billing units ($/1M tokens, or flat per-request).
-    - When a candidate is cheaper: records opportunity in `ash_cheaper_provider_opportunities`, generates audit event `CheaperProviderDiscovered` in `ash_events`, and dispatches Telegram notification with deduplication.
-    - Notification payload: model, current provider & price, new candidate & price, difference in %, and link to provider card on BestAIPrice (`https://bestaiprice.com/provider/<candidate_domain>`).
-    - Safety: Candidates are never connected automatically. Administrator manually inspects, tests, and promotes candidate as `primary` or `backup` via button in admin UI or dismisses it.
-    - Frontend: Dedicated "💡 Cheaper Alternatives" tab in `VendorsPricingView.vue` with manual scan trigger, status filter, provider card link, and promotion modal.
+    - Compares active routes and synced vendors (`ash_vendor_models`) with candidate providers for matching canonical models.
+    - Compares strictly normalized pricing with identical billing units ($/1M tokens, or flat per-request), filtering out any candidates that are already configured as current providers.
+    - Classifies every model opportunity into its respective **Model Family** (`claude`, `gpt`, `gemini`, `kimi`, `other`) stored in `ash_cheaper_provider_opportunities.model_family`.
+    - Telegram notifications are grouped by **Model Family** and candidate provider (matching routing architecture) instead of spamming per-model alerts. The alert presents family-level average savings, current active providers, candidate provider & domain, breakdown of models in the family with comparisons, and a direct link to the provider card on BestAIPrice.
+    - Frontend: Dedicated "💡 Cheaper Alternatives" tab in `VendorsPricingView.vue` features Model Family filtering tabs (`All`, `Claude`, `GPT`, `Gemini`, `Kimi`, `Other`) and organizes opportunities grouped by Model Family with family badges and average savings stats. Direct action buttons have been removed since new upstream candidates require manual onboarding, balance top-up, and verification.
   - **Intelligent Connection Testing for Unofficial (Yunwu) Nodes (`AccountTestService`)**:
     - `TestAccountConnection` routes `yunwu` nodes based on their configured `supported_model_families`: if a node supports `gpt` or `gemini` (and not `claude`), tests are executed via OpenAI `/v1/chat/completions` instead of Anthropic `/v1/messages`.
     - If a Claude test request returns HTTP 403 with `This group does not allow /v1/messages dispatch`, it automatically falls back to an OpenAI test (`/v1/chat/completions`) and avoids erroneously setting the node status to `error`.

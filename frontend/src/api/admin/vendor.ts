@@ -94,6 +94,7 @@ export async function getGrossMarginAnalytics(startDate?: string, endDate?: stri
 
 export interface CheaperProviderOpportunity {
   id: string;
+  model_family?: string;
   canonical_model_id: string;
   model_name: string;
   current_primary_provider: string;

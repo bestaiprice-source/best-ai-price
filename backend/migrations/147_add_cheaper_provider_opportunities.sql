@@ -3,6 +3,7 @@
 
 CREATE TABLE IF NOT EXISTS ash_cheaper_provider_opportunities (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    model_family TEXT NOT NULL DEFAULT 'other',
     canonical_model_id TEXT NOT NULL,
     model_name TEXT NOT NULL,
     current_primary_provider TEXT NOT NULL,
@@ -26,4 +27,6 @@ CREATE TABLE IF NOT EXISTS ash_cheaper_provider_opportunities (
 );
 
 CREATE INDEX IF NOT EXISTS idx_ash_cheaper_opportunities_status ON ash_cheaper_provider_opportunities(status);
+CREATE INDEX IF NOT EXISTS idx_ash_cheaper_opportunities_family ON ash_cheaper_provider_opportunities(model_family);
 CREATE INDEX IF NOT EXISTS idx_ash_cheaper_opportunities_model ON ash_cheaper_provider_opportunities(canonical_model_id);
+

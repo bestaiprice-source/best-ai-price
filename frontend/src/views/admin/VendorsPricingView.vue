@@ -202,109 +202,127 @@
         <div class="opportunities-header glass-panel">
           <div class="opp-info">
             <h3>Discovered Cheaper Providers (BestAIPrice Candidates)</h3>
-            <p>Regularly compares active Primary & Backup routes against BestAIPrice database. Candidates are never auto-switched: register credentials and test before assigning.</p>
+            <p>Regularly compares active Primary & Backup routes against BestAIPrice database grouped by Model Family. Cheaper candidate providers are identified relative to your currently active providers.</p>
           </div>
-          <div class="filter-group">
-            <label>Status Filter:</label>
-            <select v-model="opportunityStatusFilter" @change="loadOpportunities" class="filter-select">
-              <option value="">All Statuses</option>
-              <option value="detected">Detected (Pending)</option>
-              <option value="promoted_primary">Promoted to Primary</option>
-              <option value="promoted_backup">Promoted to Backup</option>
-              <option value="dismissed">Dismissed</option>
-            </select>
+          <div class="filter-controls">
+            <div class="filter-group">
+              <label>Status Filter:</label>
+              <select v-model="opportunityStatusFilter" @change="loadOpportunities" class="filter-select">
+                <option value="">All Statuses</option>
+                <option value="detected">Detected (Pending)</option>
+                <option value="promoted_primary">Promoted to Primary</option>
+                <option value="promoted_backup">Promoted to Backup</option>
+                <option value="dismissed">Dismissed</option>
+              </select>
+            </div>
           </div>
         </div>
 
-        <div class="table-container glass-panel mt-4">
-          <table class="vendors-table">
-            <thead>
-              <tr>
-                <th>Model</th>
-                <th>Current Route & Price</th>
-                <th>BestAIPrice Candidate</th>
-                <th>Candidate Price</th>
-                <th>Savings</th>
-                <th>BestAIPrice Card</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-if="loadingOpportunities">
-                <td colspan="8" class="text-center text-muted py-4">Loading opportunities...</td>
-              </tr>
-              <tr v-else-if="opportunities.length === 0">
-                <td colspan="8" class="text-center text-muted py-4">No cheaper opportunities detected for current models. Click "Check BestAIPrice Now" to scan.</td>
-              </tr>
-              <tr v-for="opp in opportunities" :key="opp.id">
-                <td>
-                  <div class="fw-bold">{{ opp.model_name }}</div>
-                  <div class="sub-text text-muted">{{ opp.canonical_model_id }}</div>
-                </td>
-                <td>
-                  <div><span class="route-badge primary">Primary:</span> {{ opp.current_primary_provider }}</div>
-                  <div class="price-val">${{ opp.current_primary_price.toFixed(4) }} / 1M</div>
-                  <div v-if="opp.current_backup_provider" class="mt-1">
-                    <span class="route-badge backup">Backup:</span> {{ opp.current_backup_provider }}
-                    <span class="price-val text-muted">${{ (opp.current_backup_price || 0).toFixed(4) }} / 1M</span>
-                  </div>
-                </td>
-                <td>
-                  <div class="fw-bold text-accent">{{ opp.candidate_provider }}</div>
-                  <div class="sub-text text-muted">{{ opp.candidate_domain }}</div>
-                </td>
-                <td>
-                  <div class="price-val text-success">${{ opp.candidate_price.toFixed(4) }} / 1M</div>
-                  <div v-if="opp.candidate_input_price != null" class="sub-text text-muted">
-                    In: ${{ opp.candidate_input_price.toFixed(3) }} / Out: ${{ (opp.candidate_output_price || 0).toFixed(3) }}
-                  </div>
-                </td>
-                <td>
-                  <span class="savings-badge">
-                    -{{ opp.diff_percent.toFixed(1) }}%
-                  </span>
-                </td>
-                <td>
-                  <a v-if="opp.provider_card_url" :href="opp.provider_card_url" target="_blank" class="card-link">
-                    <span>Card</span> <span class="ext-icon">↗</span>
-                  </a>
-                  <span v-else class="text-muted">—</span>
-                </td>
-                <td>
-                  <span class="status-badge" :class="getStatusBadgeClass(opp.status)">
-                    {{ formatOpportunityStatus(opp.status) }}
-                  </span>
-                </td>
-                <td>
-                  <div class="action-buttons">
-                    <button 
-                      class="action-btn promote-btn" 
-                      @click="handlePromoteOpportunity(opp, 'primary')"
-                      :disabled="actionLoadingId === opp.id"
-                      title="Assign as Primary Route">
-                      Set Primary
-                    </button>
-                    <button 
-                      class="action-btn backup-btn" 
-                      @click="handlePromoteOpportunity(opp, 'backup')"
-                      :disabled="actionLoadingId === opp.id"
-                      title="Assign as Backup Route">
-                      Set Backup
-                    </button>
-                    <button 
-                      v-if="opp.status !== 'dismissed'"
-                      class="action-btn dismiss-btn" 
-                      @click="handleDismissOpportunity(opp)"
-                      :disabled="actionLoadingId === opp.id"
-                      title="Dismiss">
-                      ✕
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+        <!-- Family Filter Tabs -->
+        <div class="family-filter-bar mt-4">
+          <div class="family-tabs">
+            <button
+              v-for="fam in familyFilterTabs"
+              :key="fam.id"
+              class="family-tab-btn"
+              :class="{ active: selectedFamilyFilter === fam.id }"
+              @click="selectedFamilyFilter = fam.id"
+            >
+              <span class="family-name">{{ fam.name }}</span>
+              <span class="family-count-badge" :class="'badge-' + fam.id">{{ fam.count }}</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Opportunities Content -->
+        <div v-if="loadingOpportunities" class="table-container glass-panel mt-4 text-center text-muted py-5">
+          Loading opportunities...
+        </div>
+        <div v-else-if="opportunities.length === 0" class="table-container glass-panel mt-4 text-center text-muted py-5">
+          No cheaper opportunities detected for current models. Click "Check BestAIPrice Now" to scan.
+        </div>
+        <div v-else-if="displayedFamilyGroups.length === 0" class="table-container glass-panel mt-4 text-center text-muted py-5">
+          No cheaper opportunities detected for the selected family.
+        </div>
+        <div v-else class="family-groups-container mt-4">
+          <div 
+            v-for="group in displayedFamilyGroups" 
+            :key="group.familyId" 
+            class="family-group-panel glass-panel mb-4"
+          >
+            <div class="family-group-header">
+              <div class="family-title-wrap">
+                <span class="family-pill" :class="'family-' + group.familyId">
+                  {{ group.familyName }}
+                </span>
+                <span class="family-models-count">{{ group.items.length }} alternatives</span>
+              </div>
+              <div class="family-savings-summary">
+                <span class="savings-label">Avg Savings:</span>
+                <span class="savings-badge">-{{ group.avgSavings.toFixed(1) }}%</span>
+              </div>
+            </div>
+
+            <div class="table-responsive">
+              <table class="vendors-table">
+                <thead>
+                  <tr>
+                    <th>Model</th>
+                    <th>Current Route & Price</th>
+                    <th>BestAIPrice Candidate</th>
+                    <th>Candidate Price</th>
+                    <th>Savings</th>
+                    <th>BestAIPrice Card</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="opp in group.items" :key="opp.id">
+                    <td>
+                      <div class="model-cell">
+                        <div class="fw-bold">{{ opp.model_name }}</div>
+                        <div class="sub-text text-muted">{{ opp.canonical_model_id }}</div>
+                      </div>
+                    </td>
+                    <td>
+                      <div><span class="route-badge primary">Primary:</span> {{ opp.current_primary_provider }}</div>
+                      <div class="price-val">${{ opp.current_primary_price.toFixed(4) }} / 1M</div>
+                      <div v-if="opp.current_backup_provider" class="mt-1">
+                        <span class="route-badge backup">Backup:</span> {{ opp.current_backup_provider }}
+                        <span class="price-val text-muted">${{ (opp.current_backup_price || 0).toFixed(4) }} / 1M</span>
+                      </div>
+                    </td>
+                    <td>
+                      <div class="fw-bold text-accent">{{ opp.candidate_provider }}</div>
+                      <div class="sub-text text-muted">{{ opp.candidate_domain }}</div>
+                    </td>
+                    <td>
+                      <div class="price-val text-success">${{ opp.candidate_price.toFixed(4) }} / 1M</div>
+                      <div v-if="opp.candidate_input_price != null" class="sub-text text-muted">
+                        In: ${{ opp.candidate_input_price.toFixed(3) }} / Out: ${{ (opp.candidate_output_price || 0).toFixed(3) }}
+                      </div>
+                    </td>
+                    <td>
+                      <span class="savings-badge">
+                        -{{ opp.diff_percent.toFixed(1) }}%
+                      </span>
+                    </td>
+                    <td>
+                      <a v-if="opp.provider_card_url" :href="opp.provider_card_url" target="_blank" class="card-link">
+                        <span>Card</span> <span class="ext-icon">↗</span>
+                      </a>
+                      <span v-else class="text-muted">—</span>
+                    </td>
+                    <td>
+                      <span class="status-badge" :class="getStatusBadgeClass(opp.status)">
+                        {{ formatOpportunityStatus(opp.status) }}
+                      </span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -404,8 +422,6 @@ import {
   getGrossMarginAnalytics,
   getProviderOpportunities,
   checkProviderOpportunities,
-  promoteProviderOpportunity,
-  dismissProviderOpportunity,
   Vendor, 
   VendorPriceHistoryItem, 
   GrossMarginAnalytics,
@@ -436,7 +452,101 @@ const opportunities = ref<CheaperProviderOpportunity[]>([]);
 const loadingOpportunities = ref(false);
 const checkingOpportunities = ref(false);
 const opportunityStatusFilter = ref('detected');
-const actionLoadingId = ref<string | null>(null);
+const selectedFamilyFilter = ref<string>('all');
+
+const MODEL_FAMILIES = [
+  { id: 'all', name: 'All Families' },
+  { id: 'claude', name: 'Claude' },
+  { id: 'gpt', name: 'GPT' },
+  { id: 'gemini', name: 'Gemini' },
+  { id: 'kimi', name: 'Kimi' },
+  { id: 'other', name: 'Other' },
+];
+
+const getOpportunityFamily = (opp: CheaperProviderOpportunity): string => {
+  if (opp.model_family) {
+    return opp.model_family.toLowerCase();
+  }
+  const m = (opp.canonical_model_id || opp.model_name || '').toLowerCase();
+  if (m.includes('claude') || m.includes('anthropic')) return 'claude';
+  if (m.includes('gpt') || m.includes('openai') || m.startsWith('o1') || m.startsWith('o3')) return 'gpt';
+  if (m.includes('gemini') || m.includes('google')) return 'gemini';
+  if (m.includes('kimi') || m.includes('moonshot')) return 'kimi';
+  return 'other';
+};
+
+const formatFamilyTitle = (familyId: string): string => {
+  switch (familyId.toLowerCase()) {
+    case 'claude': return 'Claude (Anthropic)';
+    case 'gpt': return 'GPT (OpenAI)';
+    case 'gemini': return 'Gemini (Google)';
+    case 'kimi': return 'Kimi (Moonshot)';
+    default: return 'Other Models';
+  }
+};
+
+const familyFilterTabs = computed(() => {
+  const counts: Record<string, number> = {
+    all: opportunities.value.length,
+    claude: 0,
+    gpt: 0,
+    gemini: 0,
+    kimi: 0,
+    other: 0,
+  };
+  for (const opp of opportunities.value) {
+    const fam = getOpportunityFamily(opp);
+    if (counts[fam] !== undefined) {
+      counts[fam]++;
+    } else {
+      counts.other++;
+    }
+  }
+  return MODEL_FAMILIES.map(f => ({
+    id: f.id,
+    name: f.name,
+    count: counts[f.id] || 0,
+  }));
+});
+
+interface FamilyOpportunityGroup {
+  familyId: string;
+  familyName: string;
+  items: CheaperProviderOpportunity[];
+  avgSavings: number;
+}
+
+const displayedFamilyGroups = computed<FamilyOpportunityGroup[]>(() => {
+  const familyOrder = ['claude', 'gpt', 'gemini', 'kimi', 'other'];
+  const grouped: Record<string, CheaperProviderOpportunity[]> = {};
+
+  for (const opp of opportunities.value) {
+    const fam = getOpportunityFamily(opp);
+    if (!grouped[fam]) grouped[fam] = [];
+    grouped[fam].push(opp);
+  }
+
+  const result: FamilyOpportunityGroup[] = [];
+  const familiesToInclude = selectedFamilyFilter.value === 'all'
+    ? familyOrder
+    : [selectedFamilyFilter.value];
+
+  for (const famId of familiesToInclude) {
+    const items = grouped[famId] || [];
+    if (items.length > 0) {
+      const totalSavings = items.reduce((acc, curr) => acc + curr.diff_percent, 0);
+      result.push({
+        familyId: famId,
+        familyName: formatFamilyTitle(famId),
+        items,
+        avgSavings: totalSavings / items.length,
+      });
+    }
+  }
+
+  return result;
+});
+
 
 const HARDCODED_VENDORS = [
   { name: 'OpenLux (Yunwu)', url: 'https://api.openlux.ai' },
@@ -524,31 +634,6 @@ const handleCheckOpportunities = async () => {
   }
 };
 
-const handlePromoteOpportunity = async (opp: CheaperProviderOpportunity, target: 'primary' | 'backup') => {
-  try {
-    actionLoadingId.value = opp.id;
-    await promoteProviderOpportunity(opp.id, target);
-    appStore.showSuccess(`Assigned ${opp.candidate_provider} as ${target} route for ${opp.model_name}`);
-    await loadOpportunities();
-  } catch (error: any) {
-    appStore.showError(error.message || 'Failed to promote opportunity');
-  } finally {
-    actionLoadingId.value = null;
-  }
-};
-
-const handleDismissOpportunity = async (opp: CheaperProviderOpportunity) => {
-  try {
-    actionLoadingId.value = opp.id;
-    await dismissProviderOpportunity(opp.id);
-    appStore.showSuccess(`Dismissed opportunity for ${opp.model_name}`);
-    await loadOpportunities();
-  } catch (error: any) {
-    appStore.showError(error.message || 'Failed to dismiss');
-  } finally {
-    actionLoadingId.value = null;
-  }
-};
 
 const getStatusBadgeClass = (status: string) => {
   switch (status) {
@@ -1172,39 +1257,139 @@ a:hover {
   color: #93c5fd;
 }
 
-.promote-btn {
-  background: rgba(16, 185, 129, 0.15);
+/* Family Filter Tabs */
+.family-filter-bar {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.family-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  background: rgba(15, 23, 42, 0.6);
+  padding: 6px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.family-tab-btn {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s ease;
+}
+
+.family-tab-btn:hover {
+  color: #f1f5f9;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.family-tab-btn.active {
+  background: rgba(99, 102, 241, 0.25);
+  color: #a5b4fc;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.25);
+}
+
+.family-count-badge {
+  font-size: 11px;
+  padding: 2px 7px;
+  border-radius: 100px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #cbd5e1;
+  font-weight: 700;
+}
+
+.family-tab-btn.active .family-count-badge {
+  background: rgba(99, 102, 241, 0.4);
+  color: #ffffff;
+}
+
+/* Family Group Header */
+.family-group-panel {
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.family-group-header {
+  padding: 16px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.02);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.family-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.family-pill {
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.family-pill.family-claude {
+  background: rgba(168, 85, 247, 0.2);
+  color: #c084fc;
+  border: 1px solid rgba(168, 85, 247, 0.4);
+}
+
+.family-pill.family-gpt {
+  background: rgba(16, 185, 129, 0.2);
   color: #34d399;
-  border: 1px solid rgba(16, 185, 129, 0.3);
+  border: 1px solid rgba(16, 185, 129, 0.4);
 }
 
-.promote-btn:hover:not(:disabled) {
-  background: rgba(16, 185, 129, 0.25);
-}
-
-.backup-btn {
-  background: rgba(59, 130, 246, 0.15);
+.family-pill.family-gemini {
+  background: rgba(59, 130, 246, 0.2);
   color: #60a5fa;
-  border: 1px solid rgba(59, 130, 246, 0.3);
+  border: 1px solid rgba(59, 130, 246, 0.4);
 }
 
-.backup-btn:hover:not(:disabled) {
-  background: rgba(59, 130, 246, 0.25);
+.family-pill.family-kimi {
+  background: rgba(6, 182, 212, 0.2);
+  color: #22d3ee;
+  border: 1px solid rgba(6, 182, 212, 0.4);
 }
 
-.dismiss-btn {
-  background: rgba(239, 68, 68, 0.15);
-  color: #f87171;
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  padding: 6px 10px;
+.family-pill.family-other {
+  background: rgba(148, 163, 184, 0.2);
+  color: #94a3b8;
+  border: 1px solid rgba(148, 163, 184, 0.4);
 }
 
-.dismiss-btn:hover:not(:disabled) {
-  background: rgba(239, 68, 68, 0.25);
+.family-models-count {
+  font-size: 13px;
+  color: #94a3b8;
 }
 
-.status-badge.promoted {
-  background: rgba(59, 130, 246, 0.15);
-  color: #60a5fa;
+.family-savings-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.savings-label {
+  font-size: 12px;
+  color: #94a3b8;
+  text-transform: uppercase;
+  font-weight: 600;
 }
 </style>
