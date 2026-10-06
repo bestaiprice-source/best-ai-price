@@ -20,12 +20,22 @@
               @click="switchTab('analytics')">
               <span class="icon">📊</span> Gross Margin Analytics
             </button>
+            <button 
+              class="tab-pill-btn" 
+              :class="{ active: activeTab === 'opportunities' }" 
+              @click="switchTab('opportunities')">
+              <span class="icon">💡</span> Cheaper Alternatives
+              <span v-if="opportunities.length > 0" class="mini-counter">{{ opportunities.length }}</span>
+            </button>
           </div>
           <button v-if="activeTab === 'vendors'" class="primary-btn" @click="handleSyncAll" :disabled="isSyncingAll">
             <span class="icon">🔄</span> {{ isSyncingAll ? 'Syncing...' : 'Sync All Prices' }}
           </button>
           <button v-if="activeTab === 'analytics'" class="primary-btn" @click="loadAnalytics" :disabled="loadingAnalytics">
             <span class="icon">🔄</span> {{ loadingAnalytics ? 'Refreshing...' : 'Refresh Stats' }}
+          </button>
+          <button v-if="activeTab === 'opportunities'" class="primary-btn" @click="handleCheckOpportunities" :disabled="checkingOpportunities">
+            <span class="icon">🔍</span> {{ checkingOpportunities ? 'Checking BestAIPrice...' : 'Check BestAIPrice Now' }}
           </button>
         </div>
       </div>
@@ -191,6 +201,117 @@
           </table>
         </div>
       </div>
+
+      <!-- Tab 3: Cheaper Provider Opportunities -->
+      <div v-if="activeTab === 'opportunities'" class="opportunities-section">
+        <div class="opportunities-header glass-panel">
+          <div class="opp-info">
+            <h3>Discovered Cheaper Providers (BestAIPrice Candidates)</h3>
+            <p>Regularly compares active Primary & Backup routes against BestAIPrice database. Candidates are never auto-switched: register credentials and test before assigning.</p>
+          </div>
+          <div class="filter-group">
+            <label>Status Filter:</label>
+            <select v-model="opportunityStatusFilter" @change="loadOpportunities" class="filter-select">
+              <option value="">All Statuses</option>
+              <option value="detected">Detected (Pending)</option>
+              <option value="promoted_primary">Promoted to Primary</option>
+              <option value="promoted_backup">Promoted to Backup</option>
+              <option value="dismissed">Dismissed</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="table-container glass-panel mt-4">
+          <table class="vendors-table">
+            <thead>
+              <tr>
+                <th>Model</th>
+                <th>Current Route & Price</th>
+                <th>BestAIPrice Candidate</th>
+                <th>Candidate Price</th>
+                <th>Savings</th>
+                <th>BestAIPrice Card</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-if="loadingOpportunities">
+                <td colspan="8" class="text-center text-muted py-4">Loading opportunities...</td>
+              </tr>
+              <tr v-else-if="opportunities.length === 0">
+                <td colspan="8" class="text-center text-muted py-4">No cheaper opportunities detected for current models. Click "Check BestAIPrice Now" to scan.</td>
+              </tr>
+              <tr v-for="opp in opportunities" :key="opp.id">
+                <td>
+                  <div class="fw-bold">{{ opp.model_name }}</div>
+                  <div class="sub-text text-muted">{{ opp.canonical_model_id }}</div>
+                </td>
+                <td>
+                  <div><span class="route-badge primary">Primary:</span> {{ opp.current_primary_provider }}</div>
+                  <div class="price-val">${{ opp.current_primary_price.toFixed(4) }} / 1M</div>
+                  <div v-if="opp.current_backup_provider" class="mt-1">
+                    <span class="route-badge backup">Backup:</span> {{ opp.current_backup_provider }}
+                    <span class="price-val text-muted">${{ (opp.current_backup_price || 0).toFixed(4) }} / 1M</span>
+                  </div>
+                </td>
+                <td>
+                  <div class="fw-bold text-accent">{{ opp.candidate_provider }}</div>
+                  <div class="sub-text text-muted">{{ opp.candidate_domain }}</div>
+                </td>
+                <td>
+                  <div class="price-val text-success">${{ opp.candidate_price.toFixed(4) }} / 1M</div>
+                  <div v-if="opp.candidate_input_price != null" class="sub-text text-muted">
+                    In: ${{ opp.candidate_input_price.toFixed(3) }} / Out: ${{ (opp.candidate_output_price || 0).toFixed(3) }}
+                  </div>
+                </td>
+                <td>
+                  <span class="savings-badge">
+                    -{{ opp.diff_percent.toFixed(1) }}%
+                  </span>
+                </td>
+                <td>
+                  <a v-if="opp.provider_card_url" :href="opp.provider_card_url" target="_blank" class="card-link">
+                    <span>Card</span> <span class="ext-icon">↗</span>
+                  </a>
+                  <span v-else class="text-muted">—</span>
+                </td>
+                <td>
+                  <span class="status-badge" :class="getStatusBadgeClass(opp.status)">
+                    {{ formatOpportunityStatus(opp.status) }}
+                  </span>
+                </td>
+                <td>
+                  <div class="action-buttons">
+                    <button 
+                      class="action-btn promote-btn" 
+                      @click="handlePromoteOpportunity(opp, 'primary')"
+                      :disabled="actionLoadingId === opp.id"
+                      title="Assign as Primary Route">
+                      Set Primary
+                    </button>
+                    <button 
+                      class="action-btn backup-btn" 
+                      @click="handlePromoteOpportunity(opp, 'backup')"
+                      :disabled="actionLoadingId === opp.id"
+                      title="Assign as Backup Route">
+                      Set Backup
+                    </button>
+                    <button 
+                      v-if="opp.status !== 'dismissed'"
+                      class="action-btn dismiss-btn" 
+                      @click="handleDismissOpportunity(opp)"
+                      :disabled="actionLoadingId === opp.id"
+                      title="Dismiss">
+                      ✕
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
 
     <!-- Models Modal -->
@@ -285,14 +406,19 @@ import {
   scrapeVendorByUrl, 
   getVendorPriceHistory, 
   getGrossMarginAnalytics,
+  getProviderOpportunities,
+  checkProviderOpportunities,
+  promoteProviderOpportunity,
+  dismissProviderOpportunity,
   Vendor, 
   VendorPriceHistoryItem, 
-  GrossMarginAnalytics 
+  GrossMarginAnalytics,
+  CheaperProviderOpportunity
 } from '@/api/admin/vendor';
 import { useAppStore } from '@/stores'
 
 const appStore = useAppStore();
-const activeTab = ref<'vendors' | 'analytics'>('vendors');
+const activeTab = ref<'vendors' | 'analytics' | 'opportunities'>('vendors');
 const dbVendors = ref<Vendor[]>([]);
 const loading = ref(true);
 const syncingId = ref<string | null>(null);
@@ -308,6 +434,13 @@ const historyModelName = ref('');
 // Gross Margin Analytics state
 const loadingAnalytics = ref(false);
 const marginAnalytics = ref<GrossMarginAnalytics | null>(null);
+
+// Cheaper Provider Opportunities state
+const opportunities = ref<CheaperProviderOpportunity[]>([]);
+const loadingOpportunities = ref(false);
+const checkingOpportunities = ref(false);
+const opportunityStatusFilter = ref('detected');
+const actionLoadingId = ref<string | null>(null);
 
 const HARDCODED_VENDORS = [
   { name: 'OpenLux (Yunwu)', url: 'https://api.openlux.ai' },
@@ -349,10 +482,12 @@ const loadVendors = async () => {
   }
 };
 
-const switchTab = async (tab: 'vendors' | 'analytics') => {
+const switchTab = async (tab: 'vendors' | 'analytics' | 'opportunities') => {
   activeTab.value = tab;
   if (tab === 'analytics' && !marginAnalytics.value) {
     await loadAnalytics();
+  } else if (tab === 'opportunities') {
+    await loadOpportunities();
   }
 };
 
@@ -365,6 +500,77 @@ const loadAnalytics = async () => {
     appStore.showError(error.message || 'Failed to load gross margin analytics');
   } finally {
     loadingAnalytics.value = false;
+  }
+};
+
+const loadOpportunities = async () => {
+  try {
+    loadingOpportunities.value = true;
+    const res = await getProviderOpportunities(opportunityStatusFilter.value);
+    opportunities.value = res || [];
+  } catch (error: any) {
+    appStore.showError(error.message || 'Failed to load opportunities');
+  } finally {
+    loadingOpportunities.value = false;
+  }
+};
+
+const handleCheckOpportunities = async () => {
+  try {
+    checkingOpportunities.value = true;
+    const res = await checkProviderOpportunities();
+    appStore.showSuccess(`${res.message}: ${res.discovered_count} opportunities identified`);
+    await loadOpportunities();
+  } catch (error: any) {
+    appStore.showError(error.message || 'Check failed');
+  } finally {
+    checkingOpportunities.value = false;
+  }
+};
+
+const handlePromoteOpportunity = async (opp: CheaperProviderOpportunity, target: 'primary' | 'backup') => {
+  try {
+    actionLoadingId.value = opp.id;
+    await promoteProviderOpportunity(opp.id, target);
+    appStore.showSuccess(`Assigned ${opp.candidate_provider} as ${target} route for ${opp.model_name}`);
+    await loadOpportunities();
+  } catch (error: any) {
+    appStore.showError(error.message || 'Failed to promote opportunity');
+  } finally {
+    actionLoadingId.value = null;
+  }
+};
+
+const handleDismissOpportunity = async (opp: CheaperProviderOpportunity) => {
+  try {
+    actionLoadingId.value = opp.id;
+    await dismissProviderOpportunity(opp.id);
+    appStore.showSuccess(`Dismissed opportunity for ${opp.model_name}`);
+    await loadOpportunities();
+  } catch (error: any) {
+    appStore.showError(error.message || 'Failed to dismiss');
+  } finally {
+    actionLoadingId.value = null;
+  }
+};
+
+const getStatusBadgeClass = (status: string) => {
+  switch (status) {
+    case 'detected': return 'active';
+    case 'promoted_primary':
+    case 'promoted_backup': return 'promoted';
+    case 'dismissed': return 'inactive';
+    default: return '';
+  }
+};
+
+const formatOpportunityStatus = (status: string) => {
+  switch (status) {
+    case 'detected': return 'Detected';
+    case 'promoted_primary': return 'Primary';
+    case 'promoted_backup': return 'Backup';
+    case 'dismissed': return 'Dismissed';
+    default: return status;
   }
 };
 
@@ -438,6 +644,7 @@ const formatDate = (dateStr: string) => {
 
 onMounted(() => {
   loadVendors();
+  loadOpportunities();
 });
 </script>
 
@@ -857,5 +1064,145 @@ a:hover {
 
 .icon {
   font-size: 14px;
+}
+
+/* Opportunities Section */
+.opportunities-header {
+  padding: 20px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  border-radius: 12px;
+}
+
+.opp-info h3 {
+  margin: 0 0 6px 0;
+  font-size: 18px;
+  color: #f1f5f9;
+}
+
+.opp-info p {
+  margin: 0;
+  font-size: 13px;
+  color: #94a3b8;
+  max-width: 750px;
+}
+
+.filter-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.filter-group label {
+  font-size: 13px;
+  color: #94a3b8;
+}
+
+.filter-select {
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #f1f5f9;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  outline: none;
+}
+
+.mini-counter {
+  margin-left: 6px;
+  background: #10b981;
+  color: #fff;
+  border-radius: 100px;
+  padding: 2px 7px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.savings-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-weight: 700;
+  font-size: 13px;
+  font-family: 'JetBrains Mono', monospace;
+  background: rgba(16, 185, 129, 0.2);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.4);
+}
+
+.route-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-right: 4px;
+}
+
+.route-badge.primary {
+  background: rgba(59, 130, 246, 0.2);
+  color: #60a5fa;
+}
+
+.route-badge.backup {
+  background: rgba(148, 163, 184, 0.2);
+  color: #94a3b8;
+}
+
+.sub-text {
+  font-size: 11px;
+}
+
+.card-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #60a5fa;
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.card-link:hover {
+  text-decoration: underline;
+  color: #93c5fd;
+}
+
+.promote-btn {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.promote-btn:hover:not(:disabled) {
+  background: rgba(16, 185, 129, 0.25);
+}
+
+.backup-btn {
+  background: rgba(59, 130, 246, 0.15);
+  color: #60a5fa;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.backup-btn:hover:not(:disabled) {
+  background: rgba(59, 130, 246, 0.25);
+}
+
+.dismiss-btn {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  padding: 6px 10px;
+}
+
+.dismiss-btn:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.25);
+}
+
+.status-badge.promoted {
+  background: rgba(59, 130, 246, 0.15);
+  color: #60a5fa;
 }
 </style>

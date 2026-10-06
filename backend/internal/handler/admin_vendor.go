@@ -8,17 +8,27 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/model"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
+	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/Wei-Shaw/sub2api/pkg/scraper"
 	"github.com/gin-gonic/gin"
 	"github.com/jmoiron/sqlx"
 )
 
 type AdminVendorHandler struct {
-	db *sqlx.DB
+	db             *sqlx.DB
+	cheaperService *service.CheaperProviderService
 }
 
-func NewAdminVendorHandler(db *sql.DB) *AdminVendorHandler {
-	return &AdminVendorHandler{db: sqlx.NewDb(db, "postgres")}
+func NewAdminVendorHandler(
+	db *sql.DB,
+	settingService *service.SettingService,
+	groupRepo service.GroupRepository,
+	accountRepo service.AccountRepository,
+) *AdminVendorHandler {
+	return &AdminVendorHandler{
+		db:             sqlx.NewDb(db, "postgres"),
+		cheaperService: service.NewCheaperProviderService(db, settingService, groupRepo, accountRepo),
+	}
 }
 
 // GetVendors returns all vendors and their models
@@ -311,4 +321,67 @@ func (h *AdminVendorHandler) GetVendorPriceHistory(c *gin.Context) {
 	}
 
 	response.Success(c, history)
+}
+
+// GetOpportunities returns recorded cheaper provider opportunities
+func (h *AdminVendorHandler) GetOpportunities(c *gin.Context) {
+	ctx := c.Request.Context()
+	status := c.Query("status")
+	list, err := h.cheaperService.GetOpportunities(ctx, status)
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+	response.Success(c, list)
+}
+
+// CheckOpportunities triggers a live comparison against BestAIPrice providers.json
+func (h *AdminVendorHandler) CheckOpportunities(c *gin.Context) {
+	ctx := c.Request.Context()
+	discovered, err := h.cheaperService.CheckOpportunities(ctx)
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+	response.Success(c, gin.H{
+		"message":          "Opportunities check completed",
+		"discovered_count": len(discovered),
+		"opportunities":    discovered,
+	})
+}
+
+type PromoteOpportunityRequest struct {
+	Target    string `json:"target"` // "primary" or "backup"
+	GroupID   int64  `json:"group_id"`
+	AccountID int64  `json:"account_id"`
+}
+
+// PromoteOpportunity assigns the candidate provider to Primary or Backup route
+func (h *AdminVendorHandler) PromoteOpportunity(c *gin.Context) {
+	ctx := c.Request.Context()
+	id := c.Param("id")
+	var req PromoteOpportunityRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		req.Target = "primary"
+	}
+	if req.Target == "" {
+		req.Target = "primary"
+	}
+
+	if err := h.cheaperService.PromoteOpportunity(ctx, id, req.Target, req.GroupID, req.AccountID); err != nil {
+		response.Error(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+	response.Success(c, gin.H{"message": "Opportunity promoted successfully", "target": req.Target})
+}
+
+// DismissOpportunity marks the opportunity as dismissed
+func (h *AdminVendorHandler) DismissOpportunity(c *gin.Context) {
+	ctx := c.Request.Context()
+	id := c.Param("id")
+	if err := h.cheaperService.DismissOpportunity(ctx, id); err != nil {
+		response.Error(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+	response.Success(c, gin.H{"message": "Opportunity dismissed"})
 }

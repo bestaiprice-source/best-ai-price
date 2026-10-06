@@ -537,6 +537,10 @@ func registerVendorRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	admin.POST("/vendors/:id/scrape", h.AdminVendor.ScrapeVendor)
 	admin.GET("/vendors/:id/price-history", h.AdminVendor.GetVendorPriceHistory)
 	admin.GET("/vendors/price-history", h.AdminVendor.GetVendorPriceHistory)
+	admin.GET("/vendors/opportunities", h.AdminVendor.GetOpportunities)
+	admin.POST("/vendors/opportunities/check", h.AdminVendor.CheckOpportunities)
+	admin.POST("/vendors/opportunities/:id/promote", h.AdminVendor.PromoteOpportunity)
+	admin.POST("/vendors/opportunities/:id/dismiss", h.AdminVendor.DismissOpportunity)
 }
 
 func registerProviderRoutes(admin *gin.RouterGroup, h *handler.Handlers) {

@@ -265,7 +265,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	handlerPaymentHandler := handler.NewPaymentHandler(paymentService, paymentConfigService, channelService)
 	paymentWebhookHandler := handler.NewPaymentWebhookHandler(paymentService, registry)
 	availableChannelHandler := handler.NewAvailableChannelHandler(channelService, apiKeyService, settingService)
-	adminVendorHandler := handler.NewAdminVendorHandler(db)
+	adminVendorHandler := handler.NewAdminVendorHandler(db, settingService, groupRepository, accountRepository)
 	providerCommentRepository := repository.NewProviderCommentRepository(client)
 	providerCommentService := service.NewProviderCommentService(providerCommentRepository)
 	providerCommentHandler := handler.NewProviderCommentHandler(providerCommentService)

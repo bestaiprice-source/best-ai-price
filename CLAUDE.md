@@ -149,7 +149,15 @@ Welcome to **sub2api** and the **AI Session Hypervisor (ASH / Yunwu Engine)** re
     - Endpoint `GET /api/v1/admin/usage/gross-margin?start_date=&end_date=` computes:
       - Gross Revenue, Upstream Cost, Net Gross Profit, and Overall Gross Margin % (`(Revenue - Upstream Cost) / Revenue * 100%`).
       - Grouped breakdowns `by_model` and `by_provider`.
-    - Frontend: `VendorsPricingView.vue` provides tabbed navigation between "Providers & Pricing" and "Gross Margin Analytics" with KPI summary cards, breakdown tables, margin health badges, and modal price history views.
+    - Frontend: `VendorsPricingView.vue` provides tabbed navigation between "Providers & Pricing", "Gross Margin Analytics", and "Cheaper Alternatives" with KPI summary cards, breakdown tables, margin health badges, and modal price history views.
+  - **Cheaper Provider Checker (`ash_cheaper_provider_opportunities`, `CheaperProviderService`)**:
+    - Uses candidate pricing database from `https://bestaiprice.com/gateway/data/providers.json`.
+    - Compares active Primary/Backup routes (`Group.ModelRouting` & `ash_vendor_models`) with candidate providers for matching canonical models.
+    - Compares strictly normalized pricing with identical billing units ($/1M tokens, or flat per-request).
+    - When a candidate is cheaper: records opportunity in `ash_cheaper_provider_opportunities`, generates audit event `CheaperProviderDiscovered` in `ash_events`, and dispatches Telegram notification with deduplication.
+    - Notification payload: model, current provider & price, new candidate & price, difference in %, and link to provider card on BestAIPrice (`https://bestaiprice.com/provider/<candidate_domain>`).
+    - Safety: Candidates are never connected automatically. Administrator manually inspects, tests, and promotes candidate as `primary` or `backup` via button in admin UI or dismisses it.
+    - Frontend: Dedicated "💡 Cheaper Alternatives" tab in `VendorsPricingView.vue` with manual scan trigger, status filter, provider card link, and promotion modal.
   - **Intelligent Connection Testing for Unofficial (Yunwu) Nodes (`AccountTestService`)**:
     - `TestAccountConnection` routes `yunwu` nodes based on their configured `supported_model_families`: if a node supports `gpt` or `gemini` (and not `claude`), tests are executed via OpenAI `/v1/chat/completions` instead of Anthropic `/v1/messages`.
     - If a Claude test request returns HTTP 403 with `This group does not allow /v1/messages dispatch`, it automatically falls back to an OpenAI test (`/v1/chat/completions`) and avoids erroneously setting the node status to `error`.
@@ -545,6 +553,10 @@ sub2api/
 - `GET /api/v1/admin/vendors`: List upstream AI vendors and cached model pricing.
 - `POST /api/v1/admin/vendors/scrape-by-url`: Scrape vendor model pricing by name and URL, automatically persisting price history snapshots to `ash_vendor_price_history`.
 - `GET /api/v1/admin/vendors/:id/price-history` & `GET /api/v1/admin/vendors/price-history`: Historical snapshots of vendor model prices with optional `model` query filter.
+- `GET /api/v1/admin/vendors/opportunities`: List discovered cheaper provider opportunities with optional `status` filter (`pending`, `promoted`, `dismissed`).
+- `POST /api/v1/admin/vendors/opportunities/check`: Trigger an on-demand check against `https://bestaiprice.com/gateway/data/providers.json`.
+- `POST /api/v1/admin/vendors/opportunities/:id/promote`: Promote candidate provider to `primary` or `backup` route in group's model routing.
+- `POST /api/v1/admin/vendors/opportunities/:id/dismiss`: Dismiss opportunity.
 - `GET /api/v1/admin/usage/gross-margin`: Gross Margin Analytics aggregating total revenue, upstream cost, net gross profit, overall margin %, and grouped breakdowns by model and provider (`?start_date=&end_date=`).
 
 ### ASH Diagnostics (`/api/v1/ash/*`)

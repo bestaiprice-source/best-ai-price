@@ -92,3 +92,51 @@ export async function getGrossMarginAnalytics(startDate?: string, endDate?: stri
   return data;
 }
 
+export interface CheaperProviderOpportunity {
+  id: string;
+  canonical_model_id: string;
+  model_name: string;
+  current_primary_provider: string;
+  current_primary_price: number;
+  current_backup_provider?: string;
+  current_backup_price?: number;
+  candidate_provider: string;
+  candidate_domain: string;
+  candidate_price: number;
+  candidate_input_price?: number;
+  candidate_output_price?: number;
+  diff_percent: number;
+  billing_unit: string;
+  provider_url?: string;
+  provider_card_url?: string;
+  status: string;
+  telegram_sent: boolean;
+  discovered_at: string;
+  updated_at: string;
+}
+
+export async function getProviderOpportunities(status?: string): Promise<CheaperProviderOpportunity[]> {
+  const params = new URLSearchParams();
+  if (status) params.append('status', status);
+  const { data } = await apiClient.get<CheaperProviderOpportunity[]>(`/admin/vendors/opportunities?${params.toString()}`);
+  return data;
+}
+
+export async function checkProviderOpportunities(): Promise<{ message: string; discovered_count: number; opportunities: CheaperProviderOpportunity[] }> {
+  const { data } = await apiClient.post<{ message: string; discovered_count: number; opportunities: CheaperProviderOpportunity[] }>('/admin/vendors/opportunities/check');
+  return data;
+}
+
+export async function promoteProviderOpportunity(id: string, target: 'primary' | 'backup', groupId?: number, accountId?: number): Promise<void> {
+  await apiClient.post(`/admin/vendors/opportunities/${id}/promote`, {
+    target,
+    group_id: groupId,
+    account_id: accountId,
+  });
+}
+
+export async function dismissProviderOpportunity(id: string): Promise<void> {
+  await apiClient.post(`/admin/vendors/opportunities/${id}/dismiss`);
+}
+
+

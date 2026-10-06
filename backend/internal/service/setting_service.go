@@ -3223,6 +3223,52 @@ func (s *SettingService) TestTelegramNotification(ctx context.Context) (int, err
 		time.Now().UTC().Format("2006-01-02 15:04:05 UTC"),
 	)
 
+	return s.SendTelegramNotification(ctx, msg)
+}
+
+// SendTelegramNotification sends an HTML formatted notification message to authorized Telegram recipients.
+func (s *SettingService) SendTelegramNotification(ctx context.Context, msg string) (int, error) {
+	keys := []string{
+		SettingKeyTelegramBotToken,
+		SettingKeyTelegramAllowedUsers,
+		SettingKeyTelegramActiveRecipients,
+	}
+	values, err := s.settingRepo.GetMultiple(ctx, keys)
+	if err != nil {
+		return 0, fmt.Errorf("get telegram settings: %w", err)
+	}
+
+	token := strings.TrimSpace(values[SettingKeyTelegramBotToken])
+	if token == "" {
+		return 0, fmt.Errorf("telegram bot token is not configured")
+	}
+
+	var allowedUsers []string
+	if raw := values[SettingKeyTelegramAllowedUsers]; raw != "" {
+		_ = json.Unmarshal([]byte(raw), &allowedUsers)
+	}
+
+	var activeRecipients []TelegramRecipient
+	if raw := values[SettingKeyTelegramActiveRecipients]; raw != "" {
+		_ = json.Unmarshal([]byte(raw), &activeRecipients)
+	}
+
+	targetMap := make(map[int64]struct{})
+	for _, r := range activeRecipients {
+		if r.ChatID != 0 && isTelegramUserAllowedSimple(r.ChatID, r.Username, allowedUsers) {
+			targetMap[r.ChatID] = struct{}{}
+		}
+	}
+	for _, u := range allowedUsers {
+		if id, err := strconv.ParseInt(strings.TrimSpace(u), 10, 64); err == nil && id != 0 {
+			targetMap[id] = struct{}{}
+		}
+	}
+
+	if len(targetMap) == 0 {
+		return 0, fmt.Errorf("no recipients available to receive telegram alert")
+	}
+
 	sentCount := 0
 	var lastErr error
 	client := &http.Client{Timeout: 10 * time.Second}

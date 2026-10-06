@@ -62,3 +62,27 @@ func (p *PaymentMethodList) Scan(value interface{}) error {
 	}
 	return json.Unmarshal(b, p)
 }
+
+// CheaperProviderOpportunity represents an identified cheaper upstream candidate for a model
+type CheaperProviderOpportunity struct {
+	ID                     string    `json:"id" db:"id"`
+	CanonicalModelID       string    `json:"canonical_model_id" db:"canonical_model_id"`
+	ModelName              string    `json:"model_name" db:"model_name"`
+	CurrentPrimaryProvider string    `json:"current_primary_provider" db:"current_primary_provider"`
+	CurrentPrimaryPrice    float64   `json:"current_primary_price" db:"current_primary_price"`
+	CurrentBackupProvider  *string   `json:"current_backup_provider,omitempty" db:"current_backup_provider"`
+	CurrentBackupPrice     *float64  `json:"current_backup_price,omitempty" db:"current_backup_price"`
+	CandidateProvider      string    `json:"candidate_provider" db:"candidate_provider"`
+	CandidateDomain        string    `json:"candidate_domain" db:"candidate_domain"`
+	CandidatePrice         float64   `json:"candidate_price" db:"candidate_price"`
+	CandidateInputPrice    *float64  `json:"candidate_input_price,omitempty" db:"candidate_input_price"`
+	CandidateOutputPrice   *float64  `json:"candidate_output_price,omitempty" db:"candidate_output_price"`
+	DiffPercent            float64   `json:"diff_percent" db:"diff_percent"`
+	BillingUnit            string    `json:"billing_unit" db:"billing_unit"`
+	ProviderURL            *string   `json:"provider_url,omitempty" db:"provider_url"`
+	ProviderCardURL        *string   `json:"provider_card_url,omitempty" db:"provider_card_url"`
+	Status                 string    `json:"status" db:"status"` // 'detected', 'promoted_primary', 'promoted_backup', 'dismissed'
+	TelegramSent           bool      `json:"telegram_sent" db:"telegram_sent"`
+	DiscoveredAt           time.Time `json:"discovered_at" db:"discovered_at"`
+	UpdatedAt              time.Time `json:"updated_at" db:"updated_at"`
+}
