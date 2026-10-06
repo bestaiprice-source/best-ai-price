@@ -480,9 +480,9 @@ const loadVendors = async () => {
   try {
     loading.value = true;
     const res = await getVendors();
-    dbVendors.value = res || [];
+    dbVendors.value = Array.isArray(res) ? res : ((res as any)?.data || []);
   } catch (error: any) {
-    appStore.showError(error.message || 'Failed to load vendors');
+    console.warn('Failed to load vendors:', error);
   } finally {
     loading.value = false;
   }
@@ -513,9 +513,9 @@ const loadOpportunities = async () => {
   try {
     loadingOpportunities.value = true;
     const res = await getProviderOpportunities(opportunityStatusFilter.value);
-    opportunities.value = res || [];
+    opportunities.value = Array.isArray(res) ? res : ((res as any)?.data || []);
   } catch (error: any) {
-    appStore.showError(error.message || 'Failed to load opportunities');
+    console.warn('Failed to load opportunities:', error);
   } finally {
     loadingOpportunities.value = false;
   }

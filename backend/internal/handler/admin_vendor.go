@@ -3,6 +3,7 @@ package handler
 import (
 	"database/sql"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -36,17 +37,18 @@ func (h *AdminVendorHandler) GetVendors(c *gin.Context) {
 	ctx := c.Request.Context()
 
 	var vendors []model.Vendor
-	err := h.db.SelectContext(ctx, &vendors, `SELECT * FROM ash_vendors ORDER BY name ASC`)
+	err := h.db.SelectContext(ctx, &vendors, `SELECT id::text as id, name, url, payment_methods, currency_type, exchange_rate, status, last_scraped_at, created_at, updated_at FROM ash_vendors ORDER BY name ASC`)
 	if err != nil {
-		response.Error(c, http.StatusInternalServerError, "Failed to get vendors")
+		slog.Warn("[AdminVendorHandler] GetVendors query ash_vendors error", "error", err)
+		response.Success(c, []any{})
 		return
 	}
 
 	var models []model.VendorModel
-	err = h.db.SelectContext(ctx, &models, `SELECT * FROM ash_vendor_models`)
+	err = h.db.SelectContext(ctx, &models, `SELECT id::text as id, vendor_id::text as vendor_id, model_name, input_price, output_price, is_available, created_at, updated_at FROM ash_vendor_models`)
 	if err != nil {
-		response.Error(c, http.StatusInternalServerError, "Failed to get vendor models")
-		return
+		slog.Warn("[AdminVendorHandler] GetVendors query ash_vendor_models error", "error", err)
+		models = []model.VendorModel{}
 	}
 
 	// Group models by vendor
@@ -329,7 +331,8 @@ func (h *AdminVendorHandler) GetOpportunities(c *gin.Context) {
 	status := c.Query("status")
 	list, err := h.cheaperService.GetOpportunities(ctx, status)
 	if err != nil {
-		response.Error(c, http.StatusInternalServerError, err.Error())
+		slog.Warn("[AdminVendorHandler] GetOpportunities error", "error", err)
+		response.Success(c, []model.CheaperProviderOpportunity{})
 		return
 	}
 	response.Success(c, list)

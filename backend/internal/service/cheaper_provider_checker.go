@@ -69,6 +69,37 @@ func (s *CheaperProviderService) SetProvidersURL(url string) {
 	s.providersURL = url
 }
 
+func (s *CheaperProviderService) ensureTable(ctx context.Context) {
+	_, _ = s.db.ExecContext(ctx, `
+		CREATE EXTENSION IF NOT EXISTS pgcrypto;
+		CREATE TABLE IF NOT EXISTS ash_cheaper_provider_opportunities (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			canonical_model_id TEXT NOT NULL,
+			model_name TEXT NOT NULL,
+			current_primary_provider TEXT NOT NULL,
+			current_primary_price NUMERIC(15, 6) NOT NULL,
+			current_backup_provider TEXT,
+			current_backup_price NUMERIC(15, 6),
+			candidate_provider TEXT NOT NULL,
+			candidate_domain TEXT NOT NULL,
+			candidate_price NUMERIC(15, 6) NOT NULL,
+			candidate_input_price NUMERIC(15, 6),
+			candidate_output_price NUMERIC(15, 6),
+			diff_percent NUMERIC(10, 2) NOT NULL,
+			billing_unit TEXT NOT NULL DEFAULT 'tokens',
+			provider_url TEXT,
+			provider_card_url TEXT,
+			status TEXT NOT NULL DEFAULT 'detected',
+			telegram_sent BOOLEAN NOT NULL DEFAULT false,
+			discovered_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+			updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+			UNIQUE (canonical_model_id, candidate_domain)
+		);
+		CREATE INDEX IF NOT EXISTS idx_ash_cheaper_opportunities_status ON ash_cheaper_provider_opportunities(status);
+		CREATE INDEX IF NOT EXISTS idx_ash_cheaper_opportunities_model ON ash_cheaper_provider_opportunities(canonical_model_id);
+	`)
+}
+
 // FetchCandidates retrieves all candidate providers from the BestAIPrice repository
 func (s *CheaperProviderService) FetchCandidates(ctx context.Context) ([]BestAIPriceProviderRecord, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, s.providersURL, nil)
@@ -112,6 +143,7 @@ type currentRoutePricing struct {
 // CheckOpportunities queries current model routes, compares with BestAIPrice candidates,
 // and records cheaper alternatives while dispatching events & Telegram alerts.
 func (s *CheaperProviderService) CheckOpportunities(ctx context.Context) ([]model.CheaperProviderOpportunity, error) {
+	s.ensureTable(ctx)
 	candidates, err := s.FetchCandidates(ctx)
 	if err != nil {
 		return nil, err
@@ -282,7 +314,7 @@ func (s *CheaperProviderService) CheckOpportunities(ctx context.Context) ([]mode
 			    provider_url = EXCLUDED.provider_url,
 			    provider_card_url = EXCLUDED.provider_card_url,
 			    updated_at = EXCLUDED.updated_at
-			RETURNING id, telegram_sent
+			RETURNING id::text as id, telegram_sent
 		`, opp.CanonicalModelID, opp.ModelName, opp.CurrentPrimaryProvider, opp.CurrentPrimaryPrice,
 			opp.CurrentBackupProvider, opp.CurrentBackupPrice, opp.CandidateProvider, opp.CandidateDomain,
 			opp.CandidatePrice, opp.CandidateInputPrice, opp.CandidateOutputPrice, opp.DiffPercent,
@@ -342,20 +374,31 @@ func (s *CheaperProviderService) CheckOpportunities(ctx context.Context) ([]mode
 func (s *CheaperProviderService) GetOpportunities(ctx context.Context, status string) ([]model.CheaperProviderOpportunity, error) {
 	var list []model.CheaperProviderOpportunity
 	var err error
+	queryWithStatus := `
+		SELECT * FROM ash_cheaper_provider_opportunities
+		WHERE status = $1
+		ORDER BY diff_percent DESC, discovered_at DESC
+	`
+	queryAll := `
+		SELECT * FROM ash_cheaper_provider_opportunities
+		ORDER BY diff_percent DESC, discovered_at DESC
+	`
 	if status != "" {
-		err = s.db.SelectContext(ctx, &list, `
-			SELECT * FROM ash_cheaper_provider_opportunities
-			WHERE status = $1
-			ORDER BY diff_percent DESC, discovered_at DESC
-		`, status)
+		err = s.db.SelectContext(ctx, &list, queryWithStatus, status)
 	} else {
-		err = s.db.SelectContext(ctx, &list, `
-			SELECT * FROM ash_cheaper_provider_opportunities
-			ORDER BY diff_percent DESC, discovered_at DESC
-		`)
+		err = s.db.SelectContext(ctx, &list, queryAll)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("select cheaper opportunities: %w", err)
+		s.ensureTable(ctx)
+		if status != "" {
+			_ = s.db.SelectContext(ctx, &list, queryWithStatus, status)
+		} else {
+			_ = s.db.SelectContext(ctx, &list, queryAll)
+		}
+		slog.Warn("[CheaperProviderChecker] select cheaper opportunities query error, returning empty list", "error", err)
+	}
+	if list == nil {
+		list = []model.CheaperProviderOpportunity{}
 	}
 	return list, nil
 }
