@@ -246,7 +246,7 @@ Welcome to **sub2api** and the **AI Session Hypervisor (ASH / Yunwu Engine)** re
 ### 2.4 Unified AI Providers Section & Architecture (`/admin/providers`)
 - **Concept & Business Goal**:
   - In the admin panel, the unified section «Поставщики» (Providers) at `/admin/providers` acts as the single pane of glass for all external upstream AI API services where BestAIPrice maintains an account, balance, and credentials (e.g., OpenLux, Portdan, Yuanqiaoyun, API-Top, X-LLM, Custom).
-  - Replaces the obsolete web-scraping `/admin/vendors` view. Backward-compatible router redirects `/admin/vendors` $\to$ `/admin/providers`.
+  - `/admin/vendors` hosts the **AI Providers, Pricing, Gross Margin Analytics & Cheaper Alternatives Checker** (`VendorsPricingView.vue`), linked directly from the sidebar and from the header of `/admin/providers`.
 - **Provider Entity & Schema Alignment**:
   - Automatically discovers and maps all unofficial execution nodes belonging to the Yunwu platform or Yunwu groups (`platform = "yunwu"`, bound to a Yunwu group, or declaring an unofficial provider such as OpenLux, Portdan, Yuanqiaoyun, API-Top, X-LLM) as upstream providers without requiring manual duplicate creation. Official direct accounts (Claude OAuth, OpenAI direct keys, Gemini direct keys) are excluded and managed in `/admin/accounts`.
   - Seamlessly participates in Hypervisor scheduling, failover, balance reconciliation, and runtime metrics without schema migrations.

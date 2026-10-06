@@ -344,7 +344,15 @@ const routes: RouteRecordRaw[] = [
   },
   {
     path: '/admin/vendors',
-    redirect: '/admin/providers'
+    name: 'AdminVendors',
+    component: () => import('@/views/admin/VendorsPricingView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Vendors Pricing & Margins',
+      titleKey: 'admin.vendors.title',
+      descriptionKey: 'admin.vendors.description'
+    }
   },
   {
     path: '/admin',

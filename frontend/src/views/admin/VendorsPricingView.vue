@@ -3,6 +3,11 @@
     <div class="vendors-container">
       <div class="header-section">
         <div class="header-content">
+          <div class="mb-2">
+            <router-link to="/admin/providers" class="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-primary-500 hover:text-primary-600 transition-colors">
+              <span>← К списку нод (Поставщики)</span>
+            </router-link>
+          </div>
           <h2>AI Providers, Pricing & Margins</h2>
           <p class="subtitle">Manage upstream provider prices, view historical trends, and audit retail gross margins.</p>
         </div>
@@ -400,6 +405,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue';
+import { useRoute } from 'vue-router';
 import AppLayout from '@/components/layout/AppLayout.vue';
 import { 
   getVendors, 
@@ -637,12 +643,19 @@ const getMarginClass = (pct: number) => {
   return 'margin-negative';
 };
 
+const route = useRoute();
+
 const formatDate = (dateStr: string) => {
   if (!dateStr) return 'Never';
   return new Date(dateStr).toLocaleString();
 };
 
 onMounted(() => {
+  if (route.query.tab === 'opportunities') {
+    activeTab.value = 'opportunities';
+  } else if (route.query.tab === 'analytics') {
+    activeTab.value = 'analytics';
+  }
   loadVendors();
   loadOpportunities();
 });

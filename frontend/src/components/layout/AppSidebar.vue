@@ -379,6 +379,21 @@ const TicketIcon = {
     )
 }
 
+const LightbulbIcon = {
+  render: () =>
+    h(
+      'svg',
+      { fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor', 'stroke-width': '1.5' },
+      [
+        h('path', {
+          'stroke-linecap': 'round',
+          'stroke-linejoin': 'round',
+          d: 'M12 18v-5.25m0 0a6.01 6.01 0 001.5-.189m-1.5.189a6.01 6.01 0 01-1.5-.189m3.75 7.439v-1.5a1.5 1.5 0 00-1.5-1.5h-1.5a1.5 1.5 0 00-1.5 1.5v1.5m6-7.5a6 6 0 10-9 0c0 1.25.39 2.41 1.05 3.36.3.43.45.95.45 1.48v.66h6v-.66c0-.53.15-1.05.45-1.48.66-.95 1.05-2.11 1.05-3.36z'
+        })
+      ]
+    )
+}
+
 const CogIcon = {
   render: () =>
     h(
@@ -606,6 +621,7 @@ const adminNavItems = computed((): NavItem[] => {
     { path: '/admin/groups', label: t('nav.groups'), icon: FolderIcon, hideInSimpleMode: true },
     { path: '/admin/channels/pricing', label: 'Channel Pricing', icon: ChannelIcon, hideInSimpleMode: true },
     { path: '/admin/providers', label: t('nav.providers'), icon: GlobeIcon, hideInSimpleMode: true },
+    { path: '/admin/vendors', label: 'Чекер цен и Альтернативы', icon: LightbulbIcon, hideInSimpleMode: true },
     ...(channelMonitorEnabled.value
       ? [{ path: '/admin/channels/monitor', label: 'Channel Monitor', icon: SignalIcon, hideInSimpleMode: true }]
       : []),
