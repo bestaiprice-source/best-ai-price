@@ -250,42 +250,72 @@
             :key="group.familyId" 
             class="family-group-panel glass-panel mb-4"
           >
+            <!-- Family Header -->
             <div class="family-group-header">
               <div class="family-title-wrap">
                 <span class="family-pill" :class="'family-' + group.familyId">
                   {{ group.familyName }}
                 </span>
-                <span class="family-models-count">{{ group.items.length }} alternatives</span>
+                <span class="family-models-count">{{ group.activeProvider.items.length }} models compared</span>
               </div>
+
+              <!-- Candidate Provider Selector (when multiple candidate providers exist for this family) -->
+              <div v-if="group.candidateProviders.length > 1" class="candidate-selector-bar">
+                <span class="selector-label text-muted">Candidates:</span>
+                <button
+                  v-for="(cand, idx) in group.candidateProviders"
+                  :key="cand.domain"
+                  class="candidate-pill-btn"
+                  :class="{ active: group.activeProvider.domain === cand.domain }"
+                  @click="selectedCandidateForFamily[group.familyId] = cand.domain"
+                >
+                  <span v-if="idx === 0" class="best-star" title="Best Savings">★</span>
+                  <span class="cand-name">{{ cand.name }}</span>
+                  <span class="cand-savings">-{{ cand.avgSavings.toFixed(1) }}%</span>
+                </button>
+              </div>
+
+              <!-- Average Price Across All Models of Family -->
               <div class="family-savings-summary">
                 <div class="price-stat">
                   <span class="stat-label">Current Avg:</span>
-                  <span class="stat-val">${{ group.currentAvgPrice.toFixed(2) }}</span>
+                  <span class="stat-val">${{ group.activeProvider.currentAvgPrice.toFixed(2) }}</span>
                 </div>
                 <span class="stat-arrow">→</span>
                 <div class="price-stat">
                   <span class="stat-label">Candidate Avg:</span>
-                  <span class="stat-val text-success">${{ group.candidateAvgPrice.toFixed(2) }}</span>
+                  <span class="stat-val text-success">${{ group.activeProvider.candidateAvgPrice.toFixed(2) }}</span>
                 </div>
-                <span class="savings-badge ml-2">-{{ group.avgSavings.toFixed(1) }}%</span>
+                <span class="savings-badge ml-2">-{{ group.activeProvider.avgSavings.toFixed(1) }}%</span>
               </div>
             </div>
 
+            <!-- Candidate Provider Info Subbar -->
+            <div class="candidate-info-subbar px-4 py-2">
+              <div class="candidate-meta">
+                <span class="text-muted">Candidate:</span> <strong class="text-accent">{{ group.activeProvider.name }}</strong> <span class="sub-text text-muted">({{ group.activeProvider.domain }})</span>
+                <span class="mx-2 text-muted">|</span>
+                <span class="text-muted">Current:</span> {{ group.activeProvider.currentPrimaryProviders.join(', ') || 'Active' }}
+              </div>
+              <a v-if="group.activeProvider.cardUrl" :href="group.activeProvider.cardUrl" target="_blank" class="card-link">
+                <span>BestAIPrice Card</span> <span class="ext-icon">↗</span>
+              </a>
+            </div>
+
+            <!-- Table of Models for Selected Candidate Provider (Each model appears exactly once) -->
             <div class="table-responsive">
               <table class="vendors-table">
                 <thead>
                   <tr>
                     <th>Model</th>
                     <th>Current Route & Price</th>
-                    <th>BestAIPrice Candidate</th>
                     <th>Candidate Price</th>
                     <th>Savings</th>
-                    <th>BestAIPrice Card</th>
                     <th>Status</th>
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="opp in group.items" :key="opp.id">
+                  <tr v-for="opp in group.activeProvider.items" :key="opp.id">
                     <td>
                       <div class="model-cell">
                         <div class="fw-bold">{{ opp.model_name }}</div>
@@ -301,10 +331,6 @@
                       </div>
                     </td>
                     <td>
-                      <div class="fw-bold text-accent">{{ opp.candidate_provider }}</div>
-                      <div class="sub-text text-muted">{{ opp.candidate_domain }}</div>
-                    </td>
-                    <td>
                       <div class="price-val text-success">${{ opp.candidate_price.toFixed(4) }} / 1M</div>
                       <div v-if="opp.candidate_input_price != null" class="sub-text text-muted">
                         In: ${{ opp.candidate_input_price.toFixed(3) }} / Out: ${{ (opp.candidate_output_price || 0).toFixed(3) }}
@@ -314,12 +340,6 @@
                       <span class="savings-badge">
                         -{{ opp.diff_percent.toFixed(1) }}%
                       </span>
-                    </td>
-                    <td>
-                      <a v-if="opp.provider_card_url" :href="opp.provider_card_url" target="_blank" class="card-link">
-                        <span>Card</span> <span class="ext-icon">↗</span>
-                      </a>
-                      <span v-else class="text-muted">—</span>
                     </td>
                     <td>
                       <span class="status-badge" :class="getStatusBadgeClass(opp.status)">
@@ -461,6 +481,7 @@ const loadingOpportunities = ref(false);
 const checkingOpportunities = ref(false);
 const opportunityStatusFilter = ref('detected');
 const selectedFamilyFilter = ref<string>('all');
+const selectedCandidateForFamily = ref<Record<string, string>>({});
 
 const MODEL_FAMILIES = [
   { id: 'all', name: 'All Families' },
@@ -468,7 +489,6 @@ const MODEL_FAMILIES = [
   { id: 'gpt', name: 'GPT' },
   { id: 'gemini', name: 'Gemini' },
   { id: 'kimi', name: 'Kimi' },
-  { id: 'other', name: 'Other' },
 ];
 
 const getOpportunityFamily = (opp: CheaperProviderOpportunity): string => {
@@ -495,19 +515,17 @@ const formatFamilyTitle = (familyId: string): string => {
 
 const familyFilterTabs = computed(() => {
   const counts: Record<string, number> = {
-    all: opportunities.value.length,
+    all: 0,
     claude: 0,
     gpt: 0,
     gemini: 0,
     kimi: 0,
-    other: 0,
   };
   for (const opp of opportunities.value) {
     const fam = getOpportunityFamily(opp);
-    if (counts[fam] !== undefined) {
+    if (fam !== 'other' && counts[fam] !== undefined) {
       counts[fam]++;
-    } else {
-      counts.other++;
+      counts.all++;
     }
   }
   return MODEL_FAMILIES.map(f => ({
@@ -517,23 +535,35 @@ const familyFilterTabs = computed(() => {
   }));
 });
 
-interface FamilyOpportunityGroup {
-  familyId: string;
-  familyName: string;
+interface CandidateProviderGroup {
+  name: string;
+  domain: string;
+  cardUrl: string;
+  currentPrimaryProviders: string[];
   items: CheaperProviderOpportunity[];
   currentAvgPrice: number;
   candidateAvgPrice: number;
   avgSavings: number;
 }
 
+interface FamilyOpportunityGroup {
+  familyId: string;
+  familyName: string;
+  candidateProviders: CandidateProviderGroup[];
+  activeProvider: CandidateProviderGroup;
+}
+
 const displayedFamilyGroups = computed<FamilyOpportunityGroup[]>(() => {
-  const familyOrder = ['claude', 'gpt', 'gemini', 'kimi', 'other'];
-  const grouped: Record<string, CheaperProviderOpportunity[]> = {};
+  const familyOrder = ['claude', 'gpt', 'gemini', 'kimi'];
+  const grouped: Record<string, Record<string, CheaperProviderOpportunity[]>> = {};
 
   for (const opp of opportunities.value) {
     const fam = getOpportunityFamily(opp);
-    if (!grouped[fam]) grouped[fam] = [];
-    grouped[fam].push(opp);
+    if (fam === 'other') continue;
+    if (!grouped[fam]) grouped[fam] = {};
+    const domain = (opp.candidate_domain || '').toLowerCase().trim();
+    if (!grouped[fam][domain]) grouped[fam][domain] = [];
+    grouped[fam][domain].push(opp);
   }
 
   const result: FamilyOpportunityGroup[] = [];
@@ -542,21 +572,47 @@ const displayedFamilyGroups = computed<FamilyOpportunityGroup[]>(() => {
     : [selectedFamilyFilter.value];
 
   for (const famId of familiesToInclude) {
-    const items = grouped[famId] || [];
-    if (items.length > 0) {
+    const domainMap = grouped[famId] || {};
+    const candidateProviders: CandidateProviderGroup[] = [];
+
+    for (const [domain, items] of Object.entries(domainMap)) {
+      if (items.length === 0) continue;
       const currentSum = items.reduce((acc, curr) => acc + (curr.current_primary_price || 0), 0);
       const candidateSum = items.reduce((acc, curr) => acc + (curr.candidate_price || 0), 0);
       const currentAvg = currentSum / items.length;
       const candidateAvg = candidateSum / items.length;
       const savings = currentAvg > 0 ? ((currentAvg - candidateAvg) / currentAvg) * 100 : 0;
 
-      result.push({
-        familyId: famId,
-        familyName: formatFamilyTitle(famId),
+      const first = items[0];
+      const cardUrl = first.provider_card_url || `https://bestaiprice.com/provider/${domain}`;
+      const primSet = new Set<string>();
+      items.forEach(it => { if (it.current_primary_provider) primSet.add(it.current_primary_provider); });
+
+      candidateProviders.push({
+        name: first.candidate_provider || domain,
+        domain,
+        cardUrl,
+        currentPrimaryProviders: Array.from(primSet),
         items,
         currentAvgPrice: currentAvg,
         candidateAvgPrice: candidateAvg,
         avgSavings: savings,
+      });
+    }
+
+    if (candidateProviders.length > 0) {
+      // Sort candidate providers by average savings descending (best option first)
+      candidateProviders.sort((a, b) => b.avgSavings - a.avgSavings);
+
+      // Determine active provider domain
+      const selectedDomain = selectedCandidateForFamily.value[famId];
+      const activeProvider = candidateProviders.find(p => p.domain === selectedDomain) || candidateProviders[0];
+
+      result.push({
+        familyId: famId,
+        familyName: formatFamilyTitle(famId),
+        candidateProviders,
+        activeProvider,
       });
     }
   }
@@ -1430,6 +1486,67 @@ a:hover {
 
 .ml-2 {
   margin-left: 8px;
+}
+
+.candidate-selector-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.selector-label {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.candidate-pill-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #cbd5e1;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.candidate-pill-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+
+.candidate-pill-btn.active {
+  background: rgba(99, 102, 241, 0.25);
+  border-color: rgba(99, 102, 241, 0.6);
+  color: #c7d2fe;
+  box-shadow: 0 0 10px rgba(99, 102, 241, 0.3);
+}
+
+.best-star {
+  color: #fbbf24;
+  font-size: 12px;
+}
+
+.cand-savings {
+  color: #34d399;
+  font-size: 11px;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.candidate-info-subbar {
+  background: rgba(15, 23, 42, 0.4);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 13px;
 }
 </style>
 

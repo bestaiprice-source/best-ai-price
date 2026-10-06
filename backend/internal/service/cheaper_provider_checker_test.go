@@ -101,7 +101,7 @@ func TestCheaperProviderChecker_GetAndDismiss(t *testing.T) {
 	}).AddRow("opp-1", "claude", "anthropic/claude-3-7-sonnet", "claude-3-7-sonnet", "Current", 18.0,
 		"Cheap", "cheap.ai", 12.0, 33.33, "tokens", "detected", true, now, now)
 
-	mock.ExpectQuery(regexp.QuoteMeta("SELECT * FROM ash_cheaper_provider_opportunities WHERE status = $1")).
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT * FROM ash_cheaper_provider_opportunities WHERE model_family != 'other' AND status = $1")).
 		WithArgs("detected").
 		WillReturnRows(rows)
 

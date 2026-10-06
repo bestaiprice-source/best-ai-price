@@ -149,6 +149,9 @@ type currentRoutePricing struct {
 // and records cheaper alternatives while dispatching events & Telegram alerts.
 func (s *CheaperProviderService) CheckOpportunities(ctx context.Context) ([]model.CheaperProviderOpportunity, error) {
 	s.ensureTable(ctx)
+	// Clean up any legacy "other" opportunities
+	_, _ = s.db.ExecContext(ctx, "DELETE FROM ash_cheaper_provider_opportunities WHERE model_family = 'other'")
+
 	candidates, err := s.FetchCandidates(ctx)
 	if err != nil {
 		return nil, err
@@ -220,11 +223,40 @@ func (s *CheaperProviderService) CheckOpportunities(ctx context.Context) ([]mode
 	var newAlerts []model.CheaperProviderOpportunity
 	now := time.Now().UTC()
 
+	type candGroupKey struct {
+		family string
+		domain string
+	}
+	type candGroup struct {
+		family          string
+		candidateDomain string
+		candidateName   string
+		models          []model.CheaperProviderOpportunity
+	}
+	groupCandidates := make(map[candGroupKey]*candGroup)
+	var groupCandidateKeys []candGroupKey
+
 	// 2. Evaluate candidates against current routes
 	for _, cand := range candidates {
 		cModel := strings.ToLower(strings.TrimSpace(cand.ModelName))
 		cCanon := strings.ToLower(strings.TrimSpace(cand.CanonicalModelID))
 		if cModel == "" && cCanon == "" {
+			continue
+		}
+
+		canonID := cand.CanonicalModelID
+		if canonID == "" {
+			canonID = cand.ModelName
+		}
+
+		// Classify Model Family (claude, gpt, gemini, kimi)
+		oppFamily := yunwu.ClassifyModelFamily(canonID)
+		if oppFamily == yunwu.FamilyOther && cand.ModelName != "" {
+			oppFamily = yunwu.ClassifyModelFamily(cand.ModelName)
+		}
+
+		// Exclude "other" family completely
+		if oppFamily == yunwu.FamilyOther || oppFamily == "other" || oppFamily == "" {
 			continue
 		}
 
@@ -298,16 +330,6 @@ func (s *CheaperProviderService) CheckOpportunities(ctx context.Context) ([]mode
 		if candDomain == "" {
 			cardURL = cand.ProviderURL
 		}
-		canonID := cand.CanonicalModelID
-		if canonID == "" {
-			canonID = cand.ModelName
-		}
-
-		// Classify Model Family (e.g. claude, gpt, gemini, kimi, other)
-		oppFamily := yunwu.ClassifyModelFamily(canonID)
-		if oppFamily == yunwu.FamilyOther && cand.ModelName != "" {
-			oppFamily = yunwu.ClassifyModelFamily(cand.ModelName)
-		}
 
 		var backupProvider *string
 		var backupPrice *float64
@@ -338,62 +360,103 @@ func (s *CheaperProviderService) CheckOpportunities(ctx context.Context) ([]mode
 			UpdatedAt:              now,
 		}
 
-		// 4. Save opportunity into DB (upsert)
-		var insertedID string
-		var prevTelegramSent bool
-		err := s.db.QueryRowContext(ctx, `
-			INSERT INTO ash_cheaper_provider_opportunities 
-				(model_family, canonical_model_id, model_name, current_primary_provider, current_primary_price, 
-				 current_backup_provider, current_backup_price, candidate_provider, candidate_domain, 
-				 candidate_price, candidate_input_price, candidate_output_price, diff_percent, 
-				 billing_unit, provider_url, provider_card_url, status, telegram_sent, discovered_at, updated_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, false, $18, $18)
-			ON CONFLICT (canonical_model_id, candidate_domain) DO UPDATE
-			SET model_family = EXCLUDED.model_family,
-			    current_primary_provider = EXCLUDED.current_primary_provider,
-			    current_primary_price = EXCLUDED.current_primary_price,
-			    current_backup_provider = EXCLUDED.current_backup_provider,
-			    current_backup_price = EXCLUDED.current_backup_price,
-			    candidate_price = EXCLUDED.candidate_price,
-			    candidate_input_price = EXCLUDED.candidate_input_price,
-			    candidate_output_price = EXCLUDED.candidate_output_price,
-			    diff_percent = EXCLUDED.diff_percent,
-			    provider_url = EXCLUDED.provider_url,
-			    provider_card_url = EXCLUDED.provider_card_url,
-			    updated_at = EXCLUDED.updated_at
-			RETURNING id::text as id, telegram_sent
-		`, opp.ModelFamily, opp.CanonicalModelID, opp.ModelName, opp.CurrentPrimaryProvider, opp.CurrentPrimaryPrice,
-			opp.CurrentBackupProvider, opp.CurrentBackupPrice, opp.CandidateProvider, opp.CandidateDomain,
-			opp.CandidatePrice, opp.CandidateInputPrice, opp.CandidateOutputPrice, opp.DiffPercent,
-			opp.BillingUnit, opp.ProviderURL, opp.ProviderCardURL, opp.Status, now).Scan(&insertedID, &prevTelegramSent)
+		gKey := candGroupKey{family: oppFamily, domain: candDomain}
+		if _, exists := groupCandidates[gKey]; !exists {
+			groupCandidates[gKey] = &candGroup{
+				family:          oppFamily,
+				candidateDomain: candDomain,
+				candidateName:   cand.ProviderName,
+				models:          nil,
+			}
+			groupCandidateKeys = append(groupCandidateKeys, gKey)
+		}
+		groupCandidates[gKey].models = append(groupCandidates[gKey].models, opp)
+	}
 
-		if err != nil {
-			slog.Error("failed to upsert cheaper opportunity", "canonical_model_id", opp.CanonicalModelID, "candidate_domain", opp.CandidateDomain, "err", err)
+	// 4. Evaluate each candidate provider by AVERAGE price across all models in this family
+	for _, key := range groupCandidateKeys {
+		grp := groupCandidates[key]
+		if len(grp.models) == 0 {
 			continue
 		}
 
-		opp.ID = insertedID
-		opp.TelegramSent = prevTelegramSent
+		currentPriceSum := 0.0
+		candidatePriceSum := 0.0
+		for _, o := range grp.models {
+			currentPriceSum += o.CurrentPrimaryPrice
+			candidatePriceSum += o.CandidatePrice
+		}
+		currentAvg := currentPriceSum / float64(len(grp.models))
+		candidateAvg := candidatePriceSum / float64(len(grp.models))
 
-		// 5. Audit event in ash_events
-		eventPayload, _ := json.Marshal(map[string]any{
-			"model_family":       opp.ModelFamily,
-			"canonical_model_id": opp.CanonicalModelID,
-			"candidate_provider": opp.CandidateProvider,
-			"candidate_domain":   opp.CandidateDomain,
-			"diff_percent":       opp.DiffPercent,
-			"current_primary":    opp.CurrentPrimaryProvider,
-			"current_price":      opp.CurrentPrimaryPrice,
-			"candidate_price":    opp.CandidatePrice,
-		})
-		_, _ = s.db.ExecContext(ctx, `
-			INSERT INTO ash_events (owner_id, event_type, payload, created_at)
-			VALUES ('system', 'CheaperProviderDiscovered', $1, NOW())
-		`, eventPayload)
+		// Candidate provider must be cheaper ON AVERAGE across all models in this family
+		if currentAvg <= 0 || candidateAvg >= currentAvg {
+			continue
+		}
+		familySavings := math.Round(((currentAvg-candidateAvg)/currentAvg)*10000) / 100
+		if familySavings < 1.0 {
+			continue
+		}
 
-		discovered = append(discovered, opp)
-		if !prevTelegramSent {
-			newAlerts = append(newAlerts, opp)
+		for _, opp := range grp.models {
+			// Save opportunity into DB (upsert)
+			var insertedID string
+			var prevTelegramSent bool
+			err := s.db.QueryRowContext(ctx, `
+				INSERT INTO ash_cheaper_provider_opportunities 
+					(model_family, canonical_model_id, model_name, current_primary_provider, current_primary_price, 
+					 current_backup_provider, current_backup_price, candidate_provider, candidate_domain, 
+					 candidate_price, candidate_input_price, candidate_output_price, diff_percent, 
+					 billing_unit, provider_url, provider_card_url, status, telegram_sent, discovered_at, updated_at)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, false, $18, $18)
+				ON CONFLICT (canonical_model_id, candidate_domain) DO UPDATE
+				SET model_family = EXCLUDED.model_family,
+				    current_primary_provider = EXCLUDED.current_primary_provider,
+				    current_primary_price = EXCLUDED.current_primary_price,
+				    current_backup_provider = EXCLUDED.current_backup_provider,
+				    current_backup_price = EXCLUDED.current_backup_price,
+				    candidate_price = EXCLUDED.candidate_price,
+				    candidate_input_price = EXCLUDED.candidate_input_price,
+				    candidate_output_price = EXCLUDED.candidate_output_price,
+				    diff_percent = EXCLUDED.diff_percent,
+				    provider_url = EXCLUDED.provider_url,
+				    provider_card_url = EXCLUDED.provider_card_url,
+				    updated_at = EXCLUDED.updated_at
+				RETURNING id::text as id, telegram_sent
+			`, opp.ModelFamily, opp.CanonicalModelID, opp.ModelName, opp.CurrentPrimaryProvider, opp.CurrentPrimaryPrice,
+				opp.CurrentBackupProvider, opp.CurrentBackupPrice, opp.CandidateProvider, opp.CandidateDomain,
+				opp.CandidatePrice, opp.CandidateInputPrice, opp.CandidateOutputPrice, opp.DiffPercent,
+				opp.BillingUnit, opp.ProviderURL, opp.ProviderCardURL, opp.Status, now).Scan(&insertedID, &prevTelegramSent)
+
+			if err != nil {
+				slog.Error("failed to upsert cheaper opportunity", "canonical_model_id", opp.CanonicalModelID, "candidate_domain", opp.CandidateDomain, "err", err)
+				continue
+			}
+
+			opp.ID = insertedID
+			opp.TelegramSent = prevTelegramSent
+
+			// 5. Audit event in ash_events
+			eventPayload, _ := json.Marshal(map[string]any{
+				"model_family":       opp.ModelFamily,
+				"canonical_model_id": opp.CanonicalModelID,
+				"candidate_provider": opp.CandidateProvider,
+				"candidate_domain":   opp.CandidateDomain,
+				"diff_percent":       opp.DiffPercent,
+				"family_savings":     familySavings,
+				"current_primary":    opp.CurrentPrimaryProvider,
+				"current_price":      opp.CurrentPrimaryPrice,
+				"candidate_price":    opp.CandidatePrice,
+			})
+			_, _ = s.db.ExecContext(ctx, `
+				INSERT INTO ash_events (owner_id, event_type, payload, created_at)
+				VALUES ('system', 'CheaperProviderDiscovered', $1, NOW())
+			`, eventPayload)
+
+			discovered = append(discovered, opp)
+			if !prevTelegramSent {
+				newAlerts = append(newAlerts, opp)
+			}
 		}
 	}
 
@@ -531,11 +594,12 @@ func (s *CheaperProviderService) GetOpportunities(ctx context.Context, status st
 	var err error
 	queryWithStatus := `
 		SELECT * FROM ash_cheaper_provider_opportunities
-		WHERE status = $1
+		WHERE model_family != 'other' AND status = $1
 		ORDER BY diff_percent DESC, discovered_at DESC
 	`
 	queryAll := `
 		SELECT * FROM ash_cheaper_provider_opportunities
+		WHERE model_family != 'other'
 		ORDER BY diff_percent DESC, discovered_at DESC
 	`
 	if status != "" {
