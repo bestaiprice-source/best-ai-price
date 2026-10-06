@@ -251,4 +251,79 @@ func TestCheaperProviderChecker_FamilyClassificationAndAlertGrouping(t *testing.
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestCheaperProviderChecker_SingleBestCandidatePerFamily(t *testing.T) {
+	// Candidate 1: mediocre savings (10%)
+	in1, out1 := 4.5, 4.5 // total $9
+	// Candidate 2: best savings (60%)
+	in2, out2 := 2.0, 2.0 // total $4
+	testData := []BestAIPriceProviderRecord{
+		{
+			ProviderName:        "Mediocre Candidate",
+			ProviderDomain:      "mediocre.io",
+			ProviderURL:         "https://mediocre.io",
+			ModelName:           "claude-3-7-sonnet",
+			CanonicalModelID:    "anthropic/claude-3-7-sonnet",
+			InputPriceUSDPer1M:  &in1,
+			OutputPriceUSDPer1M: &out1,
+			TrustStatus:         "green",
+		},
+		{
+			ProviderName:        "Best Winner Candidate",
+			ProviderDomain:      "winner.io",
+			ProviderURL:         "https://winner.io",
+			ModelName:           "claude-3-7-sonnet",
+			CanonicalModelID:    "anthropic/claude-3-7-sonnet",
+			InputPriceUSDPer1M:  &in2,
+			OutputPriceUSDPer1M: &out2,
+			TrustStatus:         "green",
+		},
+	}
+	dataBytes, err := json.Marshal(testData)
+	require.NoError(t, err)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(dataBytes)
+	}))
+	defer server.Close()
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	svc := NewCheaperProviderService(db, nil, nil, nil)
+	svc.SetProvidersURL(server.URL)
+
+	// Primary price is $10 ($5 in, $5 out)
+	rows := sqlmock.NewRows([]string{"model_name", "input_price", "output_price", "vendor_name", "vendor_url"}).
+		AddRow("claude-3-7-sonnet", 0.005, 0.005, "Current Route", "https://current.com")
+
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT vm.model_name, vm.input_price, vm.output_price, v.name as vendor_name, v.url as vendor_url")).
+		WillReturnRows(rows)
+
+	// Only 1 candidate (the winner) should be inserted!
+	mock.ExpectQuery(regexp.QuoteMeta("INSERT INTO ash_cheaper_provider_opportunities")).
+		WithArgs(
+			"claude", "anthropic/claude-3-7-sonnet", "claude-3-7-sonnet", "Current Route", 10.0,
+			nil, nil, "Best Winner Candidate", "winner.io",
+			4.0, sqlmock.AnyArg(), sqlmock.AnyArg(), 60.0,
+			"tokens", sqlmock.AnyArg(), sqlmock.AnyArg(), "detected", sqlmock.AnyArg(),
+		).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "telegram_sent"}).AddRow("opp-winner", false))
+	mock.ExpectExec(regexp.QuoteMeta("INSERT INTO ash_events")).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	opps, err := svc.CheckOpportunities(context.Background())
+	require.NoError(t, err)
+	require.Len(t, opps, 1)
+
+	assert.Equal(t, "winner.io", opps[0].CandidateDomain)
+	assert.Equal(t, "Best Winner Candidate", opps[0].CandidateProvider)
+	assert.Equal(t, 4.0, opps[0].CandidatePrice)
+	assert.Equal(t, 60.0, opps[0].DiffPercent)
+
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+
 

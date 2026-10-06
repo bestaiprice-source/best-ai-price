@@ -698,7 +698,8 @@ const handleCheckOpportunities = async () => {
   try {
     checkingOpportunities.value = true;
     const res = await checkProviderOpportunities();
-    appStore.showSuccess(`${res.message}: ${res.discovered_count} opportunities identified`);
+    const count = res.discovered_count !== undefined ? res.discovered_count : (res.opportunities?.length || 0);
+    appStore.showSuccess(`${res.message || 'Check completed'}: ${count} cheaper model opportunities found across best family providers`);
     await loadOpportunities();
   } catch (error: any) {
     appStore.showError(error.message || 'Check failed');

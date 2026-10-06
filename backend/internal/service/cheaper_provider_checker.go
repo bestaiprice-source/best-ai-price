@@ -220,7 +220,6 @@ func (s *CheaperProviderService) CheckOpportunities(ctx context.Context) ([]mode
 	}
 
 	var discovered []model.CheaperProviderOpportunity
-	var newAlerts []model.CheaperProviderOpportunity
 	now := time.Now().UTC()
 
 	type candGroupKey struct {
@@ -374,6 +373,17 @@ func (s *CheaperProviderService) CheckOpportunities(ctx context.Context) ([]mode
 	}
 
 	// 4. Evaluate each candidate provider by AVERAGE price across all models in this family
+	type evaluatedGroup struct {
+		family          string
+		candidateDomain string
+		candidateName   string
+		models          []model.CheaperProviderOpportunity
+		currentAvg      float64
+		candidateAvg    float64
+		familySavings   float64
+	}
+
+	familyCandidates := make(map[string][]*evaluatedGroup)
 	for _, key := range groupCandidateKeys {
 		grp := groupCandidates[key]
 		if len(grp.models) == 0 {
@@ -398,6 +408,46 @@ func (s *CheaperProviderService) CheckOpportunities(ctx context.Context) ([]mode
 			continue
 		}
 
+		familyCandidates[grp.family] = append(familyCandidates[grp.family], &evaluatedGroup{
+			family:          grp.family,
+			candidateDomain: grp.candidateDomain,
+			candidateName:   grp.candidateName,
+			models:          grp.models,
+			currentAvg:      currentAvg,
+			candidateAvg:    candidateAvg,
+			familySavings:   familySavings,
+		})
+	}
+
+	// 5. Select ONLY the SINGLE BEST candidate provider for each family (Claude, GPT, Gemini, Kimi)
+	// (Best family savings percentage, breaking ties by model coverage count)
+	familyOrder := []string{"claude", "gpt", "gemini", "kimi"}
+	var winningGroups []*evaluatedGroup
+	var winningDomains []string
+	for _, fam := range familyOrder {
+		cands := familyCandidates[fam]
+		if len(cands) == 0 {
+			continue
+		}
+		var best *evaluatedGroup
+		for _, cand := range cands {
+			if best == nil || cand.familySavings > best.familySavings ||
+				(cand.familySavings == best.familySavings && len(cand.models) > len(best.models)) {
+				best = cand
+			}
+		}
+		if best != nil {
+			winningGroups = append(winningGroups, best)
+			winningDomains = append(winningDomains, best.candidateDomain)
+		}
+	}
+
+	// Clean up stale opportunities from non-winning candidate domains
+	if len(winningDomains) > 0 {
+		_, _ = s.db.ExecContext(ctx, `DELETE FROM ash_cheaper_provider_opportunities WHERE candidate_domain != ALL($1)`, pq.Array(winningDomains))
+	}
+
+	for _, grp := range winningGroups {
 		for _, opp := range grp.models {
 			// Save opportunity into DB (upsert)
 			var insertedID string
@@ -436,14 +486,14 @@ func (s *CheaperProviderService) CheckOpportunities(ctx context.Context) ([]mode
 			opp.ID = insertedID
 			opp.TelegramSent = prevTelegramSent
 
-			// 5. Audit event in ash_events
+			// Audit event in ash_events
 			eventPayload, _ := json.Marshal(map[string]any{
 				"model_family":       opp.ModelFamily,
 				"canonical_model_id": opp.CanonicalModelID,
 				"candidate_provider": opp.CandidateProvider,
 				"candidate_domain":   opp.CandidateDomain,
 				"diff_percent":       opp.DiffPercent,
-				"family_savings":     familySavings,
+				"family_savings":     grp.familySavings,
 				"current_primary":    opp.CurrentPrimaryProvider,
 				"current_price":      opp.CurrentPrimaryPrice,
 				"candidate_price":    opp.CandidatePrice,
@@ -454,53 +504,21 @@ func (s *CheaperProviderService) CheckOpportunities(ctx context.Context) ([]mode
 			`, eventPayload)
 
 			discovered = append(discovered, opp)
-			if !prevTelegramSent {
-				newAlerts = append(newAlerts, opp)
-			}
 		}
 	}
 
-	// 6. Send Telegram notifications grouped by Model Family and Candidate Provider
-	if len(newAlerts) > 0 && s.settingService != nil {
-		type alertGroup struct {
-			family          string
-			candidateDomain string
-			opps            []model.CheaperProviderOpportunity
-		}
-		groupMap := make(map[string]*alertGroup)
-		var groupOrder []string
-
-		for _, opp := range newAlerts {
-			groupKey := fmt.Sprintf("%s|%s", opp.ModelFamily, strings.ToLower(opp.CandidateDomain))
-			if _, exists := groupMap[groupKey]; !exists {
-				groupMap[groupKey] = &alertGroup{
-					family:          opp.ModelFamily,
-					candidateDomain: opp.CandidateDomain,
-					opps:            nil,
-				}
-				groupOrder = append(groupOrder, groupKey)
-			}
-			groupMap[groupKey].opps = append(groupMap[groupKey].opps, opp)
-		}
-
-		for _, key := range groupOrder {
-			grp := groupMap[key]
-			if len(grp.opps) == 0 {
+	// 6. Send Telegram notifications for the BEST candidate of each family
+	if len(winningGroups) > 0 && s.settingService != nil {
+		for _, grp := range winningGroups {
+			if len(grp.models) == 0 {
 				continue
 			}
 
-			currentPriceSum := 0.0
-			candidatePriceSum := 0.0
-			count := 0
 			currentProvidersSet := make(map[string]bool)
 			var currentProvidersList []string
 			var modelLines []string
 
-			for i, o := range grp.opps {
-				currentPriceSum += o.CurrentPrimaryPrice
-				candidatePriceSum += o.CandidatePrice
-				count++
-
+			for i, o := range grp.models {
 				if !currentProvidersSet[o.CurrentPrimaryProvider] {
 					currentProvidersSet[o.CurrentPrimaryProvider] = true
 					currentProvidersList = append(currentProvidersList, o.CurrentPrimaryProvider)
@@ -522,18 +540,11 @@ func (s *CheaperProviderService) CheckOpportunities(ctx context.Context) ([]mode
 				}
 			}
 
-			if len(grp.opps) > 8 {
-				modelLines = append(modelLines, fmt.Sprintf("• <i>... и ещё %d моделей</i>", len(grp.opps)-8))
+			if len(grp.models) > 8 {
+				modelLines = append(modelLines, fmt.Sprintf("• <i>... и ещё %d моделей</i>", len(grp.models)-8))
 			}
 
-			currentAvgPrice := currentPriceSum / float64(count)
-			candidateAvgPrice := candidatePriceSum / float64(count)
-			avgSavingsPercent := 0.0
-			if currentAvgPrice > 0 {
-				avgSavingsPercent = math.Round(((currentAvgPrice-candidateAvgPrice)/currentAvgPrice)*1000) / 10
-			}
-
-			firstOpp := grp.opps[0]
+			firstOpp := grp.models[0]
 			cardURL := ""
 			if firstOpp.ProviderCardURL != nil {
 				cardURL = *firstOpp.ProviderCardURL
@@ -552,28 +563,34 @@ func (s *CheaperProviderService) CheckOpportunities(ctx context.Context) ([]mode
 				"💡 <b>Найден более дешёвый поставщик для семейства %s!</b>\n\n"+
 					"<b>Семейство:</b> %s\n"+
 					"<b>Текущие провайдеры:</b> %s (ср. цена: %s / 1M)\n"+
-					"<b>Новый кандидат:</b> %s (%s) (ср. цена: %s / 1M)\n"+
+					"<b>Лучший кандидат:</b> %s (%s) (ср. цена: %s / 1M)\n"+
 					"<b>Экономия по средней цене семейства:</b> 🟢 <b>-%.1f%%</b>\n\n"+
-					"<b>Модели:</b>\n%s\n\n"+
+					"<b>Модели (%d):</b>\n%s\n\n"+
 					"<b>Карточка поставщика:</b> <a href=\"%s\">%s</a>",
 				familyNameDisplay,
 				familyNameDisplay,
-				currentDisplay, formatPriceUSD(currentAvgPrice),
-				firstOpp.CandidateProvider, firstOpp.CandidateDomain, formatPriceUSD(candidateAvgPrice),
-				avgSavingsPercent,
+				currentDisplay, formatPriceUSD(grp.currentAvg),
+				grp.candidateName, grp.candidateDomain, formatPriceUSD(grp.candidateAvg),
+				grp.familySavings,
+				len(grp.models),
 				strings.Join(modelLines, "\n"),
 				cardURL,
-				firstOpp.CandidateDomain,
+				grp.candidateDomain,
 			)
 
-			if _, tgErr := s.settingService.SendTelegramNotification(ctx, tgMsg); tgErr == nil {
+			slog.Info("[CheaperProviderChecker] Dispatching Telegram alert for family", "family", grp.family, "candidate", grp.candidateDomain, "savings", grp.familySavings)
+			sentCount, tgErr := s.settingService.SendTelegramNotification(ctx, tgMsg)
+			if tgErr == nil && sentCount > 0 {
+				slog.Info("[CheaperProviderChecker] Telegram alert dispatched successfully", "family", grp.family, "recipients", sentCount)
 				var ids []string
-				for _, o := range grp.opps {
+				for _, o := range grp.models {
 					ids = append(ids, o.ID)
 				}
-				_, _ = s.db.ExecContext(ctx, `UPDATE ash_cheaper_provider_opportunities SET telegram_sent = true WHERE id = ANY($1)`, pq.Array(ids))
+				if len(ids) > 0 {
+					_, _ = s.db.ExecContext(ctx, `UPDATE ash_cheaper_provider_opportunities SET telegram_sent = true WHERE id = ANY($1)`, pq.Array(ids))
+				}
 				for i := range discovered {
-					for _, o := range grp.opps {
+					for _, o := range grp.models {
 						if discovered[i].ID == o.ID {
 							discovered[i].TelegramSent = true
 						}
