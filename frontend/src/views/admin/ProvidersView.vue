@@ -17,6 +17,13 @@
             <Icon name="sync" size="sm" :class="{ 'animate-spin': isSyncingAll }" />
             <span>{{ isSyncingAll ? 'Syncing...' : 'Sync All Balances' }}</span>
           </button>
+          <button
+            @click="openCreateModal"
+            class="inline-flex items-center gap-2 rounded-xl bg-primary-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-all hover:bg-primary-500 hover:shadow-md dark:bg-primary-500 dark:hover:bg-primary-400"
+          >
+            <Icon name="plus" size="sm" />
+            <span>Add Provider</span>
+          </button>
           <router-link
             to="/admin/vendors"
             class="inline-flex items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-sm font-medium text-indigo-700 shadow-sm transition-all hover:bg-indigo-100 hover:shadow dark:border-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-300 dark:hover:bg-indigo-900/50"
@@ -26,7 +33,7 @@
           </router-link>
           <router-link
             to="/admin/accounts"
-            class="inline-flex items-center gap-2 rounded-xl bg-primary-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-all hover:bg-primary-500 hover:shadow-md dark:bg-primary-500 dark:hover:bg-primary-400"
+            class="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 shadow-sm transition-all hover:bg-gray-50 hover:shadow dark:border-dark-700 dark:bg-dark-800 dark:text-gray-200 dark:hover:bg-dark-700"
           >
             <Icon name="server" size="sm" />
             <span>Manage Nodes</span>
@@ -551,8 +558,26 @@
           </div>
         </div>
 
-        <!-- Min Balance & Status -->
-        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <!-- Balance, Min Balance & Status -->
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div>
+            <label class="block text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1">
+              Initial / Current Balance ($ USD)
+            </label>
+            <div class="relative">
+              <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm text-gray-400">$</span>
+              <input
+                v-model.number="form.balance_usd"
+                type="number"
+                step="0.01"
+                min="0"
+                placeholder="0.00"
+                class="w-full rounded-xl border border-gray-200 bg-white py-2 pl-8 pr-3 text-sm text-gray-900 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-dark-600 dark:bg-dark-700 dark:text-white"
+              />
+            </div>
+            <p class="mt-1 text-[11px] text-gray-400">For manual sync / estimated balance tracking when balance API is absent.</p>
+          </div>
+
           <div>
             <label class="block text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1">
               Minimum Balance ($ USD)
@@ -897,6 +922,7 @@ const form = reactive({
   protocol: 'openai' as ProviderProtocol,
   base_url: '',
   api_key: '',
+  balance_usd: 0,
   min_balance_usd: 20,
   status: 'active' as 'active' | 'disabled',
   supported_model_families: [] as string[]
@@ -946,7 +972,25 @@ function applyPreset(preset: typeof presets[0]) {
   form.supported_model_families = [...preset.families]
 }
 
-// Edit Modal
+// Create & Edit Modal
+
+function openCreateModal() {
+  editingProvider.value = null
+  selectedPresetId.value = null
+  showApiKey.value = false
+  draftTestResult.value = null
+  form.provider_name = ''
+  form.domain = ''
+  form.protocol = 'openai'
+  form.base_url = ''
+  form.api_key = ''
+  form.balance_usd = 0
+  form.min_balance_usd = 20
+  form.status = 'active'
+  form.supported_model_families = ['claude', 'gpt']
+  mappingRows.value = []
+  showEditModal.value = true
+}
 
 function openEditModal(provider: Provider) {
   editingProvider.value = provider
@@ -958,6 +1002,7 @@ function openEditModal(provider: Provider) {
   form.protocol = provider.protocol || 'openai'
   form.base_url = provider.base_url
   form.api_key = ''
+  form.balance_usd = provider.balance_usd !== undefined ? provider.balance_usd : 0
   form.min_balance_usd = provider.min_balance_usd !== undefined ? provider.min_balance_usd : 20
   form.status = provider.status || 'active'
   form.supported_model_families = [...(provider.supported_model_families || [])]
@@ -1009,6 +1054,7 @@ async function saveProvider() {
         protocol: form.protocol,
         base_url: form.base_url,
         api_key: form.api_key || undefined,
+        balance_usd: form.balance_usd,
         min_balance_usd: form.min_balance_usd,
         status: form.status,
         supported_model_families: form.supported_model_families,
@@ -1022,6 +1068,7 @@ async function saveProvider() {
         protocol: form.protocol,
         base_url: form.base_url,
         api_key: form.api_key,
+        balance_usd: form.balance_usd,
         min_balance_usd: form.min_balance_usd,
         status: form.status,
         supported_model_families: form.supported_model_families,

@@ -139,6 +139,7 @@ type CreateProviderRequest struct {
 	APIKey                 string            `json:"api_key" binding:"required"`
 	SupportedModelFamilies []string          `json:"supported_model_families"`
 	ModelMapping           map[string]string `json:"model_mapping"`
+	BalanceUSD             *float64          `json:"balance_usd"`
 	MinBalanceUSD          *float64          `json:"min_balance_usd"`
 	Status                 string            `json:"status" binding:"omitempty,oneof=active disabled"`
 	Notes                  string            `json:"notes"`
@@ -156,6 +157,7 @@ type UpdateProviderRequest struct {
 	APIKey                 string            `json:"api_key"`
 	SupportedModelFamilies []string          `json:"supported_model_families"`
 	ModelMapping           map[string]string `json:"model_mapping"`
+	BalanceUSD             *float64          `json:"balance_usd"`
 	MinBalanceUSD          *float64          `json:"min_balance_usd"`
 	Status                 string            `json:"status" binding:"omitempty,oneof=active disabled"`
 	Notes                  *string           `json:"notes"`
@@ -426,6 +428,27 @@ func (h *ProviderHandler) accountToProviderResponse(ctx context.Context, acc *se
 		}
 	}
 
+	// If balanceSource is manual or estimated, compute estimated balance based on token consumption
+	if (balanceSource == "manual" || balanceSource == "estimated") && rt != nil {
+		initialDeposit, hasDeposit := extra["initial_deposit_usd"].(float64)
+		if !hasDeposit {
+			initialDeposit, hasDeposit = extra["balance_usd"].(float64)
+		}
+		if hasDeposit && initialDeposit > 0 {
+			baselineTokens, _ := extra["deposit_baseline_tokens"].(float64)
+			tokensSpent := float64(rt.UsedTokens) - baselineTokens
+			if tokensSpent > 0 {
+				estimatedSpend := tokensSpent / 1_000_000.0 * 2.5
+				estBalance := initialDeposit - estimatedSpend
+				if estBalance < 0 {
+					estBalance = 0
+				}
+				balanceUSD = float64(int(estBalance*100)) / 100.0
+				balanceSource = "estimated"
+			}
+		}
+	}
+
 	metrics := ProviderMetrics{}
 	if rt != nil {
 		metrics.LatencyMs = rt.AvgLatencyMs
@@ -642,6 +665,11 @@ func (h *ProviderHandler) CreateGateway(c gatewayctx.GatewayContext) {
 		creds = enc
 	}
 
+	initBal := 0.0
+	if req.BalanceUSD != nil && *req.BalanceUSD >= 0 {
+		initBal = *req.BalanceUSD
+	}
+
 	extra := map[string]any{
 		"provider":                  prov,
 		"domain":                    domainStr,
@@ -650,7 +678,9 @@ func (h *ProviderHandler) CreateGateway(c gatewayctx.GatewayContext) {
 		"supported_model_families": modelFamilies,
 		"model_mapping":             modelMapping,
 		"min_balance_usd":           minBalance,
-		"balance_usd":               0.0,
+		"balance_usd":               initBal,
+		"initial_deposit_usd":       initBal,
+		"deposit_baseline_tokens":   float64(0),
 		"balance_source":            "manual",
 		"balance_updated_at":        time.Now().UTC().Format(time.RFC3339),
 	}
@@ -764,6 +794,19 @@ func (h *ProviderHandler) UpdateGateway(c gatewayctx.GatewayContext) {
 	}
 	if req.MinBalanceUSD != nil && *req.MinBalanceUSD >= 0 {
 		extra["min_balance_usd"] = *req.MinBalanceUSD
+	}
+	if req.BalanceUSD != nil && *req.BalanceUSD >= 0 {
+		extra["balance_usd"] = *req.BalanceUSD
+		extra["initial_deposit_usd"] = *req.BalanceUSD
+		usedTokens := int64(0)
+		if h.nodeManager != nil {
+			if rt, _ := h.nodeManager.GetNodeRuntimeState(ctx, strconv.FormatInt(id, 10)); rt != nil {
+				usedTokens = rt.UsedTokens
+			}
+		}
+		extra["deposit_baseline_tokens"] = float64(usedTokens)
+		extra["balance_source"] = "manual"
+		extra["balance_updated_at"] = time.Now().UTC().Format(time.RFC3339)
 	}
 
 	name := acc.Name
@@ -911,6 +954,60 @@ func (h *ProviderHandler) SyncBalanceGateway(c gatewayctx.GatewayContext) {
 
 	grants, err := h.statsWorker.SyncNodeStats(ctx, node, apiKey, baseURL)
 	if err != nil {
+		// If automated balance API failed, fallback to estimated balance from usage if deposit exists
+		initialDeposit, hasDeposit := acc.Extra["initial_deposit_usd"].(float64)
+		if !hasDeposit {
+			initialDeposit, hasDeposit = acc.Extra["balance_usd"].(float64)
+		}
+		if hasDeposit && initialDeposit > 0 {
+			nowStr := time.Now().UTC().Format(time.RFC3339)
+			extra := acc.Extra
+			if extra == nil {
+				extra = make(map[string]any)
+			}
+			baselineTokens, _ := extra["deposit_baseline_tokens"].(float64)
+			tokensSpent := float64(0)
+			if h.nodeManager != nil {
+				if rt, _ := h.nodeManager.GetNodeRuntimeState(ctx, nodeID); rt != nil {
+					tokensSpent = float64(rt.UsedTokens) - baselineTokens
+				}
+			}
+			estimatedSpend := 0.0
+			if tokensSpent > 0 {
+				estimatedSpend = tokensSpent / 1_000_000.0 * 2.5
+			}
+			estBalance := initialDeposit - estimatedSpend
+			if estBalance < 0 {
+				estBalance = 0
+			}
+			estBalance = float64(int(estBalance*100)) / 100.0
+			extra["balance_usd"] = estBalance
+			extra["balance_updated_at"] = nowStr
+			extra["balance_source"] = "estimated"
+			_, _ = h.adminService.UpdateAccount(ctx, id, &service.UpdateAccountInput{
+				Extra:                 extra,
+				SkipMixedChannelCheck: true,
+			})
+
+			minBalance := 20.0
+			if mb, ok := extra["min_balance_usd"].(float64); ok && mb >= 0 {
+				minBalance = mb
+			}
+			if estBalance <= minBalance && h.statsWorker.Notifier() != nil {
+				_, _ = h.statsWorker.Notifier().CheckAndNotify(ctx, nodeID, acc.Name, prov, estBalance)
+			}
+
+			response.SuccessContext(gatewayJSONResponder{ctx: c}, map[string]any{
+				"id":             id,
+				"balance_usd":    estBalance,
+				"total_granted":  initialDeposit,
+				"total_used":     estimatedSpend,
+				"source":         "estimated",
+				"last_synced_at": nowStr,
+			})
+			return
+		}
+
 		response.ErrorContext(gatewayJSONResponder{ctx: c}, http.StatusBadRequest, "Sync failed: "+err.Error())
 		return
 	}
@@ -1043,7 +1140,54 @@ func (h *ProviderHandler) SyncAllBalancesGateway(c gatewayctx.GatewayContext) {
 			grants, syncErr := h.statsWorker.SyncNodeStats(ctx, node, apiKey, baseURL)
 			mu.Lock()
 			if syncErr != nil {
-				summary.Failed++
+				// Fallback to estimated balance if initial deposit exists
+				initialDeposit, hasDeposit := a.Extra["initial_deposit_usd"].(float64)
+				if !hasDeposit {
+					initialDeposit, hasDeposit = a.Extra["balance_usd"].(float64)
+				}
+				if hasDeposit && initialDeposit > 0 {
+					nowStr := time.Now().UTC().Format(time.RFC3339)
+					extra := a.Extra
+					if extra == nil {
+						extra = make(map[string]any)
+					}
+					baselineTokens, _ := extra["deposit_baseline_tokens"].(float64)
+					tokensSpent := float64(0)
+					if h.nodeManager != nil {
+						if rt, _ := h.nodeManager.GetNodeRuntimeState(ctx, nodeID); rt != nil {
+							tokensSpent = float64(rt.UsedTokens) - baselineTokens
+						}
+					}
+					estimatedSpend := 0.0
+					if tokensSpent > 0 {
+						estimatedSpend = tokensSpent / 1_000_000.0 * 2.5
+					}
+					estBalance := initialDeposit - estimatedSpend
+					if estBalance < 0 {
+						estBalance = 0
+					}
+					estBalance = float64(int(estBalance*100)) / 100.0
+					extra["balance_usd"] = estBalance
+					extra["balance_updated_at"] = nowStr
+					extra["balance_source"] = "estimated"
+					_, _ = h.adminService.UpdateAccount(ctx, a.ID, &service.UpdateAccountInput{
+						Extra:                 extra,
+						SkipMixedChannelCheck: true,
+					})
+
+					summary.Synced++
+					summary.TotalBalanceUSD += estBalance
+
+					minBalance := 20.0
+					if mb, ok := extra["min_balance_usd"].(float64); ok && mb >= 0 {
+						minBalance = mb
+					}
+					if estBalance <= minBalance && h.statsWorker.Notifier() != nil {
+						_, _ = h.statsWorker.Notifier().CheckAndNotify(ctx, nodeID, a.Name, prov, estBalance)
+					}
+				} else {
+					summary.Failed++
+				}
 			} else {
 				summary.Synced++
 				summary.TotalBalanceUSD += grants.TotalAvailable

@@ -451,6 +451,15 @@ func (yh *YunwuHypervisor) HandleRequest(
 		)
 		_, _ = yh.store.LogEvent(ctx, ownerID, &sess.ID, &selectedNode.NodeID, "RequestFailed", map[string]any{"error": execErr.Error(), "attempt": attempt, "pool_type": "yunwu"})
 
+		// Update node runtime state for production error rate and metrics
+		if errState, sErr := yh.nm.GetNodeRuntimeState(ctx, selectedNode.NodeID); sErr == nil && errState != nil {
+			errState.TotalRequests++
+			errState.SuccessRate = float64(errState.SuccessfulRequests) / float64(errState.TotalRequests)
+			nowErr := time.Now()
+			errState.LastErrorAt = &nowErr
+			_ = yh.nm.SaveNodeRuntimeState(ctx, errState)
+		}
+
 		// If this failed attempt consumed tokens upstream, record it as a platform failover loss
 		// (actual_cost = 0, so user is NOT charged, while upstream_cost is captured for margin analytics)
 		if meta != nil && (meta.InputTokens > 0 || meta.OutputTokens > 0) {
@@ -532,11 +541,16 @@ func (yh *YunwuHypervisor) HandleRequest(
 	if state == nil {
 		state = &health.NodeRuntimeState{NodeID: selectedNode.NodeID}
 	}
+	state.TotalRequests++
+	state.SuccessfulRequests++
+	state.SuccessRate = float64(state.SuccessfulRequests) / float64(state.TotalRequests)
 	state.AvgLatencyMs = (state.AvgLatencyMs + latencyMs) / 2
 	if meta != nil {
 		state.UsedTokens += int64(meta.InputTokens + meta.OutputTokens)
 	}
 	state.ConsecutiveSuccesses++
+	nowSucc := time.Now()
+	state.LastSuccessAt = &nowSucc
 	_ = yh.nm.SaveNodeRuntimeState(ctx, state)
 
 	// 9. Record usage

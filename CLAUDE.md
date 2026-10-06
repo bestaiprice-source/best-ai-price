@@ -196,10 +196,10 @@ Welcome to **sub2api** and the **AI Session Hypervisor (ASH / Yunwu Engine)** re
         - Supports numeric Telegram User IDs (`123456789`), usernames (`@admin` or `admin`, case-insensitive), or wildcard `*`.
         - Direct numeric User IDs in the whitelist can receive notifications immediately.
         - Connected recipients are stored in DB (`SettingKeyTelegramActiveRecipients`) and in Redis (`ash:yunwu:telegram:recipients`).
-      - **Deduplication & State Transition**:
+      - **Deduplication, 12h Cooldown & State Transition**:
         - Alert state tracked in Redis (`ash:yunwu:alerted:balance_low:<nodeID>`) via atomic `SetNX` with in-memory fallback.
-        - **Single-Trigger Guarantee**: Emits an alert strictly *once* when crossing $\le$ the threshold. Repeated balance syncs while the balance remains low do not spam duplicate alerts.
-        - **Automatic Reset on Replenishment**: When an account is recharged above the threshold (`available_usd > threshold`), the alert state is automatically purged (`DEL`), enabling future alerts if the balance drops again.
+        - **12-Hour Cooldown & Single-Trigger Guarantee**: Emits an alert when crossing $\le$ the threshold (resolved per-node from `acc.Extra["min_balance_usd"]`, falling back to global threshold $20). Repeated balance syncs suppress duplicate alerts within a 12-hour cooldown window.
+        - **Automatic Reset on Replenishment**: When an account is recharged above the threshold (`available_usd > threshold`), the alert state is automatically purged (`DEL`), enabling immediate alerts if the balance drops again in the future.
         - Multi-Recipient Delivery: Alerts are broadcast to all authorized connected recipients. If all deliveries fail, the alert state is reset to allow immediate retry on the next balance sync cycle.
       - **Admin Settings & API Endpoints**:
         - Dedicated Telegram tab in Admin Settings (`SettingsView.vue`) with live Bot Token configuration, Alerts Enabled toggle, Alert Threshold input, Whitelist textarea, Connected Recipients table with timestamps, and "Send Test Notification" action.
@@ -260,26 +260,26 @@ Welcome to **sub2api** and the **AI Session Hypervisor (ASH / Yunwu Engine)** re
     - `api_key` / Credentials: Encrypted at rest using `credentials.Cipher` (AES-256-GCM); masked (`12-***90` / `sk-***`) in all administrative list and detail responses.
     - `supported_model_families`: Whitelist of supported model families (`claude`, `gpt`, `gemini`, `kimi`, `other`, `deepseek`) persisted in `extra["supported_model_families"]`.
     - `model_mapping`: Canonical $\leftrightarrow$ Upstream model ID translation map (e.g. `claude-3-7-sonnet` $\to$ `claude-3-7-sonnet-20250219`) stored in `extra["model_mapping"]`.
-    - `balance_usd`: Real-time synced or cached balance in USD.
-    - `balance_source`: Upstream source identifier (e.g. `credit_grants`, `token_allowance`, `sub2api_usage`).
-    - `last_synced_at`: RFC3339 timestamp of last successful balance reconciliation.
+    - `balance_usd`: Real-time synced, manual deposit, or estimated balance in USD.
+    - `balance_source`: Upstream source identifier (`credit_grants`, `token_allowance`, `manual`, or `estimated`). When an upstream provider lacks an automated balance API, admins can input an initial/current deposit (`initial_deposit_usd`), from which the system calculates remaining balance dynamically based on token consumption (`deposit_baseline_tokens` and runtime `rt.UsedTokens`).
+    - `last_synced_at`: RFC3339 timestamp of last successful balance reconciliation or estimation.
     - `min_balance_usd`: Configurable low-balance threshold (defaults to `$20.00`) resolved from `extra`.
     - `state`: Computed status badge: `Healthy`, `Degraded`, `Down`, `Invalid key`, `Low balance`, or `Disabled`.
-    - `metrics`: Live operational performance (`latency_ms`, `error_rate`, `requests`, `spend_usd`) aggregated from Redis node runtime (`ash:node:{nodeID}:runtime`).
+    - `metrics`: Live operational performance (`latency_ms`, `error_rate`, `requests`, `spend_usd`) aggregated from Redis node runtime (`ash:node:{nodeID}:runtime`). Updated on real production user traffic in `YunwuHypervisor.Execute`.
     - `status`: Activation toggle (`active` / `disabled`).
 - **Endpoints (`/api/v1/admin/providers`)**:
   - `GET /api/v1/admin/providers`: Paginated provider list with search, status, and state filters, plus summary KPI metrics (`total_providers`, `active_providers`, `low_balance_providers`, `total_balance_usd`, `total_spend_usd`).
   - `GET /api/v1/admin/providers/:id`: Provider detail by ID.
-  - `POST /api/v1/admin/providers`: Create new upstream provider with encrypted credentials.
-  - `PUT /api/v1/admin/providers/:id`: Update provider configuration and credentials.
+  - `POST /api/v1/admin/providers`: Create new upstream provider with encrypted credentials and optional initial balance (`balance_usd`).
+  - `PUT /api/v1/admin/providers/:id`: Update provider configuration, credentials, and manual balance adjustment (`balance_usd`).
   - `DELETE /api/v1/admin/providers/:id`: Delete provider node.
-  - `POST /api/v1/admin/providers/:id/sync-balance`: Single provider real-time balance synchronization via `yunwu.StatsWorker`. Triggers Telegram alert if balance drops below `min_balance_usd`.
-  - `POST /api/v1/admin/providers/sync-all`: Cluster-wide parallel batch balance synchronization across all active providers (bounded concurrency: 5).
+  - `POST /api/v1/admin/providers/:id/sync-balance`: Single provider real-time balance synchronization via `yunwu.StatsWorker`. Automatically falls back to usage-based estimated balance calculation if upstream automated balance sync fails. Triggers Telegram alert if balance drops below `min_balance_usd`.
+  - `POST /api/v1/admin/providers/sync-all`: Cluster-wide parallel batch balance synchronization across all active providers (bounded concurrency: 5) with usage-based fallback on balance sync failure.
   - `POST /api/v1/admin/providers/:id/test`: Live connectivity and latency test against upstream models endpoint.
   - `POST /api/v1/admin/providers/test-draft`: Test connectivity for unpersisted/draft credentials and endpoints from the creation modal.
 - **Frontend Implementation**:
   - API Client: `frontend/src/api/admin/providers.ts`.
-  - Main View: `frontend/src/views/admin/ProvidersView.vue` with rich aesthetics, KPI cards, live search, state badges, preset dropdowns, credential masking with show/hide password toggle, and model mapping matrix.
+  - Main View: `frontend/src/views/admin/ProvidersView.vue` with rich aesthetics, KPI cards, live search, state badges, preset dropdowns, credential masking with show/hide password toggle, model mapping matrix, "Add Provider" action button, and initial balance input fields.
   - Sidebar: Integrated into `frontend/src/components/layout/AppSidebar.vue` under "Поставщики" (`nav.providers`).
     - `checkCancelRateLimit` in `payment_order_lifecycle.go` fails closed with HTTP 500 on database error rather than bypassing rate limiting.
     - NOWPayments status mapping: `sending`, `confirming`, and `waiting` map to `ProviderStatusPending`. Only `finished` and `confirmed` mark orders as paid.

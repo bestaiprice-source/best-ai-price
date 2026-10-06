@@ -189,7 +189,8 @@ func (n *TelegramNotifier) resolveTargetChatIDs(cfg notifierConfig) []string {
 
 func (n *TelegramNotifier) markAlerted(ctx context.Context, nodeID string) (bool, error) {
 	if n.store != nil && n.store.Redis() != nil {
-		set, err := n.store.Redis().SetNX(ctx, alertKey(nodeID), "1", 0).Result()
+		// Enforce 12h cooldown for repeated identical alerts
+		set, err := n.store.Redis().SetNX(ctx, alertKey(nodeID), "1", 12*time.Hour).Result()
 		if err == nil {
 			if !set {
 				return false, nil
@@ -266,27 +267,40 @@ func (n *TelegramNotifier) CheckAndNotify(ctx context.Context, nodeID, accountNa
 		}
 	}
 
+	// Resolve threshold: default $20 from global config, but allow individual provider override if configured
+	threshold := nCfg.threshold
+	if n.store != nil && n.store.DB() != nil {
+		id, parseErr := strconv.ParseInt(nodeID, 10, 64)
+		if parseErr == nil && id > 0 {
+			if acc, err := n.store.DB().Account.Get(ctx, id); err == nil && acc != nil && acc.Extra != nil {
+				if mb, ok := acc.Extra["min_balance_usd"].(float64); ok && mb > 0 {
+					threshold = mb
+				}
+			}
+		}
+	}
+
 	// Balance replenished above threshold: reset alert state
-	if availableUSD > nCfg.threshold {
+	if availableUSD > threshold {
 		if n.IsAlerted(ctx, nodeID) {
 			n.clearAlerted(ctx, nodeID)
 			slog.Info("[TelegramNotifier] Yunwu node balance replenished above threshold, alert state reset",
 				"node_id", nodeID,
 				"provider", provider,
 				"available_usd", availableUSD,
-				"threshold", nCfg.threshold,
+				"threshold", threshold,
 			)
 		}
 		return false, nil
 	}
 
-	// Balance is <= threshold ($20 or lower).
+	// Balance is <= threshold ($20 or provider specific threshold).
 	if strings.TrimSpace(nCfg.botToken) == "" {
 		slog.Debug("[TelegramNotifier] Low balance detected but Telegram bot token not configured",
 			"node_id", nodeID,
 			"provider", provider,
 			"available_usd", availableUSD,
-			"threshold", nCfg.threshold,
+			"threshold", threshold,
 		)
 		return false, nil
 	}
@@ -297,7 +311,7 @@ func (n *TelegramNotifier) CheckAndNotify(ctx context.Context, nodeID, accountNa
 			"node_id", nodeID,
 			"provider", provider,
 			"available_usd", availableUSD,
-			"threshold", nCfg.threshold,
+			"threshold", threshold,
 		)
 		return false, nil
 	}
@@ -307,11 +321,11 @@ func (n *TelegramNotifier) CheckAndNotify(ctx context.Context, nodeID, accountNa
 		slog.Warn("[TelegramNotifier] Failed to mark alert state in store", "node_id", nodeID, "error", err)
 	}
 	if !newlyAlerted {
-		// Already alerted once for this low-balance period; suppress duplicate
+		// Already alerted once for this low-balance period; suppress duplicate within cooldown
 		return false, nil
 	}
 
-	msg := formatAlertMessage(provider, accountName, nodeID, availableUSD, nCfg.threshold)
+	msg := formatAlertMessage(provider, accountName, nodeID, availableUSD, threshold)
 
 	sentCount := 0
 	var lastErr error

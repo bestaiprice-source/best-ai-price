@@ -65,6 +65,7 @@ export interface CreateProviderRequest {
   api_key: string
   supported_model_families?: string[]
   model_mapping?: Record<string, string>
+  balance_usd?: number
   min_balance_usd?: number
   status?: 'active' | 'disabled'
 }
@@ -78,6 +79,7 @@ export interface UpdateProviderRequest {
   api_key?: string
   supported_model_families?: string[]
   model_mapping?: Record<string, string>
+  balance_usd?: number
   min_balance_usd?: number
   status?: 'active' | 'disabled'
 }
