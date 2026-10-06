@@ -199,13 +199,21 @@ func (s *CheaperProviderService) CheckOpportunities(ctx context.Context) ([]mode
 		mKey := strings.ToLower(strings.TrimSpace(r.ModelName))
 		in1M := r.InputPrice * 1000.0
 		out1M := r.OutputPrice * 1000.0
-		currentRoutes[mKey] = append(currentRoutes[mKey], currentRoutePricing{
+		pricing := currentRoutePricing{
 			ModelName:     r.ModelName,
 			ProviderName:  r.VendorName,
 			InputPrice1M:  in1M,
 			OutputPrice1M: out1M,
 			Total1M:       in1M + out1M,
-		})
+		}
+		currentRoutes[mKey] = append(currentRoutes[mKey], pricing)
+		if strings.Contains(mKey, "/") {
+			parts := strings.Split(mKey, "/")
+			suffix := parts[len(parts)-1]
+			if suffix != "" && suffix != mKey {
+				currentRoutes[suffix] = append(currentRoutes[suffix], pricing)
+			}
+		}
 	}
 
 	var discovered []model.CheaperProviderOpportunity
@@ -339,7 +347,7 @@ func (s *CheaperProviderService) CheckOpportunities(ctx context.Context) ([]mode
 				 current_backup_provider, current_backup_price, candidate_provider, candidate_domain, 
 				 candidate_price, candidate_input_price, candidate_output_price, diff_percent, 
 				 billing_unit, provider_url, provider_card_url, status, telegram_sent, discovered_at, updated_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, 'detected', false, $18, $18)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, false, $18, $18)
 			ON CONFLICT (canonical_model_id, candidate_domain) DO UPDATE
 			SET model_family = EXCLUDED.model_family,
 			    current_primary_provider = EXCLUDED.current_primary_provider,
@@ -357,32 +365,35 @@ func (s *CheaperProviderService) CheckOpportunities(ctx context.Context) ([]mode
 		`, opp.ModelFamily, opp.CanonicalModelID, opp.ModelName, opp.CurrentPrimaryProvider, opp.CurrentPrimaryPrice,
 			opp.CurrentBackupProvider, opp.CurrentBackupPrice, opp.CandidateProvider, opp.CandidateDomain,
 			opp.CandidatePrice, opp.CandidateInputPrice, opp.CandidateOutputPrice, opp.DiffPercent,
-			opp.BillingUnit, opp.ProviderURL, opp.ProviderCardURL, now).Scan(&insertedID, &prevTelegramSent)
+			opp.BillingUnit, opp.ProviderURL, opp.ProviderCardURL, opp.Status, now).Scan(&insertedID, &prevTelegramSent)
 
-		if err == nil {
-			opp.ID = insertedID
-			opp.TelegramSent = prevTelegramSent
+		if err != nil {
+			slog.Error("failed to upsert cheaper opportunity", "canonical_model_id", opp.CanonicalModelID, "candidate_domain", opp.CandidateDomain, "err", err)
+			continue
+		}
 
-			// 5. Audit event in ash_events
-			eventPayload, _ := json.Marshal(map[string]any{
-				"model_family":       opp.ModelFamily,
-				"canonical_model_id": opp.CanonicalModelID,
-				"candidate_provider": opp.CandidateProvider,
-				"candidate_domain":   opp.CandidateDomain,
-				"diff_percent":       opp.DiffPercent,
-				"current_primary":    opp.CurrentPrimaryProvider,
-				"current_price":      opp.CurrentPrimaryPrice,
-				"candidate_price":    opp.CandidatePrice,
-			})
-			_, _ = s.db.ExecContext(ctx, `
-				INSERT INTO ash_events (owner_id, event_type, payload, created_at)
-				VALUES ('system', 'CheaperProviderDiscovered', $1, NOW())
-			`, eventPayload)
+		opp.ID = insertedID
+		opp.TelegramSent = prevTelegramSent
 
-			discovered = append(discovered, opp)
-			if !prevTelegramSent {
-				newAlerts = append(newAlerts, opp)
-			}
+		// 5. Audit event in ash_events
+		eventPayload, _ := json.Marshal(map[string]any{
+			"model_family":       opp.ModelFamily,
+			"canonical_model_id": opp.CanonicalModelID,
+			"candidate_provider": opp.CandidateProvider,
+			"candidate_domain":   opp.CandidateDomain,
+			"diff_percent":       opp.DiffPercent,
+			"current_primary":    opp.CurrentPrimaryProvider,
+			"current_price":      opp.CurrentPrimaryPrice,
+			"candidate_price":    opp.CandidatePrice,
+		})
+		_, _ = s.db.ExecContext(ctx, `
+			INSERT INTO ash_events (owner_id, event_type, payload, created_at)
+			VALUES ('system', 'CheaperProviderDiscovered', $1, NOW())
+		`, eventPayload)
+
+		discovered = append(discovered, opp)
+		if !prevTelegramSent {
+			newAlerts = append(newAlerts, opp)
 		}
 	}
 

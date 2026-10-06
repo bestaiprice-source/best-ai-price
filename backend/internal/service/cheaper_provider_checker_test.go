@@ -58,6 +58,12 @@ func TestCheaperProviderChecker_FetchAndCompare(t *testing.T) {
 
 	// 4. Mock INSERT INTO ash_cheaper_provider_opportunities
 	mock.ExpectQuery(regexp.QuoteMeta("INSERT INTO ash_cheaper_provider_opportunities")).
+		WithArgs(
+			"claude", "anthropic/claude-3-7-sonnet", "claude-3-7-sonnet", "Current Expensive Provider", 18.0,
+			nil, nil, "Test Cheap Cloud", "cheapcloud.ai",
+			12.0, sqlmock.AnyArg(), sqlmock.AnyArg(), 33.33,
+			"tokens", sqlmock.AnyArg(), sqlmock.AnyArg(), "detected", sqlmock.AnyArg(),
+		).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "telegram_sent"}).AddRow("opp-uuid-1", true))
 
 	// 5. Mock INSERT INTO ash_events
