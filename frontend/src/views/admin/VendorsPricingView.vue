@@ -52,7 +52,6 @@
             <tr>
               <th>Provider</th>
               <th>URL</th>
-              <th>Payment Methods</th>
               <th>Models Count</th>
               <th>Last Updated</th>
               <th>Actions</th>
@@ -62,15 +61,6 @@
             <tr v-for="vendor in displayVendors" :key="vendor.url">
               <td class="fw-bold">{{ vendor.name }}</td>
               <td><a :href="vendor.url" target="_blank">{{ vendor.url }}</a></td>
-              <td>
-                <div class="tags-container">
-                  <span v-for="method in vendor.payment_methods" :key="method.type" 
-                        class="payment-tag" :style="{ backgroundColor: method.color || '#333' }">
-                    {{ method.name }}
-                  </span>
-                  <span v-if="!vendor.payment_methods || vendor.payment_methods.length === 0" class="text-muted">None</span>
-                </div>
-              </td>
               <td>{{ vendor.models?.length || 0 }}</td>
               <td>{{ formatDate(vendor.last_scraped_at) }}</td>
               <td>
@@ -909,21 +899,6 @@ a {
 }
 a:hover {
   text-decoration: underline;
-}
-
-.tags-container {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.payment-tag {
-  padding: 4px 10px;
-  border-radius: 100px;
-  font-size: 11px;
-  font-weight: 600;
-  color: white;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.2);
 }
 
 .action-buttons {

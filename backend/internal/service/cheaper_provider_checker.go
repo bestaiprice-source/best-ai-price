@@ -347,8 +347,7 @@ func (s *CheaperProviderService) CheckOpportunities(ctx context.Context) ([]mode
 						"<b>Текущий Primary:</b> %s ($%.4f за 1M)\n"+
 						"<b>Новый кандидат:</b> %s ($%.4f за 1M)\n"+
 						"<b>Экономия:</b> 🟢 <b>-%.1f%%</b>\n"+
-						"<b>Карточка поставщика:</b> <a href=\"%s\">%s</a>\n\n"+
-						"⚠️ <i>Новый кандидат не подключается автоматически: сначала требуются регистрация, пополнение баланса, добавление credentials и тесты.</i>",
+						"<b>Карточка поставщика:</b> <a href=\"%s\">%s</a>",
 					opp.ModelName, opp.CanonicalModelID,
 					opp.CurrentPrimaryProvider, opp.CurrentPrimaryPrice,
 					opp.CandidateProvider, opp.CandidatePrice,
