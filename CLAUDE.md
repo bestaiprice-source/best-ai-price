@@ -258,12 +258,12 @@ Welcome to **sub2api** and the **AI Session Hypervisor (ASH / Yunwu Engine)** re
     - `base_url`: Upstream API root endpoint (e.g. `https://api.anthropic.com`, `https://api.openai.com/v1`, `https://api.openlux.ai/v1`).
     - `protocol`: Communication protocol (`openai`, `anthropic`, `gemini`, `responses`).
     - `api_key` / Credentials: Encrypted at rest using `credentials.Cipher` (AES-256-GCM); masked (`12-***90` / `sk-***`) in all administrative list and detail responses.
-    - `supported_model_families`: Whitelist of supported model families (`claude`, `gpt`, `gemini`, `kimi`, `other`, `deepseek`) persisted in `extra["supported_model_families"]`.
+    - `supported_model_families`: Whitelist of supported model families (`claude`, `gpt`, `gemini`, `kimi`, `deepseek`) persisted in `extra["supported_model_families"]`. Note: The generic `other` family is strictly excluded from cheaper routing evaluation and account templates to focus exclusively on core actionable model families.
     - `model_mapping`: Canonical $\leftrightarrow$ Upstream model ID translation map (e.g. `claude-3-7-sonnet` $\to$ `claude-3-7-sonnet-20250219`) stored in `extra["model_mapping"]`.
     - `balance_usd`: Real-time synced, manual deposit, or estimated balance in USD.
     - `balance_source`: Upstream source identifier (`credit_grants`, `token_allowance`, `manual`, or `estimated`). When an upstream provider lacks an automated balance API, admins can input an initial/current deposit (`initial_deposit_usd`), from which the system calculates remaining balance dynamically based on token consumption (`deposit_baseline_tokens` and runtime `rt.UsedTokens`).
     - `last_synced_at`: RFC3339 timestamp of last successful balance reconciliation or estimation.
-    - `min_balance_usd`: Configurable low-balance threshold (defaults to `$20.00`) resolved from `extra`.
+    - `min_balance_usd`: Configurable low-balance threshold (defaults to `$20.00`) resolved from `extra`. Configurable directly via `CreateAccountModal.vue` and `EditAccountModal.vue` alongside `yunwu_protocol` (`openai`, `anthropic`, `gemini`, `responses`).
     - `state`: Computed status badge: `Healthy`, `Degraded`, `Down`, `Invalid key`, `Low balance`, or `Disabled`.
     - `metrics`: Live operational performance (`latency_ms`, `error_rate`, `requests`, `spend_usd`) aggregated from Redis node runtime (`ash:node:{nodeID}:runtime`). Updated on real production user traffic in `YunwuHypervisor.Execute`.
     - `status`: Activation toggle (`active` / `disabled`).

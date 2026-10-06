@@ -17,13 +17,6 @@
             <Icon name="sync" size="sm" :class="{ 'animate-spin': isSyncingAll }" />
             <span>{{ isSyncingAll ? 'Syncing...' : 'Sync All Balances' }}</span>
           </button>
-          <button
-            @click="openCreateModal"
-            class="inline-flex items-center gap-2 rounded-xl bg-primary-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-all hover:bg-primary-500 hover:shadow-md dark:bg-primary-500 dark:hover:bg-primary-400"
-          >
-            <Icon name="plus" size="sm" />
-            <span>Add Provider</span>
-          </button>
           <router-link
             to="/admin/vendors"
             class="inline-flex items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-sm font-medium text-indigo-700 shadow-sm transition-all hover:bg-indigo-100 hover:shadow dark:border-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-300 dark:hover:bg-indigo-900/50"
@@ -33,7 +26,7 @@
           </router-link>
           <router-link
             to="/admin/accounts"
-            class="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 shadow-sm transition-all hover:bg-gray-50 hover:shadow dark:border-dark-700 dark:bg-dark-800 dark:text-gray-200 dark:hover:bg-dark-700"
+            class="inline-flex items-center gap-2 rounded-xl bg-primary-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-all hover:bg-primary-500 hover:shadow-md dark:bg-primary-500 dark:hover:bg-primary-400"
           >
             <Icon name="server" size="sm" />
             <span>Manage Nodes</span>
@@ -441,31 +434,29 @@
       </div>
     </div>
 
-    <!-- Create / Edit Provider Modal -->
+    <!-- Edit Provider Modal -->
     <BaseDialog
       :show="showEditModal"
-      :title="editingProvider ? 'Edit Provider' : 'Add New Provider'"
+      title="Edit Provider"
       width="wide"
       @close="closeEditModal"
     >
       <form @submit.prevent="saveProvider" class="space-y-5">
-        <!-- Quick Presets -->
-        <div v-if="!editingProvider" class="rounded-xl border border-gray-100 bg-gray-50/70 p-3.5 dark:border-dark-700 dark:bg-dark-900/40">
-          <label class="block text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-2">
-            Quick Provider Preset
+        <!-- Preset Quick Pick (for new provider) -->
+        <div v-if="!editingProvider" class="space-y-1.5 rounded-xl border border-dashed border-gray-200 bg-gray-50/50 p-3 dark:border-dark-600 dark:bg-dark-800/40">
+          <label class="block text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+            Quick Fill Presets
           </label>
           <div class="flex flex-wrap gap-2">
             <button
-              v-for="preset in presets"
-              :key="preset.id"
+              v-for="p in presets"
+              :key="p.id"
               type="button"
-              @click="applyPreset(preset)"
-              class="rounded-lg border px-3 py-1.5 text-xs font-medium transition-all"
-              :class="selectedPresetId === preset.id
-                ? 'border-primary-500 bg-primary-50 text-primary-700 dark:bg-primary-950/40 dark:text-primary-300'
-                : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-100 dark:border-dark-600 dark:bg-dark-800 dark:text-gray-300 dark:hover:bg-dark-700'"
+              @click="applyPreset(p)"
+              class="rounded-lg px-2.5 py-1 text-xs font-medium border transition-colors"
+              :class="selectedPresetId === p.id ? 'border-primary-500 bg-primary-50 text-primary-700 dark:bg-primary-950/50 dark:text-primary-300' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-100 dark:border-dark-600 dark:bg-dark-700 dark:text-gray-300'"
             >
-              {{ preset.name }}
+              {{ p.name }}
             </button>
           </div>
         </div>
@@ -972,25 +963,7 @@ function applyPreset(preset: typeof presets[0]) {
   form.supported_model_families = [...preset.families]
 }
 
-// Create & Edit Modal
-
-function openCreateModal() {
-  editingProvider.value = null
-  selectedPresetId.value = null
-  showApiKey.value = false
-  draftTestResult.value = null
-  form.provider_name = ''
-  form.domain = ''
-  form.protocol = 'openai'
-  form.base_url = ''
-  form.api_key = ''
-  form.balance_usd = 0
-  form.min_balance_usd = 20
-  form.status = 'active'
-  form.supported_model_families = ['claude', 'gpt']
-  mappingRows.value = []
-  showEditModal.value = true
-}
+// Edit Modal
 
 function openEditModal(provider: Provider) {
   editingProvider.value = provider

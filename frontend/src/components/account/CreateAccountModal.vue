@@ -319,6 +319,43 @@
           <p class="input-hint">Your API Key / Bearer Token</p>
         </div>
         <div>
+          <label class="input-label">Protocol</label>
+          <select v-model="yunwuProtocol" class="input">
+            <option value="openai">OpenAI Compatible (standard /v1/chat/completions)</option>
+            <option value="anthropic">Anthropic Messages (native /v1/messages)</option>
+            <option value="gemini">Google Gemini (native /v1beta/models)</option>
+            <option value="responses">OpenAI Responses API</option>
+          </select>
+        </div>
+
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div>
+            <label class="input-label">Initial / Current Balance ($ USD)</label>
+            <input
+              v-model.number="yunwuInitialBalance"
+              type="number"
+              step="0.01"
+              min="0"
+              class="input font-mono"
+              placeholder="0.00"
+            />
+            <p class="input-hint">For manual deposit tracking and usage estimation</p>
+          </div>
+          <div>
+            <label class="input-label">Min Balance Alert Threshold ($ USD)</label>
+            <input
+              v-model.number="yunwuMinBalance"
+              type="number"
+              step="0.01"
+              min="0"
+              class="input font-mono"
+              placeholder="20.00"
+            />
+            <p class="input-hint">Telegram alert triggers when balance drops below this</p>
+          </div>
+        </div>
+
+        <div>
           <label class="input-label">Supported Model Families</label>
           <p class="mb-2 text-xs text-gray-500 dark:text-gray-400">
             Select which neural network families will be routed to this node:
@@ -340,6 +377,60 @@
                 <span class="block text-[11px] text-gray-500 dark:text-gray-400">{{ family.desc }}</span>
               </div>
             </label>
+          </div>
+        </div>
+
+        <!-- Custom Model Mapping -->
+        <div class="rounded-lg border border-gray-200 bg-white/70 p-3.5 dark:border-dark-700 dark:bg-dark-900/40">
+          <div class="flex items-center justify-between mb-2">
+            <div>
+              <span class="text-xs font-semibold uppercase tracking-wider text-gray-700 dark:text-gray-300">
+                Model Mapping (Optional)
+              </span>
+              <p class="text-[11px] text-gray-500 dark:text-gray-400">
+                Map incoming canonical model IDs to upstream provider model IDs
+              </p>
+            </div>
+            <button
+              type="button"
+              @click="addYunwuMapping"
+              class="inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-emerald-600 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950/40"
+            >
+              + Add Mapping
+            </button>
+          </div>
+
+          <div v-if="yunwuModelMappings.length === 0" class="py-2 text-center text-xs text-gray-400 dark:text-gray-500">
+            No custom model mappings configured. Standard model IDs will be passed as-is.
+          </div>
+
+          <div v-else class="space-y-2">
+            <div
+              v-for="(row, idx) in yunwuModelMappings"
+              :key="idx"
+              class="flex items-center gap-2"
+            >
+              <input
+                v-model="row.canonical"
+                type="text"
+                placeholder="Canonical (e.g. claude-3-7-sonnet)"
+                class="input flex-1 font-mono text-xs"
+              />
+              <span class="text-xs text-gray-400">→</span>
+              <input
+                v-model="row.upstream"
+                type="text"
+                placeholder="Upstream (e.g. claude-3-7-sonnet-20250219)"
+                class="input flex-1 font-mono text-xs"
+              />
+              <button
+                type="button"
+                @click="removeYunwuMapping(idx)"
+                class="rounded p-1 text-gray-400 hover:text-rose-500"
+              >
+                ✕
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -3285,7 +3376,23 @@ const yunwuBaseUrl = ref('https://api.openlux.ai/v1') // For Yunwu type: base UR
 const yunwuApiKey = ref('') // For Yunwu type: API key
 const yunwuProvider = ref('openlux')
 const yunwuCustomProvider = ref('')
-const yunwuSupportedFamilies = ref<string[]>(['claude', 'gpt', 'gemini', 'kimi', 'other'])
+const yunwuProtocol = ref('openai')
+const yunwuInitialBalance = ref<number | null>(0)
+const yunwuMinBalance = ref<number | null>(20)
+const yunwuSupportedFamilies = ref<string[]>(['claude', 'gpt', 'gemini', 'kimi'])
+interface YunwuMappingRow {
+  canonical: string
+  upstream: string
+}
+const yunwuModelMappings = ref<YunwuMappingRow[]>([])
+
+const addYunwuMapping = () => {
+  yunwuModelMappings.value.push({ canonical: '', upstream: '' })
+}
+
+const removeYunwuMapping = (index: number) => {
+  yunwuModelMappings.value.splice(index, 1)
+}
 
 const YUNWU_PROVIDER_DEFAULTS: Record<string, string> = {
   openlux: 'https://api.openlux.ai/v1',
@@ -3304,8 +3411,7 @@ const availableModelFamilies = [
   { id: 'claude', name: 'Claude', desc: 'claude-3-5-sonnet, claude-3-7-sonnet, opus...' },
   { id: 'gpt', name: 'GPT', desc: 'gpt-4o, o1, o3, chatgpt...' },
   { id: 'gemini', name: 'Gemini', desc: 'gemini-1.5, gemini-2.5, live, imagen...' },
-  { id: 'kimi', name: 'Kimi', desc: 'kimi-latest, kimi-k1.5, kimi-k2.6, moonshot...' },
-  { id: 'other', name: 'Other', desc: 'deepseek, qwen, llama, grok, mistral...' }
+  { id: 'kimi', name: 'Kimi', desc: 'kimi-latest, kimi-k1.5, kimi-k2.6, moonshot...' }
 ]
 const antigravityModelRestrictionMode = ref<'whitelist' | 'mapping'>('whitelist')
 const antigravityWhitelistModels = ref<string[]>([])
@@ -4075,7 +4181,11 @@ const resetForm = () => {
   yunwuApiKey.value = ''
   yunwuProvider.value = 'openlux'
   yunwuCustomProvider.value = ''
-  yunwuSupportedFamilies.value = ['claude', 'gpt', 'gemini', 'kimi', 'other']
+  yunwuProtocol.value = 'openai'
+  yunwuInitialBalance.value = 0
+  yunwuMinBalance.value = 20
+  yunwuSupportedFamilies.value = ['claude', 'gpt', 'gemini', 'kimi']
+  yunwuModelMappings.value = []
   tempUnschedEnabled.value = false
   tempUnschedRules.value = []
   geminiOAuthType.value = 'code_assist'
@@ -4253,9 +4363,27 @@ const handleSubmit = async () => {
     }
     const extra: Record<string, unknown> = {
       provider: finalProvider,
+      yunwu_protocol: yunwuProtocol.value || 'openai',
       supported_model_families: yunwuSupportedFamilies.value.length > 0
         ? yunwuSupportedFamilies.value
-        : ['claude', 'gpt', 'gemini', 'other']
+        : ['claude', 'gpt', 'gemini', 'kimi'],
+      min_balance_usd: Number(yunwuMinBalance.value) || 20,
+      balance_usd: Number(yunwuInitialBalance.value) || 0,
+      initial_deposit_usd: Number(yunwuInitialBalance.value) || 0,
+      deposit_baseline_tokens: 0,
+      balance_source: 'manual',
+      balance_updated_at: new Date().toISOString()
+    }
+    const mappingObj: Record<string, string> = {}
+    for (const row of yunwuModelMappings.value) {
+      const c = row.canonical.trim()
+      const u = row.upstream.trim()
+      if (c && u) {
+        mappingObj[c] = u
+      }
+    }
+    if (Object.keys(mappingObj).length > 0) {
+      extra.model_mapping = mappingObj
     }
 
     await createAccountAndFinish('yunwu', 'apikey' as AccountType, credentials, extra)

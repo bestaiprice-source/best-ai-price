@@ -166,6 +166,30 @@
               placeholder="e.g. openlux, portdan, custom-vendor"
             />
           </div>
+
+          <!-- Protocol & Alert Threshold -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label class="input-label">Forwarding Protocol</label>
+              <select v-model="yunwuProtocol" class="input">
+                <option value="openai">OpenAI Chat Protocol (/v1/chat/completions)</option>
+                <option value="anthropic">Anthropic Messages Protocol (/v1/messages)</option>
+                <option value="gemini">Native Gemini Protocol (/v1beta/models/...)</option>
+              </select>
+            </div>
+            <div>
+              <label class="input-label">Low Balance Alert Threshold ($)</label>
+              <input
+                v-model.number="yunwuMinBalance"
+                type="number"
+                step="0.01"
+                min="0"
+                class="input font-mono"
+                placeholder="20.00"
+              />
+            </div>
+          </div>
+
           <div>
             <label class="input-label">Supported Model Families</label>
             <p class="mb-2 text-xs text-gray-500 dark:text-gray-400">
@@ -1964,7 +1988,10 @@ const allowOverages = ref(false) // For antigravity accounts: enable AI Credits 
 // Unofficial Provider (Yunwu / OpenLux / Portdan / Top-API / Yuanqiaoyun) Node Settings
 const yunwuProvider = ref('openlux')
 const yunwuCustomProvider = ref('')
-const yunwuSupportedFamilies = ref<string[]>(['claude', 'gpt', 'gemini', 'kimi', 'other'])
+const yunwuProtocol = ref('openai')
+const yunwuMinBalance = ref<number | null>(20)
+const yunwuBalance = ref<number | null>(0)
+const yunwuSupportedFamilies = ref<string[]>(['claude', 'gpt', 'gemini', 'kimi'])
 
 const YUNWU_PROVIDER_DEFAULTS: Record<string, string> = {
   openlux: 'https://api.openlux.ai/v1',
@@ -1987,8 +2014,7 @@ const availableModelFamilies = [
   { id: 'claude', name: 'Claude', desc: 'claude-3-5-sonnet, claude-3-7-sonnet, opus...' },
   { id: 'gpt', name: 'GPT', desc: 'gpt-4o, o1, o3, chatgpt...' },
   { id: 'gemini', name: 'Gemini', desc: 'gemini-1.5, gemini-2.5, live, imagen...' },
-  { id: 'kimi', name: 'Kimi', desc: 'kimi-latest, kimi-k1.5, kimi-k2.6, moonshot...' },
-  { id: 'other', name: 'Other', desc: 'deepseek, qwen, llama, grok, mistral...' }
+  { id: 'kimi', name: 'Kimi', desc: 'kimi-latest, kimi-k1.5, kimi-k2.6, moonshot...' }
 ]
 const antigravityModelRestrictionMode = ref<'whitelist' | 'mapping'>('whitelist')
 const antigravityWhitelistModels = ref<string[]>([])
@@ -2242,16 +2268,22 @@ const syncFormFromAccount = (newAccount: Account | null) => {
       yunwuProvider.value = 'custom'
       yunwuCustomProvider.value = rawProv
     }
+    yunwuProtocol.value = (extra?.yunwu_protocol as string) || 'openai'
+    yunwuMinBalance.value = typeof extra?.min_balance_usd === 'number' ? extra.min_balance_usd : 20
+    yunwuBalance.value = typeof extra?.balance_usd === 'number' ? extra.balance_usd : 0
     const families = extra?.supported_model_families
     if (Array.isArray(families) && families.length > 0) {
-      yunwuSupportedFamilies.value = [...(families as string[])]
+      yunwuSupportedFamilies.value = (families as string[]).filter(f => f !== 'other')
     } else {
-      yunwuSupportedFamilies.value = ['claude', 'gpt', 'gemini', 'kimi', 'other']
+      yunwuSupportedFamilies.value = ['claude', 'gpt', 'gemini', 'kimi']
     }
   } else {
     yunwuProvider.value = 'openlux'
     yunwuCustomProvider.value = ''
-    yunwuSupportedFamilies.value = ['claude', 'gpt', 'gemini', 'kimi', 'other']
+    yunwuProtocol.value = 'openai'
+    yunwuMinBalance.value = 20
+    yunwuBalance.value = 0
+    yunwuSupportedFamilies.value = ['claude', 'gpt', 'gemini', 'kimi']
   }
 
   // Load OpenAI passthrough toggle (OpenAI OAuth/API Key)
@@ -3384,9 +3416,13 @@ const handleSubmit = async () => {
         ? yunwuCustomProvider.value.trim().toLowerCase()
         : (yunwuProvider.value || 'openlux')
       newExtra.provider = finalProvider
+      newExtra.yunwu_protocol = yunwuProtocol.value || 'openai'
+      if (yunwuMinBalance.value != null && yunwuMinBalance.value >= 0) {
+        newExtra.min_balance_usd = Number(yunwuMinBalance.value)
+      }
       newExtra.supported_model_families = yunwuSupportedFamilies.value.length > 0
-        ? yunwuSupportedFamilies.value
-        : ['claude', 'gpt', 'gemini', 'other']
+        ? yunwuSupportedFamilies.value.filter(f => f !== 'other')
+        : ['claude', 'gpt', 'gemini', 'kimi']
       updatePayload.extra = applyIgnorePauseSchedulingErrorsUpdate(newExtra)
     }
 
