@@ -258,8 +258,16 @@
                 <span class="family-models-count">{{ group.items.length }} alternatives</span>
               </div>
               <div class="family-savings-summary">
-                <span class="savings-label">Avg Savings:</span>
-                <span class="savings-badge">-{{ group.avgSavings.toFixed(1) }}%</span>
+                <div class="price-stat">
+                  <span class="stat-label">Current Avg:</span>
+                  <span class="stat-val">${{ group.currentAvgPrice.toFixed(2) }}</span>
+                </div>
+                <span class="stat-arrow">→</span>
+                <div class="price-stat">
+                  <span class="stat-label">Candidate Avg:</span>
+                  <span class="stat-val text-success">${{ group.candidateAvgPrice.toFixed(2) }}</span>
+                </div>
+                <span class="savings-badge ml-2">-{{ group.avgSavings.toFixed(1) }}%</span>
               </div>
             </div>
 
@@ -513,6 +521,8 @@ interface FamilyOpportunityGroup {
   familyId: string;
   familyName: string;
   items: CheaperProviderOpportunity[];
+  currentAvgPrice: number;
+  candidateAvgPrice: number;
   avgSavings: number;
 }
 
@@ -534,12 +544,19 @@ const displayedFamilyGroups = computed<FamilyOpportunityGroup[]>(() => {
   for (const famId of familiesToInclude) {
     const items = grouped[famId] || [];
     if (items.length > 0) {
-      const totalSavings = items.reduce((acc, curr) => acc + curr.diff_percent, 0);
+      const currentSum = items.reduce((acc, curr) => acc + (curr.current_primary_price || 0), 0);
+      const candidateSum = items.reduce((acc, curr) => acc + (curr.candidate_price || 0), 0);
+      const currentAvg = currentSum / items.length;
+      const candidateAvg = candidateSum / items.length;
+      const savings = currentAvg > 0 ? ((currentAvg - candidateAvg) / currentAvg) * 100 : 0;
+
       result.push({
         familyId: famId,
         familyName: formatFamilyTitle(famId),
         items,
-        avgSavings: totalSavings / items.length,
+        currentAvgPrice: currentAvg,
+        candidateAvgPrice: candidateAvg,
+        avgSavings: savings,
       });
     }
   }
@@ -1383,13 +1400,36 @@ a:hover {
 .family-savings-summary {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
-.savings-label {
-  font-size: 12px;
+.price-stat {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.stat-label {
+  font-size: 11px;
   color: #94a3b8;
   text-transform: uppercase;
   font-weight: 600;
 }
+
+.stat-val {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+}
+
+.stat-arrow {
+  color: #64748b;
+  font-size: 13px;
+}
+
+.ml-2 {
+  margin-left: 8px;
+}
 </style>
+

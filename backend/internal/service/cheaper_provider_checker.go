@@ -415,17 +415,18 @@ func (s *CheaperProviderService) CheckOpportunities(ctx context.Context) ([]mode
 				continue
 			}
 
-			totalSavings := 0.0
-			maxSavings := 0.0
+			currentPriceSum := 0.0
+			candidatePriceSum := 0.0
+			count := 0
 			currentProvidersSet := make(map[string]bool)
 			var currentProvidersList []string
 			var modelLines []string
 
 			for i, o := range grp.opps {
-				totalSavings += o.DiffPercent
-				if o.DiffPercent > maxSavings {
-					maxSavings = o.DiffPercent
-				}
+				currentPriceSum += o.CurrentPrimaryPrice
+				candidatePriceSum += o.CandidatePrice
+				count++
+
 				if !currentProvidersSet[o.CurrentPrimaryProvider] {
 					currentProvidersSet[o.CurrentPrimaryProvider] = true
 					currentProvidersList = append(currentProvidersList, o.CurrentPrimaryProvider)
@@ -451,10 +452,11 @@ func (s *CheaperProviderService) CheckOpportunities(ctx context.Context) ([]mode
 				modelLines = append(modelLines, fmt.Sprintf("• <i>... и ещё %d моделей</i>", len(grp.opps)-8))
 			}
 
-			avgSavings := totalSavings / float64(len(grp.opps))
-			savingsStr := fmt.Sprintf("🟢 <b>-%.1f%%</b>", avgSavings)
-			if len(grp.opps) > 1 && maxSavings > avgSavings+0.5 {
-				savingsStr = fmt.Sprintf("🟢 <b>-%.1f%%</b> (до -%.1f%%)", avgSavings, maxSavings)
+			currentAvgPrice := currentPriceSum / float64(count)
+			candidateAvgPrice := candidatePriceSum / float64(count)
+			avgSavingsPercent := 0.0
+			if currentAvgPrice > 0 {
+				avgSavingsPercent = math.Round(((currentAvgPrice-candidateAvgPrice)/currentAvgPrice)*1000) / 10
 			}
 
 			firstOpp := grp.opps[0]
@@ -475,17 +477,16 @@ func (s *CheaperProviderService) CheckOpportunities(ctx context.Context) ([]mode
 			tgMsg := fmt.Sprintf(
 				"💡 <b>Найден более дешёвый поставщик для семейства %s!</b>\n\n"+
 					"<b>Семейство:</b> %s\n"+
-					"<b>Текущие провайдеры:</b> %s\n"+
-					"<b>Новый кандидат:</b> %s (%s)\n"+
-					"<b>Экономия по семейству:</b> %s\n\n"+
+					"<b>Текущие провайдеры:</b> %s (ср. цена: %s / 1M)\n"+
+					"<b>Новый кандидат:</b> %s (%s) (ср. цена: %s / 1M)\n"+
+					"<b>Экономия по средней цене семейства:</b> 🟢 <b>-%.1f%%</b>\n\n"+
 					"<b>Модели:</b>\n%s\n\n"+
 					"<b>Карточка поставщика:</b> <a href=\"%s\">%s</a>",
 				familyNameDisplay,
 				familyNameDisplay,
-				currentDisplay,
-				firstOpp.CandidateProvider,
-				firstOpp.CandidateDomain,
-				savingsStr,
+				currentDisplay, formatPriceUSD(currentAvgPrice),
+				firstOpp.CandidateProvider, firstOpp.CandidateDomain, formatPriceUSD(candidateAvgPrice),
+				avgSavingsPercent,
 				strings.Join(modelLines, "\n"),
 				cardURL,
 				firstOpp.CandidateDomain,
