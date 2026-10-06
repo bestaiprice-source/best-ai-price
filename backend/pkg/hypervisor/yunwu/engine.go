@@ -404,6 +404,15 @@ func (yh *YunwuHypervisor) HandleRequest(
 	// 7. Execute Runtime Request
 	execStart := time.Now()
 
+	modelName := requestedModel
+	var parsedReq struct {
+		Model string `json:"model"`
+	}
+	_ = json.Unmarshal(reqPayload, &parsedReq)
+	if parsedReq.Model != "" {
+		modelName = parsedReq.Model
+	}
+
 	var meta *runtime.ResponseMetadata
 	var execErr error
 	maxRetries := yh.cfg.MaxRetry
@@ -441,6 +450,13 @@ func (yh *YunwuHypervisor) HandleRequest(
 			"error", execErr,
 		)
 		_, _ = yh.store.LogEvent(ctx, ownerID, &sess.ID, &selectedNode.NodeID, "RequestFailed", map[string]any{"error": execErr.Error(), "attempt": attempt, "pool_type": "yunwu"})
+
+		// If this failed attempt consumed tokens upstream, record it as a platform failover loss
+		// (actual_cost = 0, so user is NOT charged, while upstream_cost is captured for margin analytics)
+		if meta != nil && (meta.InputTokens > 0 || meta.OutputTokens > 0) {
+			yh.recordUpstreamFailoverLoss(ctx, ownerID, sess.ID, *selectedNode, modelName, meta, attempt, stream != nil)
+		}
+
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
@@ -520,6 +536,7 @@ func (yh *YunwuHypervisor) HandleRequest(
 	if meta != nil {
 		state.UsedTokens += int64(meta.InputTokens + meta.OutputTokens)
 	}
+	state.ConsecutiveSuccesses++
 	_ = yh.nm.SaveNodeRuntimeState(ctx, state)
 
 	// 9. Record usage
@@ -593,6 +610,104 @@ func (yh *YunwuHypervisor) HandleRequest(
 	_, _ = yh.store.LogEvent(ctx, ownerID, &sess.ID, &selectedNode.NodeID, "RequestSucceeded", map[string]any{"latency_ms": time.Since(execStart).Milliseconds(), "pool_type": "yunwu"})
 
 	return meta, nil
+}
+
+func (yh *YunwuHypervisor) recordUpstreamFailoverLoss(
+	ctx context.Context,
+	ownerID string,
+	sessionID string,
+	node health.ExecutionNode,
+	modelName string,
+	meta *runtime.ResponseMetadata,
+	attempt int,
+	streaming bool,
+) {
+	if meta == nil || (meta.InputTokens <= 0 && meta.OutputTokens <= 0) {
+		return
+	}
+
+	inPrice, outPrice, hasPrice := yh.resolveNodePrice(ctx, &node, modelName)
+	if !hasPrice {
+		inPrice, outPrice, hasPrice = yh.resolveNodePrice(ctx, &node, StripVendorPrefix(modelName))
+	}
+	if !hasPrice {
+		return
+	}
+
+	inCostUSD := float64(meta.InputTokens) * (inPrice / 1000.0)
+	outCostUSD := float64(meta.OutputTokens) * (outPrice / 1000.0)
+	totalCostUSD := inCostUSD + outCostUSD
+
+	var accountMapping map[string]string
+	if yh.store != nil && yh.store.DB() != nil {
+		if accID, err := strconv.ParseInt(node.NodeID, 10, 64); err == nil && accID > 0 {
+			if dbAcc, err := yh.store.DB().Account.Get(ctx, accID); err == nil && dbAcc != nil {
+				accountMapping = ParseAccountModelMapping(dbAcc.Extra)
+			}
+		}
+	}
+	upstreamModel := ResolveUpstreamModelID(node.Provider, modelName, accountMapping)
+
+	lossReqID := fmt.Sprintf("%s-failover-loss-%d-%d", sessionID, attempt, time.Now().UnixNano())
+	userID, _ := strconv.ParseInt(ownerID, 10, 64)
+	accountID, _ := strconv.ParseInt(node.NodeID, 10, 64)
+
+	if yh.store != nil {
+		// 1. Record to usage_logs with actual_cost = 0 so it reflects as platform upstream loss in Gross Margin Analytics
+		_, err := yh.store.RecordUpstreamFailoverLoss(
+			ctx,
+			userID,
+			accountID,
+			modelName,
+			upstreamModel,
+			int(meta.InputTokens),
+			int(meta.OutputTokens),
+			inCostUSD,
+			outCostUSD,
+			totalCostUSD,
+			lossReqID,
+			streaming,
+		)
+		if err != nil {
+			slog.Warn("[YunwuHypervisor] Failed to record upstream failover loss to usage_logs", "error", err, "node_id", node.NodeID)
+		}
+
+		// 2. Record to ash_usages with billed_micro_usd = 0
+		_, _ = yh.store.RecordUsageDetails(
+			ctx,
+			ownerID,
+			&sessionID,
+			&node.NodeID,
+			meta.InputTokens,
+			meta.OutputTokens,
+			meta.InputTokens+meta.OutputTokens,
+			"yunwu",
+			node.Provider,
+			modelName,
+			"upstream_failover_loss",
+			0,
+		)
+
+		// 3. Log event
+		_, _ = yh.store.LogEvent(ctx, ownerID, &sessionID, &node.NodeID, "UpstreamFailoverLossRecorded", map[string]any{
+			"attempt":        attempt,
+			"input_tokens":   meta.InputTokens,
+			"output_tokens":  meta.OutputTokens,
+			"total_cost_usd": totalCostUSD,
+			"provider":       node.Provider,
+			"pool_type":      "yunwu",
+		})
+	}
+
+	slog.Info("[YunwuHypervisor] Recorded upstream failover loss for failed attempt",
+		"node_id", node.NodeID,
+		"provider", node.Provider,
+		"model", modelName,
+		"input_tokens", meta.InputTokens,
+		"output_tokens", meta.OutputTokens,
+		"total_cost_usd", totalCostUSD,
+		"attempt", attempt,
+	)
 }
 
 // HandleLive proxies a bidirectional Gemini Live session through the isolated

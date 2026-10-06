@@ -418,6 +418,21 @@ func (s *BillingService) GetYunwuOnlyModelPricing(ctx context.Context, model str
 	return nil, fmt.Errorf("yunwu pricing not found for model: %s", model)
 }
 
+// GetYunwuMaxModelPricing retrieves the maximum model pricing across all available upstream providers,
+// ensuring published retail price covers the cost of both Primary and Backup routes:
+// retail = max(primary_cost, backup_cost) * (1 + markup).
+func (s *BillingService) GetYunwuMaxModelPricing(ctx context.Context, model string) (*ModelPricing, error) {
+	if s == nil || s.yunwuPricing == nil {
+		return nil, errors.New("yunwu pricing service not configured")
+	}
+	model = strings.ToLower(strings.TrimSpace(model))
+	if ywPricing, ok := s.yunwuPricing.GetModelPricingMaxAcrossProviders(ctx, model); ok && ywPricing != nil {
+		return s.applyModelSpecificPricingPolicy(model, ywPricing), nil
+	}
+	return nil, fmt.Errorf("yunwu max pricing not found for model: %s", model)
+}
+
+
 // GetYunwuKnownModelNames returns all model names known from Yunwu pricing service.
 func (s *BillingService) GetYunwuKnownModelNames(ctx context.Context) []string {
 	if s == nil || s.yunwuPricing == nil {
@@ -559,6 +574,9 @@ func isOpenAIGPT54Model(model string) bool {
 	if strings.Contains(m, "/") {
 		parts := strings.Split(m, "/")
 		m = parts[len(parts)-1]
+	}
+	if strings.HasPrefix(m, "gpt-5.4-mini") || strings.HasPrefix(m, "gpt-5.4-nano") {
+		return false
 	}
 	return m == "gpt-5.4" || strings.HasPrefix(m, "gpt-5.4-")
 }

@@ -120,20 +120,20 @@ func TestGetPublicModelsPricing_WithYunwuUpstreamPricing(t *testing.T) {
 		byID[item.CanonicalModelID] = item
 	}
 
-	// 1. anthropic/claude-sonnet-5 has upstream pricing
+	// 1. anthropic/claude-sonnet-5 has upstream pricing with 10% base markup (1.10)
 	sonnet5, exists := byID["anthropic/claude-sonnet-5"]
 	require.True(t, exists)
 	require.NotNil(t, sonnet5.InputPricePer1M)
 	require.NotNil(t, sonnet5.OutputPricePer1M)
-	assert.Equal(t, 3.0, *sonnet5.InputPricePer1M)
-	assert.Equal(t, 15.0, *sonnet5.OutputPricePer1M)
+	assert.Equal(t, 3.3, *sonnet5.InputPricePer1M)
+	assert.Equal(t, 16.5, *sonnet5.OutputPricePer1M)
 
-	// 2. openai/sora has native fixed price
+	// 2. openai/sora has native fixed price with 10% base markup (1.10)
 	sora, exists := byID["openai/sora"]
 	require.True(t, exists)
 	require.NotNil(t, sora.NativePriceUSD)
 	require.NotNil(t, sora.NativePriceUnit)
-	assert.Equal(t, 0.10, *sora.NativePriceUSD)
+	assert.Equal(t, 0.11, *sora.NativePriceUSD)
 	assert.Equal(t, "request", *sora.NativePriceUnit)
 
 	// 3. Unpriced model has nil prices
@@ -431,9 +431,9 @@ func TestResolveYunwuRateMultiplier_Fallbacks(t *testing.T) {
 	svc3 := &GatewayService{cfg: cfg}
 	assert.Equal(t, 1.15, svc3.ResolveYunwuRateMultiplier(context.Background()))
 
-	// 4. Default fallback to 1.0 when nothing configured
+	// 4. Default fallback to 1.10 (10% base markup) when nothing configured
 	svc4 := &GatewayService{}
-	assert.Equal(t, 1.0, svc4.ResolveYunwuRateMultiplier(context.Background()))
+	assert.Equal(t, 1.10, svc4.ResolveYunwuRateMultiplier(context.Background()))
 
 	// 5. Explicit multiplier in context overrides repository/config
 	ctxWithRate := ContextWithRateMultiplier(context.Background(), 1.55)

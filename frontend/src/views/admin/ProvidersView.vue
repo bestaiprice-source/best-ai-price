@@ -7,9 +7,6 @@
           <h1 class="text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
             Поставщики (AI Providers)
           </h1>
-          <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            Автоматический мониторинг неофициальных поставщиков группы Yunwu на основе нод исполнения
-          </p>
         </div>
         <div class="flex flex-wrap items-center gap-3">
           <button

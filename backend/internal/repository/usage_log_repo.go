@@ -4239,3 +4239,78 @@ func setToSlice(set map[int64]struct{}) []int64 {
 	}
 	return out
 }
+
+// GetGrossMarginAnalytics calculates gross margin metrics aggregated by model and by provider/account.
+func (r *usageLogRepository) GetGrossMarginAnalytics(ctx context.Context, startTime, endTime time.Time) (*usagestats.GrossMarginAnalytics, error) {
+	analytics := &usagestats.GrossMarginAnalytics{
+		ByModel:    make([]usagestats.GrossMarginItem, 0),
+		ByProvider: make([]usagestats.GrossMarginItem, 0),
+	}
+
+	// 1. By Model
+	modelQuery := `
+		SELECT
+			COALESCE(NULLIF(TRIM(requested_model), ''), model) as model_name,
+			COUNT(*) as requests,
+			COALESCE(SUM(input_tokens + output_tokens + cache_creation_tokens + cache_read_tokens), 0) as total_tokens,
+			COALESCE(SUM(actual_cost), 0) as revenue,
+			COALESCE(SUM(total_cost * COALESCE(account_rate_multiplier, 1)), 0) as upstream_cost
+		FROM usage_logs
+		WHERE created_at >= $1 AND created_at < $2
+		GROUP BY 1
+		ORDER BY revenue DESC
+	`
+	rows, err := r.sql.QueryContext(ctx, modelQuery, startTime, endTime)
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var item usagestats.GrossMarginItem
+			if err := rows.Scan(&item.Name, &item.Requests, &item.TotalTokens, &item.Revenue, &item.UpstreamCost); err == nil {
+				item.GrossProfit = item.Revenue - item.UpstreamCost
+				if item.Revenue > 0 {
+					item.GrossMarginPercent = (item.GrossProfit / item.Revenue) * 100.0
+				}
+				analytics.ByModel = append(analytics.ByModel, item)
+			}
+		}
+	}
+
+	// 2. By Provider
+	provQuery := `
+		SELECT
+			COALESCE(NULLIF(TRIM(a.name), ''), COALESCE(NULLIF(TRIM(a.platform), ''), 'Unknown')) as provider_name,
+			COUNT(*) as requests,
+			COALESCE(SUM(u.input_tokens + u.output_tokens + u.cache_creation_tokens + u.cache_read_tokens), 0) as total_tokens,
+			COALESCE(SUM(u.actual_cost), 0) as revenue,
+			COALESCE(SUM(u.total_cost * COALESCE(u.account_rate_multiplier, 1)), 0) as upstream_cost
+		FROM usage_logs u
+		LEFT JOIN accounts a ON u.account_id = a.id
+		WHERE u.created_at >= $1 AND u.created_at < $2
+		GROUP BY 1
+		ORDER BY revenue DESC
+	`
+	prows, err := r.sql.QueryContext(ctx, provQuery, startTime, endTime)
+	if err == nil {
+		defer prows.Close()
+		for prows.Next() {
+			var item usagestats.GrossMarginItem
+			if err := prows.Scan(&item.Name, &item.Requests, &item.TotalTokens, &item.Revenue, &item.UpstreamCost); err == nil {
+				item.GrossProfit = item.Revenue - item.UpstreamCost
+				if item.Revenue > 0 {
+					item.GrossMarginPercent = (item.GrossProfit / item.Revenue) * 100.0
+				}
+				analytics.ByProvider = append(analytics.ByProvider, item)
+				analytics.TotalRevenue += item.Revenue
+				analytics.TotalUpstreamCost += item.UpstreamCost
+			}
+		}
+	}
+
+	analytics.TotalGrossProfit = analytics.TotalRevenue - analytics.TotalUpstreamCost
+	if analytics.TotalRevenue > 0 {
+		analytics.OverallGrossMarginPercent = (analytics.TotalGrossProfit / analytics.TotalRevenue) * 100.0
+	}
+
+	return analytics, nil
+}
+

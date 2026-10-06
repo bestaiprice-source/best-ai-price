@@ -89,6 +89,7 @@ func (rm *YunwuRebindingManager) HandleYunwuFailure(
 	if errors.Is(errReason, context.DeadlineExceeded) || strings.Contains(errorText, "timeout") || strings.Contains(errorText, "deadline exceeded") {
 		state.RecentTimeouts++
 	}
+	state.ConsecutiveSuccesses = 0
 	state.CooldownUntil = &cooldownUntil
 	_ = rm.nm.SaveNodeRuntimeState(ctx, state)
 

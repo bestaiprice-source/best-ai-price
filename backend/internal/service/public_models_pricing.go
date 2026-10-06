@@ -240,12 +240,12 @@ func (s *GatewayService) ResolveYunwuRateMultiplier(ctx context.Context) float64
 		}
 	}
 
-	// 4. Fallback to default configuration rate multiplier
+	// 4. Fallback to default configuration rate multiplier (base default 1.10 = 10% markup)
 	if s != nil && s.cfg != nil && s.cfg.Default.RateMultiplier > 0 {
 		return s.cfg.Default.RateMultiplier
 	}
 
-	return 1.0
+	return 1.10
 }
 
 // GetPublicModelsPricing aggregates all available models and their selling pricing (including yunwu markup).
@@ -344,10 +344,15 @@ func (s *GatewayService) GetPublicModelsPricing(ctx context.Context) []PublicMod
 			}
 		}
 
-		// Resolve pricing strictly from upstream Yunwu providers (no LiteLLM, no built-in static table)
+		// Resolve pricing strictly from upstream Yunwu providers using highest cost route:
+		// retail = max(primary_cost, backup_cost) * (1 + markup)
 		var pricing *ModelPricing
 		if s != nil && s.billingService != nil {
-			if p, err := s.billingService.GetYunwuOnlyModelPricing(ctx, cid); err == nil && p != nil {
+			if p, err := s.billingService.GetYunwuMaxModelPricing(ctx, cid); err == nil && p != nil {
+				pricing = p
+			} else if p, err := s.billingService.GetYunwuMaxModelPricing(ctx, slug); err == nil && p != nil {
+				pricing = p
+			} else if p, err := s.billingService.GetYunwuOnlyModelPricing(ctx, cid); err == nil && p != nil {
 				pricing = p
 			} else if p, err := s.billingService.GetYunwuOnlyModelPricing(ctx, slug); err == nil && p != nil {
 				pricing = p

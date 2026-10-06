@@ -6552,11 +6552,21 @@ func normalizeOpenAIReasoningEffort(raw string) string {
 	}
 }
 
-// CheckModelPricingAvailable 检查指定模型当前是否可以成功获取定价配置
+// CheckModelPricingAvailable 检查指定模型当前是否可以成功获取定价配置并进行非负利润校验
 func (s *OpenAIGatewayService) CheckModelPricingAvailable(ctx context.Context, model string) error {
 	if s.billingService == nil {
 		return nil
 	}
-	_, err := s.billingService.GetModelPricingWithContext(ctx, model)
-	return err
+	pricing, err := s.billingService.GetModelPricingWithContext(ctx, model)
+	if err != nil {
+		return err
+	}
+	// Negative margin protection: reject requests if configured rate multiplier leads to a deficit
+	if pricing != nil {
+		if m, ok := RateMultiplierFromContext(ctx); ok && m > 0 && m < 1.0 {
+			return fmt.Errorf("negative margin protection: rate multiplier %.4f leads to deficit", m)
+		}
+	}
+	return nil
 }
+

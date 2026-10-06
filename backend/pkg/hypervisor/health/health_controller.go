@@ -112,6 +112,7 @@ func (hc *HealthController) Reconcile(ctx context.Context) error {
 				node.State = "healthy"
 				state.Recent429 = 0
 				state.RecentTimeouts = 0
+				state.ConsecutiveSuccesses = 0
 				_ = hc.nm.SaveNode(ctx, node)
 				_ = hc.nm.SaveNodeRuntimeState(ctx, state)
 			}

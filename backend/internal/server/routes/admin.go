@@ -535,6 +535,8 @@ func registerVendorRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	admin.POST("/vendors", h.AdminVendor.AddVendor)
 	admin.POST("/vendors/scrape-by-url", h.AdminVendor.ScrapeVendorByUrl)
 	admin.POST("/vendors/:id/scrape", h.AdminVendor.ScrapeVendor)
+	admin.GET("/vendors/:id/price-history", h.AdminVendor.GetVendorPriceHistory)
+	admin.GET("/vendors/price-history", h.AdminVendor.GetVendorPriceHistory)
 }
 
 func registerProviderRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
@@ -996,6 +998,7 @@ func registerUsageRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	{
 		usage.GET("", h.Admin.Usage.List)
 		usage.GET("/stats", h.Admin.Usage.Stats)
+		usage.GET("/gross-margin", h.Admin.Usage.GrossMargin)
 		usage.GET("/search-users", h.Admin.Usage.SearchUsers)
 		usage.GET("/search-api-keys", h.Admin.Usage.SearchAPIKeys)
 		usage.GET("/cleanup-tasks", h.Admin.Usage.ListCleanupTasks)

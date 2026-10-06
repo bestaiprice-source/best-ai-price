@@ -359,3 +359,13 @@ func (s *UsageService) GetStatsWithFilters(ctx context.Context, filters usagesta
 	}
 	return stats, nil
 }
+
+// GetGrossMarginAnalytics returns gross margin metrics aggregated by model and by provider.
+func (s *UsageService) GetGrossMarginAnalytics(ctx context.Context, startTime, endTime time.Time) (*usagestats.GrossMarginAnalytics, error) {
+	analytics, err := s.usageRepo.GetGrossMarginAnalytics(ctx, startTime, endTime)
+	if err != nil {
+		return nil, fmt.Errorf("get gross margin analytics: %w", err)
+	}
+	return analytics, nil
+}
+

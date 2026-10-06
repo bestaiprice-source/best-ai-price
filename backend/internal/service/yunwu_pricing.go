@@ -493,3 +493,71 @@ func (s *YunwuPricingService) GetModelPricingAcrossProviders(ctx context.Context
 	}
 	return nil, false
 }
+
+// GetModelPricingMaxAcrossProviders resolves the highest cost tier among all active routes
+// for a model to guarantee retail pricing covers both Primary and Backup costs:
+// retail = max(primary_cost, backup_cost) * (1 + markup).
+func (s *YunwuPricingService) GetModelPricingMaxAcrossProviders(ctx context.Context, modelName string) (*ModelPricing, bool) {
+	if s == nil {
+		return nil, false
+	}
+	s.mu.RLock()
+	allProviders := make([]string, 0, len(s.providerURLs)+len(s.providerPricing)+1)
+	seen := make(map[string]bool)
+	allProviders = append(allProviders, "openlux")
+	seen["openlux"] = true
+	for p := range s.providerURLs {
+		if !seen[p] {
+			seen[p] = true
+			allProviders = append(allProviders, p)
+		}
+	}
+	for p := range s.providerPricing {
+		if !seen[p] {
+			seen[p] = true
+			allProviders = append(allProviders, p)
+		}
+	}
+	s.mu.RUnlock()
+
+	var maxPricing *ModelPricing
+	found := false
+
+	for _, p := range allProviders {
+		if pr, ok := s.GetModelPricingForProvider(ctx, p, modelName); ok && pr != nil {
+			if !found {
+				maxPricing = &ModelPricing{
+					InputPricePerToken:         pr.InputPricePerToken,
+					OutputPricePerToken:        pr.OutputPricePerToken,
+					CacheReadPricePerToken:     pr.CacheReadPricePerToken,
+					CacheCreationPricePerToken: pr.CacheCreationPricePerToken,
+					FixedPricePerRequest:       pr.FixedPricePerRequest,
+					ImageOutputPricePerToken:   pr.ImageOutputPricePerToken,
+				}
+				found = true
+			} else {
+				if pr.InputPricePerToken > maxPricing.InputPricePerToken {
+					maxPricing.InputPricePerToken = pr.InputPricePerToken
+				}
+				if pr.OutputPricePerToken > maxPricing.OutputPricePerToken {
+					maxPricing.OutputPricePerToken = pr.OutputPricePerToken
+				}
+				if pr.CacheReadPricePerToken > maxPricing.CacheReadPricePerToken {
+					maxPricing.CacheReadPricePerToken = pr.CacheReadPricePerToken
+				}
+				if pr.CacheCreationPricePerToken > maxPricing.CacheCreationPricePerToken {
+					maxPricing.CacheCreationPricePerToken = pr.CacheCreationPricePerToken
+				}
+				if pr.FixedPricePerRequest > maxPricing.FixedPricePerRequest {
+					maxPricing.FixedPricePerRequest = pr.FixedPricePerRequest
+				}
+				if pr.ImageOutputPricePerToken > maxPricing.ImageOutputPricePerToken {
+					maxPricing.ImageOutputPricePerToken = pr.ImageOutputPricePerToken
+				}
+			}
+		}
+	}
+
+	return maxPricing, found
+}
+

@@ -25,12 +25,24 @@ type failingAdminService struct {
 	updateCallCount atomic.Int64
 }
 
+func (f *failingAdminService) GetAccount(ctx context.Context, id int64) (*service.Account, error) {
+	return &service.Account{
+		ID:          id,
+		Name:        "test-account",
+		Credentials: make(map[string]any),
+	}, nil
+}
+
 func (f *failingAdminService) UpdateAccount(ctx context.Context, id int64, input *service.UpdateAccountInput) (*service.Account, error) {
 	f.updateCallCount.Add(1)
 	if id == f.failOnAccountID {
 		return nil, errors.New("database error")
 	}
-	return f.stubAdminService.UpdateAccount(ctx, id, input)
+	return &service.Account{
+		ID:          id,
+		Name:        "test-account",
+		Credentials: input.Credentials,
+	}, nil
 }
 
 func setupAccountHandlerWithService(adminSvc service.AdminService) (*gin.Engine, *AccountHandler) {
@@ -125,7 +137,11 @@ func (f *getAccountFailingService) GetAccount(ctx context.Context, id int64) (*s
 	if id == f.failOnAccountID {
 		return nil, errors.New("not found")
 	}
-	return f.stubAdminService.GetAccount(ctx, id)
+	return &service.Account{
+		ID:          id,
+		Name:        "test-account",
+		Credentials: make(map[string]any),
+	}, nil
 }
 
 func TestBatchUpdateCredentials_InterceptWarmupRequests_NonBool(t *testing.T) {

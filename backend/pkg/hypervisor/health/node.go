@@ -28,10 +28,11 @@ type NodeRuntimeState struct {
 	RecentTimeouts     int        `json:"recent_timeouts"`
 	UsedTokens         int64      `json:"used_tokens"`
 	TotalRequests      int64      `json:"total_requests"`
-	SuccessfulRequests int64      `json:"successful_requests"`
-	LastSuccessAt      *time.Time `json:"last_success_at,omitempty"`
-	LastErrorAt        *time.Time `json:"last_error_at,omitempty"`
-	CooldownUntil      *time.Time `json:"cooldown_until,omitempty"`
+	SuccessfulRequests   int64      `json:"successful_requests"`
+	ConsecutiveSuccesses int        `json:"consecutive_successes"`
+	LastSuccessAt        *time.Time `json:"last_success_at,omitempty"`
+	LastErrorAt          *time.Time `json:"last_error_at,omitempty"`
+	CooldownUntil        *time.Time `json:"cooldown_until,omitempty"`
 }
 
 type NodeManager struct {

@@ -326,3 +326,25 @@ type AccountUsageStatsResponse struct {
 	Endpoints         []EndpointStat        `json:"endpoints"`
 	UpstreamEndpoints []EndpointStat        `json:"upstream_endpoints"`
 }
+
+// GrossMarginItem represents profit and margin metrics for a model or provider.
+type GrossMarginItem struct {
+	Name               string  `json:"name"`
+	Requests           int64   `json:"requests"`
+	TotalTokens        int64   `json:"total_tokens"`
+	Revenue            float64 `json:"revenue"`              // Customer charge (USD)
+	UpstreamCost       float64 `json:"upstream_cost"`        // Raw upstream cost (USD)
+	GrossProfit        float64 `json:"gross_profit"`         // Revenue - UpstreamCost (USD)
+	GrossMarginPercent float64 `json:"gross_margin_percent"` // (GrossProfit / Revenue) * 100
+}
+
+// GrossMarginAnalytics represents aggregated margin analytics.
+type GrossMarginAnalytics struct {
+	TotalRevenue              float64           `json:"total_revenue"`
+	TotalUpstreamCost         float64           `json:"total_upstream_cost"`
+	TotalGrossProfit          float64           `json:"total_gross_profit"`
+	OverallGrossMarginPercent float64           `json:"overall_gross_margin_percent"`
+	ByModel                   []GrossMarginItem `json:"by_model"`
+	ByProvider                []GrossMarginItem `json:"by_provider"`
+}
+

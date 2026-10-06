@@ -335,8 +335,49 @@ func (h *UsageHandler) StatsGateway(c gatewayctx.GatewayContext) {
 	response.SuccessContext(gatewayJSONResponder{ctx: c}, stats)
 }
 
+// GrossMargin handles getting gross margin analytics by model and by provider
+// GET /api/v1/admin/usage/gross-margin
+func (h *UsageHandler) GrossMargin(c *gin.Context) {
+	h.GrossMarginGateway(gatewayctx.FromGin(c))
+}
+
+func (h *UsageHandler) GrossMarginGateway(c gatewayctx.GatewayContext) {
+	userTZ := c.QueryValue("timezone")
+	now := timezone.NowInUserLocation(userTZ)
+	var startTime, endTime time.Time
+
+	startDateStr := c.QueryValue("start_date")
+	endDateStr := c.QueryValue("end_date")
+
+	if startDateStr != "" && endDateStr != "" {
+		var err error
+		startTime, err = timezone.ParseInUserLocation("2006-01-02", startDateStr, userTZ)
+		if err != nil {
+			response.ErrorContext(gatewayJSONResponder{ctx: c}, http.StatusBadRequest, "Invalid start_date format, use YYYY-MM-DD")
+			return
+		}
+		endTime, err = timezone.ParseInUserLocation("2006-01-02", endDateStr, userTZ)
+		if err != nil {
+			response.ErrorContext(gatewayJSONResponder{ctx: c}, http.StatusBadRequest, "Invalid end_date format, use YYYY-MM-DD")
+			return
+		}
+		endTime = endTime.AddDate(0, 0, 1)
+	} else {
+		startTime = now.AddDate(0, 0, -30)
+		endTime = now.AddDate(0, 0, 1)
+	}
+
+	analytics, err := h.usageService.GetGrossMarginAnalytics(c.Request().Context(), startTime, endTime)
+	if err != nil {
+		logger.LegacyPrintf("handler.admin.usage", "GetGrossMarginAnalytics failed: %v", err)
+		response.ErrorContext(gatewayJSONResponder{ctx: c}, http.StatusInternalServerError, "Failed to get gross margin analytics")
+		return
+	}
+
+	response.SuccessContext(gatewayJSONResponder{ctx: c}, analytics)
+}
+
 // SearchUsers handles searching users by email keyword
-// GET /api/v1/admin/usage/search-users
 func (h *UsageHandler) SearchUsers(c *gin.Context) {
 	h.SearchUsersGateway(gatewayctx.FromGin(c))
 }

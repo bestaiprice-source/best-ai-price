@@ -46,3 +46,49 @@ export async function scrapeVendorByUrl(name: string, url: string): Promise<{ me
   const { data } = await apiClient.post<{ message: string, models_count: number }>(`/admin/vendors/scrape-by-url`, { name, url });
   return data;
 }
+
+export interface VendorPriceHistoryItem {
+  id: string;
+  vendor_id: string;
+  model_name: string;
+  input_price: number;
+  output_price: number;
+  is_available: boolean;
+  recorded_at: string;
+}
+
+export interface GrossMarginItem {
+  name: string;
+  requests: number;
+  total_tokens: number;
+  revenue: number;
+  upstream_cost: number;
+  gross_profit: number;
+  gross_margin_percent: number;
+}
+
+export interface GrossMarginAnalytics {
+  total_revenue: number;
+  total_upstream_cost: number;
+  total_gross_profit: number;
+  overall_gross_margin_percent: number;
+  by_model: GrossMarginItem[];
+  by_provider: GrossMarginItem[];
+}
+
+export async function getVendorPriceHistory(vendorId?: string, modelName?: string): Promise<VendorPriceHistoryItem[]> {
+  const params = new URLSearchParams();
+  if (modelName) params.append('model', modelName);
+  const url = vendorId ? `/admin/vendors/${vendorId}/price-history?${params.toString()}` : `/admin/vendors/price-history?${params.toString()}`;
+  const { data } = await apiClient.get<VendorPriceHistoryItem[]>(url);
+  return data;
+}
+
+export async function getGrossMarginAnalytics(startDate?: string, endDate?: string): Promise<GrossMarginAnalytics> {
+  const params = new URLSearchParams();
+  if (startDate) params.append('start_date', startDate);
+  if (endDate) params.append('end_date', endDate);
+  const { data } = await apiClient.get<GrossMarginAnalytics>(`/admin/usage/gross-margin?${params.toString()}`);
+  return data;
+}
+

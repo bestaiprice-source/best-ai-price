@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -882,6 +883,92 @@ func TestYunwuAffinityAndMediaHandling(t *testing.T) {
 	assert.NotNil(t, resp)
 }
 
+type mockFailoverLossRuntime struct {
+	attempts int
+}
 
+func (m *mockFailoverLossRuntime) Execute(ctx context.Context, nodeID string, reqPayload []byte, stream io.Writer) (*runtime.ResponseMetadata, error) {
+	m.attempts++
+	if m.attempts == 1 {
+		// First attempt fails, but upstream returned partial token consumption (e.g. stream broken)
+		return &runtime.ResponseMetadata{
+			StatusCode:   500,
+			InputTokens:  120,
+			OutputTokens: 30,
+		}, errors.New("upstream connection dropped")
+	}
+	// Second attempt succeeds cleanly
+	return &runtime.ResponseMetadata{
+		StatusCode:   200,
+		InputTokens:  120,
+		OutputTokens: 250,
+	}, nil
+}
 
+func TestUpstreamFailoverLossAccounting(t *testing.T) {
+	t.Setenv("ASH_YUNWU_TEST_MODE", "true")
+	ctx := context.Background()
+	store := setupTestYunwuStore(t)
+	rt := &mockFailoverLossRuntime{}
+	yh := NewYunwuHypervisor(store, rt)
 
+	nm := health.NewNodeManager(store)
+	// Add primary node
+	require.NoError(t, nm.SaveNode(ctx, &health.ExecutionNode{
+		NodeID:       "node-loss-1",
+		AccountName:  "Primary Loss Node",
+		Provider:     "yunwu",
+		Capabilities: []string{"claude"},
+		State:        "healthy",
+	}))
+	require.NoError(t, store.Redis().SAdd(ctx, "ash:yunwu:nodes", "node-loss-1").Err())
+	setTestBalance(t, store, "node-loss-1", 50_000_000)
+
+	// Add backup node
+	require.NoError(t, nm.SaveNode(ctx, &health.ExecutionNode{
+		NodeID:       "node-loss-2",
+		AccountName:  "Backup Loss Node",
+		Provider:     "yunwu",
+		Capabilities: []string{"claude"},
+		State:        "healthy",
+	}))
+	require.NoError(t, store.Redis().SAdd(ctx, "ash:yunwu:nodes", "node-loss-2").Err())
+	setTestBalance(t, store, "node-loss-2", 50_000_000)
+
+	// Set pricing
+	ppm := yh.PriceManager()
+	require.NotNil(t, ppm)
+	ppm.SetProviderPrices("node-loss-1", map[string]ProviderModelPrice{
+		"claude-3-7-sonnet": {InputPricePer1k: 0.015, OutputPricePer1k: 0.075, Available: true},
+	})
+	ppm.SetProviderPrices("node-loss-2", map[string]ProviderModelPrice{
+		"claude-3-7-sonnet": {InputPricePer1k: 0.015, OutputPricePer1k: 0.075, Available: true},
+	})
+
+	// User quota
+	require.NoError(t, yh.qm.SaveUserAccess(ctx, &quota.UserAccess{
+		OwnerID:      "user-loss-test",
+		PlanID:       "pro",
+		MonthlyLimit: 1_000_000,
+		Priority:     1,
+		IsActive:     true,
+	}, "yunwu"))
+
+	payload := []byte(`{"model": "claude-3-7-sonnet", "messages": [{"role": "user", "content": "hi"}]}`)
+	resp, err := yh.HandleRequest(ctx, "user-loss-test", "conv-failover-loss", payload, io.Discard, "yunwu")
+	require.NoError(t, err)
+	assert.NotNil(t, resp)
+	assert.Equal(t, 2, rt.attempts)
+	assert.Equal(t, int64(120), resp.InputTokens)
+	assert.Equal(t, int64(250), resp.OutputTokens)
+
+	// Verify failover loss was handled without failing request
+	// And direct call to recordUpstreamFailoverLoss works safely even without postgres DB
+	yh.recordUpstreamFailoverLoss(ctx, "user-loss-test", "sess-test", health.ExecutionNode{
+		NodeID:   "node-loss-1",
+		Provider: "yunwu",
+	}, "claude-3-7-sonnet", &runtime.ResponseMetadata{
+		InputTokens:  100,
+		OutputTokens: 50,
+	}, 1, false)
+}

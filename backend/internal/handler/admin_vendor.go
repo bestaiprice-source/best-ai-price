@@ -140,6 +140,12 @@ func (h *AdminVendorHandler) ScrapeVendor(c *gin.Context) {
 			response.Error(c, http.StatusInternalServerError, "Failed to upsert models")
 			return
 		}
+
+		// Also record snapshot in price history
+		_, _ = tx.ExecContext(ctx, `
+			INSERT INTO ash_vendor_price_history (vendor_id, model_name, input_price, output_price, is_available, recorded_at)
+			VALUES ($1, $2, $3, $4, $5, $6)
+		`, id, m.ModelName, m.InputPrice, m.OutputPrice, m.IsAvailable, now)
 	}
 
 	if err := tx.Commit(); err != nil {
@@ -231,6 +237,12 @@ func (h *AdminVendorHandler) ScrapeVendorByUrl(c *gin.Context) {
 			response.Error(c, http.StatusInternalServerError, "Failed to upsert models")
 			return
 		}
+
+		// Also record snapshot in price history
+		_, _ = tx.ExecContext(ctx, `
+			INSERT INTO ash_vendor_price_history (vendor_id, model_name, input_price, output_price, is_available, recorded_at)
+			VALUES ($1, $2, $3, $4, $5, $6)
+		`, id, m.ModelName, m.InputPrice, m.OutputPrice, m.IsAvailable, now)
 	}
 
 	if err := tx.Commit(); err != nil {
@@ -239,4 +251,64 @@ func (h *AdminVendorHandler) ScrapeVendorByUrl(c *gin.Context) {
 	}
 
 	response.Success(c, gin.H{"message": "Scrape successful", "models_count": len(res.Models)})
+}
+
+type VendorPriceHistoryItem struct {
+	ID          string    `json:"id" db:"id"`
+	VendorID    string    `json:"vendor_id" db:"vendor_id"`
+	ModelName   string    `json:"model_name" db:"model_name"`
+	InputPrice  float64   `json:"input_price" db:"input_price"`
+	OutputPrice float64   `json:"output_price" db:"output_price"`
+	IsAvailable bool      `json:"is_available" db:"is_available"`
+	RecordedAt  time.Time `json:"recorded_at" db:"recorded_at"`
+}
+
+// GetVendorPriceHistory returns historical pricing snapshots for a vendor and/or model
+func (h *AdminVendorHandler) GetVendorPriceHistory(c *gin.Context) {
+	ctx := c.Request.Context()
+	vendorID := c.Param("id")
+	modelName := c.Query("model")
+
+	var history []VendorPriceHistoryItem
+	var err error
+
+	if vendorID != "" && modelName != "" {
+		err = h.db.SelectContext(ctx, &history, `
+			SELECT id, vendor_id, model_name, input_price, output_price, is_available, recorded_at
+			FROM ash_vendor_price_history
+			WHERE vendor_id = $1 AND model_name = $2
+			ORDER BY recorded_at DESC
+			LIMIT 100
+		`, vendorID, modelName)
+	} else if vendorID != "" {
+		err = h.db.SelectContext(ctx, &history, `
+			SELECT id, vendor_id, model_name, input_price, output_price, is_available, recorded_at
+			FROM ash_vendor_price_history
+			WHERE vendor_id = $1
+			ORDER BY recorded_at DESC
+			LIMIT 100
+		`, vendorID)
+	} else if modelName != "" {
+		err = h.db.SelectContext(ctx, &history, `
+			SELECT id, vendor_id, model_name, input_price, output_price, is_available, recorded_at
+			FROM ash_vendor_price_history
+			WHERE model_name = $1
+			ORDER BY recorded_at DESC
+			LIMIT 100
+		`, modelName)
+	} else {
+		err = h.db.SelectContext(ctx, &history, `
+			SELECT id, vendor_id, model_name, input_price, output_price, is_available, recorded_at
+			FROM ash_vendor_price_history
+			ORDER BY recorded_at DESC
+			LIMIT 100
+		`)
+	}
+
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, "Failed to get price history")
+		return
+	}
+
+	response.Success(c, history)
 }

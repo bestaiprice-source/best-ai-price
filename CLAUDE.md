@@ -124,6 +124,32 @@ Welcome to **sub2api** and the **AI Session Hypervisor (ASH / Yunwu Engine)** re
     - If multiple nodes share the lowest price tier, traffic is balanced organically between them based on health scoring, latency, queue depth, and `UsedTokens` load balancing.
     - Node runtime metrics update `state.UsedTokens += meta.InputTokens + meta.OutputTokens` upon each successful request to maintain fair distribution among equally-priced nodes.
     - `HandleYunwuFailure` in `YunwuRebindingManager` receives node prices and seamlessly rebinds failing sessions to fallback nodes.
+  - **Upstream Failover Loss Accounting (Specification 6.2)**:
+    - When an upstream provider fails during a request attempt (network reset, broken stream, or upstream error) but has already consumed tokens upstream (`meta != nil && (meta.InputTokens > 0 || meta.OutputTokens > 0)`):
+    - **Zero Double-Charge**: The client is NEVER charged for the failed attempt (`actual_cost = 0.0`, `billed_micro_usd = 0`). Only the final successful retry attempt bills the user.
+    - **Platform Internal Expense Capture**: The consumed tokens and upstream dollar cost (`total_cost = (input_tokens * in_price + output_tokens * out_price)`) are recorded in `usage_logs` via `RecordUpstreamFailoverLoss` with `user_agent = "upstream_failover_loss"`.
+    - **Gross Margin Integration**: Because `actual_cost = 0` and `total_cost > 0` on these failover rows, platform Gross Margin Analytics automatically incorporates the upstream cost as platform operational loss, correctly deducting it from net margin.
+    - An append-only audit event `UpstreamFailoverLossRecorded` is written to `ash_events` with node ID, provider, token counts, and upstream USD cost.
+  - **Retail Pricing & Margin Protection (`GetYunwuMaxModelPricing`)**:
+    - Formula:
+      `retail_input = max(primary_input_cost, backup_input_cost) * (1 + markup)`
+      `retail_output = max(primary_output_cost, backup_output_cost) * (1 + markup)`
+    - Default base markup is set to 10% (`1.10` multiplier) in `backend/internal/service/public_models_pricing.go`.
+    - `GetModelPricingMaxAcrossProviders` scans all active providers in `ash_vendor_models` and calculates the maximum input, output, cache, and request costs. This guarantees the published retail price is never lower than the cost of any active route (primary or backup).
+    - **Negative Margin Protection**: Gateway level guard (`CheckModelPricingAvailable` in `openai_gateway_service.go`) guarantees that if effective retail pricing multiplier drops below 1.0 (leading to a deficit), requests are rejected with `insufficient_margin_error` (HTTP 402/400).
+  - **Vendor Price History Snapshots (`ash_vendor_price_history`)**:
+    - Schema migration `146_add_vendor_price_history.sql` creates `ash_vendor_price_history` with indexed `vendor_id`, `model_name`, and `recorded_at`.
+    - Every vendor scrape (`ScrapeVendor` and `ScrapeVendorByUrl`) captures historical snapshots of model prices.
+    - Endpoints: `GET /api/v1/admin/vendors/:id/price-history` and `GET /api/v1/admin/vendors/price-history?model=:model`.
+  - **Primary Recovery via Consecutive Health-Checks**:
+    - Hypervisor node runtime state (`NodeRuntimeState.ConsecutiveSuccesses`) tracks verified successful executions.
+    - Reset to 0 upon failure or rebinding in `pkg/hypervisor/yunwu/rebinding.go`; incremented on successful completion in `engine.go`.
+    - Cooldown clears safely while ensuring primary node re-establishment tracks consecutive healthy runs.
+  - **Gross Margin Analytics**:
+    - Endpoint `GET /api/v1/admin/usage/gross-margin?start_date=&end_date=` computes:
+      - Gross Revenue, Upstream Cost, Net Gross Profit, and Overall Gross Margin % (`(Revenue - Upstream Cost) / Revenue * 100%`).
+      - Grouped breakdowns `by_model` and `by_provider`.
+    - Frontend: `VendorsPricingView.vue` provides tabbed navigation between "Providers & Pricing" and "Gross Margin Analytics" with KPI summary cards, breakdown tables, margin health badges, and modal price history views.
   - **Intelligent Connection Testing for Unofficial (Yunwu) Nodes (`AccountTestService`)**:
     - `TestAccountConnection` routes `yunwu` nodes based on their configured `supported_model_families`: if a node supports `gpt` or `gemini` (and not `claude`), tests are executed via OpenAI `/v1/chat/completions` instead of Anthropic `/v1/messages`.
     - If a Claude test request returns HTTP 403 with `This group does not allow /v1/messages dispatch`, it automatically falls back to an OpenAI test (`/v1/chat/completions`) and avoids erroneously setting the node status to `error`.
@@ -516,6 +542,10 @@ sub2api/
 - `DELETE /api/v1/admin/api-keys/:id`: Delete any user's API key.
 - `GET /api/v1/admin/users`: User account management.
 - `GET /api/v1/admin/groups`: Group & channel management.
+- `GET /api/v1/admin/vendors`: List upstream AI vendors and cached model pricing.
+- `POST /api/v1/admin/vendors/scrape-by-url`: Scrape vendor model pricing by name and URL, automatically persisting price history snapshots to `ash_vendor_price_history`.
+- `GET /api/v1/admin/vendors/:id/price-history` & `GET /api/v1/admin/vendors/price-history`: Historical snapshots of vendor model prices with optional `model` query filter.
+- `GET /api/v1/admin/usage/gross-margin`: Gross Margin Analytics aggregating total revenue, upstream cost, net gross profit, overall margin %, and grouped breakdowns by model and provider (`?start_date=&end_date=`).
 
 ### ASH Diagnostics (`/api/v1/ash/*`)
 - `GET /api/v1/ash/health`: Hypervisor health state and degradation mode.

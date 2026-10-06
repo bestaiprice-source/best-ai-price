@@ -1828,6 +1828,10 @@ func (r *stubUsageLogRepo) GetStatsWithFilters(ctx context.Context, filters usag
 func (r *stubUsageLogRepo) GetAllGroupUsageSummary(ctx context.Context, todayStart time.Time) ([]usagestats.GroupUsageSummary, error) {
 	return nil, errors.New("not implemented")
 }
+func (r *stubUsageLogRepo) GetGrossMarginAnalytics(ctx context.Context, startTime, endTime time.Time) (*usagestats.GrossMarginAnalytics, error) {
+	return &usagestats.GrossMarginAnalytics{}, nil
+}
+
 
 type stubSettingRepo struct {
 	all map[string]string
