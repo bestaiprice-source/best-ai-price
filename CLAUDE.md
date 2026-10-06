@@ -551,7 +551,7 @@ sub2api/
 - `GET /api/v1/admin/users`: User account management.
 - `GET /api/v1/admin/groups`: Group & channel management.
 - `GET /api/v1/admin/vendors`: List upstream AI vendors and cached model pricing.
-- `POST /api/v1/admin/vendors/scrape-by-url`: Scrape vendor model pricing by name and URL, automatically persisting price history snapshots to `ash_vendor_price_history`.
+- `POST /api/v1/admin/vendors/scrape-by-url`: Scrape vendor model pricing by name and URL (supporting native One-API `/api/pricing` as well as BestAIPrice `providers.json` fallback for Portdan and other aggregators), automatically persisting price history snapshots to `ash_vendor_price_history`.
 - `GET /api/v1/admin/vendors/:id/price-history` & `GET /api/v1/admin/vendors/price-history`: Historical snapshots of vendor model prices with optional `model` query filter.
 - `GET /api/v1/admin/vendors/opportunities`: List discovered cheaper provider opportunities with optional `status` filter (`pending`, `promoted`, `dismissed`).
 - `POST /api/v1/admin/vendors/opportunities/check`: Trigger an on-demand check against `https://bestaiprice.com/gateway/data/providers.json`.

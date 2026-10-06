@@ -587,7 +587,7 @@ const handleScrape = async (vendor: Vendor) => {
     appStore.showSuccess(res.message + ` (${res.models_count} models synced)`);
     await loadVendors();
   } catch (error: any) {
-    appStore.showError(error.message || 'Scrape failed');
+    appStore.showError(error.message || `Failed to sync ${vendor.name}`);
   } finally {
     syncingId.value = null;
   }
@@ -596,10 +596,24 @@ const handleScrape = async (vendor: Vendor) => {
 const handleSyncAll = async () => {
   try {
     isSyncingAll.value = true;
+    let syncedCount = 0;
+    const failedVendors: string[] = [];
     for (const vendor of displayVendors.value) {
-      await scrapeVendorByUrl(vendor.name, vendor.url);
+      try {
+        await scrapeVendorByUrl(vendor.name, vendor.url);
+        syncedCount++;
+      } catch (err: any) {
+        console.warn(`Failed to sync vendor ${vendor.name}:`, err);
+        failedVendors.push(vendor.name);
+      }
     }
-    appStore.showSuccess('All vendors synced successfully');
+    if (failedVendors.length === 0) {
+      appStore.showSuccess(`All ${syncedCount} vendors synced successfully`);
+    } else if (syncedCount > 0) {
+      appStore.showWarning(`Synced ${syncedCount} vendors (${failedVendors.join(', ')} failed)`);
+    } else {
+      appStore.showError(`Failed to sync vendors: ${failedVendors.join(', ')}`);
+    }
     await loadVendors();
   } catch (error: any) {
     appStore.showError(error.message || 'Sync all failed');

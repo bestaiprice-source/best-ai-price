@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/model"
@@ -115,7 +116,8 @@ func (h *AdminVendorHandler) ScrapeVendor(c *gin.Context) {
 	s := scraper.NewOneAPIScraper()
 	res, err := s.Scrape(ctx, vendorURL)
 	if err != nil {
-		response.Error(c, http.StatusInternalServerError, "Failed to scrape vendor: "+err.Error())
+		slog.Warn("[AdminVendorHandler] ScrapeVendor failed", "id", id, "url", vendorURL, "err", err)
+		response.Error(c, http.StatusBadGateway, "Failed to scrape vendor: "+err.Error())
 		return
 	}
 
@@ -181,11 +183,17 @@ func (h *AdminVendorHandler) ScrapeVendorByUrl(c *gin.Context) {
 		return
 	}
 
+	normURL := strings.TrimRight(strings.TrimSpace(req.URL), "/")
+	if normURL == "" {
+		response.Error(c, http.StatusBadRequest, "URL cannot be empty")
+		return
+	}
+
 	ctx := c.Request.Context()
 
 	// Check if exists
 	var id string
-	err := h.db.QueryRowContext(ctx, `SELECT id FROM ash_vendors WHERE url = $1`, req.URL).Scan(&id)
+	err := h.db.QueryRowContext(ctx, `SELECT id FROM ash_vendors WHERE rtrim(url, '/') = rtrim($1, '/')`, normURL).Scan(&id)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			// Insert
@@ -193,21 +201,25 @@ func (h *AdminVendorHandler) ScrapeVendorByUrl(c *gin.Context) {
 				INSERT INTO ash_vendors (name, url) 
 				VALUES ($1, $2) 
 				RETURNING id
-			`, req.Name, req.URL).Scan(&id)
+			`, req.Name, normURL).Scan(&id)
 			if err != nil {
-				response.Error(c, http.StatusInternalServerError, "Failed to create vendor")
-				return
+				// Retry query in case of concurrent insert
+				if err2 := h.db.QueryRowContext(ctx, `SELECT id FROM ash_vendors WHERE rtrim(url, '/') = rtrim($1, '/')`, normURL).Scan(&id); err2 != nil {
+					response.Error(c, http.StatusInternalServerError, "Failed to create vendor: "+err.Error())
+					return
+				}
 			}
 		} else {
-			response.Error(c, http.StatusInternalServerError, "Database error")
+			response.Error(c, http.StatusInternalServerError, "Database error: "+err.Error())
 			return
 		}
 	}
 
 	s := scraper.NewOneAPIScraper()
-	res, err := s.Scrape(ctx, req.URL)
+	res, err := s.Scrape(ctx, normURL)
 	if err != nil {
-		response.Error(c, http.StatusInternalServerError, "Failed to scrape vendor: "+err.Error())
+		slog.Warn("[AdminVendorHandler] ScrapeVendorByUrl failed", "url", normURL, "err", err)
+		response.Error(c, http.StatusBadGateway, "Failed to scrape vendor: "+err.Error())
 		return
 	}
 
