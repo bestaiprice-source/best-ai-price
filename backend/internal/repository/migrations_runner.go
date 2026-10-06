@@ -79,6 +79,14 @@ var migrationChecksumCompatibilityRules = map[string]migrationChecksumCompatibil
 			"222b4a09c797c22e5922b6b172327c824f5463aaa8760e4f621bc5c22e2be0f3": {},
 		},
 	},
+	"147_add_cheaper_provider_opportunities.sql": {
+		fileChecksum: "945e87a06c122cc20b0a74c2aa6f98c4f72b1f6a470cf70536b30c149d26d70f",
+		acceptedDBChecksum: map[string]struct{}{
+			"945e87a06c122cc20b0a74c2aa6f98c4f72b1f6a470cf70536b30c149d26d70f": {},
+			"5e7e67f2cf5a57ea28cd25bfb1f871bc29d0914375d370a49d9a6ef8bac1876d": {},
+			"65868312158fb892ca656a60760d9908eaef0f98ccbf76f7b15d679c89b05467": {},
+		},
+	},
 }
 
 // ApplyMigrations 将嵌入的 SQL 迁移文件应用到指定的数据库。
