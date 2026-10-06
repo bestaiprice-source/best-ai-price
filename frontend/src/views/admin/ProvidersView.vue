@@ -5,7 +5,7 @@
       <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 class="text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
-            Поставщики (AI Providers)
+            AI Providers
           </h1>
         </div>
         <div class="flex flex-wrap items-center gap-3">
@@ -15,21 +15,21 @@
             class="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 shadow-sm transition-all hover:bg-gray-50 hover:shadow disabled:opacity-50 dark:border-dark-700 dark:bg-dark-800 dark:text-gray-200 dark:hover:bg-dark-700"
           >
             <Icon name="sync" size="sm" :class="{ 'animate-spin': isSyncingAll }" />
-            <span>{{ isSyncingAll ? 'Синхронизация...' : 'Синхронизировать все' }}</span>
+            <span>{{ isSyncingAll ? 'Syncing...' : 'Sync All Balances' }}</span>
           </button>
           <router-link
             to="/admin/vendors"
             class="inline-flex items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-sm font-medium text-indigo-700 shadow-sm transition-all hover:bg-indigo-100 hover:shadow dark:border-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-300 dark:hover:bg-indigo-900/50"
           >
             <Icon name="lightbulb" size="sm" />
-            <span>Чекер цен и Альтернативы</span>
+            <span>Price Checker & Margins</span>
           </router-link>
           <router-link
             to="/admin/accounts"
             class="inline-flex items-center gap-2 rounded-xl bg-primary-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-all hover:bg-primary-500 hover:shadow-md dark:bg-primary-500 dark:hover:bg-primary-400"
           >
             <Icon name="server" size="sm" />
-            <span>Управление нодами</span>
+            <span>Manage Nodes</span>
           </router-link>
         </div>
       </div>
@@ -39,44 +39,44 @@
         <!-- Total Providers -->
         <div
           @click="resetFilters"
-          title="Сбросить фильтры и показать все"
+          title="Reset filters and show all"
           class="relative cursor-pointer overflow-hidden rounded-2xl border border-gray-200/80 bg-white/70 p-5 shadow-sm backdrop-blur-sm transition-transform hover:scale-[1.01] dark:border-dark-700/80 dark:bg-dark-800/70"
         >
           <div class="flex items-center justify-between">
-            <span class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Всего поставщиков</span>
+            <span class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Total Providers</span>
             <div class="rounded-xl bg-blue-500/10 p-2.5 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400">
               <Icon name="grid" size="sm" />
             </div>
           </div>
           <p class="mt-2 text-2xl font-bold text-gray-900 dark:text-white">{{ summaryStats.total_providers }}</p>
-          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Подключенных сервисов</p>
+          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Connected upstream services</p>
         </div>
 
         <!-- Active Providers -->
         <div
           @click="filters.status = 'active'; filters.state = ''; fetchData()"
-          title="Фильтр: только активные"
+          title="Filter: active only"
           class="relative cursor-pointer overflow-hidden rounded-2xl border border-gray-200/80 bg-white/70 p-5 shadow-sm backdrop-blur-sm transition-transform hover:scale-[1.01] dark:border-dark-700/80 dark:bg-dark-800/70"
         >
           <div class="flex items-center justify-between">
-            <span class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Активные</span>
+            <span class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Active</span>
             <div class="rounded-xl bg-emerald-500/10 p-2.5 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400">
               <Icon name="check" size="sm" />
             </div>
           </div>
           <p class="mt-2 text-2xl font-bold text-emerald-600 dark:text-emerald-400">{{ summaryStats.active_providers }}</p>
-          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Готовы к приёму трафика</p>
+          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Ready for traffic</p>
         </div>
 
         <!-- Low Balance Alert -->
         <div
           @click="filters.state = 'Low balance'; filters.status = ''; fetchData()"
-          title="Фильтр: низкий баланс"
+          title="Filter: low balance"
           class="relative cursor-pointer overflow-hidden rounded-2xl border border-gray-200/80 bg-white/70 p-5 shadow-sm backdrop-blur-sm transition-transform hover:scale-[1.01] dark:border-dark-700/80 dark:bg-dark-800/70"
           :class="{ 'ring-2 ring-red-500/30': summaryStats.low_balance_providers > 0 }"
         >
           <div class="flex items-center justify-between">
-            <span class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Низкий баланс</span>
+            <span class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Low Balance</span>
             <div :class="[
               'rounded-xl p-2.5',
               summaryStats.low_balance_providers > 0
@@ -89,31 +89,31 @@
           <p class="mt-2 text-2xl font-bold" :class="summaryStats.low_balance_providers > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-gray-900 dark:text-white'">
             {{ summaryStats.low_balance_providers }}
           </p>
-          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Ниже порога min_balance</p>
+          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Below min_balance threshold</p>
         </div>
 
         <!-- Total Balance USD -->
         <div class="relative overflow-hidden rounded-2xl border border-gray-200/80 bg-white/70 p-5 shadow-sm backdrop-blur-sm dark:border-dark-700/80 dark:bg-dark-800/70">
           <div class="flex items-center justify-between">
-            <span class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Общий баланс</span>
+            <span class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Total Balance</span>
             <div class="rounded-xl bg-violet-500/10 p-2.5 text-violet-600 dark:bg-violet-500/20 dark:text-violet-400">
               <span class="text-base font-bold">$</span>
             </div>
           </div>
           <p class="mt-2 text-2xl font-bold text-gray-900 dark:text-white">${{ formatCurrency(summaryStats.total_balance_usd) }}</p>
-          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Доступно на счетах</p>
+          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Available across accounts</p>
         </div>
 
         <!-- Total Spend USD -->
         <div class="relative overflow-hidden rounded-2xl border border-gray-200/80 bg-white/70 p-5 shadow-sm backdrop-blur-sm dark:border-dark-700/80 dark:bg-dark-800/70">
           <div class="flex items-center justify-between">
-            <span class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Общий расход</span>
+            <span class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Total Spend</span>
             <div class="rounded-xl bg-amber-500/10 p-2.5 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400">
               <Icon name="chart" size="sm" />
             </div>
           </div>
           <p class="mt-2 text-2xl font-bold text-gray-900 dark:text-white">${{ formatCurrency(summaryStats.total_spend_usd) }}</p>
-          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Использовано за период</p>
+          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Used during current period</p>
         </div>
       </div>
 
@@ -127,7 +127,7 @@
               v-model="filters.search"
               @input="handleSearchInput"
               type="text"
-              placeholder="Поиск по названию, домену..."
+              placeholder="Search by name, domain..."
               class="w-full rounded-xl border border-gray-200 bg-gray-50/50 py-2 pl-9 pr-3 text-sm text-gray-900 placeholder-gray-400 focus:border-primary-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-dark-600 dark:bg-dark-700/50 dark:text-white dark:focus:bg-dark-700"
             />
           </div>
@@ -138,9 +138,9 @@
             @change="fetchData"
             class="rounded-xl border border-gray-200 bg-white py-2 pl-3 pr-8 text-sm text-gray-700 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-dark-600 dark:bg-dark-700 dark:text-gray-200"
           >
-            <option value="">Все статусы</option>
-            <option value="active">Только активные</option>
-            <option value="disabled">Отключенные</option>
+            <option value="">All Statuses</option>
+            <option value="active">Active Only</option>
+            <option value="disabled">Disabled</option>
           </select>
 
           <!-- State Filter -->
@@ -149,7 +149,7 @@
             @change="fetchData"
             class="rounded-xl border border-gray-200 bg-white py-2 pl-3 pr-8 text-sm text-gray-700 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-dark-600 dark:bg-dark-700 dark:text-gray-200"
           >
-            <option value="">Все состояния</option>
+            <option value="">All States</option>
             <option value="Healthy">Healthy</option>
             <option value="Degraded">Degraded</option>
             <option value="Down">Down</option>
@@ -164,7 +164,7 @@
           class="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 dark:border-dark-600 dark:text-gray-300 dark:hover:bg-dark-700"
         >
           <Icon name="refresh" size="sm" :class="{ 'animate-spin': isLoading }" />
-          <span>Обновить</span>
+          <span>Refresh</span>
         </button>
       </div>
 
@@ -174,14 +174,14 @@
           <table class="w-full text-left text-sm">
             <thead class="border-b border-gray-200 bg-gray-50/75 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:border-dark-700 dark:bg-dark-900/50 dark:text-gray-400">
               <tr>
-                <th class="px-5 py-3.5">Поставщик</th>
-                <th class="px-5 py-3.5">Состояние</th>
-                <th class="px-5 py-3.5">Баланс</th>
-                <th class="px-5 py-3.5">Порог (Мин)</th>
-                <th class="px-5 py-3.5">Метрики</th>
-                <th class="px-5 py-3.5">Модели</th>
-                <th class="px-5 py-3.5 text-center">Статус</th>
-                <th class="px-5 py-3.5 text-right">Действия</th>
+                <th class="px-5 py-3.5">Provider</th>
+                <th class="px-5 py-3.5">State</th>
+                <th class="px-5 py-3.5">Balance</th>
+                <th class="px-5 py-3.5">Min Threshold</th>
+                <th class="px-5 py-3.5">Metrics</th>
+                <th class="px-5 py-3.5">Models</th>
+                <th class="px-5 py-3.5 text-center">Status</th>
+                <th class="px-5 py-3.5 text-right">Actions</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-gray-100 dark:divide-dark-700/60">
@@ -189,7 +189,7 @@
                 <td colspan="8" class="px-5 py-12 text-center text-gray-500 dark:text-gray-400">
                   <div class="flex flex-col items-center justify-center gap-2">
                     <Icon name="sync" size="lg" class="animate-spin text-primary-500" />
-                    <span>Загрузка списка поставщиков...</span>
+                    <span>Loading providers list...</span>
                   </div>
                 </td>
               </tr>
@@ -197,9 +197,9 @@
                 <td colspan="8" class="px-5 py-12 text-center text-gray-500 dark:text-gray-400">
                   <div class="flex flex-col items-center justify-center gap-2">
                     <Icon name="grid" size="lg" class="text-gray-300 dark:text-gray-600" />
-                    <span class="text-base font-medium">Поставщики группы Yunwu не найдены</span>
+                    <span class="text-base font-medium">No Yunwu providers found</span>
                     <span class="text-xs text-gray-400 max-w-md text-center">
-                      В этом разделе отображаются только сторонние и неофициальные поставщики группы Yunwu (OpenLux, Portdan, Yuanqiaoyun, API-Top, X-LLM и др.). Официальные аккаунты (Claude, OpenAI, Gemini) настраиваются в разделе «Ноды».
+                      This section displays upstream providers for the Yunwu group (OpenLux, Portdan, Yuanqiaoyun, API-Top, X-LLM, etc.). Official accounts (Claude, OpenAI, Gemini) are configured under Nodes.
                     </span>
                     <div class="mt-2 flex items-center gap-3">
                       <router-link
@@ -207,14 +207,14 @@
                         class="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-dark-700 dark:bg-dark-800 dark:text-gray-200 dark:hover:bg-dark-750"
                       >
                         <Icon name="server" size="sm" />
-                        Перейти к нодам
+                        Go to Nodes
                       </router-link>
                       <button
                         v-if="filters.search || filters.status || filters.state"
                         @click="resetFilters"
                         class="text-xs text-primary-500 hover:underline"
                       >
-                        Сбросить фильтры
+                        Reset filters
                       </button>
                     </div>
                   </div>
@@ -279,7 +279,7 @@
                       </span>
                       <span v-if="provider.balance_usd <= provider.min_balance_usd && provider.status === 'active'"
                             class="inline-flex items-center rounded bg-rose-50 px-1 py-0.2 text-[10px] font-semibold text-rose-600 dark:bg-rose-950/40 dark:text-rose-400"
-                            title="Баланс ниже минимального порога">
+                            title="Balance is below the minimum threshold">
                         Low
                       </span>
                     </div>
@@ -301,28 +301,28 @@
                 <td class="px-5 py-4 whitespace-nowrap">
                   <div class="flex items-center gap-3 text-xs">
                     <!-- Latency -->
-                    <div class="flex flex-col" :title="'Средняя задержка: ' + (provider.metrics.latency_ms || 0) + ' ms'">
+                    <div class="flex flex-col" :title="'Average latency: ' + (provider.metrics.latency_ms || 0) + ' ms'">
                       <span class="text-[10px] uppercase text-gray-400">Latency</span>
                       <span class="font-medium" :class="getLatencyClass(provider.metrics.latency_ms)">
                         {{ provider.metrics.latency_ms > 0 ? provider.metrics.latency_ms + 'ms' : '—' }}
                       </span>
                     </div>
                     <!-- Error Rate -->
-                    <div class="flex flex-col" :title="'Ошибки: ' + (provider.metrics.error_rate || 0) + '%'">
+                    <div class="flex flex-col" :title="'Error rate: ' + (provider.metrics.error_rate || 0) + '%'">
                       <span class="text-[10px] uppercase text-gray-400">Errors</span>
                       <span class="font-medium" :class="getErrorRateClass(provider.metrics.error_rate)">
                         {{ provider.metrics.error_rate !== undefined ? provider.metrics.error_rate + '%' : '0%' }}
                       </span>
                     </div>
                     <!-- Requests -->
-                    <div class="flex flex-col" :title="'Всего запросов: ' + (provider.metrics.requests || 0)">
+                    <div class="flex flex-col" :title="'Total requests: ' + (provider.metrics.requests || 0)">
                       <span class="text-[10px] uppercase text-gray-400">Reqs</span>
                       <span class="font-medium text-gray-700 dark:text-gray-300">
                         {{ formatCompactNumber(provider.metrics.requests) }}
                       </span>
                     </div>
                     <!-- Spend -->
-                    <div class="flex flex-col" :title="'Расход: $' + (provider.metrics.spend_usd || 0)">
+                    <div class="flex flex-col" :title="'Spend: $' + (provider.metrics.spend_usd || 0)">
                       <span class="text-[10px] uppercase text-gray-400">Spend</span>
                       <span class="font-medium text-gray-700 dark:text-gray-300">
                         ${{ formatCurrency(provider.metrics.spend_usd) }}
@@ -353,7 +353,7 @@
                       v-if="Object.keys(provider.model_mapping || {}).length > 0"
                       @click="openMappingsModal(provider)"
                       class="text-xs text-primary-600 hover:text-primary-700 dark:text-primary-400"
-                      :title="'Смотреть маппинг моделей (' + Object.keys(provider.model_mapping).length + ')'"
+                      :title="'View model mappings (' + Object.keys(provider.model_mapping).length + ')'"
                     >
                       <Icon name="link" size="xs" />
                     </button>
@@ -366,7 +366,7 @@
                     @click="toggleProviderStatus(provider)"
                     class="relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500/20"
                     :class="provider.status === 'active' ? 'bg-primary-600 dark:bg-primary-500' : 'bg-gray-200 dark:bg-dark-600'"
-                    :title="provider.status === 'active' ? 'Активен (кликните для отключения)' : 'Отключен (кликните для активации)'"
+                    :title="provider.status === 'active' ? 'Active (click to disable)' : 'Disabled (click to activate)'"
                   >
                     <span
                       class="pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"
@@ -383,7 +383,7 @@
                       @click="handleTestConnection(provider)"
                       :disabled="testingProviderId === provider.id"
                       class="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-primary-600 disabled:opacity-50 dark:hover:bg-dark-700 dark:hover:text-primary-400"
-                      title="Тест подключения и задержки"
+                      title="Test connection & latency"
                     >
                       <Icon name="play" size="sm" :class="{ 'animate-spin': testingProviderId === provider.id }" />
                     </button>
@@ -393,7 +393,7 @@
                       @click="handleSyncBalance(provider)"
                       :disabled="syncingProviderId === provider.id"
                       class="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-emerald-600 disabled:opacity-50 dark:hover:bg-dark-700 dark:hover:text-emerald-400"
-                      title="Синхронизировать баланс"
+                      title="Sync balance"
                     >
                       <Icon name="sync" size="sm" :class="{ 'animate-spin': syncingProviderId === provider.id }" />
                     </button>
@@ -402,7 +402,7 @@
                     <button
                       @click="openEditModal(provider)"
                       class="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-blue-600 dark:hover:bg-dark-700 dark:hover:text-blue-400"
-                      title="Редактировать"
+                      title="Edit"
                     >
                       <Icon name="edit" size="sm" />
                     </button>
@@ -411,7 +411,7 @@
                     <button
                       @click="openDeleteDialog(provider)"
                       class="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/30 dark:hover:text-rose-400"
-                      title="Удалить"
+                      title="Delete"
                     >
                       <Icon name="trash" size="sm" />
                     </button>
@@ -437,7 +437,7 @@
     <!-- Create / Edit Provider Modal -->
     <BaseDialog
       :show="showEditModal"
-      :title="editingProvider ? 'Редактирование поставщика' : 'Добавить нового поставщика'"
+      :title="editingProvider ? 'Edit Provider' : 'Add New Provider'"
       width="wide"
       @close="closeEditModal"
     >
@@ -445,7 +445,7 @@
         <!-- Quick Presets -->
         <div v-if="!editingProvider" class="rounded-xl border border-gray-100 bg-gray-50/70 p-3.5 dark:border-dark-700 dark:bg-dark-900/40">
           <label class="block text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-2">
-            Быстрый пресет поставщика
+            Quick Provider Preset
           </label>
           <div class="flex flex-wrap gap-2">
             <button
@@ -467,7 +467,7 @@
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label class="block text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1">
-              Название поставщика <span class="text-rose-500">*</span>
+              Provider Name <span class="text-rose-500">*</span>
             </label>
             <input
               v-model="form.provider_name"
@@ -480,12 +480,12 @@
 
           <div>
             <label class="block text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1">
-              Домен (Domain)
+              Domain
             </label>
             <input
               v-model="form.domain"
               type="text"
-              placeholder="e.g. api.openlux.ai (автоматически из URL если пусто)"
+              placeholder="e.g. api.openlux.ai (auto-extracted from URL if empty)"
               class="w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2 text-sm text-gray-900 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-dark-600 dark:bg-dark-700 dark:text-white"
             />
           </div>
@@ -495,7 +495,7 @@
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <div>
             <label class="block text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1">
-              Протокол API <span class="text-rose-500">*</span>
+              API Protocol <span class="text-rose-500">*</span>
             </label>
             <select
               v-model="form.protocol"
@@ -527,10 +527,10 @@
         <div>
           <div class="flex items-center justify-between mb-1">
             <label class="block text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
-              API Ключ (Учётные данные) <span v-if="!editingProvider" class="text-rose-500">*</span>
+              API Key (Credentials) <span v-if="!editingProvider" class="text-rose-500">*</span>
             </label>
             <span class="text-[11px] text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-              <Icon name="check" size="xs" /> Шифруется AES-256-GCM в БД
+              <Icon name="check" size="xs" /> Encrypted with AES-256-GCM in DB
             </span>
           </div>
           <div class="relative">
@@ -538,7 +538,7 @@
               v-model="form.api_key"
               :type="showApiKey ? 'text' : 'password'"
               :required="!editingProvider"
-              :placeholder="editingProvider ? '•••••••••••••••••••••••• (оставьте пустым для сохранения текущего ключа)' : 'sk-...' "
+              :placeholder="editingProvider ? '•••••••••••••••••••••••• (leave empty to keep current key)' : 'sk-...' "
               class="w-full rounded-xl border border-gray-200 bg-white py-2 pl-3.5 pr-10 text-sm font-mono text-gray-900 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-dark-600 dark:bg-dark-700 dark:text-white"
             />
             <button
@@ -555,7 +555,7 @@
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label class="block text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1">
-              Минимальный баланс ($ USD)
+              Minimum Balance ($ USD)
             </label>
             <div class="relative">
               <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm text-gray-400">$</span>
@@ -568,19 +568,19 @@
                 class="w-full rounded-xl border border-gray-200 bg-white py-2 pl-8 pr-3 text-sm text-gray-900 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-dark-600 dark:bg-dark-700 dark:text-white"
               />
             </div>
-            <p class="mt-1 text-[11px] text-gray-400">По умолчанию $20. При падении ниже порога отправляется alert в Telegram.</p>
+            <p class="mt-1 text-[11px] text-gray-400">Default $20. An alert is sent via Telegram when balance drops below this threshold.</p>
           </div>
 
           <div>
             <label class="block text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1">
-              Статус использования
+              Usage Status
             </label>
             <select
               v-model="form.status"
               class="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-dark-600 dark:bg-dark-700 dark:text-white"
             >
-              <option value="active">Active (Включен в диспетчер Hypervisor)</option>
-              <option value="disabled">Disabled (Отключен)</option>
+              <option value="active">Active (Enabled in Hypervisor scheduler)</option>
+              <option value="disabled">Disabled (Inactive)</option>
             </select>
           </div>
         </div>
@@ -588,7 +588,7 @@
         <!-- Supported Model Families -->
         <div>
           <label class="block text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-2">
-            Поддерживаемые семейства моделей
+            Supported Model Families
           </label>
           <div class="flex flex-wrap gap-2.5">
             <label
@@ -615,9 +615,9 @@
           <div class="flex items-center justify-between mb-2">
             <div>
               <label class="block text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
-                Маппинг моделей (Canonical Model ↔ Upstream Model)
+                Model Mappings (Canonical Model ↔ Upstream Model)
               </label>
-              <p class="text-[11px] text-gray-400">Переопределение системных имён моделей на имена у данного поставщика</p>
+              <p class="text-[11px] text-gray-400">Override system canonical model names to provider-specific upstream names</p>
             </div>
             <button
               type="button"
@@ -625,12 +625,12 @@
               class="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-dark-600 dark:text-gray-300 dark:hover:bg-dark-700"
             >
               <Icon name="plus" size="xs" />
-              <span>Добавить строку</span>
+              <span>Add Row</span>
             </button>
           </div>
 
           <div v-if="mappingRows.length === 0" class="rounded-xl border border-dashed border-gray-200 p-3 text-center text-xs text-gray-400 dark:border-dark-700">
-            Нет индивидуальных переопределений (будут использоваться имена 1-в-1)
+            No custom overrides (canonical names will be used 1-to-1)
           </div>
           <div v-else class="space-y-2 max-h-48 overflow-y-auto pr-1">
             <div
@@ -641,14 +641,14 @@
               <input
                 v-model="row.canonical"
                 type="text"
-                placeholder="Каноническая (e.g. claude-3-7-sonnet)"
+                placeholder="Canonical (e.g. claude-3-7-sonnet)"
                 class="flex-1 rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-xs text-gray-900 focus:border-primary-500 focus:outline-none dark:border-dark-600 dark:bg-dark-700 dark:text-white"
               />
               <span class="text-gray-400 font-bold">→</span>
               <input
                 v-model="row.upstream"
                 type="text"
-                placeholder="У поставщика (e.g. claude-3-7-sonnet-20250219)"
+                placeholder="Upstream (e.g. claude-3-7-sonnet-20250219)"
                 class="flex-1 rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-xs text-gray-900 focus:border-primary-500 focus:outline-none dark:border-dark-600 dark:bg-dark-700 dark:text-white"
               />
               <button
@@ -666,12 +666,12 @@
         <div v-if="draftTestResult" class="rounded-xl p-3 text-xs" :class="draftTestResult.success ? 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300' : 'bg-rose-50 text-rose-800 dark:bg-rose-950/40 dark:text-rose-300'">
           <div class="flex items-center gap-2 font-semibold">
             <Icon :name="draftTestResult.success ? 'check' : 'x'" size="xs" />
-            <span>{{ draftTestResult.success ? 'Соединение успешно!' : 'Ошибка подключения' }}</span>
+            <span>{{ draftTestResult.success ? 'Connection successful!' : 'Connection error' }}</span>
           </div>
           <p class="mt-1">
             {{ draftTestResult.success
-              ? `Задержка: ${draftTestResult.latency_ms} ms | Доступно моделей: ${draftTestResult.model_count}`
-              : (draftTestResult.error || 'Проверьте Base URL и API Key')
+              ? `Latency: ${draftTestResult.latency_ms} ms | Available models: ${draftTestResult.model_count}`
+              : (draftTestResult.error || 'Please check Base URL and API Key')
             }}
           </p>
         </div>
@@ -685,7 +685,7 @@
             class="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 px-3.5 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:border-dark-600 dark:text-gray-300 dark:hover:bg-dark-700"
           >
             <Icon name="play" size="xs" :class="{ 'animate-spin': isTestingDraft }" />
-            <span>{{ isTestingDraft ? 'Проверка...' : 'Проверить соединение' }}</span>
+            <span>{{ isTestingDraft ? 'Testing...' : 'Test Connection' }}</span>
           </button>
 
           <div class="flex items-center gap-2.5">
@@ -694,7 +694,7 @@
               @click="closeEditModal"
               class="rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-dark-600 dark:text-gray-300 dark:hover:bg-dark-700"
             >
-              Отмена
+              Cancel
             </button>
             <button
               type="submit"
@@ -702,7 +702,7 @@
               class="inline-flex items-center gap-2 rounded-xl bg-primary-600 px-5 py-2 text-sm font-medium text-white shadow-sm hover:bg-primary-500 disabled:opacity-50 dark:bg-primary-500 dark:hover:bg-primary-400"
             >
               <Icon v-if="isSaving" name="sync" size="xs" class="animate-spin" />
-              <span>{{ isSaving ? 'Сохранение...' : (editingProvider ? 'Сохранить изменения' : 'Создать поставщика') }}</span>
+              <span>{{ isSaving ? 'Saving...' : (editingProvider ? 'Save Changes' : 'Create Provider') }}</span>
             </button>
           </div>
         </div>
@@ -712,7 +712,7 @@
     <!-- Mappings View Modal -->
     <BaseDialog
       :show="showMappingsModal"
-      :title="'Маппинг моделей: ' + (activeMappingsProvider?.provider_name || '')"
+      :title="'Model Mappings: ' + (activeMappingsProvider?.provider_name || '')"
       width="normal"
       @close="showMappingsModal = false"
     >
@@ -721,8 +721,8 @@
           <table class="w-full text-left text-xs">
             <thead class="bg-gray-50 dark:bg-dark-800 text-gray-500 uppercase font-semibold">
               <tr>
-                <th class="px-4 py-2.5">Каноническая модель</th>
-                <th class="px-4 py-2.5">Модель у поставщика</th>
+                <th class="px-4 py-2.5">Canonical Model</th>
+                <th class="px-4 py-2.5">Upstream Model</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-gray-100 dark:divide-dark-700">
@@ -739,10 +739,10 @@
     <!-- Delete Confirmation Dialog -->
     <ConfirmDialog
       :show="showDeleteConfirm"
-      title="Удаление поставщика"
-      :message="`Вы уверены, что хотите удалить поставщика «${deletingProvider?.provider_name}»? Это действие необратимо и отключит маршрутизацию запросов через этот шлюз.`"
-      confirmText="Удалить"
-      cancelText="Отмена"
+      title="Delete Provider"
+      :message="`Are you sure you want to delete provider «${deletingProvider?.provider_name}»? This action cannot be undone and will stop routing requests through this gateway.`"
+      confirmText="Delete"
+      cancelText="Cancel"
       :danger="true"
       @confirm="confirmDelete"
       @cancel="showDeleteConfirm = false"
@@ -832,7 +832,7 @@ const availableModelFamilies = [
   { id: 'gemini', label: 'Gemini (Google)' },
   { id: 'kimi', label: 'Kimi (Moonshot)' },
   { id: 'deepseek', label: 'DeepSeek' },
-  { id: 'other', label: 'Другие / Custom' }
+  { id: 'other', label: 'Other / Custom' }
 ]
 
 // Presets
@@ -925,7 +925,7 @@ async function fetchData() {
       summaryStats.value = res.summary
     }
   } catch (err: any) {
-    appStore.showToast('error', err?.message || 'Ошибка загрузки поставщиков')
+    appStore.showToast('error', err?.message || 'Failed to load providers')
   } finally {
     isLoading.value = false
   }
@@ -1014,7 +1014,7 @@ async function saveProvider() {
         supported_model_families: form.supported_model_families,
         model_mapping: mapping
       })
-      appStore.showToast('success', `Поставщик «${form.provider_name}» успешно обновлен`)
+      appStore.showToast('success', `Provider «${form.provider_name}» updated successfully`)
     } else {
       await createProvider({
         provider_name: form.provider_name,
@@ -1027,12 +1027,12 @@ async function saveProvider() {
         supported_model_families: form.supported_model_families,
         model_mapping: mapping
       })
-      appStore.showToast('success', `Поставщик «${form.provider_name}» успешно добавлен`)
+      appStore.showToast('success', `Provider «${form.provider_name}» created successfully`)
     }
     closeEditModal()
     fetchData()
   } catch (err: any) {
-    appStore.showToast('error', err?.message || 'Ошибка сохранения поставщика')
+    appStore.showToast('error', err?.message || 'Failed to save provider')
   } finally {
     isSaving.value = false
   }
@@ -1044,13 +1044,13 @@ async function handleTestConnection(provider: Provider) {
   try {
     const res = await testProviderConnection(provider.id)
     if (res.success) {
-      appStore.showToast('success', `Связь с «${provider.provider_name}» подтверждена (Задержка: ${res.latency_ms} ms, Моделей: ${res.model_count})`)
+      appStore.showToast('success', `Connection to «${provider.provider_name}» verified (Latency: ${res.latency_ms} ms, Models: ${res.model_count})`)
     } else {
-      appStore.showToast('error', `Ошибка проверки связи: ${res.error || 'Код ' + res.status_code}`)
+      appStore.showToast('error', `Connection test failed: ${res.error || 'Status ' + res.status_code}`)
     }
     fetchData()
   } catch (err: any) {
-    appStore.showToast('error', err?.message || 'Ошибка тестирования соединения')
+    appStore.showToast('error', err?.message || 'Connection test error')
   } finally {
     testingProviderId.value = null
   }
@@ -1078,7 +1078,7 @@ async function testDraftCredentials() {
       latency_ms: 0,
       status_code: 500,
       model_count: 0,
-      error: err?.message || 'Ошибка соединения'
+      error: err?.message || 'Connection error'
     }
   } finally {
     isTestingDraft.value = false
@@ -1090,10 +1090,10 @@ async function handleSyncBalance(provider: Provider) {
   syncingProviderId.value = provider.id
   try {
     const res = await syncProviderBalance(provider.id)
-    appStore.showToast('success', `Баланс «${provider.provider_name}» синхронизирован: $${formatCurrency(res.balance_usd)}`)
+    appStore.showToast('success', `Balance for «${provider.provider_name}» synced: $${formatCurrency(res.balance_usd)}`)
     fetchData()
   } catch (err: any) {
-    appStore.showToast('error', err?.message || 'Ошибка синхронизации баланса')
+    appStore.showToast('error', err?.message || 'Failed to sync balance')
   } finally {
     syncingProviderId.value = null
   }
@@ -1105,13 +1105,13 @@ async function handleSyncAll() {
   try {
     const summary = await syncAllProviderBalances()
     if (summary.failed === 0) {
-      appStore.showToast('success', `Все балансы успешно синхронизированы (${summary.successful}/${summary.total})`)
+      appStore.showToast('success', `All balances synced successfully (${summary.successful}/${summary.total})`)
     } else {
-      appStore.showToast('warning', `Синхронизировано: ${summary.successful}, с ошибкой: ${summary.failed}`)
+      appStore.showToast('warning', `Synced: ${summary.successful}, failed: ${summary.failed}`)
     }
     fetchData()
   } catch (err: any) {
-    appStore.showToast('error', err?.message || 'Ошибка массовой синхронизации')
+    appStore.showToast('error', err?.message || 'Batch balance sync failed')
   } finally {
     isSyncingAll.value = false
   }
@@ -1123,10 +1123,10 @@ async function toggleProviderStatus(provider: Provider) {
   try {
     await updateProvider(provider.id, { status: newStatus })
     provider.status = newStatus
-    appStore.showToast('success', `Поставщик «${provider.provider_name}» ${newStatus === 'active' ? 'активирован' : 'отключен'}`)
+    appStore.showToast('success', `Provider «${provider.provider_name}» ${newStatus === 'active' ? 'enabled' : 'disabled'}`)
     fetchData()
   } catch (err: any) {
-    appStore.showToast('error', err?.message || 'Не удалось обновить статус')
+    appStore.showToast('error', err?.message || 'Failed to update status')
   }
 }
 
@@ -1146,12 +1146,12 @@ async function confirmDelete() {
   if (!deletingProvider.value) return
   try {
     await deleteProvider(deletingProvider.value.id)
-    appStore.showToast('success', `Поставщик «${deletingProvider.value.provider_name}» удален`)
+    appStore.showToast('success', `Provider «${deletingProvider.value.provider_name}» deleted`)
     showDeleteConfirm.value = false
     deletingProvider.value = null
     fetchData()
   } catch (err: any) {
-    appStore.showToast('error', err?.message || 'Ошибка удаления поставщика')
+    appStore.showToast('error', err?.message || 'Failed to delete provider')
   }
 }
 
@@ -1169,16 +1169,16 @@ function formatCompactNumber(num?: number): string {
 }
 
 function formatTimeAgo(timeStr?: string | null): string {
-  if (!timeStr) return 'Никогда не синхронизировался'
+  if (!timeStr) return 'Never synced'
   const diff = Date.now() - new Date(timeStr).getTime()
   const sec = Math.floor(diff / 1000)
-  if (sec < 60) return 'только что'
+  if (sec < 60) return 'just now'
   const min = Math.floor(sec / 60)
-  if (min < 60) return `${min} мин. назад`
+  if (min < 60) return `${min}m ago`
   const hrs = Math.floor(min / 60)
-  if (hrs < 24) return `${hrs} ч. назад`
+  if (hrs < 24) return `${hrs}h ago`
   const days = Math.floor(hrs / 24)
-  return `${days} дн. назад`
+  return `${days}d ago`
 }
 
 function getStateBadgeClass(state: ProviderState): string {

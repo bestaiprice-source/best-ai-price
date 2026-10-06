@@ -5,7 +5,7 @@
         <div class="header-content">
           <div class="mb-2">
             <router-link to="/admin/providers" class="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-primary-500 hover:text-primary-600 transition-colors">
-              <span>← К списку нод (Поставщики)</span>
+              <span>← Back to Providers</span>
             </router-link>
           </div>
           <h2>AI Providers, Pricing & Margins</h2>

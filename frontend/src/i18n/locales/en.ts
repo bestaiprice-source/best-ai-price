@@ -356,6 +356,7 @@ export default {
     subscriptions: 'Subscriptions',
     accounts: 'Accounts',
     providers: 'Providers',
+    vendors: 'Price Checker & Margins',
     proxies: 'Proxies',
     redeemCodes: 'Redeem Codes',
     ops: 'Ops',
@@ -2004,6 +2005,12 @@ export default {
     providers: {
       title: 'Providers',
       description: 'Manage external API providers, balances, credentials, and model mappings'
+    },
+
+    // Vendors / Price Checker
+    vendors: {
+      title: 'Price Checker & Margins',
+      description: 'Compare provider prices, discover cheaper alternatives, and monitor gross margins'
     },
 
     // Accounts

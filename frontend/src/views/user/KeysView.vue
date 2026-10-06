@@ -424,7 +424,7 @@
     >
       <form id="key-form" @submit.prevent="handleSubmit" class="space-y-5">
         <div v-if="isAdmin && !showEditModal">
-          <label class="input-label">User / Owner (Владелец ключа)</label>
+          <label class="input-label">User / Owner</label>
           <select
             v-model="formData.user_id"
             class="input select w-full"

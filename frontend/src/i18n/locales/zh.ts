@@ -355,7 +355,8 @@ export default {
     groups: '分组管理',
     subscriptions: '订阅管理',
     accounts: '账号管理',
-    providers: '供应商 / Поставщики',
+    providers: '供应商',
+    vendors: '比价与利润率',
     proxies: 'IP管理',
     redeemCodes: '兑换码',
     ops: '运维监控',
@@ -2081,8 +2082,14 @@ export default {
 
     // Providers
     providers: {
-      title: '供应商 / Поставщики',
+      title: '供应商管理',
       description: '管理外部 API 供应商、余额、凭据和模型映射'
+    },
+
+    // Vendors
+    vendors: {
+      title: '比价与利润率',
+      description: '比较上游供应商价格，发现更便宜的替代渠道并监控毛利率'
     },
 
     // Accounts Management
