@@ -344,6 +344,27 @@ export default {
   },
 
   // Navigation
+  billing: {
+    title: 'Billing History',
+    description: 'Your money operations — deposits, API usage, refunds and manual adjustments — kept separate from the technical API usage log.',
+    loadFailed: 'Failed to load billing history',
+    empty: 'No money operations yet',
+    filterAll: 'All',
+    types: {
+      deposit: 'Deposit',
+      usage: 'API usage',
+      refund: 'Refund',
+      adjustment: 'Manual adjustment'
+    },
+    columns: {
+      time: 'Time',
+      type: 'Type',
+      amount: 'Amount',
+      asset: 'Currency / network',
+      status: 'Status',
+      details: 'Details'
+    }
+  },
   availableChannels: {
     columns: {
       name: 'Channel',
@@ -392,6 +413,7 @@ export default {
     providerHealth: 'Provider Health',
     alerts: 'Alerts',
     support: 'Support',
+    billing: 'Billing History',
     proxies: 'Proxies',
     redeemCodes: 'Redeem Codes',
     ops: 'Ops',

@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -26,7 +27,7 @@ type AdminService interface {
 	CreateUser(ctx context.Context, input *CreateUserInput) (*User, error)
 	UpdateUser(ctx context.Context, id int64, input *UpdateUserInput) (*User, error)
 	DeleteUser(ctx context.Context, id int64) error
-	UpdateUserBalance(ctx context.Context, userID int64, balance float64, operation string, notes string) (*User, error)
+	UpdateUserBalance(ctx context.Context, userID int64, balance float64, operation string, notes string, operator string) (*User, error)
 	GetUserAPIKeys(ctx context.Context, userID int64, page, pageSize int) ([]APIKey, int64, error)
 	GetUserUsageStats(ctx context.Context, userID int64, period string) (any, error)
 	// GetUserBalanceHistory returns paginated balance/concurrency change records for a user.
@@ -715,7 +716,16 @@ func (s *adminServiceImpl) DeleteUser(ctx context.Context, id int64) error {
 	return nil
 }
 
-func (s *adminServiceImpl) UpdateUserBalance(ctx context.Context, userID int64, balance float64, operation string, notes string) (*User, error) {
+func (s *adminServiceImpl) UpdateUserBalance(ctx context.Context, userID int64, balance float64, operation string, notes string, operator string) (*User, error) {
+	// §12: an administrative adjustment must always carry a reason, and the
+	// reason is recorded in the audit log below.
+	reason := strings.TrimSpace(notes)
+	if reason == "" {
+		return nil, errors.New("reason is required for balance adjustment")
+	}
+	if strings.TrimSpace(operator) == "" {
+		operator = "admin"
+	}
 	user, err := s.userRepo.GetByID(ctx, userID)
 	if err != nil {
 		return nil, err
@@ -767,7 +777,7 @@ func (s *adminServiceImpl) UpdateUserBalance(ctx context.Context, userID int64, 
 			Value:  balanceDiff,
 			Status: StatusUsed,
 			UsedBy: &user.ID,
-			Notes:  notes,
+			Notes:  reason,
 		}
 		now := time.Now()
 		adjustmentRecord.UsedAt = &now
@@ -775,9 +785,39 @@ func (s *adminServiceImpl) UpdateUserBalance(ctx context.Context, userID int64, 
 		if err := s.redeemCodeRepo.Create(ctx, adjustmentRecord); err != nil {
 			logger.LegacyPrintf("service.admin", "failed to create balance adjustment redeem code: %v", err)
 		}
+
+		// §12: mandatory audit record for the adjustment, with the reason.
+		s.writeBalanceAdjustmentAudit(ctx, userID, operator, operation, oldBalance, user.Balance, balanceDiff, reason)
 	}
 
 	return user, nil
+}
+
+// writeBalanceAdjustmentAudit appends an append-only audit record for an
+// administrative balance adjustment (reason included). Best-effort: it must never
+// fail the adjustment itself.
+func (s *adminServiceImpl) writeBalanceAdjustmentAudit(ctx context.Context, userID int64, operator, operation string, oldBalance, newBalance, diff float64, reason string) {
+	if s.entClient == nil {
+		return
+	}
+	detail, err := json.Marshal(map[string]any{
+		"operation":   operation,
+		"old_balance": oldBalance,
+		"new_balance": newBalance,
+		"diff":        diff,
+		"reason":      reason,
+	})
+	if err != nil {
+		detail = []byte(fmt.Sprintf(`{"reason":%q}`, reason))
+	}
+	if _, err := s.entClient.PaymentAuditLog.Create().
+		SetOrderID(fmt.Sprintf("balance:%d", userID)).
+		SetAction("ADMIN_BALANCE_ADJUSTMENT").
+		SetDetail(string(detail)).
+		SetOperator(operator).
+		Save(ctx); err != nil {
+		logger.LegacyPrintf("service.admin", "failed to write balance adjustment audit: user_id=%d err=%v", userID, err)
+	}
 }
 
 func (s *adminServiceImpl) GetUserAPIKeys(ctx context.Context, userID int64, page, pageSize int) ([]APIKey, int64, error) {
@@ -1383,7 +1423,7 @@ func (s *adminServiceImpl) AdminUpdateAPIKey(ctx context.Context, keyID int64, r
 		apiKey.Name = *req.Name
 	}
 	apiKey.AllowedModels = NormalizeAPIKeyAllowedModels(apiKey.AllowedModels)
-	
+
 	if req.GroupID != nil || req.GroupIDs != nil {
 		requestedGroupIDs := apiKey.GroupIDs
 		if req.GroupIDs != nil {
@@ -1397,7 +1437,7 @@ func (s *adminServiceImpl) AdminUpdateAPIKey(ctx context.Context, keyID int64, r
 				requestedGroupIDs = []int64{*req.GroupID}
 			}
 		}
-		
+
 		apiKey.GroupIDs = requestedGroupIDs
 		apiKey.GroupID = PrimaryAPIKeyGroupID(requestedGroupIDs)
 	}
@@ -1427,7 +1467,7 @@ func (s *adminServiceImpl) AdminUpdateAPIKey(ctx context.Context, keyID int64, r
 		apiKey.ExpiresAt = req.ExpiresAt
 	}
 
-	// IP 
+	// IP
 	if len(req.IPWhitelist) > 0 {
 		apiKey.IPWhitelist = req.IPWhitelist
 	}

@@ -249,6 +249,17 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/billing',
+    name: 'BillingHistory',
+    component: () => import('@/views/user/BillingHistoryView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      title: 'Billing History',
+      titleKey: 'nav.billing'
+    }
+  },
+  {
     path: '/payment/qrcode',
     name: 'PaymentQRCode',
     component: () => import('@/views/user/PaymentQRCodeView.vue'),

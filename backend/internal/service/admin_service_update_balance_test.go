@@ -73,7 +73,7 @@ func TestAdminService_UpdateUserBalance_InvalidatesAuthCache(t *testing.T) {
 		authCacheInvalidator: invalidator,
 	}
 
-	_, err := svc.UpdateUserBalance(context.Background(), 7, 5, "add", "")
+	_, err := svc.UpdateUserBalance(context.Background(), 7, 5, "add", "compensation", "admin:1")
 	require.NoError(t, err)
 	require.Equal(t, []int64{7}, invalidator.userIDs)
 	require.Len(t, redeemRepo.created, 1)
@@ -90,8 +90,23 @@ func TestAdminService_UpdateUserBalance_NoChangeNoInvalidate(t *testing.T) {
 		authCacheInvalidator: invalidator,
 	}
 
-	_, err := svc.UpdateUserBalance(context.Background(), 7, 10, "set", "")
+	_, err := svc.UpdateUserBalance(context.Background(), 7, 10, "set", "no-op reason", "admin:1")
 	require.NoError(t, err)
 	require.Empty(t, invalidator.userIDs)
+	require.Empty(t, redeemRepo.created)
+}
+
+func TestAdminService_UpdateUserBalance_RequiresReason(t *testing.T) {
+	baseRepo := &userRepoStub{user: &User{ID: 7, Balance: 10}}
+	repo := &balanceUserRepoStub{userRepoStub: baseRepo}
+	redeemRepo := &balanceRedeemRepoStub{redeemRepoStub: &redeemRepoStub{}}
+	svc := &adminServiceImpl{
+		userRepo:       repo,
+		redeemCodeRepo: redeemRepo,
+	}
+
+	_, err := svc.UpdateUserBalance(context.Background(), 7, 5, "add", "   ", "admin:1")
+	require.Error(t, err)
+	require.Empty(t, repo.updated, "adjustment must not be applied without a reason")
 	require.Empty(t, redeemRepo.created)
 }

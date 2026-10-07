@@ -655,6 +655,7 @@ const userNavItems = computed((): NavItem[] => {
     ...(paymentEnabled.value
       ? [{ path: '/orders', label: 'My Orders', icon: OrderListIcon, hideInSimpleMode: true }]
       : []),
+    { path: '/billing', label: t('nav.billing'), icon: CreditCardIcon, hideInSimpleMode: true },
     { path: '/redeem', label: t('nav.redeem'), icon: GiftIcon, hideInSimpleMode: true },
     { path: '/profile', label: t('nav.profile'), icon: UserIcon },
     ...(docsHref.value
@@ -700,6 +701,7 @@ const personalNavItems = computed((): NavItem[] => {
     ...(paymentEnabled.value
       ? [{ path: '/orders', label: 'My Orders', icon: OrderListIcon, hideInSimpleMode: true }]
       : []),
+    { path: '/billing', label: t('nav.billing'), icon: CreditCardIcon, hideInSimpleMode: true },
     { path: '/redeem', label: t('nav.redeem'), icon: GiftIcon, hideInSimpleMode: true },
     { path: '/profile', label: t('nav.profile'), icon: UserIcon },
     ...(docsHref.value

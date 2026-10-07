@@ -344,6 +344,27 @@ export default {
   },
 
   // Navigation
+  billing: {
+    title: '账单历史',
+    description: '资金流水 — 充值、API 消费、退款与人工调整，与 API 用量日志分开显示。',
+    loadFailed: '账单历史加载失败',
+    empty: '暂无资金流水',
+    filterAll: '全部',
+    types: {
+      deposit: '充值',
+      usage: 'API 消费',
+      refund: '退款',
+      adjustment: '人工调整'
+    },
+    columns: {
+      time: '时间',
+      type: '类型',
+      amount: '金额',
+      asset: '币种 / 网络',
+      status: '状态',
+      details: '详情'
+    }
+  },
   availableChannels: {
     columns: {
       name: '渠道',
@@ -392,6 +413,7 @@ export default {
     providerHealth: '供应商健康',
     alerts: '告警',
     support: '支持',
+    billing: '账单历史',
     proxies: 'IP管理',
     redeemCodes: '兑换码',
     ops: '运维监控',

@@ -3,6 +3,7 @@ package admin
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -310,7 +311,7 @@ func (h *UserHandler) UpdateBalanceGateway(c gatewayctx.GatewayContext) {
 		Body:   req,
 	}
 	executeAdminIdempotentGatewayJSON(c, "admin.users.balance.update", idempotencyPayload, service.DefaultWriteIdempotencyTTL(), func(ctx context.Context) (any, error) {
-		user, execErr := h.adminService.UpdateUserBalance(ctx, userID, req.Balance, req.Operation, req.Notes)
+		user, execErr := h.adminService.UpdateUserBalance(ctx, userID, req.Balance, req.Operation, req.Notes, fmt.Sprintf("admin:%d", getAdminIDFromGatewayContext(c)))
 		if execErr != nil {
 			return nil, execErr
 		}

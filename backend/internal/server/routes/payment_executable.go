@@ -42,6 +42,7 @@ func ExecutablePaymentRoutes(h *handler.Handlers) []gatewayctx.RouteDef {
 			gatewayctx.RouteDef{Method: http.MethodGet, Path: "/api/v1/payment/plans", Handler: h.Payment.GetPlansGateway, Middleware: userMW},
 			gatewayctx.RouteDef{Method: http.MethodGet, Path: "/api/v1/payment/channels", Handler: h.Payment.GetChannelsGateway, Middleware: userMW},
 			gatewayctx.RouteDef{Method: http.MethodGet, Path: "/api/v1/payment/limits", Handler: h.Payment.GetLimitsGateway, Middleware: userMW},
+			gatewayctx.RouteDef{Method: http.MethodGet, Path: "/api/v1/payment/ledger", Handler: h.Payment.GetLedgerGateway, Middleware: userMW},
 			gatewayctx.RouteDef{Method: http.MethodPost, Path: "/api/v1/payment/orders", Handler: h.Payment.CreateOrderGateway, Middleware: userMW},
 			gatewayctx.RouteDef{Method: http.MethodPost, Path: "/api/v1/payment/orders/verify", Handler: h.Payment.VerifyOrderGateway, Middleware: userMW},
 			gatewayctx.RouteDef{Method: http.MethodGet, Path: "/api/v1/payment/orders/my", Handler: h.Payment.GetMyOrdersGateway, Middleware: userMW},

@@ -24,15 +24,43 @@ type PaymentHandler struct {
 	channelService *service.ChannelService
 	paymentService *service.PaymentService
 	configService  *service.PaymentConfigService
+	ledgerService  *service.BalanceLedgerService
 }
 
 // NewPaymentHandler creates a new PaymentHandler.
-func NewPaymentHandler(paymentService *service.PaymentService, configService *service.PaymentConfigService, channelService *service.ChannelService) *PaymentHandler {
+func NewPaymentHandler(paymentService *service.PaymentService, configService *service.PaymentConfigService, channelService *service.ChannelService, ledgerService *service.BalanceLedgerService) *PaymentHandler {
 	return &PaymentHandler{
 		channelService: channelService,
 		paymentService: paymentService,
 		configService:  configService,
+		ledgerService:  ledgerService,
 	}
+}
+
+// GetLedger returns the authenticated user's money-operation history (§12):
+// deposits, API usage debits, refunds and manual adjustments — a separate ledger
+// from the technical usage log.
+// GET /api/v1/payment/ledger?type=&page=&page_size=
+func (h *PaymentHandler) GetLedger(c *gin.Context) {
+	h.GetLedgerGateway(gatewayctx.FromGin(c))
+}
+
+func (h *PaymentHandler) GetLedgerGateway(c gatewayctx.GatewayContext) {
+	subject, ok := requireAuthGateway(c)
+	if !ok {
+		return
+	}
+	if h.ledgerService == nil {
+		response.SuccessContext(gatewayJSONResponder{ctx: c}, &service.BalanceLedgerPage{Items: []service.LedgerEntry{}})
+		return
+	}
+	page, pageSize := response.ParsePaginationValues(c)
+	ledger, err := h.ledgerService.GetUserLedger(c.Request().Context(), subject.UserID, c.QueryValue("type"), page, pageSize)
+	if err != nil {
+		response.ErrorFromContext(gatewayJSONResponder{ctx: c}, err)
+		return
+	}
+	response.SuccessContext(gatewayJSONResponder{ctx: c}, ledger)
 }
 
 // GetPaymentConfig returns the payment system configuration.
