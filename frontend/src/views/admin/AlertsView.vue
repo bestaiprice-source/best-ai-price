@@ -103,7 +103,8 @@
               <tbody class="divide-y divide-gray-50 dark:divide-dark-800">
                 <tr v-for="r in rules" :key="r.id">
                   <td class="px-4 py-2">
-                    <div class="font-medium text-gray-900 dark:text-white">{{ r.name }}</div>
+                    <div class="font-medium text-gray-900 dark:text-white">{{ metricLabel(r.metric_type) }}</div>
+                    <div v-if="!isLatinText(r.name)" class="text-xs text-gray-400">{{ r.name }}</div>
                     <div class="text-xs" :class="r.enabled ? 'text-emerald-500' : 'text-gray-400'">{{ r.enabled ? 'enabled' : 'disabled' }}</div>
                   </td>
                   <td class="px-4 py-2 text-xs text-gray-500 dark:text-gray-400">{{ r.metric_type }}</td>
@@ -129,7 +130,8 @@
                 <span :class="severityBadgeClass(ev.severity)">{{ ev.severity }}</span>
                 <span class="text-xs text-gray-400">{{ formatTime(ev.fired_at || ev.created_at) }}</span>
               </div>
-              <p class="mt-1 text-sm text-gray-800 dark:text-gray-200">{{ ev.title || ev.description || ('Event #' + ev.id) }}</p>
+              <p class="mt-1 text-sm text-gray-800 dark:text-gray-200">{{ eventLabel(ev) }}</p>
+              <p v-if="!isLatinText(ev.title) && ev.title" class="text-xs text-gray-400">{{ ev.title }}</p>
               <p class="text-xs text-gray-400">status: {{ ev.status }}</p>
             </div>
             <div v-if="!loading && events.length === 0" class="px-5 py-8 text-center text-gray-400">
@@ -149,6 +151,7 @@ import Icon from '@/components/icons/Icon.vue'
 import { useAppStore } from '@/stores'
 import { getTelegramSettings, testTelegramNotification, type TelegramSettings } from '@/api/admin/settings'
 import { listAlertRules, listAlertEvents, type AlertRule, type AlertEvent } from '@/api/admin/ops'
+import { metricLabel, isLatinText } from '@/utils/opsLabels'
 
 const appStore = useAppStore()
 
@@ -172,6 +175,15 @@ const eventTypes = [
 
 const formatTime = (v?: string) => (v ? new Date(v).toLocaleString() : '—')
 
+// Map rule_id → metric_type so alert events (whose stored title may be a
+// free-form/Chinese string) can be shown with a stable English label.
+const ruleMetricMap = ref<Map<number, string>>(new Map())
+const eventLabel = (ev: AlertEvent): string => {
+  const mt = ruleMetricMap.value.get(ev.rule_id)
+  if (mt) return metricLabel(mt)
+  return ev.title || ev.description || ('Event #' + ev.id)
+}
+
 const severityBadgeClass = (severity: string) => {
   const base = 'inline-flex rounded-full px-2 py-0.5 text-xs font-medium '
   switch ((severity || '').toLowerCase()) {
@@ -193,7 +205,14 @@ const load = async () => {
       listAlertEvents({ limit: 30 })
     ])
     if (tgRes.status === 'fulfilled') telegram.value = tgRes.value
-    if (rulesRes.status === 'fulfilled') rules.value = Array.isArray(rulesRes.value) ? rulesRes.value : []
+    if (rulesRes.status === 'fulfilled') {
+      rules.value = Array.isArray(rulesRes.value) ? rulesRes.value : []
+      const map = new Map<number, string>()
+      for (const r of rules.value) {
+        if (r.id != null && r.metric_type) map.set(r.id, r.metric_type)
+      }
+      ruleMetricMap.value = map
+    }
     if (eventsRes.status === 'fulfilled') {
       const list = eventsRes.value as AlertEvent[]
       events.value = Array.isArray(list) ? list.slice(0, 30) : []

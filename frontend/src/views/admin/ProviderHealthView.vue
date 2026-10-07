@@ -172,7 +172,8 @@
                 <span :class="severityBadgeClass(ev.severity)">{{ ev.severity }}</span>
                 <span class="text-xs text-gray-400">{{ formatTime(ev.fired_at || ev.created_at) }}</span>
               </div>
-              <p class="mt-1 text-sm text-gray-800 dark:text-gray-200">{{ ev.title || ev.description || ('Event #' + ev.id) }}</p>
+              <p class="mt-1 text-sm text-gray-800 dark:text-gray-200">{{ eventLabel(ev) }}</p>
+              <p v-if="!isLatinText(ev.title) && ev.title" class="text-xs text-gray-400">{{ ev.title }}</p>
               <p class="text-xs text-gray-400">status: {{ ev.status }}</p>
             </div>
             <div v-if="!loading && incidents.length === 0" class="px-5 py-8 text-center text-gray-400">
@@ -192,7 +193,8 @@ import Icon from '@/components/icons/Icon.vue'
 import { useAppStore } from '@/stores'
 import { getProviders, type Provider } from '@/api/admin/providers'
 import { getAshYunwuHealth, getAshYunwuNodes, type AshHealthResponse, type YunwuNodeItem } from '@/api/admin/ash'
-import { listAlertEvents, type AlertEvent } from '@/api/admin/ops'
+import { listAlertEvents, listAlertRules, type AlertEvent } from '@/api/admin/ops'
+import { metricLabel, isLatinText } from '@/utils/opsLabels'
 
 const appStore = useAppStore()
 
@@ -220,6 +222,15 @@ const poolBannerClass = computed(() => {
 const formatUsd = (v?: number | null) => (typeof v === 'number' ? '$' + v.toFixed(2) : '—')
 const formatPercent = (v?: number | null) => (typeof v === 'number' ? v.toFixed(1) + '%' : '—')
 const formatTime = (v?: string) => (v ? new Date(v).toLocaleString() : '—')
+
+// Map rule_id → metric_type so alert events with free-form/Chinese titles can be
+// rendered with a stable English label.
+const ruleMetricMap = ref<Map<number, string>>(new Map())
+const eventLabel = (ev: AlertEvent): string => {
+  const mt = ruleMetricMap.value.get(ev.rule_id)
+  if (mt) return metricLabel(mt)
+  return ev.title || ev.description || ('Event #' + ev.id)
+}
 
 const mapNodeState = (state: string) => {
   const s = (state || '').toLowerCase()
@@ -261,15 +272,23 @@ const severityBadgeClass = (severity: string) => {
 const load = async () => {
   loading.value = true
   try {
-    const [provRes, poolRes, nodesRes, incidentsRes] = await Promise.allSettled([
+    const [provRes, poolRes, nodesRes, incidentsRes, rulesRes] = await Promise.allSettled([
       getProviders(1, 200),
       getAshYunwuHealth(),
       getAshYunwuNodes(),
-      listAlertEvents({ limit: 20 })
+      listAlertEvents({ limit: 20 }),
+      listAlertRules()
     ])
     if (provRes.status === 'fulfilled') providers.value = provRes.value.items || []
     if (poolRes.status === 'fulfilled') pool.value = poolRes.value
     if (nodesRes.status === 'fulfilled') nodes.value = Array.isArray(nodesRes.value) ? nodesRes.value : []
+    if (rulesRes.status === 'fulfilled') {
+      const map = new Map<number, string>()
+      for (const r of (rulesRes.value || [])) {
+        if (r.id != null && r.metric_type) map.set(r.id, r.metric_type)
+      }
+      ruleMetricMap.value = map
+    }
     if (incidentsRes.status === 'fulfilled') {
       const list = incidentsRes.value as AlertEvent[]
       incidents.value = Array.isArray(list) ? list.slice(0, 20) : []
