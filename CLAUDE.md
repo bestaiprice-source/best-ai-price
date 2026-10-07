@@ -153,6 +153,7 @@ Welcome to **sub2api** and the **AI Session Hypervisor (ASH / Yunwu Engine)** re
     - Frontend: `VendorsPricingView.vue` provides tabbed navigation between "Providers & Pricing", "Gross Margin Analytics", and "Cheaper Alternatives" with KPI summary cards, breakdown tables, margin health badges, and modal price history views.
   - **Cheaper Provider Checker (`ash_cheaper_provider_opportunities`, `CheaperProviderService`)**:
     - Uses candidate pricing database from `https://bestaiprice.com/gateway/data/providers.json`.
+    - **Runs regularly, not only on demand**: `CheaperProviderService.Start()` (called from `NewAdminVendorHandler`) launches a periodic scan guarded by `singletonBackgroundServicesEnabled()` with `sync.Once`. Interval via `ASH_CHEAPER_PROVIDER_CHECK_SECONDS` (default `21600` = 6h; `<=0` disables). The on-demand `POST /api/v1/admin/vendors/opportunities/check` endpoint still works.
     - Compares active routes and synced vendors (`ash_vendor_models`) with candidate providers for matching canonical models.
     - Compares strictly normalized pricing with identical billing units ($/1M tokens, or flat per-request), filtering out any candidates that are already configured as current providers.
     - Classifies every model opportunity into its respective **Model Family** (`claude`, `gpt`, `gemini`, `kimi`), completely excluding the `other` family (any legacy `other` records are purged). Stored in `ash_cheaper_provider_opportunities.model_family` (migration `148_add_model_family_to_cheaper_opportunities.sql`).

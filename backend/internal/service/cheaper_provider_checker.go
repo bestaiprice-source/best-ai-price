@@ -10,7 +10,9 @@ import (
 	"math"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/model"
@@ -45,6 +47,44 @@ type CheaperProviderService struct {
 	accountRepo    AccountRepository
 	httpClient     *http.Client
 	providersURL   string
+	startOnce      sync.Once
+}
+
+// DefaultCheaperProviderCheckSeconds is how often the checker re-runs on its own
+// (§8: the service compares routes regularly, not only on demand). 0 disables.
+const DefaultCheaperProviderCheckSeconds = 6 * 3600
+
+// Start launches the periodic cheaper-provider scan. It is a no-op unless this
+// process owns singleton background services, and only ever starts once. The
+// interval comes from ASH_CHEAPER_PROVIDER_CHECK_SECONDS (default 6h; <=0 disables).
+func (s *CheaperProviderService) Start() {
+	if s == nil || !singletonBackgroundServicesEnabled() {
+		return
+	}
+	s.startOnce.Do(func() {
+		interval := DefaultCheaperProviderCheckSeconds
+		if raw := strings.TrimSpace(os.Getenv("ASH_CHEAPER_PROVIDER_CHECK_SECONDS")); raw != "" {
+			if v, err := strconv.Atoi(raw); err == nil {
+				interval = v
+			}
+		}
+		if interval <= 0 {
+			slog.Info("[CheaperProvider] periodic check disabled (ASH_CHEAPER_PROVIDER_CHECK_SECONDS<=0)")
+			return
+		}
+		go func() {
+			ticker := time.NewTicker(time.Duration(interval) * time.Second)
+			defer ticker.Stop()
+			slog.Info("[CheaperProvider] periodic cheaper-provider check started", "interval_seconds", interval)
+			for range ticker.C {
+				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+				if _, err := s.CheckOpportunities(ctx); err != nil {
+					slog.Warn("[CheaperProvider] periodic check failed", "error", err)
+				}
+				cancel()
+			}
+		}()
+	})
 }
 
 func NewCheaperProviderService(
@@ -311,7 +351,7 @@ func (s *CheaperProviderService) CheckOpportunities(ctx context.Context) ([]mode
 			}
 		} else if cand.NativePriceUSD != nil && cand.NativePriceUnit != nil && primary.NativePrice != nil && primary.NativeUnit != nil {
 			if strings.EqualFold(*cand.NativePriceUnit, *primary.NativeUnit) && *cand.NativePriceUSD < *primary.NativePrice {
-				diffPercent = math.Round(((*primary.NativePrice - *cand.NativePriceUSD) / *primary.NativePrice) * 10000) / 100
+				diffPercent = math.Round(((*primary.NativePrice-*cand.NativePriceUSD) / *primary.NativePrice)*10000) / 100
 				if diffPercent >= 1.0 {
 					isCheaper = true
 					candidatePrice = *cand.NativePriceUSD
@@ -739,4 +779,3 @@ func formatPriceUSD(p float64) string {
 	}
 	return fmt.Sprintf("$%.4f", p)
 }
-

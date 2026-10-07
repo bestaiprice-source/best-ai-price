@@ -29,10 +29,13 @@ func NewAdminVendorHandler(
 	groupRepo service.GroupRepository,
 	accountRepo service.AccountRepository,
 ) *AdminVendorHandler {
-	return &AdminVendorHandler{
+	h := &AdminVendorHandler{
 		db:             sqlx.NewDb(db, "postgres"),
 		cheaperService: service.NewCheaperProviderService(db, settingService, groupRepo, accountRepo),
 	}
+	// §8: run the cheaper-provider comparison regularly, not only on demand.
+	h.cheaperService.Start()
+	return h
 }
 
 // GetVendors returns all vendors and their models
