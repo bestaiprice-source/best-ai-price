@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+
+	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/health"
 )
 
 func TestContextWithModelRouting(t *testing.T) {
@@ -78,5 +80,52 @@ func TestDescribeRouting(t *testing.T) {
 	}
 	if got := describeRouting([]int64{1, 2}); got != "explicit([1 2])" {
 		t.Errorf("describeRouting = %q", got)
+	}
+}
+
+func TestSortNodesByPrice(t *testing.T) {
+	nodes := []health.ExecutionNode{
+		{NodeID: "expensive"},
+		{NodeID: "cheap"},
+		{NodeID: "mid"},
+		{NodeID: "unpriced"},
+	}
+	prices := map[string]float64{
+		"expensive": 0.180,
+		"cheap":     0.018,
+		"mid":       0.060,
+	}
+	sortNodesByPrice(nodes, prices)
+
+	got := []string{nodes[0].NodeID, nodes[1].NodeID, nodes[2].NodeID, nodes[3].NodeID}
+	want := []string{"cheap", "mid", "expensive", "unpriced"}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("sortNodesByPrice order = %v, want %v", got, want)
+		}
+	}
+}
+
+func TestPricePrimaryBackup(t *testing.T) {
+	prices := map[string]float64{"a": 0.018, "b": 0.060, "c": 0.180}
+
+	// Distinct price tiers → primary cheapest, backup next tier.
+	nodes := []health.ExecutionNode{{NodeID: "a"}, {NodeID: "b"}, {NodeID: "c"}}
+	primary, backup := pricePrimaryBackup(nodes, prices)
+	if primary != "a" || backup != "b" {
+		t.Fatalf("expected primary=a backup=b, got primary=%s backup=%s", primary, backup)
+	}
+
+	// Single price tier (ties) → no distinct backup.
+	tie := []health.ExecutionNode{{NodeID: "a"}, {NodeID: "x"}}
+	primary, backup = pricePrimaryBackup(tie, map[string]float64{"a": 0.05, "x": 0.05})
+	if primary != "a" || backup != "" {
+		t.Fatalf("expected primary=a backup=\"\", got primary=%s backup=%s", primary, backup)
+	}
+
+	// No prices → empty.
+	primary, backup = pricePrimaryBackup(nodes, map[string]float64{})
+	if primary != "" || backup != "" {
+		t.Fatalf("expected empty result, got primary=%s backup=%s", primary, backup)
 	}
 }

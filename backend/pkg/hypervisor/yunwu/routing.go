@@ -4,8 +4,11 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/health"
 )
 
 // modelRoutingKey is the context key used to pass an explicit, ordered list of
@@ -135,4 +138,56 @@ func describeRouting(ids []int64) string {
 		return "pool"
 	}
 	return fmt.Sprintf("explicit(%v)", ids)
+}
+
+// sortNodesByPrice orders candidate nodes ascending by their total price
+// (input+output per 1K) for the requested model, so the cheapest provider is
+// evaluated first (Primary). Nodes without a known price are pushed to the end.
+// Ties are broken by NodeID for a deterministic, stable ordering.
+func sortNodesByPrice(nodes []health.ExecutionNode, priceMap map[string]float64) {
+	if len(nodes) < 2 || len(priceMap) == 0 {
+		return
+	}
+	sort.SliceStable(nodes, func(i, j int) bool {
+		pi, iok := priceMap[nodes[i].NodeID]
+		pj, jok := priceMap[nodes[j].NodeID]
+		switch {
+		case iok && jok:
+			if pi != pj {
+				return pi < pj
+			}
+			return nodes[i].NodeID < nodes[j].NodeID
+		case iok:
+			return true // priced nodes come first
+		case jok:
+			return false
+		default:
+			return nodes[i].NodeID < nodes[j].NodeID
+		}
+	})
+}
+
+// pricePrimaryBackup derives the Primary/Backup provider purely from price for
+// the requested model: Primary is the cheapest provider, Backup is the next
+// cheapest provider with a strictly higher price (a different price tier).
+// It assumes `nodes` is already price-sorted. Returns empty Backup when only one
+// price tier exists.
+func pricePrimaryBackup(nodes []health.ExecutionNode, priceMap map[string]float64) (primaryID, backupID string) {
+	firstPrice := -1.0
+	for _, n := range nodes {
+		p, ok := priceMap[n.NodeID]
+		if !ok {
+			continue
+		}
+		if primaryID == "" {
+			primaryID = n.NodeID
+			firstPrice = p
+			continue
+		}
+		if p > firstPrice*1.0001 {
+			backupID = n.NodeID
+			break
+		}
+	}
+	return primaryID, backupID
 }

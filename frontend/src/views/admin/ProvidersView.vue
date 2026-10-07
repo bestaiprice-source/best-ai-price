@@ -7,6 +7,24 @@
           <h1 class="text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
             AI Providers
           </h1>
+          <div class="mt-3 inline-flex rounded-xl border border-gray-200 bg-white p-1 dark:border-dark-700 dark:bg-dark-800">
+            <button
+              type="button"
+              class="rounded-lg px-3 py-1.5 text-sm font-medium transition-colors"
+              :class="activeTab === 'providers' ? 'bg-primary-600 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-dark-700'"
+              @click="activeTab = 'providers'"
+            >
+              Providers
+            </button>
+            <button
+              type="button"
+              class="rounded-lg px-3 py-1.5 text-sm font-medium transition-colors"
+              :class="activeTab === 'routing' ? 'bg-primary-600 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-dark-700'"
+              @click="activeTab = 'routing'"
+            >
+              Model Routing
+            </button>
+          </div>
         </div>
         <div class="flex flex-wrap items-center gap-3">
           <button
@@ -34,6 +52,7 @@
         </div>
       </div>
 
+      <template v-if="activeTab === 'providers'">
       <!-- KPI Summary Cards -->
       <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <!-- Total Providers -->
@@ -432,6 +451,9 @@
           />
         </div>
       </div>
+      </template>
+
+      <ProvidersModelRoutingSection v-else :providers="providers" />
     </div>
 
     <!-- Edit Provider Modal -->
@@ -771,6 +793,7 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
+import ProvidersModelRoutingSection from './components/ProvidersModelRoutingSection.vue'
 import Pagination from '@/components/common/Pagination.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { useAppStore } from '@/stores'
@@ -794,6 +817,7 @@ const appStore = useAppStore()
 
 // State
 const providers = ref<Provider[]>([])
+const activeTab = ref<'providers' | 'routing'>('providers')
 const isLoading = ref(false)
 const isSaving = ref(false)
 const isSyncingAll = ref(false)

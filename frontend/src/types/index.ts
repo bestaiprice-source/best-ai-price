@@ -547,6 +547,9 @@ export interface CreateGroupRequest {
   fallback_group_id_on_invalid_request?: number | null
   mcp_xml_inject?: boolean
   supported_model_scopes?: string[]
+  // 模型路由（Primary/Backup）：{ "<model pattern>": [primaryAccountId, backupAccountId, ...] }
+  model_routing?: Record<string, number[]> | null
+  model_routing_enabled?: boolean
   // 从指定分组复制账号
   copy_accounts_from_group_ids?: number[]
 }
@@ -575,6 +578,9 @@ export interface UpdateGroupRequest {
   fallback_group_id_on_invalid_request?: number | null
   mcp_xml_inject?: boolean
   supported_model_scopes?: string[]
+  // 模型路由（Primary/Backup）
+  model_routing?: Record<string, number[]> | null
+  model_routing_enabled?: boolean
   copy_accounts_from_group_ids?: number[]
 }
 

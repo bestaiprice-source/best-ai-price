@@ -1580,7 +1580,7 @@
             <!-- Selected codes summary -->
             <div class="flex flex-wrap gap-1.5">
               <span
-                v-for="code in selectedErrorCodes.sort((a, b) => a - b)"
+                v-for="code in sortedSelectedErrorCodes"
                 :key="code"
                 class="inline-flex items-center gap-1 rounded-full bg-red-100 px-2.5 py-0.5 text-sm font-medium text-red-700 dark:bg-red-900/30 dark:text-red-400"
               >
@@ -3345,6 +3345,8 @@ const poolModeEnabled = ref(false)
 const poolModeRetryCount = ref(DEFAULT_POOL_MODE_RETRY_COUNT)
 const customErrorCodesEnabled = ref(false)
 const selectedErrorCodes = ref<number[]>([])
+// Sorted view for rendering; avoids mutating the reactive array inside the template.
+const sortedSelectedErrorCodes = computed(() => [...selectedErrorCodes.value].sort((a, b) => a - b))
 const customErrorCodeInput = ref<number | null>(null)
 const interceptWarmupRequests = ref(false)
 const autoPauseOnExpired = ref(true)

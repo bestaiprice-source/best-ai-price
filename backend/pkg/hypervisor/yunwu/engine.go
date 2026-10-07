@@ -341,6 +341,22 @@ func (yh *YunwuHypervisor) HandleRequest(
 	}
 	nodes = compatibleNodes
 
+	// 4.1 Assign Primary/Backup by price: the cheapest provider for the requested
+	// model is Primary, the next cheapest is Backup. Nodes are ordered by price so
+	// the scheduler (and failover/rebinding) always prefers the cheapest route.
+	// An explicit administrator route (4.2) overrides this.
+	sortNodesByPrice(nodes, nodePrices)
+	primaryID, backupID := pricePrimaryBackup(nodes, nodePrices)
+	if primaryID != "" {
+		slog.Info("[YunwuHypervisor] Price-based Primary/Backup route",
+			"model", requestedModel,
+			"primary_node", primaryID,
+			"primary_price", nodePrices[primaryID],
+			"backup_node", backupID,
+			"backup_price", nodePrices[backupID],
+		)
+	}
+
 	// 4.2 Apply explicit Primary/Backup routing when the gateway provided an
 	// ordered route for the requested model. This makes administrator
 	// promotions effective for unofficial providers.
