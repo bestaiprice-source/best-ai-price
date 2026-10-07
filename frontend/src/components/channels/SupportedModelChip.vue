@@ -26,6 +26,15 @@
         {{ model.platform }}
       </span>
       {{ model.name }}
+      <span
+        v-if="modelStatus"
+        class="ml-0.5 inline-flex items-center gap-1 text-[10px] font-normal"
+        :class="statusTextClass"
+        :title="statusLabel"
+      >
+        <span class="h-1.5 w-1.5 rounded-full" :class="statusDotClass" />
+        {{ statusLabel }}
+      </span>
     </span>
 
     <!-- Teleport to body so the popover is not clipped by card/overflow-hidden
@@ -180,14 +189,57 @@ const props = withDefaults(
      * 仅用于视觉，不影响业务逻辑。
      */
     platformHint?: string
+    /**
+     * §11.3: model availability (from the public catalog). Rendered as a small
+     * status dot + label; omitted when unknown so we never show a guessed state.
+     */
+    modelStatus?: 'available' | 'degraded' | 'unavailable' | ''
   }>(),
   {
     pricingKeyPrefix: 'availableChannels.pricing',
     noPricingLabel: '',
     showPlatform: true,
-    platformHint: ''
+    platformHint: '',
+    modelStatus: ''
   }
 )
+
+const statusLabel = computed(() => {
+  switch (props.modelStatus) {
+    case 'available':
+      return t('availableChannels.status.available')
+    case 'degraded':
+      return t('availableChannels.status.degraded')
+    case 'unavailable':
+      return t('availableChannels.status.unavailable')
+    default:
+      return ''
+  }
+})
+const statusDotClass = computed(() => {
+  switch (props.modelStatus) {
+    case 'available':
+      return 'bg-emerald-500'
+    case 'degraded':
+      return 'bg-amber-500'
+    case 'unavailable':
+      return 'bg-gray-400'
+    default:
+      return ''
+  }
+})
+const statusTextClass = computed(() => {
+  switch (props.modelStatus) {
+    case 'available':
+      return 'text-emerald-600 dark:text-emerald-400'
+    case 'degraded':
+      return 'text-amber-600 dark:text-amber-400'
+    case 'unavailable':
+      return 'text-gray-400 dark:text-gray-500'
+    default:
+      return ''
+  }
+})
 
 const effectivePlatform = computed<string>(() => props.model.platform || props.platformHint || '')
 

@@ -344,6 +344,38 @@ export default {
   },
 
   // Navigation
+  availableChannels: {
+    columns: {
+      name: '渠道',
+      description: '描述',
+      platform: '平台',
+      groups: '分组',
+      supportedModels: '支持模型'
+    },
+    noPricing: '未配置价格',
+    noModels: '无模型',
+    empty: '暂无可用渠道',
+    status: {
+      available: '可用',
+      degraded: '降级',
+      unavailable: '不可用'
+    },
+    pricing: {
+      billingMode: '计费方式',
+      billingModeToken: '按 Token',
+      billingModePerRequest: '按请求',
+      billingModeImage: '按图片',
+      inputPrice: '输入',
+      outputPrice: '输出',
+      cacheWritePrice: '缓存写入',
+      cacheReadPrice: '缓存读取',
+      imageOutputPrice: '图片输出',
+      perRequestPrice: '每次请求',
+      unitPerMillion: '每 100 万',
+      unitPerRequest: '每次请求',
+      intervals: '阶梯计费'
+    }
+  },
   nav: {
     dashboard: '仪表盘',
     announcements: '公告',
@@ -359,6 +391,7 @@ export default {
     vendors: '更便宜替代方案',
     providerHealth: '供应商健康',
     alerts: '告警',
+    support: '支持',
     proxies: 'IP管理',
     redeemCodes: '兑换码',
     ops: '运维监控',

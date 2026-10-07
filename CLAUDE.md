@@ -360,6 +360,16 @@ Administrators can view, copy, edit, and delete all API keys across all users in
 - **Admin Read Endpoints**: `GET /api/v1/admin/data/auth-providers`, `GET /api/v1/admin/auth-providers`, `GET /api/v1/admin/data/auth_providers.json` (requires admin credentials).
 - **Authentication**: Requires header `x-api-key: <admin-api-key>` or Bearer JWT token with admin role.
 
+### User Cabinet (§11 — bestaiprice.com aligned user area)
+The Sub2API user frontend is reused (no second cabinet), mapped to the recommended navigation `Overview | API Keys | Models & Pricing | Usage | Billing | Docs | Support`:
+- `Overview` = `/dashboard` (`DashboardView.vue`): current balance, today/total spend, today/total requests, token counters (`UserDashboardStats.vue`), usage/spend charts (`UserDashboardCharts.vue`) and a quick link to the primary API key.
+- `API Keys` = `/keys` (`KeysView.vue`): create/rename/copy/enable-disable/delete, per-key `quota` (spending limit), key status (`active` / `quota_exhausted`), one key serves all group-permitted models, and the full key is shown only once at creation (masked afterwards).
+- `Models & Pricing` = `/available-channels` (`AvailableChannelsView.vue`): supported models per channel with retail input/output (and cache/image/per-request) prices from `UserSupportedModel.pricing`, plus a per-model **availability status** (`available` / `degraded` / `unavailable`) resolved from the public catalog feed `GET /models` (`src/api/publicModels.ts`) — the same retail table the gateway bills from. No upstream credentials are ever exposed.
+- `Usage` = `/usage` (`UsageView.vue`): time, model, tokens (+cache breakdown), cost, first-token/duration, endpoint/type, user-agent; filters by API key/date/model and CSV export. Internal upstream credentials are never included.
+- `Billing` = `/purchase` + `/orders` (`PaymentView.vue` / `UserOrdersView.vue`).
+- `Docs` / `Support` = external sidebar links (`AppSidebar.vue`), shown only when configured, sourced from public settings `doc_url` / `contact_info` (Support becomes `mailto:` when the contact is an email).
+- Localization: `availableChannels.*` keys (columns, pricing, status) were missing from `en.ts`/`zh.ts` and rendered as raw key paths — the block now exists in both locales.
+
 ### Frontend Integration (`frontend/src/views/user/KeysView.vue` & `RegisterView.vue`)
 - **Admin Detection**: Automatically calls `listAdmin`, `updateAdmin`, and `removeAdmin` when `isAdmin` is true.
 - **Owner Column**: Displays the owner's username, email, and User ID in the table for admins.

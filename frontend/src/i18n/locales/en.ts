@@ -344,6 +344,38 @@ export default {
   },
 
   // Navigation
+  availableChannels: {
+    columns: {
+      name: 'Channel',
+      description: 'Description',
+      platform: 'Platform',
+      groups: 'Groups',
+      supportedModels: 'Supported Models'
+    },
+    noPricing: 'No pricing configured',
+    noModels: 'No models',
+    empty: 'No available channels',
+    status: {
+      available: 'Available',
+      degraded: 'Degraded',
+      unavailable: 'Unavailable'
+    },
+    pricing: {
+      billingMode: 'Billing mode',
+      billingModeToken: 'Per token',
+      billingModePerRequest: 'Per request',
+      billingModeImage: 'Per image',
+      inputPrice: 'Input',
+      outputPrice: 'Output',
+      cacheWritePrice: 'Cache write',
+      cacheReadPrice: 'Cache read',
+      imageOutputPrice: 'Image output',
+      perRequestPrice: 'Per request',
+      unitPerMillion: 'per 1M',
+      unitPerRequest: 'per request',
+      intervals: 'Tiered pricing'
+    }
+  },
   nav: {
     dashboard: 'Dashboard',
     announcements: 'Announcements',
@@ -359,6 +391,7 @@ export default {
     vendors: 'Cheaper Alternatives',
     providerHealth: 'Provider Health',
     alerts: 'Alerts',
+    support: 'Support',
     proxies: 'Proxies',
     redeemCodes: 'Redeem Codes',
     ops: 'Ops',

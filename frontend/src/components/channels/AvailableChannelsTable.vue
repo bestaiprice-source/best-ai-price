@@ -133,6 +133,7 @@
                 :no-pricing-label="noPricingLabel"
                 :show-platform="false"
                 :platform-hint="section.platform"
+                :model-status="statusFor(m.name)"
               />
               <span v-if="section.supported_models.length === 0" class="text-xs text-gray-400">
                 {{ noModelsLabel }}
@@ -171,11 +172,27 @@ const props = defineProps<{
   emptyLabel: string
   /** 用户专属倍率（group_id → multiplier）；无专属时由 GroupBadge 仅显示默认倍率。 */
   userGroupRates: Record<number, number>
+  /**
+   * §11.3: per-model availability from the public catalog, keyed by lowercased
+   * model name (with the vendor-prefixed and trailing-slug variants included).
+   * Empty when unknown — the chip then omits the status indicator.
+   */
+  modelStatus?: Record<string, 'available' | 'degraded' | 'unavailable'>
 }>()
 
 // Suppress unused warning — props is accessed via template automatically but
 // the explicit reference here keeps the linter from flagging userGroupRates.
 void props.userGroupRates
+
+function statusFor(name: string): 'available' | 'degraded' | 'unavailable' | '' {
+  const map = props.modelStatus
+  if (!map || !name) return ''
+  const key = name.toLowerCase().trim()
+  if (map[key]) return map[key]
+  const slash = key.lastIndexOf('/')
+  if (slash >= 0 && map[key.slice(slash + 1)]) return map[key.slice(slash + 1)]
+  return ''
+}
 
 const { t } = useI18n()
 

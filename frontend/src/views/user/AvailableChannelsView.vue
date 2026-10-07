@@ -42,6 +42,7 @@
           :no-pricing-label="t('availableChannels.noPricing')"
           :no-models-label="t('availableChannels.noModels')"
           :empty-label="t('availableChannels.empty')"
+          :model-status="modelStatus"
         />
       </template>
     </TablePageLayout>
@@ -59,6 +60,7 @@ import userChannelsAPI, { type UserAvailableChannel } from '@/api/channels'
 import userGroupsAPI from '@/api/groups'
 import { useAppStore } from '@/stores/app'
 import { extractApiErrorMessage } from '@/utils/apiError'
+import { getPublicModels } from '@/api/publicModels'
 
 const { t } = useI18n()
 const appStore = useAppStore()
@@ -67,6 +69,9 @@ const channels = ref<UserAvailableChannel[]>([])
 const userGroupRates = ref<Record<number, number>>({})
 const loading = ref(false)
 const searchQuery = ref('')
+// §11.3 model availability from the public catalog (shared feed with the
+// gateway), keyed by lowercased model name so the chip can show a status dot.
+const modelStatus = ref<Record<string, 'available' | 'degraded' | 'unavailable'>>({})
 
 const columnLabels = computed(() => ({
   name: t('availableChannels.columns.name'),
@@ -120,6 +125,30 @@ async function loadChannels() {
     appStore.showError(extractApiErrorMessage(err, t('common.error')))
   } finally {
     loading.value = false
+  }
+  await loadModelStatus()
+}
+
+// Best-effort: the catalog status only decorates the model chips, so a failure
+// must never block the channel list.
+async function loadModelStatus() {
+  try {
+    const models = await getPublicModels()
+    const map: Record<string, 'available' | 'degraded' | 'unavailable'> = {}
+    for (const m of models) {
+      const status: 'available' | 'degraded' | 'unavailable' =
+        m.status === 'degraded' ? 'degraded' : m.available === false || m.status === 'unavailable' ? 'unavailable' : 'available'
+      for (const raw of [m.canonical_model_id, m.model_id]) {
+        if (!raw) continue
+        const key = raw.toLowerCase().trim()
+        map[key] = status
+        const slash = key.lastIndexOf('/')
+        if (slash >= 0) map[key.slice(slash + 1)] = status
+      }
+    }
+    modelStatus.value = map
+  } catch (err) {
+    console.warn('Failed to load public model status:', err)
   }
 }
 
