@@ -174,10 +174,12 @@ func (rm *YunwuRebindingManager) HandleYunwuFailure(
 	}
 
 	requireFresh := false
+	streak := 0
 	if rm.cfg != nil {
 		requireFresh = rm.cfg.YunwuRequireFreshBalance
+		streak = rm.cfg.YunwuRequiredHealthyStreak
 	}
-	sch := NewYunwuScheduler(requireFresh)
+	sch := NewYunwuScheduler(requireFresh).SetRequiredHealthyStreak(streak)
 	nodeStates := make(map[string]*health.NodeRuntimeState)
 	for _, node := range candidates {
 		if st, err := rm.nm.GetNodeRuntimeState(ctx, node.NodeID); err == nil && st != nil {

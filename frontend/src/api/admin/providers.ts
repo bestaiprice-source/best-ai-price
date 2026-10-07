@@ -197,3 +197,40 @@ export async function syncAllProviderBalances(): Promise<BatchSyncSummary> {
   const { data } = await apiClient.post<BatchSyncSummary>('/admin/providers/sync-all')
   return data
 }
+
+/**
+ * Resolved Primary/Backup routing table (§6): for every sellable canonical model,
+ * the two providers that will serve it, their upstream model ids, the applied
+ * retail price, route status and when both routes were last verified.
+ */
+export interface ModelRouteProvider {
+  account_id: number
+  provider: string
+  name: string
+  domain: string
+  upstream_model: string
+  available: boolean
+  last_success_at?: string
+}
+
+export interface ModelRouteItem {
+  canonical_model_id: string
+  primary: ModelRouteProvider | null
+  backup: ModelRouteProvider | null
+  retail_input_per_1m: number | null
+  retail_output_per_1m: number | null
+  status: 'available' | 'degraded' | 'unavailable'
+  route_source: 'explicit' | 'price'
+  last_verified?: string
+}
+
+export interface ModelRoutesResponse {
+  group_id?: number
+  items: ModelRouteItem[]
+  total: number
+}
+
+export async function getModelRoutes(filters?: { group_id?: number; model?: string }): Promise<ModelRoutesResponse> {
+  const { data } = await apiClient.get<ModelRoutesResponse>('/admin/model-routes', { params: filters })
+  return data
+}

@@ -102,6 +102,81 @@
         Add rule
       </button>
     </div>
+
+    <!-- Resolved routes (live, read-only) — §6 route table -->
+    <div
+      v-if="selectedGroupId"
+      class="overflow-hidden rounded-2xl border border-gray-200/80 bg-white/85 shadow-sm dark:border-dark-700/80 dark:bg-dark-800/85"
+    >
+      <div class="flex items-center justify-between border-b border-gray-200 px-5 py-3 dark:border-dark-700">
+        <div>
+          <h2 class="text-sm font-semibold text-gray-900 dark:text-white">Resolved routes</h2>
+          <p class="text-xs text-gray-500 dark:text-gray-400">
+            Live Primary/Backup for every sellable model — the actual providers, upstream model ids,
+            retail price, status and last verified.
+          </p>
+        </div>
+        <button
+          type="button"
+          class="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50 disabled:opacity-50 dark:border-dark-700 dark:bg-dark-800 dark:text-gray-300"
+          :disabled="routesLoading"
+          @click="loadRoutes"
+        >
+          <Icon name="sync" size="sm" />
+          {{ routesLoading ? 'Loading…' : 'Refresh' }}
+        </button>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-100 text-sm dark:divide-dark-700">
+          <thead class="bg-gray-50/60 text-left text-xs uppercase tracking-wider text-gray-500 dark:bg-dark-900/40 dark:text-gray-400">
+            <tr>
+              <th class="px-4 py-3">Model</th>
+              <th class="px-4 py-3">Primary</th>
+              <th class="px-4 py-3">Backup</th>
+              <th class="px-4 py-3 text-right">Retail in / out</th>
+              <th class="px-4 py-3">Status</th>
+              <th class="px-4 py-3">Last verified</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-50 dark:divide-dark-800">
+            <tr v-for="row in routes" :key="row.canonical_model_id">
+              <td class="px-4 py-3">
+                <div class="font-medium text-gray-900 dark:text-white">{{ row.canonical_model_id }}</div>
+                <div class="text-xs uppercase tracking-wide text-gray-400">{{ row.route_source }}</div>
+              </td>
+              <td class="px-4 py-3">
+                <div v-if="row.primary" class="flex flex-col">
+                  <span class="font-medium text-gray-800 dark:text-gray-200">{{ row.primary.name || row.primary.provider }}</span>
+                  <span class="text-xs text-gray-400">{{ row.primary.upstream_model }}</span>
+                </div>
+                <span v-else class="text-gray-400">—</span>
+              </td>
+              <td class="px-4 py-3">
+                <div v-if="row.backup" class="flex flex-col">
+                  <span class="font-medium text-gray-800 dark:text-gray-200">{{ row.backup.name || row.backup.provider }}</span>
+                  <span class="text-xs text-gray-400">{{ row.backup.upstream_model }}</span>
+                </div>
+                <span v-else class="text-gray-400">—</span>
+              </td>
+              <td class="px-4 py-3 text-right font-mono text-xs text-gray-700 dark:text-gray-300">
+                <template v-if="row.retail_input_per_1m !== null && row.retail_output_per_1m !== null">
+                  ${{ formatPrice(row.retail_input_per_1m) }} / ${{ formatPrice(row.retail_output_per_1m) }}
+                </template>
+                <span v-else class="text-gray-400">—</span>
+              </td>
+              <td class="px-4 py-3"><span :class="statusBadgeClass(row.status)">{{ row.status }}</span></td>
+              <td class="px-4 py-3 text-xs text-gray-500 dark:text-gray-400">{{ formatTime(row.last_verified) }}</td>
+            </tr>
+            <tr v-if="!routesLoading && routes.length === 0">
+              <td colspan="6" class="px-4 py-8 text-center text-gray-400">
+                No routed models. Add a rule above, or connect providers with priced models.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -110,6 +185,7 @@ import { ref, computed, onMounted } from 'vue'
 import Icon from '@/components/icons/Icon.vue'
 import { useAppStore } from '@/stores'
 import { getAll as listGroups, getById as getGroup, update as updateGroup } from '@/api/admin/groups'
+import { getModelRoutes, type ModelRouteItem } from '@/api/admin/providers'
 import type { AdminGroup } from '@/types'
 import type { Provider } from '@/api/admin/providers'
 
@@ -127,6 +203,40 @@ const selectedGroupId = ref<number>(0)
 const enabled = ref(false)
 const rules = ref<RoutingRule[]>([])
 const saving = ref(false)
+
+// Resolved route table (§6) — read-only projection of what will actually serve.
+const routes = ref<ModelRouteItem[]>([])
+const routesLoading = ref(false)
+
+const formatPrice = (v: number | null) => (typeof v === 'number' ? v.toFixed(4) : '—')
+const formatTime = (v?: string | null) => (v ? new Date(v).toLocaleString() : '—')
+const statusBadgeClass = (status: string) => {
+  const base = 'inline-flex rounded-full px-2 py-0.5 text-xs font-medium '
+  switch (status) {
+    case 'available':
+      return base + 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
+    case 'degraded':
+      return base + 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+    default:
+      return base + 'bg-gray-100 text-gray-600 dark:bg-dark-700 dark:text-gray-300'
+  }
+}
+
+const loadRoutes = async () => {
+  if (!selectedGroupId.value) {
+    routes.value = []
+    return
+  }
+  routesLoading.value = true
+  try {
+    const res = await getModelRoutes({ group_id: selectedGroupId.value })
+    routes.value = Array.isArray(res?.items) ? res.items : []
+  } catch (e) {
+    console.warn('Failed to load resolved routes:', e)
+  } finally {
+    routesLoading.value = false
+  }
+}
 
 let ruleSeq = 0
 const newRule = (): RoutingRule => ({ _key: `rule-${++ruleSeq}`, pattern: '', accountIds: [] })
@@ -164,6 +274,7 @@ const loadSelectedGroup = async () => {
   if (!selectedGroupId.value) {
     enabled.value = false
     rules.value = []
+    routes.value = []
     return
   }
   try {
@@ -176,6 +287,7 @@ const loadSelectedGroup = async () => {
       accountIds: Array.isArray(ids) ? [...ids] : []
     }))
     if (rules.value.length === 0) rules.value.push(newRule())
+    await loadRoutes()
   } catch (e) {
     console.warn('Failed to load group routing:', e)
     appStore.showError('Failed to load group routing')
@@ -200,6 +312,7 @@ const save = async () => {
       model_routing_enabled: enabled.value
     })
     appStore.showSuccess('Model routing saved')
+    await loadRoutes()
   } catch (e) {
     console.warn('Failed to save model routing:', e)
     appStore.showError('Failed to save model routing')

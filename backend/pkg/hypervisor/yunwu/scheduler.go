@@ -20,7 +20,15 @@ const (
 	PriorityBonusMultiplier = 5.0
 )
 
-type YunwuScheduler struct{ requireFreshBalance bool }
+type YunwuScheduler struct {
+	requireFreshBalance bool
+	// requiredHealthyStreak is the number of consecutive successful checks
+	// (health probes or served production requests) a node must accumulate
+	// after a failure before it is allowed to take traffic again. This
+	// implements §6.1: a recovered Primary must not come back after a single
+	// ping. 0 disables the gate (legacy behaviour).
+	requiredHealthyStreak int
+}
 
 func NewYunwuScheduler(requireFreshBalance ...bool) *YunwuScheduler {
 	requireFresh := false
@@ -28,6 +36,26 @@ func NewYunwuScheduler(requireFreshBalance ...bool) *YunwuScheduler {
 		requireFresh = requireFreshBalance[0]
 	}
 	return &YunwuScheduler{requireFreshBalance: requireFresh}
+}
+
+// SetRequiredHealthyStreak configures the recovery streak gate (see field doc).
+func (s *YunwuScheduler) SetRequiredHealthyStreak(n int) *YunwuScheduler {
+	if n < 0 {
+		n = 0
+	}
+	s.requiredHealthyStreak = n
+	return s
+}
+
+// isRecovering reports whether a node has a failure history and has not yet
+// proven the required streak of consecutive successes since. LastErrorAt is the
+// marker (not CooldownUntil, which the health controller clears once a cooldown
+// expires — clearing it would let a node resume after a single ping).
+func (s *YunwuScheduler) isRecovering(state *health.NodeRuntimeState) bool {
+	if state == nil || state.LastErrorAt == nil || s.requiredHealthyStreak <= 0 {
+		return false
+	}
+	return state.ConsecutiveSuccesses < s.requiredHealthyStreak
 }
 
 // SelectNode selects the best Yunwu execution node for a session based on Yunwu credit balance and health stats
@@ -43,6 +71,10 @@ func (s *YunwuScheduler) SelectNode(
 ) (*health.ExecutionNode, error) {
 	now := time.Now()
 	var candidates []health.ExecutionNode
+	// Nodes returning from a failure that have not yet proven a healthy streak.
+	// They are held back (§6.1) but kept as a last-resort fallback so a pool of
+	// only-recovering nodes still serves instead of hard-failing.
+	var deferred []health.ExecutionNode
 
 	// 1. Filter out unavailable, zero-credit (<0.01), and nodes in active cooldown
 	for _, node := range nodes {
@@ -74,6 +106,19 @@ func (s *YunwuScheduler) SelectNode(
 			continue
 		}
 
+		// §6.1: a node with a failure history must prove a streak of consecutive
+		// successful checks before it takes traffic again (never after a single ping).
+		if s.isRecovering(states[node.NodeID]) {
+			st := states[node.NodeID]
+			slog.Info("[YunwuScheduler] Deferring recovering node until it proves a healthy streak",
+				"node_id", node.NodeID,
+				"consecutive_successes", st.ConsecutiveSuccesses,
+				"required", s.requiredHealthyStreak,
+			)
+			deferred = append(deferred, node)
+			continue
+		}
+
 		candidates = append(candidates, node)
 	}
 
@@ -92,8 +137,21 @@ func (s *YunwuScheduler) SelectNode(
 			if isCooldown && len(nodes) > 1 {
 				continue
 			}
+			if s.isRecovering(states[node.NodeID]) {
+				deferred = append(deferred, node)
+				continue
+			}
 			candidates = append(candidates, node)
 		}
+	}
+
+	// Last-resort safety valve: if every candidate is still recovering, serve from
+	// it rather than failing the request outright.
+	if len(candidates) == 0 && len(deferred) > 0 {
+		slog.Warn("[YunwuScheduler] Only recovering nodes available; serving from recovering nodes as last resort",
+			"recovering_count", len(deferred),
+		)
+		candidates = deferred
 	}
 
 	if len(candidates) == 0 {

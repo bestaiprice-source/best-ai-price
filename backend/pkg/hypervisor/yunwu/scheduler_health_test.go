@@ -162,6 +162,58 @@ func TestSchedulerSelectNodeScoringAndPenalties(t *testing.T) {
 	assert.Equal(t, "ex1", selected.NodeID)
 }
 
+func TestYunwuSchedulerRecoveryStreakGate(t *testing.T) {
+	ctx := context.Background()
+	// §6.1: a node with a failure history must prove N consecutive successes
+	// before returning to service — never after a single ping.
+	sch := NewYunwuScheduler(false).SetRequiredHealthyStreak(2)
+
+	now := time.Now()
+	errAt := now.Add(-2 * time.Minute)
+
+	cheap := health.ExecutionNode{NodeID: "cheap", State: "healthy"}
+	other := health.ExecutionNode{NodeID: "other", State: "healthy"}
+	nodes := []health.ExecutionNode{cheap, other}
+	prices := map[string]float64{"cheap": 0.01, "other": 0.09}
+
+	// 1. Cheap node failed and only has 1 success -> still recovering -> other wins.
+	states := map[string]*health.NodeRuntimeState{
+		"cheap": {NodeID: "cheap", LastErrorAt: &errAt, ConsecutiveSuccesses: 1, SuccessRate: 1.0},
+		"other": {NodeID: "other", SuccessRate: 1.0},
+	}
+	selected, err := sch.SelectNode(ctx, nodes, states, nil, 1, "", "NORMAL", prices)
+	require.NoError(t, err)
+	assert.Equal(t, "other", selected.NodeID)
+
+	// 2. Cheap node has proven the streak -> cheapest wins again.
+	states["cheap"].ConsecutiveSuccesses = 2
+	selected, err = sch.SelectNode(ctx, nodes, states, nil, 1, "", "NORMAL", prices)
+	require.NoError(t, err)
+	assert.Equal(t, "cheap", selected.NodeID)
+
+	// 3. A never-failed node is never gated.
+	states["cheap"].ConsecutiveSuccesses = 0
+	states["cheap"].LastErrorAt = nil
+	selected, err = sch.SelectNode(ctx, nodes, states, nil, 1, "", "NORMAL", prices)
+	require.NoError(t, err)
+	assert.Equal(t, "cheap", selected.NodeID)
+
+	// 4. Every candidate recovering -> last-resort safety valve still serves.
+	bothRecovering := map[string]*health.NodeRuntimeState{
+		"cheap": {NodeID: "cheap", LastErrorAt: &errAt, ConsecutiveSuccesses: 0, SuccessRate: 1.0},
+		"other": {NodeID: "other", LastErrorAt: &errAt, ConsecutiveSuccesses: 0, SuccessRate: 1.0},
+	}
+	selected, err = sch.SelectNode(ctx, nodes, bothRecovering, nil, 1, "", "NORMAL", prices)
+	require.NoError(t, err)
+	require.NotNil(t, selected)
+
+	// 5. Streak gate disabled (0) -> recovering node is immediately eligible.
+	noGate := NewYunwuScheduler(false)
+	selected, err = noGate.SelectNode(ctx, nodes, bothRecovering, nil, 1, "", "NORMAL", prices)
+	require.NoError(t, err)
+	assert.Equal(t, "cheap", selected.NodeID)
+}
+
 func TestRebindingManagerFailureHandling(t *testing.T) {
 	store := setupTestYunwuStore(t)
 	rm := NewYunwuRebindingManager(store)
@@ -268,4 +320,3 @@ func TestYunwuSchedulerCheapestFirstRouting(t *testing.T) {
 	require.NotNil(t, rebound)
 	assert.Equal(t, "node-expensive", rebound.NodeID)
 }
-

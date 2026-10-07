@@ -36,6 +36,7 @@ type ProviderHandler struct {
 	accountTestService *service.AccountTestService
 	statsWorker        *yunwu.StatsWorker
 	nodeManager        *health.NodeManager
+	yunwuPricing       *service.YunwuPricingService
 	httpClient         *http.Client
 }
 
@@ -46,6 +47,7 @@ func NewProviderHandler(
 	redisClient *redis.Client,
 	secretEncryptor service.SecretEncryptor,
 	accountTestService *service.AccountTestService,
+	yunwuPricing *service.YunwuPricingService,
 ) *ProviderHandler {
 	var store *storage.Storage
 	if entClient != nil && redisClient != nil {
@@ -68,6 +70,7 @@ func NewProviderHandler(
 		accountTestService: accountTestService,
 		statsWorker:        sw,
 		nodeManager:        nm,
+		yunwuPricing:       yunwuPricing,
 		httpClient: &http.Client{
 			Timeout: 10 * time.Second,
 		},
@@ -671,18 +674,18 @@ func (h *ProviderHandler) CreateGateway(c gatewayctx.GatewayContext) {
 	}
 
 	extra := map[string]any{
-		"provider":                  prov,
-		"domain":                    domainStr,
-		"base_url":                  baseURL,
-		"yunwu_protocol":            protocol,
+		"provider":                 prov,
+		"domain":                   domainStr,
+		"base_url":                 baseURL,
+		"yunwu_protocol":           protocol,
 		"supported_model_families": modelFamilies,
-		"model_mapping":             modelMapping,
-		"min_balance_usd":           minBalance,
-		"balance_usd":               initBal,
-		"initial_deposit_usd":       initBal,
-		"deposit_baseline_tokens":   float64(0),
-		"balance_source":            "manual",
-		"balance_updated_at":        time.Now().UTC().Format(time.RFC3339),
+		"model_mapping":            modelMapping,
+		"min_balance_usd":          minBalance,
+		"balance_usd":              initBal,
+		"initial_deposit_usd":      initBal,
+		"deposit_baseline_tokens":  float64(0),
+		"balance_source":           "manual",
+		"balance_updated_at":       time.Now().UTC().Format(time.RFC3339),
 	}
 
 	groupIDs := req.GroupIDs
@@ -1036,12 +1039,12 @@ func (h *ProviderHandler) SyncBalanceGateway(c gatewayctx.GatewayContext) {
 	}
 
 	response.SuccessContext(gatewayJSONResponder{ctx: c}, map[string]any{
-		"id":              id,
-		"balance_usd":     grants.TotalAvailable,
-		"total_granted":   grants.TotalGranted,
-		"total_used":      grants.TotalUsed,
-		"source":          grants.Object,
-		"last_synced_at":  nowStr,
+		"id":             id,
+		"balance_usd":    grants.TotalAvailable,
+		"total_granted":  grants.TotalGranted,
+		"total_used":     grants.TotalUsed,
+		"source":         grants.Object,
+		"last_synced_at": nowStr,
 	})
 }
 

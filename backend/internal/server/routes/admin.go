@@ -378,6 +378,7 @@ func ExecutableAdminRoutes(h *handler.Handlers) []gatewayctx.RouteDef {
 			gatewayctx.RouteDef{Method: http.MethodPost, Path: "/api/v1/admin/providers/:id/test", Handler: h.Admin.Provider.TestConnectionGateway, Middleware: []string{"request_logger", "cors", "security_headers", "client_request_id", "admin_auth"}},
 			gatewayctx.RouteDef{Method: http.MethodPost, Path: "/api/v1/admin/providers/sync-all", Handler: h.Admin.Provider.SyncAllBalancesGateway, Middleware: []string{"request_logger", "cors", "security_headers", "client_request_id", "admin_auth"}},
 			gatewayctx.RouteDef{Method: http.MethodPost, Path: "/api/v1/admin/providers/test", Handler: h.Admin.Provider.TestDraftConnectionGateway, Middleware: []string{"request_logger", "cors", "security_headers", "client_request_id", "admin_auth"}},
+			gatewayctx.RouteDef{Method: http.MethodGet, Path: "/api/v1/admin/model-routes", Handler: h.Admin.Provider.ModelRoutesGateway, Middleware: []string{"request_logger", "cors", "security_headers", "client_request_id", "admin_auth"}},
 		)
 	}
 	if h.Admin.OAuth != nil {
@@ -494,7 +495,7 @@ func RegisterAdminRoutes(
 
 		// 使用记录管理
 		registerUsageRoutes(admin, h)
-		
+
 		// Вендоры (Vendors)
 		registerVendorRoutes(admin, h)
 
@@ -559,6 +560,7 @@ func registerProviderRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		providers.POST("/sync-all", h.Admin.Provider.SyncAllBalances)
 		providers.POST("/test", h.Admin.Provider.TestDraftConnection)
 	}
+	admin.GET("/model-routes", h.Admin.Provider.ModelRoutes)
 }
 
 func registerOpsRoutes(admin *gin.RouterGroup, h *handler.Handlers) {

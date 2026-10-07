@@ -116,7 +116,7 @@ func NewYunwuHypervisor(store *storage.Storage, rt runtime.Runtime, decryptors .
 		nm:        health.NewNodeManager(store),
 		ew:        events.NewEventWriter(store),
 		qm:        quota.NewQuotaManager(store, cfg),
-		sch:       NewYunwuScheduler(cfg.YunwuRequireFreshBalance),
+		sch:       NewYunwuScheduler(cfg.YunwuRequireFreshBalance).SetRequiredHealthyStreak(cfg.YunwuRequiredHealthyStreak),
 		rt:        rt,
 		rm:        NewYunwuRebindingManager(store, cfg),
 		comp:      compiler.NewCompiler(),
@@ -2037,4 +2037,3 @@ func maskKey(raw string) string {
 	}
 	return raw[:4] + "..." + raw[len(raw)-4:]
 }
-

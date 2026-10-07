@@ -7,12 +7,12 @@ import (
 )
 
 const (
-	SettingKeyTelegramBotToken          = "telegram_bot_token"
-	SettingKeyTelegramChatID            = "telegram_chat_id"
-	SettingKeyTelegramAlertThreshold    = "telegram_alert_threshold"
-	SettingKeyTelegramAlertsEnabled     = "telegram_alerts_enabled"
-	SettingKeyTelegramAllowedUsers      = "telegram_allowed_users"
-	SettingKeyTelegramActiveRecipients  = "telegram_active_recipients"
+	SettingKeyTelegramBotToken         = "telegram_bot_token"
+	SettingKeyTelegramChatID           = "telegram_chat_id"
+	SettingKeyTelegramAlertThreshold   = "telegram_alert_threshold"
+	SettingKeyTelegramAlertsEnabled    = "telegram_alerts_enabled"
+	SettingKeyTelegramAllowedUsers     = "telegram_allowed_users"
+	SettingKeyTelegramActiveRecipients = "telegram_active_recipients"
 )
 
 type HypervisorConfig struct {
@@ -35,6 +35,7 @@ type HypervisorConfig struct {
 	YunwuBalanceStaleSeconds      int
 	YunwuHealthProbeSeconds       int
 	YunwuHealthProbeTimeoutMs     int
+	YunwuRequiredHealthyStreak    int
 	YunwuBalanceReservePercent    int
 	YunwuRequireFreshBalance      bool
 	YunwuFallbackCapacityMicroUSD int64
@@ -70,6 +71,7 @@ func LoadFromEnv() *HypervisorConfig {
 		YunwuBalanceStaleSeconds:      getEnvInt("ASH_YUNWU_BALANCE_STALE_SECONDS", 1800),
 		YunwuHealthProbeSeconds:       getEnvInt("ASH_YUNWU_HEALTH_PROBE_SECONDS", 300),
 		YunwuHealthProbeTimeoutMs:     getEnvInt("ASH_YUNWU_HEALTH_PROBE_TIMEOUT_MS", 10000),
+		YunwuRequiredHealthyStreak:    getEnvInt("ASH_YUNWU_REQUIRED_HEALTHY_STREAK", 2),
 		YunwuBalanceReservePercent:    getEnvInt("ASH_YUNWU_BALANCE_RESERVE_PERCENT", 10),
 		YunwuRequireFreshBalance:      getEnvBool("ASH_YUNWU_REQUIRE_FRESH_BALANCE", false),
 		YunwuFallbackCapacityMicroUSD: getEnvInt64("ASH_YUNWU_FALLBACK_CAPACITY_MICRO_USD", 1_000_000_000),

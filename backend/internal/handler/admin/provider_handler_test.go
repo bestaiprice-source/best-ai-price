@@ -108,7 +108,7 @@ func TestProviderHandler_CRUD(t *testing.T) {
 	stubAdmin.accounts = nil
 	encryptor := &dummyEncryptor{}
 
-	h := NewProviderHandler(stubAdmin, client, nil, encryptor, nil)
+	h := NewProviderHandler(stubAdmin, client, nil, encryptor, nil, nil)
 
 	r := gin.New()
 	r.GET("/api/v1/admin/providers", h.List)
@@ -282,7 +282,7 @@ func TestProviderHandler_TestConnection(t *testing.T) {
 	}))
 	defer server.Close()
 
-	h := NewProviderHandler(stubAdmin, client, nil, encryptor, nil)
+	h := NewProviderHandler(stubAdmin, client, nil, encryptor, nil, nil)
 
 	r := gin.New()
 	r.POST("/api/v1/admin/providers/test", h.TestDraftConnection)
@@ -414,7 +414,7 @@ func TestProviderHandler_SyncBalance(t *testing.T) {
 	stubAdmin := newStubAdminService()
 	encryptor := &dummyEncryptor{}
 
-	h := NewProviderHandler(stubAdmin, client, nil, encryptor, nil)
+	h := NewProviderHandler(stubAdmin, client, nil, encryptor, nil, nil)
 
 	r := gin.New()
 	r.POST("/api/v1/admin/providers/:id/sync-balance", h.SyncBalance)
@@ -474,7 +474,7 @@ func TestProviderHandler_SyncBalance(t *testing.T) {
 		defer mockServer.Close()
 
 		rdb := setupTestRedis(t)
-		hSync := NewProviderHandler(stubAdmin, client, rdb, encryptor, nil)
+		hSync := NewProviderHandler(stubAdmin, client, rdb, encryptor, nil, nil)
 		rSync := gin.New()
 		rSync.POST("/api/v1/admin/providers/:id/sync-balance", hSync.SyncBalance)
 		rSync.POST("/api/v1/admin/providers/sync-all", hSync.SyncAllBalances)
@@ -513,7 +513,7 @@ func TestProviderHandler_EdgeCases(t *testing.T) {
 	stubAdmin := newStubAdminService()
 	encryptor := &dummyEncryptor{}
 
-	h := NewProviderHandler(stubAdmin, client, nil, encryptor, nil)
+	h := NewProviderHandler(stubAdmin, client, nil, encryptor, nil, nil)
 
 	r := gin.New()
 	r.GET("/api/v1/admin/providers", h.List)
@@ -680,7 +680,7 @@ func TestProviderHandler_AllExecutionNodesAsProviders(t *testing.T) {
 	}
 	encryptor := &dummyEncryptor{}
 
-	h := NewProviderHandler(stubAdmin, client, nil, encryptor, nil)
+	h := NewProviderHandler(stubAdmin, client, nil, encryptor, nil, nil)
 	r := gin.New()
 	r.GET("/api/v1/admin/providers", h.List)
 	r.GET("/api/v1/admin/providers/:id", h.GetByID)
