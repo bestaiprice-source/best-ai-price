@@ -357,6 +357,8 @@ export default {
     accounts: 'Accounts',
     providers: 'Providers',
     vendors: 'Cheaper Alternatives',
+    providerHealth: 'Provider Health',
+    alerts: 'Alerts',
     proxies: 'Proxies',
     redeemCodes: 'Redeem Codes',
     ops: 'Ops',

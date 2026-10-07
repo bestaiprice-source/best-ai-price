@@ -355,6 +355,26 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/admin/provider-health',
+    name: 'AdminProviderHealth',
+    component: () => import('@/views/admin/ProviderHealthView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Provider Health'
+    }
+  },
+  {
+    path: '/admin/alerts',
+    name: 'AdminAlerts',
+    component: () => import('@/views/admin/AlertsView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Alerts'
+    }
+  },
+  {
     path: '/admin',
     redirect: '/admin/dashboard'
   },

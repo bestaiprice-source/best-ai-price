@@ -357,6 +357,8 @@ export default {
     accounts: '账号管理',
     providers: '供应商',
     vendors: '更便宜替代方案',
+    providerHealth: '供应商健康',
+    alerts: '告警',
     proxies: 'IP管理',
     redeemCodes: '兑换码',
     ops: '运维监控',
