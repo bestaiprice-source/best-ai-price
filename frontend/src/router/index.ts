@@ -123,6 +123,17 @@ const routes: RouteRecordRaw[] = [
 
   // ==================== User Routes ====================
   {
+    path: '/docs',
+    name: 'Docs',
+    component: () => import('@/views/user/DocsView.vue'),
+    meta: {
+      requiresAuth: false,
+      requiresAdmin: false,
+      title: 'Documentation',
+      titleKey: 'nav.docs'
+    }
+  },
+  {
     path: '/',
     redirect: '/home'
   },

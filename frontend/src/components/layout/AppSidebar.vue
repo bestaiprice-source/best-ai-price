@@ -610,12 +610,8 @@ const purchaseEnabled = computed(() => (
   paymentEnabled.value || !!appStore.cachedPublicSettings?.purchase_subscription_enabled
 ))
 
-// §11 recommended navigation: Docs / Support are external links sourced from the
-// public settings (doc_url / contact_info); they only appear when configured.
-const docsHref = computed((): string => {
-  const url = appStore.cachedPublicSettings?.doc_url || appStore.docUrl || ''
-  return String(url).trim()
-})
+// §11 recommended navigation: Support is an external link sourced from the
+// public settings (contact_info); Docs is the in-product page at /docs.
 const supportHref = computed((): string => {
   const raw = String(appStore.cachedPublicSettings?.contact_info || appStore.contactInfo || '').trim()
   if (!raw) return ''
@@ -658,9 +654,7 @@ const userNavItems = computed((): NavItem[] => {
     { path: '/billing', label: t('nav.billing'), icon: CreditCardIcon, hideInSimpleMode: true },
     { path: '/redeem', label: t('nav.redeem'), icon: GiftIcon, hideInSimpleMode: true },
     { path: '/profile', label: t('nav.profile'), icon: UserIcon },
-    ...(docsHref.value
-      ? [{ path: '__docs', label: t('nav.docs'), icon: BookIcon, external: true, href: docsHref.value, hideInSimpleMode: true } as NavItem]
-      : []),
+    { path: '/docs', label: t('nav.docs'), icon: BookIcon, hideInSimpleMode: true },
     ...(supportHref.value
       ? [{ path: '__support', label: t('nav.support'), icon: LifebuoyIcon, external: true, href: supportHref.value, hideInSimpleMode: true } as NavItem]
       : []),
@@ -704,9 +698,7 @@ const personalNavItems = computed((): NavItem[] => {
     { path: '/billing', label: t('nav.billing'), icon: CreditCardIcon, hideInSimpleMode: true },
     { path: '/redeem', label: t('nav.redeem'), icon: GiftIcon, hideInSimpleMode: true },
     { path: '/profile', label: t('nav.profile'), icon: UserIcon },
-    ...(docsHref.value
-      ? [{ path: '__docs', label: t('nav.docs'), icon: BookIcon, external: true, href: docsHref.value, hideInSimpleMode: true } as NavItem]
-      : []),
+    { path: '/docs', label: t('nav.docs'), icon: BookIcon, hideInSimpleMode: true },
     ...(supportHref.value
       ? [{ path: '__support', label: t('nav.support'), icon: LifebuoyIcon, external: true, href: supportHref.value, hideInSimpleMode: true } as NavItem]
       : []),

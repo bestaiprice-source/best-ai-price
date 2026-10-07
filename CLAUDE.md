@@ -367,8 +367,17 @@ The Sub2API user frontend is reused (no second cabinet), mapped to the recommend
 - `Models & Pricing` = `/available-channels` (`AvailableChannelsView.vue`): supported models per channel with retail input/output (and cache/image/per-request) prices from `UserSupportedModel.pricing`, plus a per-model **availability status** (`available` / `degraded` / `unavailable`) resolved from the public catalog feed `GET /models` (`src/api/publicModels.ts`) — the same retail table the gateway bills from. No upstream credentials are ever exposed.
 - `Usage` = `/usage` (`UsageView.vue`): time, model, tokens (+cache breakdown), cost, first-token/duration, endpoint/type, user-agent; filters by API key/date/model and CSV export. Internal upstream credentials are never included.
 - `Billing` = `/purchase` + `/orders` (`PaymentView.vue` / `UserOrdersView.vue`).
-- `Docs` / `Support` = external sidebar links (`AppSidebar.vue`), shown only when configured, sourced from public settings `doc_url` / `contact_info` (Support becomes `mailto:` when the contact is an email).
+- `Docs` = the in-product page at `/docs` (see §13); `Support` = an external sidebar link (`AppSidebar.vue`) shown only when configured, sourced from public settings `contact_info` (becomes `mailto:` when the contact is an email).
 - Localization: `availableChannels.*` keys (columns, pricing, status) were missing from `en.ts`/`zh.ts` and rendered as raw key paths — the block now exists in both locales.
+
+### Documentation & Onboarding (§13)
+In-product documentation page at `/docs` (`frontend/src/views/user/DocsView.vue`, public route, sidebar `nav.docs`). It walks the user from sign-up to a first request and is bilingual (en/zh):
+- **Quick start**: (1) register + top up, (2) create/copy an API key, (3) pick a model and send a request — each step links to the matching screen (`/purchase`, `/keys`, `/available-channels`).
+- **Base URL & authentication**: the Base URL comes from the public setting `api_base_url` (falls back to the current origin) and is shown with a copy button; auth accepts `Authorization: Bearer <key>`, `x-api-key: <key>` or `x-goog-api-key` (per `internal/server/middleware/api_key_auth.go`).
+- **Endpoints table**: `POST /v1/messages`, `POST /v1/chat/completions`, `POST /responses`, `POST /v1beta/…`, `GET /v1/models` — matching the real gateway routes in `internal/server/routes/gateway.go`.
+- **Code examples** (cURL / Python / Node.js tabs, one-click copy): Anthropic Messages + OpenAI Chat Completions via cURL; OpenAI & Anthropic Python SDKs; `fetch` and the `openai` npm client. All snippets target the endpoints/headers above; they have been validated against the code contract, not executed against a live gateway (no production credentials in the dev environment).
+- **Models**: `GET /v1/models` with a copy-cURL button and a link to the catalog.
+- **Integrations & agents**: Claude Code (`ANTHROPIC_BASE_URL` + `ANTHROPIC_AUTH_TOKEN`), Codex / OpenAI SDK (`OPENAI_BASE_URL` + `OPENAI_API_KEY`), Gemini CLI/SDK, Cursor, OpenClaw, n8n (OpenAI node base URL), LangChain — all expressed as "custom base URL + API key" for OpenAI-compatible clients, each with a copyable config block.
 
 ### Money Balance, USDT & Payment History (§12)
 - **Single balance**: every user has one money balance (`users.balance`) that all API charges (official and Yunwu) are deducted from; no second wallet.
