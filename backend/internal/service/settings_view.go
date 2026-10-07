@@ -44,9 +44,13 @@ type SystemSettings struct {
 	SoraClientEnabled           bool
 	CustomMenuItems             string // JSON array of custom menu items
 
-	DefaultConcurrency           int
-	DefaultBalance               float64
-	DefaultRateMultiplier        float64
+	DefaultConcurrency    int
+	DefaultBalance        float64
+	DefaultRateMultiplier float64
+	// ModelMarkups overrides the effective rate multiplier for specific models
+	// (key: canonical model or wildcard pattern, value: multiplier). §7: a markup
+	// can be set globally and, where needed, separately per model.
+	ModelMarkups                 map[string]float64
 	AffiliateRebateRate          float64
 	AffiliateRebateFreezeHours   int
 	AffiliateRebateDurationDays  int

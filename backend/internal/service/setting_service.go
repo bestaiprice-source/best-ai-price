@@ -133,6 +133,7 @@ var settingHotKeys = map[string]struct{}{
 	SettingKeyAPIBaseURL:                   {},
 	SettingKeyAffiliateEnabled:             {},
 	SettingKeyDefaultRateMultiplier:        {},
+	SettingKeyModelMarkups:                 {},
 }
 
 // DefaultSubscriptionGroupReader validates group references used by default subscriptions.
@@ -753,6 +754,22 @@ func (s *SettingService) UpdateSettings(ctx context.Context, settings *SystemSet
 	if s.cfg != nil {
 		s.cfg.Default.RateMultiplier = settings.DefaultRateMultiplier
 	}
+	if len(settings.ModelMarkups) > 0 {
+		clean := make(map[string]float64, len(settings.ModelMarkups))
+		for pattern, mult := range settings.ModelMarkups {
+			pattern = strings.ToLower(strings.TrimSpace(pattern))
+			// Reject multiplier < 1.0: it would sell below cost (§7 margin protection).
+			if pattern == "" || mult < 1.0 {
+				continue
+			}
+			clean[pattern] = mult
+		}
+		if encoded, err := json.Marshal(clean); err == nil {
+			updates[SettingKeyModelMarkups] = string(encoded)
+		}
+	} else {
+		updates[SettingKeyModelMarkups] = "{}"
+	}
 	settings.AffiliateRebateRate = clampAffiliateRebateRate(settings.AffiliateRebateRate)
 	updates[SettingKeyAffiliateRebateRate] = strconv.FormatFloat(settings.AffiliateRebateRate, 'f', 8, 64)
 	if settings.AffiliateRebateFreezeHours < 0 {
@@ -1106,6 +1123,123 @@ func (s *SettingService) GetDefaultRateMultiplier(ctx context.Context) float64 {
 	return 1.10
 }
 
+// parseModelMarkups decodes the model_markups JSON setting into a pattern→multiplier map.
+func parseModelMarkups(raw string) map[string]float64 {
+	raw = strings.TrimSpace(raw)
+	if raw == "" || raw == "{}" {
+		return nil
+	}
+	out := make(map[string]float64)
+	if err := json.Unmarshal([]byte(raw), &out); err != nil {
+		return nil
+	}
+	clean := make(map[string]float64, len(out))
+	for pattern, mult := range out {
+		p := strings.ToLower(strings.TrimSpace(pattern))
+		// A multiplier below 1.0 would price a model under its own cost and
+		// guarantee a loss on every request; such entries are rejected outright
+		// (§7 margin protection). 1.0 = zero markup, which is allowed.
+		if p == "" || mult < 1.0 {
+			continue
+		}
+		clean[p] = mult
+	}
+	if len(clean) == 0 {
+		return nil
+	}
+	return clean
+}
+
+// matchModelMarkupPattern matches a model against a markup pattern that may use
+// wildcards (e.g. "claude-opus-*" or "*sonnet*").
+func matchModelMarkupPattern(pattern, model string) bool {
+	if pattern == "" || model == "" {
+		return false
+	}
+	if pattern == "*" {
+		return true
+	}
+	if !strings.Contains(pattern, "*") {
+		return pattern == model
+	}
+	idx := 0
+	for _, part := range strings.Split(pattern, "*") {
+		if part == "" {
+			continue
+		}
+		pos := strings.Index(model[idx:], part)
+		if pos < 0 {
+			return false
+		}
+		idx += pos + len(part)
+	}
+	return true
+}
+
+// GetModelMarkups returns the configured per-model markup overrides.
+func (s *SettingService) GetModelMarkups(ctx context.Context) map[string]float64 {
+	if s == nil {
+		return nil
+	}
+	raw, err := s.getSettingValueCached(ctx, SettingKeyModelMarkups)
+	if err != nil {
+		return nil
+	}
+	return parseModelMarkups(raw)
+}
+
+// ResolveModelMarkup returns the markup multiplier configured for a specific
+// model, if any (§7: the markup can be set globally and, where needed, separately
+// per model). The exact model wins; otherwise the longest matching wildcard.
+func (s *SettingService) ResolveModelMarkup(ctx context.Context, model string) (float64, bool) {
+	markups := s.GetModelMarkups(ctx)
+	if len(markups) == 0 {
+		return 0, false
+	}
+	m := strings.ToLower(strings.TrimSpace(model))
+	if m == "" {
+		return 0, false
+	}
+	candidates := []string{m}
+	if idx := strings.LastIndex(m, "/"); idx >= 0 && idx+1 < len(m) {
+		candidates = append(candidates, m[idx+1:])
+	}
+	if canonical := strings.ToLower(strings.TrimSpace(ToCanonicalModelID(model))); canonical != "" {
+		candidates = append(candidates, canonical)
+	}
+	for _, c := range candidates {
+		if mult, ok := markups[c]; ok && mult > 0 {
+			return mult, true
+		}
+	}
+	best := ""
+	var bestMult float64
+	for pattern, mult := range markups {
+		if !strings.Contains(pattern, "*") {
+			continue
+		}
+		for _, c := range candidates {
+			if matchModelMarkupPattern(pattern, c) && len(pattern) > len(best) {
+				best = pattern
+				bestMult = mult
+			}
+		}
+	}
+	if best != "" {
+		return bestMult, true
+	}
+	return 0, false
+}
+
+// ApplyModelMarkup overrides a base multiplier with the model-specific markup
+// when one is configured, otherwise returns the base unchanged.
+func (s *SettingService) ApplyModelMarkup(ctx context.Context, model string, base float64) float64 {
+	if markup, ok := s.ResolveModelMarkup(ctx, model); ok && markup > 0 {
+		return markup
+	}
+	return base
+}
+
 // GetDefaultSubscriptions 获取新用户默认订阅配置列表。
 func (s *SettingService) GetDefaultSubscriptions(ctx context.Context) []DefaultSubscriptionSetting {
 	value, err := s.settingRepo.GetValue(ctx, SettingKeyDefaultSubscriptions)
@@ -1142,6 +1276,7 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeyDefaultConcurrency:               strconv.Itoa(s.cfg.Default.UserConcurrency),
 		SettingKeyDefaultBalance:                   strconv.FormatFloat(s.cfg.Default.UserBalance, 'f', 8, 64),
 		SettingKeyDefaultRateMultiplier:            strconv.FormatFloat(s.cfg.Default.RateMultiplier, 'f', 4, 64),
+		SettingKeyModelMarkups:                     "{}",
 		SettingKeyAffiliateRebateRate:              strconv.FormatFloat(AffiliateRebateRateDefault, 'f', 8, 64),
 		SettingKeyAffiliateRebateFreezeHours:       strconv.Itoa(AffiliateRebateFreezeHoursDefault),
 		SettingKeyAffiliateRebateDurationDays:      strconv.Itoa(AffiliateRebateDurationDaysDefault),
@@ -1242,6 +1377,7 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 	} else {
 		result.DefaultRateMultiplier = 1.10
 	}
+	result.ModelMarkups = parseModelMarkups(settings[SettingKeyModelMarkups])
 	if rebateRate, err := strconv.ParseFloat(settings[SettingKeyAffiliateRebateRate], 64); err == nil {
 		result.AffiliateRebateRate = clampAffiliateRebateRate(rebateRate)
 	} else {

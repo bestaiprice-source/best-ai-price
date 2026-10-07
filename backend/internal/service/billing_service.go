@@ -113,6 +113,30 @@ type BillingService struct {
 	pricingService *PricingService
 	yunwuPricing   *YunwuPricingService
 	fallbackPrices map[string]*ModelPricing // 硬编码回退价格
+	// settingService is optional and used only to resolve a per-model markup
+	// override (§7). Set via SetSettingService; nil is safe.
+	settingService *SettingService
+}
+
+// SetSettingService wires the settings service so per-model markup overrides can
+// be resolved during billing. Optional (a nil service simply disables overrides).
+func (s *BillingService) SetSettingService(settingService *SettingService) {
+	if s != nil {
+		s.settingService = settingService
+	}
+}
+
+// ApplyModelMarkup returns the model-specific markup when one is configured,
+// otherwise the supplied base multiplier (§7: markup can be set globally and,
+// where needed, separately per model).
+func (s *BillingService) ApplyModelMarkup(ctx context.Context, model string, base float64) float64 {
+	if s == nil || s.settingService == nil {
+		return base
+	}
+	if markup, ok := s.settingService.ResolveModelMarkup(ctx, model); ok && markup > 0 {
+		return markup
+	}
+	return base
 }
 
 // NewBillingService 创建计费服务实例
@@ -440,7 +464,6 @@ func (s *BillingService) GetYunwuMaxModelPricing(ctx context.Context, model stri
 	return nil, fmt.Errorf("yunwu max pricing not found for model: %s", model)
 }
 
-
 // GetYunwuKnownModelNames returns all model names known from Yunwu pricing service.
 func (s *BillingService) GetYunwuKnownModelNames(ctx context.Context) []string {
 	if s == nil || s.yunwuPricing == nil {
@@ -448,7 +471,6 @@ func (s *BillingService) GetYunwuKnownModelNames(ctx context.Context) []string {
 	}
 	return s.yunwuPricing.GetKnownModelNames(ctx)
 }
-
 
 // CalculateCost 计算使用费用
 func (s *BillingService) CalculateCost(model string, tokens UsageTokens, rateMultiplier float64) (*CostBreakdown, error) {
@@ -924,4 +946,3 @@ func (s *BillingService) CalculateFailSafeCost(model string, tokens UsageTokens,
 	breakdown.ActualCost = breakdown.TotalCost * rateMultiplier
 	return breakdown
 }
-

@@ -8211,6 +8211,12 @@ func (s *GatewayService) RecordUsage(ctx context.Context, input *RecordUsageInpu
 	var cost *CostBreakdown
 	billingModel := forwardResultBillingModel(result.Model, result.UpstreamModel)
 
+	// §7: a markup configured specifically for this model overrides the base
+	// (user > group > system) multiplier.
+	if s.settingService != nil {
+		multiplier = s.settingService.ApplyModelMarkup(ctx, billingModel, multiplier)
+	}
+
 	// 根据请求类型选择计费方式
 	if result.MediaType == "image" || result.MediaType == "video" {
 		var soraConfig *SoraPriceConfig
@@ -8425,6 +8431,12 @@ func (s *GatewayService) RecordUsageWithLongContext(ctx context.Context, input *
 
 	var cost *CostBreakdown
 	billingModel := forwardResultBillingModel(result.Model, result.UpstreamModel)
+
+	// §7: a markup configured specifically for this model overrides the base
+	// (user > group > system) multiplier.
+	if s.settingService != nil {
+		multiplier = s.settingService.ApplyModelMarkup(ctx, billingModel, multiplier)
+	}
 
 	// 根据请求类型选择计费方式
 	if result.ImageCount > 0 {

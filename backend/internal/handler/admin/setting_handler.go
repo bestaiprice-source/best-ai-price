@@ -131,6 +131,7 @@ func (h *SettingHandler) buildSystemSettingsDTO(settings *service.SystemSettings
 		DefaultConcurrency:                   settings.DefaultConcurrency,
 		DefaultBalance:                       settings.DefaultBalance,
 		DefaultRateMultiplier:                settings.DefaultRateMultiplier,
+		ModelMarkups:                         settings.ModelMarkups,
 		DefaultSubscriptions:                 defaultSubscriptions,
 		EnableModelFallback:                  settings.EnableModelFallback,
 		FallbackModelAnthropic:               settings.FallbackModelAnthropic,
@@ -200,10 +201,11 @@ type UpdateSettingsRequest struct {
 	CustomMenuItems             *[]dto.CustomMenuItem `json:"custom_menu_items"`
 
 	// 默认配置
-	DefaultConcurrency   int                              `json:"default_concurrency"`
-	DefaultBalance       float64                          `json:"default_balance"`
-	DefaultRateMultiplier float64                         `json:"default_rate_multiplier"`
-	DefaultSubscriptions []dto.DefaultSubscriptionSetting `json:"default_subscriptions"`
+	DefaultConcurrency    int                              `json:"default_concurrency"`
+	DefaultBalance        float64                          `json:"default_balance"`
+	DefaultRateMultiplier float64                          `json:"default_rate_multiplier"`
+	ModelMarkups          map[string]float64               `json:"model_markups"`
+	DefaultSubscriptions  []dto.DefaultSubscriptionSetting `json:"default_subscriptions"`
 
 	// Model fallback configuration
 	EnableModelFallback      bool   `json:"enable_model_fallback"`
@@ -532,6 +534,7 @@ func (h *SettingHandler) UpdateSettingsGateway(c gatewayctx.GatewayContext) {
 		DefaultConcurrency:               req.DefaultConcurrency,
 		DefaultBalance:                   req.DefaultBalance,
 		DefaultRateMultiplier:            req.DefaultRateMultiplier,
+		ModelMarkups:                     req.ModelMarkups,
 		DefaultSubscriptions:             defaultSubscriptions,
 		EnableModelFallback:              req.EnableModelFallback,
 		FallbackModelAnthropic:           req.FallbackModelAnthropic,

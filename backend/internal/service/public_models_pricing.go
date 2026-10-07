@@ -267,22 +267,22 @@ func (s *GatewayService) GetPublicModelsPricing(ctx context.Context) []PublicMod
 		}
 
 		if accounts, err := s.accountRepo.ListSchedulable(ctx); err == nil && len(accounts) > 0 {
-				for _, acc := range accounts {
-					p := strings.ToLower(strings.TrimSpace(acc.Platform))
-					schedulablePlatforms[p] = true
-					for _, m := range acc.GetFetchedModelIDs() {
-						mClean := strings.ToLower(strings.TrimSpace(m))
-						availableSet[mClean] = true
-						availableSet[ToCanonicalModelID(mClean)] = true
-					}
-					for m := range acc.GetModelMapping() {
-						mClean := strings.ToLower(strings.TrimSpace(m))
-						availableSet[mClean] = true
-						availableSet[ToCanonicalModelID(mClean)] = true
-					}
+			for _, acc := range accounts {
+				p := strings.ToLower(strings.TrimSpace(acc.Platform))
+				schedulablePlatforms[p] = true
+				for _, m := range acc.GetFetchedModelIDs() {
+					mClean := strings.ToLower(strings.TrimSpace(m))
+					availableSet[mClean] = true
+					availableSet[ToCanonicalModelID(mClean)] = true
+				}
+				for m := range acc.GetModelMapping() {
+					mClean := strings.ToLower(strings.TrimSpace(m))
+					availableSet[mClean] = true
+					availableSet[ToCanonicalModelID(mClean)] = true
 				}
 			}
 		}
+	}
 
 	hasAnySchedulableAccounts := len(schedulablePlatforms) > 0
 
@@ -359,21 +359,27 @@ func (s *GatewayService) GetPublicModelsPricing(ctx context.Context) []PublicMod
 			}
 		}
 
+		// §7: per-model markup overrides the global multiplier for this model.
+		multiplier := yunwuMultiplier
+		if s != nil && s.settingService != nil {
+			multiplier = s.settingService.ApplyModelMarkup(ctx, cid, multiplier)
+		}
+
 		if pricing != nil {
 			if pricing.FixedPricePerRequest > 0 {
-				fixed := roundFloat(pricing.FixedPricePerRequest*yunwuMultiplier, 4)
+				fixed := roundFloat(pricing.FixedPricePerRequest*multiplier, 4)
 				unit := "request"
 				item.NativePriceUSD = &fixed
 				item.NativePriceUnit = &unit
 			} else if pricing.InputPricePerToken > 0 || pricing.OutputPricePerToken > 0 {
-				in1m := roundFloat(pricing.InputPricePerToken*1_000_000*yunwuMultiplier, 4)
-				out1m := roundFloat(pricing.OutputPricePerToken*1_000_000*yunwuMultiplier, 4)
+				in1m := roundFloat(pricing.InputPricePerToken*1_000_000*multiplier, 4)
+				out1m := roundFloat(pricing.OutputPricePerToken*1_000_000*multiplier, 4)
 				item.InputPricePer1M = &in1m
 				item.InputPrice = &in1m
 				item.OutputPricePer1M = &out1m
 				item.OutputPrice = &out1m
 			} else if pricing.ImageOutputPricePerToken > 0 {
-				native := roundFloat(pricing.ImageOutputPricePerToken*yunwuMultiplier, 4)
+				native := roundFloat(pricing.ImageOutputPricePerToken*multiplier, 4)
 				unit := "image"
 				item.NativePriceUSD = &native
 				item.NativePriceUnit = &unit

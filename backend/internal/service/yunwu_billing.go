@@ -344,7 +344,11 @@ func (s *GatewayService) RecordYunwuMediaUsage(ctx context.Context, in *RecordYu
 	if in.APIKey != nil {
 		group = in.APIKey.Group
 	}
-	return recordYunwuMediaUsage(ctx, s.billingDeps(), s.usageBillingRepo, s.usageLogRepo, in, yunwuMediaMultiplier(group, s.cfg))
+	multiplier := yunwuMediaMultiplier(group, s.cfg)
+	if s.settingService != nil {
+		multiplier = s.settingService.ApplyModelMarkup(ctx, in.Model, multiplier)
+	}
+	return recordYunwuMediaUsage(ctx, s.billingDeps(), s.usageBillingRepo, s.usageLogRepo, in, multiplier)
 }
 
 // RecordYunwuMediaUsage bills a flat-rate / per-unit Unofficial-provider media
@@ -357,5 +361,9 @@ func (s *OpenAIGatewayService) RecordYunwuMediaUsage(ctx context.Context, in *Re
 	if in.APIKey != nil {
 		group = in.APIKey.Group
 	}
-	return recordYunwuMediaUsage(ctx, s.billingDeps(), s.usageBillingRepo, s.usageLogRepo, in, yunwuMediaMultiplier(group, s.cfg))
+	multiplier := yunwuMediaMultiplier(group, s.cfg)
+	if s.billingService != nil {
+		multiplier = s.billingService.ApplyModelMarkup(ctx, in.Model, multiplier)
+	}
+	return recordYunwuMediaUsage(ctx, s.billingDeps(), s.usageBillingRepo, s.usageLogRepo, in, multiplier)
 }

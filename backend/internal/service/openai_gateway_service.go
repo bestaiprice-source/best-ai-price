@@ -5915,6 +5915,10 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	if result.BillingModel != "" {
 		billingModel = strings.TrimSpace(result.BillingModel)
 	}
+	// §7: a markup configured specifically for this model overrides the base multiplier.
+	if s.billingService != nil {
+		multiplier = s.billingService.ApplyModelMarkup(ctx, billingModel, multiplier)
+	}
 	serviceTier := ""
 	if result.ServiceTier != nil {
 		serviceTier = strings.TrimSpace(*result.ServiceTier)
@@ -6569,4 +6573,3 @@ func (s *OpenAIGatewayService) CheckModelPricingAvailable(ctx context.Context, m
 	}
 	return nil
 }
-

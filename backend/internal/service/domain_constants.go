@@ -147,10 +147,11 @@ const (
 	SettingKeyCustomMenuItems             = "custom_menu_items"             // 自定义菜单项（JSON 数组）
 
 	// 默认配置
-	SettingKeyDefaultConcurrency    = "default_concurrency"      // 新用户默认并发量
-	SettingKeyDefaultBalance        = "default_balance"          // 新用户默认余额
-	SettingKeyDefaultRateMultiplier = "default_rate_multiplier"   // 默认倍率/加价 (例如 1.10 表示 10% 加价)
-	SettingKeyDefaultSubscriptions  = "default_subscriptions"    // 新用户默认订阅列表（JSON）
+	SettingKeyDefaultConcurrency    = "default_concurrency"     // 新用户默认并发量
+	SettingKeyDefaultBalance        = "default_balance"         // 新用户默认余额
+	SettingKeyDefaultRateMultiplier = "default_rate_multiplier" // 默认倍率/加价 (例如 1.10 表示 10% 加价)
+	SettingKeyModelMarkups          = "model_markups"           // 模型级加价覆盖（JSON: 模型模式 -> 倍率）
+	SettingKeyDefaultSubscriptions  = "default_subscriptions"   // 新用户默认订阅列表（JSON）
 
 	// 管理员 API Key
 	SettingKeyAdminAPIKey = "admin_api_key" // 全局管理员 API Key（用于外部系统集成）
@@ -277,12 +278,12 @@ const (
 	SettingKeyAccountQuotaNotifyEmails    = "account_quota_notify_emails"
 
 	// Telegram 告警配置 (Provider / Yunwu balance alert)
-	SettingKeyTelegramBotToken          = "telegram_bot_token"
-	SettingKeyTelegramChatID            = "telegram_chat_id"
-	SettingKeyTelegramAlertThreshold    = "telegram_alert_threshold"
-	SettingKeyTelegramAlertsEnabled     = "telegram_alerts_enabled"
-	SettingKeyTelegramAllowedUsers      = "telegram_allowed_users"
-	SettingKeyTelegramActiveRecipients  = "telegram_active_recipients"
+	SettingKeyTelegramBotToken         = "telegram_bot_token"
+	SettingKeyTelegramChatID           = "telegram_chat_id"
+	SettingKeyTelegramAlertThreshold   = "telegram_alert_threshold"
+	SettingKeyTelegramAlertsEnabled    = "telegram_alerts_enabled"
+	SettingKeyTelegramAllowedUsers     = "telegram_allowed_users"
+	SettingKeyTelegramActiveRecipients = "telegram_active_recipients"
 )
 
 // AdminAPIKeyPrefix is the prefix for admin API keys (distinct from user "sk-" keys).
@@ -334,4 +335,3 @@ func CalculateEffectiveConcurrency(configuredConcurrency int, balance float64, h
 	}
 	return maxSlots
 }
-

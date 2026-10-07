@@ -1251,6 +1251,48 @@
                   {{ t('admin.settings.defaults.defaultRateMultiplierHint') }}
                 </p>
               </div>
+
+              <div class="col-span-full">
+                <div class="mb-2 flex items-start justify-between gap-3">
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      {{ t('admin.settings.defaults.modelMarkups') }}
+                    </label>
+                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      {{ t('admin.settings.defaults.modelMarkupsHint') }}
+                    </p>
+                  </div>
+                  <button type="button" class="btn btn-secondary btn-sm whitespace-nowrap" @click="addModelMarkup">
+                    {{ t('admin.settings.defaults.addModelMarkup') }}
+                  </button>
+                </div>
+                <div v-if="modelMarkupRows.length > 0" class="space-y-2">
+                  <div v-for="(row, index) in modelMarkupRows" :key="index" class="flex items-center gap-2">
+                    <input
+                      v-model="row.pattern"
+                      type="text"
+                      class="input grow"
+                      :placeholder="t('admin.settings.defaults.modelPattern')"
+                    />
+                    <input
+                      v-model.number="row.multiplier"
+                      type="number"
+                      step="0.01"
+                      min="1"
+                      class="input w-28"
+                      :placeholder="t('admin.settings.defaults.markupMultiplier')"
+                    />
+                    <button
+                      type="button"
+                      class="rounded-lg p-2 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/40"
+                      @click="modelMarkupRows.splice(index, 1)"
+                    >
+                      <Icon name="x" size="sm" />
+                    </button>
+                  </div>
+                </div>
+                <p v-else class="text-xs text-gray-400">—</p>
+              </div>
             </div>
 
             <div class="border-t border-gray-100 pt-4 dark:border-dark-700">
@@ -2365,6 +2407,9 @@ const testingSmtp = ref(false)
 const sendingTestEmail = ref(false)
 const testEmailAddress = ref('')
 const registrationEmailSuffixWhitelistTags = ref<string[]>([])
+// Per-model markup overrides (§7): a page-level editor over form.model_markups.
+const modelMarkupRows = ref<{ pattern: string; multiplier: number }[]>([])
+const addModelMarkup = () => modelMarkupRows.value.push({ pattern: '', multiplier: form.default_rate_multiplier || 1.1 })
 const registrationEmailSuffixWhitelistDraft = ref('')
 
 // Admin API Key 状态
@@ -2459,6 +2504,7 @@ const form = reactive<SettingsForm>({
   default_balance: 0,
   default_concurrency: 1,
   default_rate_multiplier: 1.10,
+  model_markups: {} as Record<string, number>,
   default_subscriptions: [],
   site_name: 'Sub2API',
   site_logo: '',
@@ -2733,6 +2779,10 @@ async function loadSettings() {
     form.smtp_password = ''
     form.turnstile_secret_key = ''
     form.linuxdo_connect_client_secret = ''
+    modelMarkupRows.value = Object.entries(settings.model_markups || {}).map(([pattern, multiplier]) => ({
+      pattern,
+      multiplier: Number(multiplier)
+    }))
   } catch (error: any) {
     appStore.showError(
       t('admin.settings.failedToLoad') + ': ' + (error.message || t('common.unknownError'))
@@ -2838,6 +2888,11 @@ async function saveSettings() {
       default_balance: form.default_balance,
       default_concurrency: form.default_concurrency,
       default_rate_multiplier: form.default_rate_multiplier,
+      model_markups: modelMarkupRows.value.reduce<Record<string, number>>((acc, row) => {
+        const pattern = row.pattern.trim().toLowerCase()
+        if (pattern && Number(row.multiplier) >= 1) acc[pattern] = Number(row.multiplier)
+        return acc
+      }, {}),
       default_subscriptions: normalizedDefaultSubscriptions,
       site_name: form.site_name,
       site_logo: form.site_logo,

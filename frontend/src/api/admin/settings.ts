@@ -29,6 +29,7 @@ export interface SystemSettings {
   default_balance: number
   default_concurrency: number
   default_rate_multiplier: number
+  model_markups: Record<string, number>
   default_subscriptions: DefaultSubscriptionSetting[]
   // OEM settings
   site_name: string
@@ -103,6 +104,7 @@ export interface UpdateSettingsRequest {
   default_balance?: number
   default_concurrency?: number
   default_rate_multiplier?: number
+  model_markups?: Record<string, number>
   default_subscriptions?: DefaultSubscriptionSetting[]
   site_name?: string
   site_logo?: string
