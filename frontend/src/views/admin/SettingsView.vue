@@ -2116,6 +2116,22 @@
                   </p>
                 </div>
 
+                <!-- Channel / Chat ID -->
+                <div>
+                  <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {{ t('admin.settings.telegram.channelId') }}
+                  </label>
+                  <input
+                    v-model="telegramForm.channel_id"
+                    type="text"
+                    :placeholder="t('admin.settings.telegram.channelIdPlaceholder')"
+                    class="input w-full font-mono text-sm"
+                  />
+                  <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                    {{ t('admin.settings.telegram.channelIdHint') }}
+                  </p>
+                </div>
+
                 <!-- Enable Alerts Toggle -->
                 <div class="flex items-center justify-between">
                   <div>
@@ -3291,6 +3307,7 @@ const telegramSaving = ref(false)
 const telegramTesting = ref(false)
 const telegramForm = reactive({
   bot_token: '',
+  channel_id: '',
   alerts_enabled: false,
   alert_threshold_usd: 20,
   allowed_users_text: ''
@@ -3311,6 +3328,7 @@ async function fetchTelegramSettings() {
   try {
     const settings = await adminAPI.settings.getTelegramSettings()
     telegramForm.bot_token = settings.bot_token || ''
+    telegramForm.channel_id = settings.channel_id || ''
     telegramForm.alerts_enabled = settings.alerts_enabled
     telegramForm.alert_threshold_usd = settings.alert_threshold_usd
     telegramForm.allowed_users_text = (settings.allowed_users || []).join('\n')
@@ -3332,11 +3350,13 @@ async function saveTelegramSettings() {
 
     const updated = await adminAPI.settings.updateTelegramSettings({
       bot_token: telegramForm.bot_token,
+      channel_id: telegramForm.channel_id,
       alerts_enabled: telegramForm.alerts_enabled,
       alert_threshold_usd: telegramForm.alert_threshold_usd,
       allowed_users: users
     })
     telegramForm.bot_token = updated.bot_token || ''
+    telegramForm.channel_id = updated.channel_id || ''
     telegramForm.alerts_enabled = updated.alerts_enabled
     telegramForm.alert_threshold_usd = updated.alert_threshold_usd
     telegramForm.allowed_users_text = (updated.allowed_users || []).join('\n')

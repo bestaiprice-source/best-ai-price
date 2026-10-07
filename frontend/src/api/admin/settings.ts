@@ -635,6 +635,7 @@ export interface TelegramRecipient {
 export interface TelegramSettings {
   bot_token: string
   bot_token_configured: boolean
+  channel_id: string
   alerts_enabled: boolean
   alert_threshold_usd: number
   allowed_users: string[]
@@ -643,6 +644,7 @@ export interface TelegramSettings {
 
 export interface UpdateTelegramSettingsRequest {
   bot_token?: string
+  channel_id?: string
   alerts_enabled: boolean
   alert_threshold_usd: number
   allowed_users: string[]

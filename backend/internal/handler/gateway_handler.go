@@ -168,11 +168,14 @@ func (h *GatewayHandler) handleHypervisorMessages(c *gin.Context) {
 	}
 
 	var reqPayloadMap struct {
-		Stream bool `json:"stream"`
+		Stream bool   `json:"stream"`
+		Model  string `json:"model"`
 	}
 	isStream := false
+	requestedModel := ""
 	if json.Unmarshal(body, &reqPayloadMap) == nil {
 		isStream = reqPayloadMap.Stream
+		requestedModel = reqPayloadMap.Model
 	}
 
 	if isStream {
@@ -185,7 +188,9 @@ func (h *GatewayHandler) handleHypervisorMessages(c *gin.Context) {
 	}
 
 	platform := "anthropic"
-	if apiKey, ok := middleware2.GetAPIKeyFromGatewayContext(transportCtx); ok && apiKey != nil {
+	var apiKey *service.APIKey
+	if k, ok := middleware2.GetAPIKeyFromGatewayContext(transportCtx); ok && k != nil {
+		apiKey = k
 		if apiKey.Group != nil && apiKey.Group.Platform != "" {
 			platform = apiKey.Group.Platform
 		}
@@ -206,7 +211,13 @@ func (h *GatewayHandler) handleHypervisorMessages(c *gin.Context) {
 		"conversation_id", conversationID,
 	)
 
-	_, err = h.hypervisorEngine.HandleRequest(c.Request.Context(), ownerID, conversationID, body, c.Writer, platform)
+	requestCtx := c.Request.Context()
+	if apiKey != nil {
+		requestCtx = service.WithYunwuModelRouting(requestCtx, apiKey.Group, requestedModel)
+	}
+	requestStart := time.Now()
+
+	meta, err := h.hypervisorEngine.HandleRequest(requestCtx, ownerID, conversationID, body, c.Writer, platform)
 	if err != nil {
 		if errors.Is(err, yunwu.ErrNoPricingAvailable) || errors.Is(err, yunwu.ErrNoCompatibleNodes) {
 			h.errorResponseGateway(transportCtx, http.StatusBadRequest, "invalid_request_error", err.Error())
@@ -214,6 +225,24 @@ func (h *GatewayHandler) handleHypervisorMessages(c *gin.Context) {
 		}
 		h.errorResponseGateway(transportCtx, http.StatusBadGateway, "api_error", err.Error())
 		return
+	}
+
+	// Bill the end user for the completed Unofficial-provider request.
+	if meta != nil && apiKey != nil && apiKey.User != nil {
+		subscription, _ := middleware2.GetSubscriptionFromGatewayContext(transportCtx)
+		result := service.BuildYunwuForwardResult("", requestedModel, meta.InputTokens, meta.OutputTokens, isStream, requestStart)
+		if billedErr := h.gatewayService.RecordYunwuUsage(c.Request.Context(), &service.RecordYunwuUsageInput{
+			Result:        result,
+			APIKey:        apiKey,
+			User:          apiKey.User,
+			AccountID:     meta.NodeID,
+			Subscription:  subscription,
+			UserAgent:     c.GetHeader("User-Agent"),
+			IPAddress:     c.ClientIP(),
+			APIKeyService: h.apiKeyService,
+		}); billedErr != nil {
+			slog.Error("[GatewayHandler] Yunwu usage billing failed", "error", billedErr, "model", requestedModel)
+		}
 	}
 }
 

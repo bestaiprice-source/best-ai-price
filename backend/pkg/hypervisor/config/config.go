@@ -33,6 +33,8 @@ type HypervisorConfig struct {
 	YunwuDefaultOutputUSDPer1K    float64
 	YunwuBalanceSyncSeconds       int
 	YunwuBalanceStaleSeconds      int
+	YunwuHealthProbeSeconds       int
+	YunwuHealthProbeTimeoutMs     int
 	YunwuBalanceReservePercent    int
 	YunwuRequireFreshBalance      bool
 	YunwuFallbackCapacityMicroUSD int64
@@ -66,6 +68,8 @@ func LoadFromEnv() *HypervisorConfig {
 		YunwuDefaultOutputUSDPer1K:    getEnvFloat("ASH_YUNWU_DEFAULT_OUTPUT_USD_PER_1K", 0.002),
 		YunwuBalanceSyncSeconds:       getEnvInt("ASH_YUNWU_BALANCE_SYNC_SECONDS", 300),
 		YunwuBalanceStaleSeconds:      getEnvInt("ASH_YUNWU_BALANCE_STALE_SECONDS", 1800),
+		YunwuHealthProbeSeconds:       getEnvInt("ASH_YUNWU_HEALTH_PROBE_SECONDS", 300),
+		YunwuHealthProbeTimeoutMs:     getEnvInt("ASH_YUNWU_HEALTH_PROBE_TIMEOUT_MS", 10000),
 		YunwuBalanceReservePercent:    getEnvInt("ASH_YUNWU_BALANCE_RESERVE_PERCENT", 10),
 		YunwuRequireFreshBalance:      getEnvBool("ASH_YUNWU_REQUIRE_FRESH_BALANCE", false),
 		YunwuFallbackCapacityMicroUSD: getEnvInt64("ASH_YUNWU_FALLBACK_CAPACITY_MICRO_USD", 1_000_000_000),

@@ -19,9 +19,10 @@ var (
 )
 
 type YunwuRebindingManager struct {
-	store *storage.Storage
-	nm    *health.NodeManager
-	cfg   *config.HypervisorConfig
+	store    *storage.Storage
+	nm       *health.NodeManager
+	cfg      *config.HypervisorConfig
+	notifier *TelegramNotifier
 }
 
 func NewYunwuRebindingManager(store *storage.Storage, cfg ...*config.HypervisorConfig) *YunwuRebindingManager {
@@ -36,6 +37,10 @@ func NewYunwuRebindingManager(store *storage.Storage, cfg ...*config.HypervisorC
 		nm:    health.NewNodeManager(store),
 		cfg:   c,
 	}
+}
+
+func (rm *YunwuRebindingManager) SetNotifier(n *TelegramNotifier) {
+	rm.notifier = n
 }
 
 // HandleYunwuFailure sets 10m cooldown on failing node and returns alternative Yunwu candidate via YunwuScheduler
@@ -100,6 +105,31 @@ func (rm *YunwuRebindingManager) HandleYunwuFailure(
 		_ = rm.nm.SaveNode(ctx, failedNode)
 	}
 
+	notifier := rm.notifier
+	if notifier == nil {
+		notifier = GetDefaultNotifier()
+	}
+	if notifier != nil {
+		prov := "yunwu"
+		accName := failedNodeID
+		if failedNode != nil {
+			if failedNode.Provider != "" {
+				prov = failedNode.Provider
+			}
+			if failedNode.AccountName != "" {
+				accName = failedNode.AccountName
+			}
+		}
+		_, _ = notifier.NotifyProviderDownOrDegraded(
+			ctx,
+			prov,
+			failedNodeID,
+			accName,
+			"cooldown",
+			fmt.Sprintf("Сбой запроса (10m cooldown): %v", errReason),
+		)
+	}
+
 	// Track 24h rebinding counter in Redis ash:yunwu:rebinding:24h
 	now := time.Now().Unix()
 	_ = rm.store.Redis().ZAdd(ctx, "ash:yunwu:rebinding:24h", redis.Z{
@@ -127,6 +157,19 @@ func (rm *YunwuRebindingManager) HandleYunwuFailure(
 
 	if len(candidates) == 0 {
 		slog.Error("[YunwuRebinding] No alternative Yunwu nodes available for rebinding")
+		if notifier != nil {
+			prov := "yunwu"
+			if failedNode != nil && failedNode.Provider != "" {
+				prov = failedNode.Provider
+			}
+			_, _ = notifier.NotifyBothProvidersUnavailable(
+				ctx,
+				"active_request",
+				prov,
+				"backup_candidates",
+				"Все резервные узлы пула исчерпаны при попытке переключения",
+			)
+		}
 		return nil, ErrYunwuRebindingExhausted
 	}
 

@@ -76,6 +76,31 @@ func PricingProviderFromContext(ctx context.Context) string {
 	return ""
 }
 
+type yunwuMaxPricingKey struct{}
+
+// ContextWithYunwuMaxPricing marks the context so that Yunwu pricing resolution
+// uses the highest cost tier across all active providers — i.e. the exact same
+// retail basis published in the BestAIPrice catalog
+// (retail = max(primary_cost, backup_cost) * (1 + markup)). Billing for a
+// completed Unofficial-provider request uses this so the charged price never
+// diverges from the advertised catalog price.
+func ContextWithYunwuMaxPricing(ctx context.Context) context.Context {
+	if ctx == nil {
+		return ctx
+	}
+	return context.WithValue(ctx, yunwuMaxPricingKey{}, true)
+}
+
+// YunwuMaxPricingFromContext reports whether max-across-providers retail pricing
+// is required for this context.
+func YunwuMaxPricingFromContext(ctx context.Context) bool {
+	if ctx == nil {
+		return false
+	}
+	v, _ := ctx.Value(yunwuMaxPricingKey{}).(bool)
+	return v
+}
+
 // YunwuPricingRawItem matches the JSON structure returned by api.openlux.ai/api/pricing
 type YunwuPricingRawItem struct {
 	ModelName       string  `json:"model_name"`

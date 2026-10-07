@@ -97,11 +97,12 @@ func (h *OpenAIGatewayHandler) ImagesGateway(c gatewayctx.GatewayContext) {
 		} else if ok {
 			requestCtx := hyperruntime.WithUpstreamRequest(c.Context(), http.MethodPost, "/v1beta/models/"+url.PathEscape(geminiModel)+":generateContent", "application/json")
 			var upstream bufferedHypervisorResponseWriter
-			_, forwardErr := h.hypervisorEngine.HandleRequest(requestCtx, strconv.FormatInt(subject.UserID, 10), c.HeaderValue("X-Conversation-ID"), geminiBody, &upstream, service.PlatformYunwu)
+			meta, forwardErr := h.hypervisorEngine.HandleRequest(requestCtx, strconv.FormatInt(subject.UserID, 10), c.HeaderValue("X-Conversation-ID"), geminiBody, &upstream, service.PlatformYunwu)
 			if forwardErr != nil {
 				h.errorResponseGateway(c, http.StatusBadGateway, "api_error", forwardErr.Error())
 				return
 			}
+			h.billYunwuResult(c, apiKey, meta, geminiModel, false, requestStart)
 			response, err := openAIImagesResponseFromGemini(upstream.Bytes())
 			if err != nil {
 				h.errorResponseGateway(c, http.StatusBadGateway, "api_error", err.Error())
@@ -121,10 +122,16 @@ func (h *OpenAIGatewayHandler) ImagesGateway(c gatewayctx.GatewayContext) {
 		}
 		requestCtx := hyperruntime.WithUpstreamRequest(c.Context(), http.MethodPost, path, contentType)
 		conversationID := c.HeaderValue("X-Conversation-ID")
-		_, forwardErr := h.hypervisorEngine.HandleRequest(requestCtx, strconv.FormatInt(subject.UserID, 10), conversationID, forwardBody, hypervisorGatewayWriter{ctx: c}, service.PlatformYunwu)
+		meta, forwardErr := h.hypervisorEngine.HandleRequest(requestCtx, strconv.FormatInt(subject.UserID, 10), conversationID, forwardBody, hypervisorGatewayWriter{ctx: c}, service.PlatformYunwu)
 		if forwardErr != nil {
 			h.errorResponseGateway(c, http.StatusBadGateway, "api_error", forwardErr.Error())
+			return
 		}
+		imageModel := gjson.GetBytes(forwardBody, "model").String()
+		if imageModel == "" {
+			imageModel = gjson.GetBytes(body, "model").String()
+		}
+		h.billYunwuResult(c, apiKey, meta, imageModel, false, requestStart)
 		return
 	}
 
@@ -534,4 +541,51 @@ func (h *OpenAIGatewayHandler) YunwuMediaGateway(c gatewayctx.GatewayContext) {
 func isMultipartImagesContentType(contentType string) bool {
 	mediaType, _, err := mime.ParseMediaType(strings.TrimSpace(contentType))
 	return err == nil && strings.EqualFold(mediaType, "multipart/form-data")
+}
+
+// billYunwuResult records end-user billing for a completed Unofficial-provider
+// (yunwu) request. It prefers flat-rate / per-unit media billing when the engine
+// reports produced media, and falls back to token billing otherwise.
+func (h *OpenAIGatewayHandler) billYunwuResult(c gatewayctx.GatewayContext, apiKey *service.APIKey, meta *hyperruntime.ResponseMetadata, model string, stream bool, requestStart time.Time) {
+	if meta == nil || apiKey == nil || apiKey.User == nil || h.gatewayService == nil {
+		return
+	}
+	subscription, _ := middleware2.GetSubscriptionFromGatewayContext(c)
+	userAgent := c.HeaderValue("User-Agent")
+	clientIP := ip.GetClientIPContext(c)
+
+	if meta.MediaCostMicroUSD > 0 {
+		if err := h.gatewayService.RecordYunwuMediaUsage(c.Context(), &service.RecordYunwuMediaUsageInput{
+			APIKey:               apiKey,
+			User:                 apiKey.User,
+			AccountID:            meta.NodeID,
+			Subscription:         subscription,
+			Model:                model,
+			MediaKind:            meta.MediaUsageUnit,
+			Units:                meta.MediaUnits,
+			UpstreamCostMicroUSD: meta.MediaCostMicroUSD,
+			UserAgent:            userAgent,
+			IPAddress:            clientIP,
+			APIKeyService:        h.apiKeyService,
+		}); err != nil {
+			zap.L().Error("openai.images.yunwu_media_billing_failed", zap.Error(err), zap.String("model", model))
+		}
+		return
+	}
+
+	if meta.InputTokens > 0 || meta.OutputTokens > 0 {
+		result := service.BuildYunwuOpenAIForwardResult("", model, meta.InputTokens, meta.OutputTokens, stream, requestStart)
+		if err := h.gatewayService.RecordYunwuUsage(c.Context(), &service.OpenAIRecordYunwuUsageInput{
+			Result:        result,
+			APIKey:        apiKey,
+			User:          apiKey.User,
+			AccountID:     meta.NodeID,
+			Subscription:  subscription,
+			UserAgent:     userAgent,
+			IPAddress:     clientIP,
+			APIKeyService: h.apiKeyService,
+		}); err != nil {
+			zap.L().Error("openai.images.yunwu_billing_failed", zap.Error(err), zap.String("model", model))
+		}
+	}
 }

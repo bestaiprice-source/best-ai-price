@@ -334,7 +334,30 @@ func (w *StatsWorker) SyncNodeStats(ctx context.Context, node *health.ExecutionN
 		"err_fallback", errFallback,
 	)
 
-	return nil, fmt.Errorf("failed to sync Yunwu balance across all endpoints (token: %v, user/self: %v, subscription: %v, credit_grants: %v, sub2api: %v, fallback: %v)", errToken, errUser, errSub, errGrants, errSub2, errFallback)
+	syncErr := fmt.Errorf("failed to sync Yunwu balance across all endpoints (token: %v, user/self: %v, subscription: %v, credit_grants: %v, sub2api: %v, fallback: %v)", errToken, errUser, errSub, errGrants, errSub2, errFallback)
+	errLower := strings.ToLower(syncErr.Error())
+	if strings.Contains(errLower, "401") || strings.Contains(errLower, "unauthorized") || strings.Contains(errLower, "invalid_api_key") || strings.Contains(errLower, "invalid api key") {
+		notifier := w.notifier
+		if notifier == nil {
+			notifier = GetDefaultNotifier()
+		}
+		if notifier != nil && node != nil {
+			masked := "***"
+			if len(apiKey) > 8 {
+				masked = apiKey[:4] + "..." + apiKey[len(apiKey)-4:]
+			}
+			_, _ = notifier.NotifyUpstreamKeyInvalid(
+				ctx,
+				node.Provider,
+				node.NodeID,
+				node.AccountName,
+				masked,
+				"Баланс-синк отклонен: недействительный или отключенный API-ключ (401 Unauthorized)",
+			)
+		}
+	}
+
+	return nil, syncErr
 }
 
 func normalizeQuotaToUSD(val float64) float64 {

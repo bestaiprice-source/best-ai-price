@@ -29,6 +29,15 @@ type ResponseMetadata struct {
 	InputTokens  int64
 	OutputTokens int64
 	StatusCode   int
+	// NodeID identifies the execution node (physical account) that ultimately
+	// served the request. Populated by the Yunwu engine so the gateway layer can
+	// bill the end user against the correct provider/account.
+	NodeID string
+	// Media billing fields for flat-rate / per-unit endpoints (image, video,
+	// audio). Populated by the Yunwu engine when the request produced media.
+	MediaUsageUnit   string
+	MediaUnits       int64
+	MediaCostMicroUSD int64
 }
 
 type Runtime interface {

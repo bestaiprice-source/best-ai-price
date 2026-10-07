@@ -694,10 +694,45 @@ func (h *GatewayHandler) GeminiV1BetaModelsGateway(transportCtx gatewayctx.Gatew
 			path += "?" + query
 		}
 		requestCtx := hyperruntime.WithUpstreamRequest(transportCtx.Context(), http.MethodPost, path, "application/json")
+		requestCtx = service.WithYunwuModelRouting(requestCtx, apiKey.Group, modelName)
 		conversationID := transportCtx.HeaderValue("X-Conversation-ID")
-		_, forwardErr := h.hypervisorEngine.HandleRequest(requestCtx, strconv.FormatInt(authSubject.UserID, 10), conversationID, body, hypervisorGatewayWriter{ctx: transportCtx}, service.PlatformYunwu)
+		meta, forwardErr := h.hypervisorEngine.HandleRequest(requestCtx, strconv.FormatInt(authSubject.UserID, 10), conversationID, body, hypervisorGatewayWriter{ctx: transportCtx}, service.PlatformYunwu)
 		if forwardErr != nil {
 			googleErrorContext(transportCtx, http.StatusBadGateway, forwardErr.Error())
+			return
+		}
+		// Bill the end user for the completed Unofficial-provider request.
+		if meta != nil && apiKey.User != nil {
+			sub, _ := middleware.GetSubscriptionFromGatewayContext(transportCtx)
+			if meta.MediaCostMicroUSD > 0 {
+				if billedErr := h.gatewayService.RecordYunwuMediaUsage(transportCtx.Context(), &service.RecordYunwuMediaUsageInput{
+					APIKey:               apiKey,
+					User:                 apiKey.User,
+					AccountID:            meta.NodeID,
+					Subscription:         sub,
+					Model:                modelName,
+					MediaKind:            meta.MediaUsageUnit,
+					Units:                meta.MediaUnits,
+					UpstreamCostMicroUSD: meta.MediaCostMicroUSD,
+					UserAgent:            transportCtx.HeaderValue("User-Agent"),
+					APIKeyService:        h.apiKeyService,
+				}); billedErr != nil {
+					reqLog.Error("gemini.yunwu_media_billing_failed", zap.Error(billedErr))
+				}
+			} else if meta.InputTokens > 0 || meta.OutputTokens > 0 {
+				result := service.BuildYunwuForwardResult("", modelName, meta.InputTokens, meta.OutputTokens, stream, requestStart)
+				if billedErr := h.gatewayService.RecordYunwuUsage(transportCtx.Context(), &service.RecordYunwuUsageInput{
+					Result:        result,
+					APIKey:        apiKey,
+					User:          apiKey.User,
+					AccountID:     meta.NodeID,
+					Subscription:  sub,
+					UserAgent:     transportCtx.HeaderValue("User-Agent"),
+					APIKeyService: h.apiKeyService,
+				}); billedErr != nil {
+					reqLog.Error("gemini.yunwu_billing_failed", zap.Error(billedErr))
+				}
+			}
 		}
 		return
 	}

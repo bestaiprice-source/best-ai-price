@@ -49,6 +49,7 @@ type YunwuHypervisor struct {
 	bm        *backup.BackupManager
 	hc        *YunwuHealthController
 	sw        *StatsWorker
+	prober    *YunwuHealthProber
 	cfg       *config.HypervisorConfig
 	decryptor credentials.Cipher
 	pm        PriceResolver
@@ -128,6 +129,10 @@ func NewYunwuHypervisor(store *storage.Storage, rt runtime.Runtime, decryptors .
 		pm:        NewProviderPriceManager(store, decryptor, nil),
 	}
 
+	if yh.sw != nil && yh.sw.Notifier() != nil {
+		yh.hc.SetNotifier(yh.sw.Notifier())
+		yh.rm.SetNotifier(yh.sw.Notifier())
+	}
 	yh.hc.Start(context.Background(), 10*time.Second, func(ctx context.Context) []health.ExecutionNode {
 		nodes, _ := yh.getAllYunwuNodes(ctx)
 		return nodes
@@ -136,9 +141,27 @@ func NewYunwuHypervisor(store *storage.Storage, rt runtime.Runtime, decryptors .
 	if yh.sw != nil && yh.sw.Bot() != nil {
 		yh.sw.Bot().Start(context.Background())
 	}
+	yh.prober = NewYunwuHealthProber(store, cfg, decryptor, yh.Notifier())
+	yh.prober.Start(context.Background(), time.Duration(cfg.YunwuHealthProbeSeconds)*time.Second)
 
 	slog.Info("[YunwuHypervisor] Initialized dedicated Yunwu Engine")
 	return yh
+}
+
+// Notifier returns the active TelegramNotifier instance.
+func (yh *YunwuHypervisor) Notifier() *TelegramNotifier {
+	if yh != nil && yh.sw != nil && yh.sw.Notifier() != nil {
+		return yh.sw.Notifier()
+	}
+	return GetDefaultNotifier()
+}
+
+// StatsWorker returns the underlying StatsWorker.
+func (yh *YunwuHypervisor) StatsWorker() *StatsWorker {
+	if yh != nil {
+		return yh.sw
+	}
+	return nil
 }
 
 // SetPriceResolver allows injecting or replacing the pricing resolver
@@ -179,6 +202,9 @@ func (yh *YunwuHypervisor) HandleRequest(
 		if m, ok := payloadMap["model"].(string); ok {
 			requestedModel = m
 		}
+	}
+	if notifier := yh.Notifier(); notifier != nil && requestedModel != "" {
+		notifier.RecordModelRequest(ctx, requestedModel)
 	}
 	if requestedModel == "" {
 		requestedModel = modelNameFromRequest(ctx)
@@ -291,6 +317,13 @@ func (yh *YunwuHypervisor) HandleRequest(
 	}
 
 	if len(compatibleNodes) == 0 {
+		if notifier := yh.Notifier(); notifier != nil {
+			reason := "Нет доступных узлов с ценообразованием в пуле"
+			if familyMatchedNodes == 0 {
+				reason = "Семейство модели не поддерживается доступными узлами"
+			}
+			_, _ = notifier.NotifyBothProvidersUnavailable(ctx, requestedModel, "primary", "backup", reason)
+		}
 		if familyMatchedNodes == 0 {
 			slog.Warn("[YunwuHypervisor] No candidate nodes support requested model family",
 				"requested_model", requestedModel,
@@ -307,6 +340,39 @@ func (yh *YunwuHypervisor) HandleRequest(
 		return nil, ErrNoPricingAvailable
 	}
 	nodes = compatibleNodes
+
+	// 4.2 Apply explicit Primary/Backup routing when the gateway provided an
+	// ordered route for the requested model. This makes administrator
+	// promotions effective for unofficial providers.
+	routingApplied := false
+	if routing := ModelRoutingFromContext(ctx); len(routing) > 0 {
+		byID := make(map[string]health.ExecutionNode, len(nodes))
+		for _, n := range nodes {
+			byID[n.NodeID] = n
+		}
+		ordered := make([]health.ExecutionNode, 0, len(routing))
+		matched := 0
+		for _, id := range routing {
+			if n, ok := byID[fmt.Sprintf("%d", id)]; ok {
+				ordered = append(ordered, n)
+				matched++
+			}
+		}
+		if matched > 0 {
+			nodes = ordered
+			routingApplied = true
+			slog.Info("[YunwuHypervisor] Applying explicit Primary/Backup model routing",
+				"routing", describeRouting(routing),
+				"matched_nodes", matched,
+				"model", requestedModel,
+			)
+		} else {
+			slog.Warn("[YunwuHypervisor] Explicit model routing configured but no candidate matched, falling back to pool",
+				"routing", routing,
+				"model", requestedModel,
+			)
+		}
+	}
 
 	if activeLeaseNodeID != "" {
 		leaseValid := false
@@ -340,11 +406,33 @@ func (yh *YunwuHypervisor) HandleRequest(
 		"system_state", systemState,
 	)
 
-	// 5. Select Best Node via YunwuScheduler (prioritizes cheapest price tier with failover)
-	selectedNode, err := yh.sch.SelectNode(ctx, nodes, states, credits, userPriority, activeLeaseNodeID, systemState, nodePrices)
-	if err != nil {
-		slog.Error("[YunwuHypervisor] YunwuScheduler selection failed", "error", err, "total_nodes", len(nodes))
-		return nil, err
+	// 5. Select the best node. When an explicit Primary/Backup route was provided,
+	// honor its order strictly (Primary first, then Backup, ...), otherwise fall
+	// back to cheapest-first pool scheduling.
+	var selectedNode *health.ExecutionNode
+	if routingApplied {
+		for i := range nodes {
+			n := &nodes[i]
+			if n.State == "unavailable" || n.State == "cooldown" {
+				continue
+			}
+			if st := states[n.NodeID]; st != nil && st.CooldownUntil != nil && time.Now().Before(*st.CooldownUntil) {
+				continue
+			}
+			selectedNode = n
+			break
+		}
+		if selectedNode == nil {
+			slog.Warn("[YunwuHypervisor] All routed Primary/Backup nodes unavailable, falling back to pool scheduling",
+				"model", requestedModel)
+		}
+	}
+	if selectedNode == nil {
+		selectedNode, err = yh.sch.SelectNode(ctx, nodes, states, credits, userPriority, activeLeaseNodeID, systemState, nodePrices)
+		if err != nil {
+			slog.Error("[YunwuHypervisor] YunwuScheduler selection failed", "error", err, "total_nodes", len(nodes))
+			return nil, err
+		}
 	}
 	media := classifyMediaRequest(ctx, requestedModel, reqPayload)
 	admittedInputPrice, admittedOutputPrice, hasAdmittedPrice := yh.resolveNodePrice(ctx, selectedNode, requestedModel)
@@ -451,6 +539,41 @@ func (yh *YunwuHypervisor) HandleRequest(
 		)
 		_, _ = yh.store.LogEvent(ctx, ownerID, &sess.ID, &selectedNode.NodeID, "RequestFailed", map[string]any{"error": execErr.Error(), "attempt": attempt, "pool_type": "yunwu"})
 
+		if notifier := yh.Notifier(); notifier != nil {
+			errStr := strings.ToLower(execErr.Error())
+			// Event 2: Upstream API Key invalid/disabled
+			if strings.Contains(errStr, "401") || strings.Contains(errStr, "unauthorized") ||
+				strings.Contains(errStr, "invalid_api_key") || strings.Contains(errStr, "invalid api key") ||
+				strings.Contains(errStr, "account_deactivated") || strings.Contains(errStr, "key disabled") ||
+				strings.Contains(errStr, "authentication_error") {
+				maskedKey := "***"
+				if selectedNode != nil {
+					maskedKey = maskKey(selectedNode.NodeID)
+				}
+				_, _ = notifier.NotifyUpstreamKeyInvalid(
+					ctx,
+					selectedNode.Provider,
+					selectedNode.NodeID,
+					selectedNode.AccountName,
+					maskedKey,
+					execErr.Error(),
+				)
+			}
+
+			// Event 6: 429 / 5xx error spike
+			code := 0
+			if strings.Contains(errStr, "429") || strings.Contains(errStr, "too many requests") {
+				code = 429
+			} else if strings.Contains(errStr, "500") || strings.Contains(errStr, "502") ||
+				strings.Contains(errStr, "503") || strings.Contains(errStr, "504") {
+				code = 500
+			}
+			if code > 0 {
+				notifier.RecordError(ctx, code, selectedNode.Provider)
+				_, _ = notifier.CheckAndNotifyErrorSpike(ctx, selectedNode.Provider)
+			}
+		}
+
 		// Update node runtime state for production error rate and metrics
 		if errState, sErr := yh.nm.GetNodeRuntimeState(ctx, selectedNode.NodeID); sErr == nil && errState != nil {
 			errState.TotalRequests++
@@ -474,9 +597,43 @@ func (yh *YunwuHypervisor) HandleRequest(
 			return nil, execErr
 		}
 
+		// Client-side request errors (malformed parameters, unsupported fields,
+		// content policy, ...) must NOT trigger failover/rebinding: retrying the
+		// same bad request on a Backup provider wastes upstream capacity, cools
+		// down a healthy node and can cause uncontrolled spend. Fail closed with
+		// the original upstream error.
+		if isClientRequestError(execErr) {
+			slog.Warn("[YunwuHypervisor] Client request error detected, suppressing failover",
+				"node_id", selectedNode.NodeID,
+				"model", requestedModel,
+				"error", execErr,
+			)
+			_, _ = yh.store.LogEvent(ctx, ownerID, &sess.ID, &selectedNode.NodeID, "RequestClientError", map[string]any{
+				"error":               execErr.Error(),
+				"failover_suppressed": true,
+				"pool_type":           "yunwu",
+			})
+			return nil, execErr
+		}
+
 		if attempt == maxRetries {
 			slog.Error("[YunwuHypervisor] Max retries reached, failing request", "session_id", sess.ID)
+			if notifier := yh.Notifier(); notifier != nil {
+				_, _ = notifier.NotifyBothProvidersUnavailable(
+					ctx,
+					requestedModel,
+					selectedNode.Provider,
+					"backup_pool",
+					fmt.Sprintf("Исчерпаны все попытки выполнения (%d): %v", maxRetries, execErr),
+				)
+			}
 			break
+		}
+
+		// Event 5: Record failover and check failover rate
+		if notifier := yh.Notifier(); notifier != nil && requestedModel != "" {
+			notifier.RecordModelFailover(ctx, requestedModel)
+			_, _ = notifier.CheckAndNotifyFailoverRate(ctx, requestedModel)
 		}
 
 		// Rebind on failure
@@ -509,6 +666,15 @@ func (yh *YunwuHypervisor) HandleRequest(
 			slog.Error("[YunwuHypervisor] Rebinding failed or no alternative nodes", "rebind_error", rebindErr)
 			_, _ = yh.store.LogEvent(ctx, ownerID, &sess.ID, nil, "RebindingFailed", map[string]any{"reason": fmt.Sprint(rebindErr), "pool_type": "yunwu"})
 			observability.Default.RebindingFailed()
+			if notifier := yh.Notifier(); notifier != nil {
+				_, _ = notifier.NotifyBothProvidersUnavailable(
+					ctx,
+					requestedModel,
+					selectedNode.Provider,
+					"backup_candidates",
+					fmt.Sprintf("Ребиндинг не удался: %v", rebindErr),
+				)
+			}
 			break // No point in retrying if no alternatives
 		}
 	}
@@ -520,6 +686,16 @@ func (yh *YunwuHypervisor) HandleRequest(
 			"error", execErr,
 		)
 		return nil, execErr
+	}
+	// Expose the executing node so the gateway layer can bill the end user
+	// against the provider/account that actually served the request.
+	if meta != nil {
+		meta.NodeID = selectedNode.NodeID
+		if media.Kind != "" && media.Kind != "media_control" && estimatedMicroUSD > 0 {
+			meta.MediaUsageUnit = media.Kind
+			meta.MediaUnits = media.Units
+			meta.MediaCostMicroUSD = estimatedMicroUSD
+		}
 	}
 	if operation := operationNameFromResponse(responseWriter.buf.Bytes()); operation != "" {
 		_ = yh.store.Redis().Set(ctx, yunwuOperationNodeKey(operation), selectedNode.NodeID, 7*24*time.Hour).Err()
@@ -1833,5 +2009,16 @@ func (yh *YunwuHypervisor) prepareNodePayload(ctx context.Context, node *health.
 	}
 
 	return payload
+}
+
+func maskKey(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "***"
+	}
+	if len(raw) <= 8 {
+		return "***"
+	}
+	return raw[:4] + "..." + raw[len(raw)-4:]
 }
 

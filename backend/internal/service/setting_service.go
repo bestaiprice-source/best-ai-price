@@ -3022,6 +3022,7 @@ func maxInt64(value int64, min int64) int64 {
 type TelegramSettings struct {
 	BotToken           string              `json:"bot_token"`
 	BotTokenConfigured bool                `json:"bot_token_configured"`
+	ChannelID          string              `json:"channel_id"`
 	AlertsEnabled      bool                `json:"alerts_enabled"`
 	AlertThresholdUSD  float64             `json:"alert_threshold_usd"`
 	AllowedUsers       []string            `json:"allowed_users"`
@@ -3038,6 +3039,7 @@ type TelegramRecipient struct {
 // UpdateTelegramSettingsRequest represents payload for updating Telegram notification settings.
 type UpdateTelegramSettingsRequest struct {
 	BotToken          *string  `json:"bot_token,omitempty"`
+	ChannelID         *string  `json:"channel_id,omitempty"`
 	AlertsEnabled     bool     `json:"alerts_enabled"`
 	AlertThresholdUSD float64  `json:"alert_threshold_usd"`
 	AllowedUsers      []string `json:"allowed_users"`
@@ -3089,6 +3091,7 @@ func isTelegramUserAllowedSimple(userID int64, username string, allowedUsers []s
 func (s *SettingService) GetTelegramSettings(ctx context.Context) (*TelegramSettings, error) {
 	keys := []string{
 		SettingKeyTelegramBotToken,
+		SettingKeyTelegramChatID,
 		SettingKeyTelegramAlertsEnabled,
 		SettingKeyTelegramAlertThreshold,
 		SettingKeyTelegramAllowedUsers,
@@ -3101,6 +3104,7 @@ func (s *SettingService) GetTelegramSettings(ctx context.Context) (*TelegramSett
 	}
 
 	token := values[SettingKeyTelegramBotToken]
+	channelID := strings.TrimSpace(values[SettingKeyTelegramChatID])
 	alertsEnabled := true
 	if v, exists := values[SettingKeyTelegramAlertsEnabled]; exists {
 		if b, err := strconv.ParseBool(v); err == nil {
@@ -3128,6 +3132,7 @@ func (s *SettingService) GetTelegramSettings(ctx context.Context) (*TelegramSett
 	return &TelegramSettings{
 		BotToken:           maskTelegramToken(token),
 		BotTokenConfigured: strings.TrimSpace(token) != "",
+		ChannelID:          channelID,
 		AlertsEnabled:      alertsEnabled,
 		AlertThresholdUSD:  threshold,
 		AllowedUsers:       allowedUsers,
@@ -3147,6 +3152,10 @@ func (s *SettingService) SetTelegramSettings(ctx context.Context, req *UpdateTel
 		if rawToken != "" && !strings.Contains(rawToken, "*") {
 			updates[SettingKeyTelegramBotToken] = rawToken
 		}
+	}
+
+	if req.ChannelID != nil {
+		updates[SettingKeyTelegramChatID] = strings.TrimSpace(*req.ChannelID)
 	}
 
 	updates[SettingKeyTelegramAlertsEnabled] = strconv.FormatBool(req.AlertsEnabled)
@@ -3173,10 +3182,11 @@ func (s *SettingService) SetTelegramSettings(ctx context.Context, req *UpdateTel
 	return nil
 }
 
-// TestTelegramNotification sends a test alert to authorized Telegram recipients.
+// TestTelegramNotification sends a test alert to authorized Telegram recipients and channel.
 func (s *SettingService) TestTelegramNotification(ctx context.Context) (int, error) {
 	keys := []string{
 		SettingKeyTelegramBotToken,
+		SettingKeyTelegramChatID,
 		SettingKeyTelegramAllowedUsers,
 		SettingKeyTelegramActiveRecipients,
 	}
@@ -3200,20 +3210,23 @@ func (s *SettingService) TestTelegramNotification(ctx context.Context) (int, err
 		_ = json.Unmarshal([]byte(raw), &activeRecipients)
 	}
 
-	targetMap := make(map[int64]struct{})
+	targetMap := make(map[string]struct{})
+	if ch := strings.TrimSpace(values[SettingKeyTelegramChatID]); ch != "" {
+		targetMap[ch] = struct{}{}
+	}
 	for _, r := range activeRecipients {
 		if r.ChatID != 0 && isTelegramUserAllowedSimple(r.ChatID, r.Username, allowedUsers) {
-			targetMap[r.ChatID] = struct{}{}
+			targetMap[strconv.FormatInt(r.ChatID, 10)] = struct{}{}
 		}
 	}
 	for _, u := range allowedUsers {
 		if id, err := strconv.ParseInt(strings.TrimSpace(u), 10, 64); err == nil && id != 0 {
-			targetMap[id] = struct{}{}
+			targetMap[strconv.FormatInt(id, 10)] = struct{}{}
 		}
 	}
 
 	if len(targetMap) == 0 {
-		return 0, fmt.Errorf("no recipients available to receive test alert (please specify numeric user IDs in allowed users or send /start to the bot)")
+		return 0, fmt.Errorf("no recipients available to receive test alert (please configure channel ID, specify numeric user IDs in allowed users, or send /start to the bot)")
 	}
 
 	msg := fmt.Sprintf(
@@ -3226,10 +3239,11 @@ func (s *SettingService) TestTelegramNotification(ctx context.Context) (int, err
 	return s.SendTelegramNotification(ctx, msg)
 }
 
-// SendTelegramNotification sends an HTML formatted notification message to authorized Telegram recipients.
+// SendTelegramNotification sends an HTML formatted notification message to authorized Telegram recipients and channel.
 func (s *SettingService) SendTelegramNotification(ctx context.Context, msg string) (int, error) {
 	keys := []string{
 		SettingKeyTelegramBotToken,
+		SettingKeyTelegramChatID,
 		SettingKeyTelegramAllowedUsers,
 		SettingKeyTelegramActiveRecipients,
 	}
@@ -3253,15 +3267,18 @@ func (s *SettingService) SendTelegramNotification(ctx context.Context, msg strin
 		_ = json.Unmarshal([]byte(raw), &activeRecipients)
 	}
 
-	targetMap := make(map[int64]struct{})
+	targetMap := make(map[string]struct{})
+	if ch := strings.TrimSpace(values[SettingKeyTelegramChatID]); ch != "" {
+		targetMap[ch] = struct{}{}
+	}
 	for _, r := range activeRecipients {
 		if r.ChatID != 0 && isTelegramUserAllowedSimple(r.ChatID, r.Username, allowedUsers) {
-			targetMap[r.ChatID] = struct{}{}
+			targetMap[strconv.FormatInt(r.ChatID, 10)] = struct{}{}
 		}
 	}
 	for _, u := range allowedUsers {
 		if id, err := strconv.ParseInt(strings.TrimSpace(u), 10, 64); err == nil && id != 0 {
-			targetMap[id] = struct{}{}
+			targetMap[strconv.FormatInt(id, 10)] = struct{}{}
 		}
 	}
 
@@ -3274,7 +3291,7 @@ func (s *SettingService) SendTelegramNotification(ctx context.Context, msg strin
 	client := &http.Client{Timeout: 10 * time.Second}
 	for chatID := range targetMap {
 		payload := map[string]string{
-			"chat_id":    strconv.FormatInt(chatID, 10),
+			"chat_id":    chatID,
 			"text":       msg,
 			"parse_mode": "HTML",
 		}

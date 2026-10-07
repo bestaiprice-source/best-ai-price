@@ -404,3 +404,508 @@ func TestTelegramNotifier_SendDirectAlert(t *testing.T) {
 	assert.Len(t, sentMessages, 2)
 }
 
+func TestTelegramNotifier_ProviderDownDegraded(t *testing.T) {
+	ctx := context.Background()
+	var sentMessages []telegramSendMessagePayload
+	var mu sync.Mutex
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		var payload telegramSendMessagePayload
+		body, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(body, &payload)
+		mu.Lock()
+		sentMessages = append(sentMessages, payload)
+		mu.Unlock()
+		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
+	}))
+	defer server.Close()
+
+	cfg := &config.HypervisorConfig{
+		TelegramBotToken:      "test-token",
+		TelegramAllowedUsers:  []string{"123456"},
+		TelegramAlertsEnabled: true,
+	}
+
+	notifier := NewTelegramNotifier(nil, cfg)
+	notifier.SetBaseURL(server.URL)
+	notifier.SetHTTPClient(server.Client())
+
+	// 1. Initial alert
+	notified, err := notifier.NotifyProviderDownOrDegraded(ctx, "openlux", "node-501", "OpenLux-Primary", "degraded", "Consecutive timeouts > 5")
+	require.NoError(t, err)
+	assert.True(t, notified)
+
+	mu.Lock()
+	require.Len(t, sentMessages, 1)
+	assert.Contains(t, sentMessages[0].Text, "Провайдер недоступен / деградирован")
+	assert.Contains(t, sentMessages[0].Text, "openlux")
+	assert.Contains(t, sentMessages[0].Text, "node-501")
+	assert.Contains(t, sentMessages[0].Text, "degraded")
+	mu.Unlock()
+
+	// 2. Cooldown deduplication
+	notified, err = notifier.NotifyProviderDownOrDegraded(ctx, "openlux", "node-501", "OpenLux-Primary", "degraded", "Consecutive timeouts > 5")
+	require.NoError(t, err)
+	assert.False(t, notified, "should be suppressed by cooldown")
+
+	mu.Lock()
+	assert.Len(t, sentMessages, 1)
+	mu.Unlock()
+}
+
+func TestTelegramNotifier_UpstreamKeyInvalid(t *testing.T) {
+	ctx := context.Background()
+	var sentMessages []telegramSendMessagePayload
+	var mu sync.Mutex
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		var payload telegramSendMessagePayload
+		body, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(body, &payload)
+		mu.Lock()
+		sentMessages = append(sentMessages, payload)
+		mu.Unlock()
+		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
+	}))
+	defer server.Close()
+
+	cfg := &config.HypervisorConfig{
+		TelegramBotToken:      "test-token",
+		TelegramAllowedUsers:  []string{"123456"},
+		TelegramAlertsEnabled: true,
+	}
+
+	notifier := NewTelegramNotifier(nil, cfg)
+	notifier.SetBaseURL(server.URL)
+	notifier.SetHTTPClient(server.Client())
+
+	notified, err := notifier.NotifyUpstreamKeyInvalid(ctx, "portdan", "node-601", "Portdan-Acc", "sk-12...9999", "401 Unauthorized: invalid api key")
+	require.NoError(t, err)
+	assert.True(t, notified)
+
+	mu.Lock()
+	require.Len(t, sentMessages, 1)
+	assert.Contains(t, sentMessages[0].Text, "Upstream API-ключ недействителен / отключен")
+	assert.Contains(t, sentMessages[0].Text, "portdan")
+	assert.Contains(t, sentMessages[0].Text, "sk-12...9999")
+	mu.Unlock()
+
+	// Cooldown suppresses immediate duplicate
+	notified, err = notifier.NotifyUpstreamKeyInvalid(ctx, "portdan", "node-601", "Portdan-Acc", "sk-12...9999", "401 Unauthorized")
+	require.NoError(t, err)
+	assert.False(t, notified)
+}
+
+func TestTelegramNotifier_BothProvidersUnavailable(t *testing.T) {
+	ctx := context.Background()
+	var sentMessages []telegramSendMessagePayload
+	var mu sync.Mutex
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		var payload telegramSendMessagePayload
+		body, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(body, &payload)
+		mu.Lock()
+		sentMessages = append(sentMessages, payload)
+		mu.Unlock()
+		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
+	}))
+	defer server.Close()
+
+	cfg := &config.HypervisorConfig{
+		TelegramBotToken:      "test-token",
+		TelegramAllowedUsers:  []string{"123456"},
+		TelegramAlertsEnabled: true,
+	}
+
+	notifier := NewTelegramNotifier(nil, cfg)
+	notifier.SetBaseURL(server.URL)
+	notifier.SetHTTPClient(server.Client())
+
+	notified, err := notifier.NotifyBothProvidersUnavailable(ctx, "claude-3-7-sonnet", "openlux", "portdan", "All candidates exhausted on 429")
+	require.NoError(t, err)
+	assert.True(t, notified)
+
+	mu.Lock()
+	require.Len(t, sentMessages, 1)
+	assert.Contains(t, sentMessages[0].Text, "Оба поставщика модели недоступны")
+	assert.Contains(t, sentMessages[0].Text, "claude-3-7-sonnet")
+	assert.Contains(t, sentMessages[0].Text, "openlux")
+	assert.Contains(t, sentMessages[0].Text, "portdan")
+	mu.Unlock()
+
+	// Cooldown
+	notified, err = notifier.NotifyBothProvidersUnavailable(ctx, "claude-3-7-sonnet", "openlux", "portdan", "repeated error")
+	require.NoError(t, err)
+	assert.False(t, notified)
+}
+
+func TestTelegramNotifier_FailoverRateExceeded(t *testing.T) {
+	ctx := context.Background()
+	var sentMessages []telegramSendMessagePayload
+	var mu sync.Mutex
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		var payload telegramSendMessagePayload
+		body, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(body, &payload)
+		mu.Lock()
+		sentMessages = append(sentMessages, payload)
+		mu.Unlock()
+		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
+	}))
+	defer server.Close()
+
+	cfg := &config.HypervisorConfig{
+		TelegramBotToken:      "test-token",
+		TelegramAllowedUsers:  []string{"123456"},
+		TelegramAlertsEnabled: true,
+	}
+
+	notifier := NewTelegramNotifier(nil, cfg)
+	notifier.SetBaseURL(server.URL)
+	notifier.SetHTTPClient(server.Client())
+
+	model := "gpt-4o"
+	// Record 10 requests
+	for i := 0; i < 10; i++ {
+		notifier.RecordModelRequest(ctx, model)
+	}
+
+	// 1 failover out of 10 = 10% (below 20% threshold)
+	notifier.RecordModelFailover(ctx, model)
+	notified, err := notifier.CheckAndNotifyFailoverRate(ctx, model)
+	require.NoError(t, err)
+	assert.False(t, notified)
+
+	// 2 more failovers: 3 out of 10 = 30% (exceeds 20% threshold)
+	notifier.RecordModelFailover(ctx, model)
+	notifier.RecordModelFailover(ctx, model)
+	notified, err = notifier.CheckAndNotifyFailoverRate(ctx, model)
+	require.NoError(t, err)
+	assert.True(t, notified)
+
+	mu.Lock()
+	require.Len(t, sentMessages, 1)
+	assert.Contains(t, sentMessages[0].Text, "Высокий Failover Rate по модели")
+	assert.Contains(t, sentMessages[0].Text, "gpt-4o")
+	assert.Contains(t, sentMessages[0].Text, "30.0%")
+	mu.Unlock()
+
+	// Subsequent check suppressed by cooldown
+	notified, err = notifier.CheckAndNotifyFailoverRate(ctx, model)
+	require.NoError(t, err)
+	assert.False(t, notified)
+}
+
+func TestTelegramNotifier_ErrorSpike429_5xx(t *testing.T) {
+	ctx := context.Background()
+	var sentMessages []telegramSendMessagePayload
+	var mu sync.Mutex
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		var payload telegramSendMessagePayload
+		body, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(body, &payload)
+		mu.Lock()
+		sentMessages = append(sentMessages, payload)
+		mu.Unlock()
+		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
+	}))
+	defer server.Close()
+
+	cfg := &config.HypervisorConfig{
+		TelegramBotToken:      "test-token",
+		TelegramAllowedUsers:  []string{"123456"},
+		TelegramAlertsEnabled: true,
+	}
+
+	notifier := NewTelegramNotifier(nil, cfg)
+	notifier.SetBaseURL(server.URL)
+	notifier.SetHTTPClient(server.Client())
+
+	scope := "openlux"
+	// Record 10 429s (below threshold of 15)
+	for i := 0; i < 10; i++ {
+		notifier.RecordError(ctx, 429, scope)
+	}
+	notified, err := notifier.CheckAndNotifyErrorSpike(ctx, scope)
+	require.NoError(t, err)
+	assert.False(t, notified)
+
+	// Record 6 500s -> total 16 errors (exceeds threshold of 15)
+	for i := 0; i < 6; i++ {
+		notifier.RecordError(ctx, 500, scope)
+	}
+	notified, err = notifier.CheckAndNotifyErrorSpike(ctx, scope)
+	require.NoError(t, err)
+	assert.True(t, notified)
+
+	mu.Lock()
+	require.Len(t, sentMessages, 1)
+	assert.Contains(t, sentMessages[0].Text, "Резкий рост 429 / 5xx")
+	assert.Contains(t, sentMessages[0].Text, "openlux")
+	assert.Contains(t, sentMessages[0].Text, "10")
+	assert.Contains(t, sentMessages[0].Text, "6")
+	mu.Unlock()
+
+	// Cooldown suppresses
+	notified, err = notifier.CheckAndNotifyErrorSpike(ctx, scope)
+	require.NoError(t, err)
+	assert.False(t, notified)
+}
+
+func TestTelegramNotifier_CheaperProviderFound(t *testing.T) {
+	ctx := context.Background()
+	var sentMessages []telegramSendMessagePayload
+	var mu sync.Mutex
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		var payload telegramSendMessagePayload
+		body, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(body, &payload)
+		mu.Lock()
+		sentMessages = append(sentMessages, payload)
+		mu.Unlock()
+		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
+	}))
+	defer server.Close()
+
+	cfg := &config.HypervisorConfig{
+		TelegramBotToken:      "test-token",
+		TelegramAllowedUsers:  []string{"123456"},
+		TelegramAlertsEnabled: true,
+	}
+
+	notifier := NewTelegramNotifier(nil, cfg)
+	notifier.SetBaseURL(server.URL)
+	notifier.SetHTTPClient(server.Client())
+
+	notified, err := notifier.NotifyCheaperProviderFound(
+		ctx,
+		"claude",
+		"claude-3-5-sonnet",
+		"openlux", 3.00,
+		"top-api", "api-top.com", 2.20,
+		26.7,
+		"https://bestaiprice.com/providers/top-api",
+	)
+	require.NoError(t, err)
+	assert.True(t, notified)
+
+	mu.Lock()
+	require.Len(t, sentMessages, 1)
+	assert.Contains(t, sentMessages[0].Text, "Найден более выгодный поставщик")
+	assert.Contains(t, sentMessages[0].Text, "claude-3-5-sonnet")
+	assert.Contains(t, sentMessages[0].Text, "top-api")
+	assert.Contains(t, sentMessages[0].Text, "-26.7%")
+	assert.Contains(t, sentMessages[0].Text, "https://bestaiprice.com/providers/top-api")
+	mu.Unlock()
+
+	// Duplicate suppressed
+	notified, err = notifier.NotifyCheaperProviderFound(
+		ctx,
+		"claude",
+		"claude-3-5-sonnet",
+		"openlux", 3.00,
+		"top-api", "api-top.com", 2.20,
+		26.7,
+		"https://bestaiprice.com/providers/top-api",
+	)
+	require.NoError(t, err)
+	assert.False(t, notified)
+}
+
+func TestTelegramNotifier_PriceChangedSignificantly(t *testing.T) {
+	ctx := context.Background()
+	var sentMessages []telegramSendMessagePayload
+	var mu sync.Mutex
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		var payload telegramSendMessagePayload
+		body, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(body, &payload)
+		mu.Lock()
+		sentMessages = append(sentMessages, payload)
+		mu.Unlock()
+		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
+	}))
+	defer server.Close()
+
+	cfg := &config.HypervisorConfig{
+		TelegramBotToken:      "test-token",
+		TelegramAllowedUsers:  []string{"123456"},
+		TelegramAlertsEnabled: true,
+	}
+
+	notifier := NewTelegramNotifier(nil, cfg)
+	notifier.SetBaseURL(server.URL)
+	notifier.SetHTTPClient(server.Client())
+
+	notified, err := notifier.NotifyPriceChangedSignificantly(
+		ctx,
+		"openlux",
+		"gpt-4o",
+		2.50, 3.20,
+		10.00, 12.50,
+		28.0,
+		10.0,
+	)
+	require.NoError(t, err)
+	assert.True(t, notified)
+
+	mu.Lock()
+	require.Len(t, sentMessages, 1)
+	assert.Contains(t, sentMessages[0].Text, "Значительное изменение цены поставщика")
+	assert.Contains(t, sentMessages[0].Text, "openlux")
+	assert.Contains(t, sentMessages[0].Text, "gpt-4o")
+	assert.Contains(t, sentMessages[0].Text, "+28.0%")
+	assert.Contains(t, sentMessages[0].Text, "Требуется пересчёт розничных цен")
+	mu.Unlock()
+
+	// Cooldown suppresses
+	notified, err = notifier.NotifyPriceChangedSignificantly(
+		ctx,
+		"openlux",
+		"gpt-4o",
+		2.50, 3.20,
+		10.00, 12.50,
+		28.0,
+		10.0,
+	)
+	require.NoError(t, err)
+	assert.False(t, notified)
+}
+
+func TestTelegramNotifier_ChannelBroadcastWithRecipients(t *testing.T) {
+	ctx := context.Background()
+	var sentRecipients []string
+	var mu sync.Mutex
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		var payload telegramSendMessagePayload
+		body, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(body, &payload)
+		mu.Lock()
+		sentRecipients = append(sentRecipients, payload.ChatID)
+		mu.Unlock()
+		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
+	}))
+	defer server.Close()
+
+	cfg := &config.HypervisorConfig{
+		TelegramBotToken:      "test-token",
+		TelegramChatID:        "-100999888777", // Broadcast channel ID
+		TelegramAllowedUsers:  []string{"111222"}, // Whitelisted admin user
+		TelegramAlertsEnabled: true,
+	}
+
+	notifier := NewTelegramNotifier(nil, cfg)
+	notifier.SetBaseURL(server.URL)
+	notifier.SetHTTPClient(server.Client())
+
+	notified, err := notifier.NotifyProviderDownOrDegraded(ctx, "portdan", "node-channel", "Portdan", "down", "Connection refused")
+	require.NoError(t, err)
+	assert.True(t, notified)
+
+	mu.Lock()
+	defer mu.Unlock()
+	assert.Len(t, sentRecipients, 2)
+	assert.Contains(t, sentRecipients, "-100999888777")
+	assert.Contains(t, sentRecipients, "111222")
+}
+
+func TestTelegramNotifier_EdgeCasesAndCoverage(t *testing.T) {
+	ctx := context.Background()
+
+	// 1. Get/Set default notifier
+	prev := GetDefaultNotifier()
+	n := NewTelegramNotifier(nil, nil)
+	SetDefaultNotifier(n)
+	assert.Equal(t, n, GetDefaultNotifier())
+	SetDefaultNotifier(prev)
+
+	// 2. RecordModelRequest and Failover with empty model
+	n.RecordModelRequest(ctx, "")
+	n.RecordModelFailover(ctx, "")
+	n.RecordError(ctx, 200, "openlux") // not an error
+	n.RecordError(ctx, 404, "openlux") // not 429 or 5xx
+
+	// 3. CheckAndNotifyFailoverRate with empty model
+	ok, err := n.CheckAndNotifyFailoverRate(ctx, "nonexistent-model")
+	assert.NoError(t, err)
+	assert.False(t, ok)
+
+	// 4. CheckAndNotifyErrorSpike with empty scope
+	ok, err = n.CheckAndNotifyErrorSpike(ctx, "")
+	assert.NoError(t, err)
+	assert.False(t, ok)
+
+	// 5. Disabled notifier
+	disabled := NewTelegramNotifier(nil, &config.HypervisorConfig{
+		TelegramAlertsEnabled: false,
+	})
+	ok, err = disabled.NotifyProviderDownOrDegraded(ctx, "prov", "n1", "acc", "down", "err")
+	assert.NoError(t, err)
+	assert.False(t, ok)
+
+	ok, err = disabled.NotifyProviderBalanceLow(ctx, "prov", "n1", "acc", 10.0, 20.0)
+	assert.NoError(t, err)
+	assert.False(t, ok)
+
+	// 6. Formatter tests with fallbacks
+	msg := formatAlertMessage("", "", "node-x", 5.0, 20.0)
+	assert.Contains(t, msg, "Yunwu")
+	assert.Contains(t, msg, "node-x")
+
+	// 7. CheckCooldownAndNotify default cooldown branches (cooldown <= 0)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
+	}))
+	defer server.Close()
+
+	activeCfg := &config.HypervisorConfig{
+		TelegramBotToken:      "tok",
+		TelegramAllowedUsers:  []string{"999"},
+		TelegramAlertsEnabled: true,
+	}
+	activeNotifier := NewTelegramNotifier(nil, activeCfg)
+	activeNotifier.SetBaseURL(server.URL)
+	activeNotifier.SetHTTPClient(server.Client())
+
+	events := []TelegramEventType{
+		EventProviderDownDegraded,
+		EventUpstreamKeyInvalid,
+		EventProviderBalanceLow,
+		EventBothProvidersUnavailable,
+		EventFailoverRateExceeded,
+		EventErrorSpike,
+		EventCheaperProviderFound,
+		EventPriceChangedSignificantly,
+		TelegramEventType("unknown_custom"),
+	}
+	for _, ev := range events {
+		ok, err := activeNotifier.CheckCooldownAndNotify(ctx, ev, "entity-"+string(ev), 0, func() string {
+			return "test text for " + string(ev)
+		})
+		assert.NoError(t, err)
+		assert.True(t, ok)
+	}
+
+	// 8. maskKey test via engine
+	assert.Equal(t, "***", maskKey(""))
+	assert.Equal(t, "***", maskKey("short"))
+	assert.Equal(t, "sk-1...8901", maskKey("sk-12345678901"))
+}
+
+
+

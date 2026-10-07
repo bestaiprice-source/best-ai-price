@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"log/slog"
+	"math"
 	"net/http"
 	"strings"
 	"time"
@@ -11,6 +12,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/model"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
 	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/yunwu"
 	"github.com/Wei-Shaw/sub2api/pkg/scraper"
 	"github.com/gin-gonic/gin"
 	"github.com/jmoiron/sqlx"
@@ -142,8 +144,48 @@ func (h *AdminVendorHandler) ScrapeVendor(c *gin.Context) {
 		return
 	}
 
+	// Query previous prices to detect significant price changes (Event 8)
+	var prevModels []struct {
+		ModelName   string  `db:"model_name"`
+		InputPrice  float64 `db:"input_price"`
+		OutputPrice float64 `db:"output_price"`
+	}
+	_ = tx.SelectContext(ctx, &prevModels, `SELECT model_name, input_price, output_price FROM ash_vendor_models WHERE vendor_id = $1`, id)
+	prevPriceMap := make(map[string][2]float64)
+	for _, pm := range prevModels {
+		prevPriceMap[pm.ModelName] = [2]float64{pm.InputPrice, pm.OutputPrice}
+	}
+
 	// Update models (upsert)
 	for _, m := range res.Models {
+		if prev, exists := prevPriceMap[m.ModelName]; exists {
+			oldIn, oldOut := prev[0], prev[1]
+			var inDiff, outDiff float64
+			if oldIn > 0 {
+				inDiff = (m.InputPrice - oldIn) / oldIn
+			}
+			if oldOut > 0 {
+				outDiff = (m.OutputPrice - oldOut) / oldOut
+			}
+			maxDiff := inDiff
+			if math.Abs(outDiff) > math.Abs(inDiff) {
+				maxDiff = outDiff
+			}
+			if math.Abs(maxDiff) >= 0.10 {
+				if notifier := yunwu.GetDefaultNotifier(); notifier != nil {
+					_, _ = notifier.NotifyPriceChangedSignificantly(
+						ctx,
+						res.Name,
+						m.ModelName,
+						oldIn, m.InputPrice,
+						oldOut, m.OutputPrice,
+						maxDiff*100,
+						10.0,
+					)
+				}
+			}
+		}
+
 		_, err = tx.ExecContext(ctx, `
 			INSERT INTO ash_vendor_models (vendor_id, model_name, input_price, output_price, is_available)
 			VALUES ($1, $2, $3, $4, $5)
@@ -249,8 +291,48 @@ func (h *AdminVendorHandler) ScrapeVendorByUrl(c *gin.Context) {
 		return
 	}
 
+	// Query previous prices to detect significant price changes (Event 8)
+	var prevModels []struct {
+		ModelName   string  `db:"model_name"`
+		InputPrice  float64 `db:"input_price"`
+		OutputPrice float64 `db:"output_price"`
+	}
+	_ = tx.SelectContext(ctx, &prevModels, `SELECT model_name, input_price, output_price FROM ash_vendor_models WHERE vendor_id = $1`, id)
+	prevPriceMap := make(map[string][2]float64)
+	for _, pm := range prevModels {
+		prevPriceMap[pm.ModelName] = [2]float64{pm.InputPrice, pm.OutputPrice}
+	}
+
 	// Update models (upsert)
 	for _, m := range res.Models {
+		if prev, exists := prevPriceMap[m.ModelName]; exists {
+			oldIn, oldOut := prev[0], prev[1]
+			var inDiff, outDiff float64
+			if oldIn > 0 {
+				inDiff = (m.InputPrice - oldIn) / oldIn
+			}
+			if oldOut > 0 {
+				outDiff = (m.OutputPrice - oldOut) / oldOut
+			}
+			maxDiff := inDiff
+			if math.Abs(outDiff) > math.Abs(inDiff) {
+				maxDiff = outDiff
+			}
+			if math.Abs(maxDiff) >= 0.10 {
+				if notifier := yunwu.GetDefaultNotifier(); notifier != nil {
+					_, _ = notifier.NotifyPriceChangedSignificantly(
+						ctx,
+						finalName,
+						m.ModelName,
+						oldIn, m.InputPrice,
+						oldOut, m.OutputPrice,
+						maxDiff*100,
+						10.0,
+					)
+				}
+			}
+		}
+
 		_, err = tx.ExecContext(ctx, `
 			INSERT INTO ash_vendor_models (vendor_id, model_name, input_price, output_price, is_available)
 			VALUES ($1, $2, $3, $4, $5)

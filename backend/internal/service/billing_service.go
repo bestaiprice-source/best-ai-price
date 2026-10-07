@@ -352,6 +352,14 @@ func (s *BillingService) GetModelPricingWithContext(ctx context.Context, model s
 
 	// 1. 优先从 Yunwu / OpenLux 实时动态价格获取
 	if s.yunwuPricing != nil {
+		if YunwuMaxPricingFromContext(ctx) {
+			// Billing path for Unofficial providers: use the highest cost tier
+			// across all active routes (max(primary,backup)) so the charged price
+			// exactly matches the published retail catalog price.
+			if maxPricing, ok := s.yunwuPricing.GetModelPricingMaxAcrossProviders(ctx, model); ok && maxPricing != nil {
+				return s.applyModelSpecificPricingPolicy(model, maxPricing), nil
+			}
+		}
 		if ywPricing, ok := s.yunwuPricing.GetModelPricingAcrossProviders(ctx, model); ok && ywPricing != nil {
 			return s.applyModelSpecificPricingPolicy(model, ywPricing), nil
 		}

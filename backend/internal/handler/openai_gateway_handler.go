@@ -376,11 +376,14 @@ func (h *OpenAIGatewayHandler) handleHypervisorChatCompletions(c *gin.Context) {
 	}
 
 	var reqPayloadMap struct {
-		Stream bool `json:"stream"`
+		Stream bool   `json:"stream"`
+		Model  string `json:"model"`
 	}
 	isStream := false
+	requestedModel := ""
 	if json.Unmarshal(body, &reqPayloadMap) == nil {
 		isStream = reqPayloadMap.Stream
+		requestedModel = reqPayloadMap.Model
 	}
 
 	if isStream {
@@ -394,15 +397,17 @@ func (h *OpenAIGatewayHandler) handleHypervisorChatCompletions(c *gin.Context) {
 
 	platform := "openai"
 	var keyPrefix string
-	if apiKey, ok := middleware2.GetAPIKeyFromGatewayContext(transportCtx); ok && apiKey != nil {
-		if len(apiKey.Key) > 10 {
-			keyPrefix = apiKey.Key[:10]
+	var hyperApiKey *service.APIKey
+	if k, ok := middleware2.GetAPIKeyFromGatewayContext(transportCtx); ok && k != nil {
+		hyperApiKey = k
+		if len(k.Key) > 10 {
+			keyPrefix = k.Key[:10]
 		} else {
-			keyPrefix = apiKey.Key
+			keyPrefix = k.Key
 		}
 		// Use the specific group tied to this API key to determine platform
-		if apiKey.Group != nil && apiKey.Group.Platform != "" {
-			platform = apiKey.Group.Platform
+		if k.Group != nil && k.Group.Platform != "" {
+			platform = k.Group.Platform
 		}
 	}
 	if forcePlat, hasForce := middleware2.GetForcePlatformFromGatewayContext(transportCtx); hasForce && forcePlat != "" {
@@ -416,7 +421,13 @@ func (h *OpenAIGatewayHandler) handleHypervisorChatCompletions(c *gin.Context) {
 		"key_prefix", keyPrefix,
 	)
 
-	_, err = h.hypervisorEngine.HandleRequest(c.Request.Context(), ownerID, conversationID, body, c.Writer, platform)
+	requestCtx := c.Request.Context()
+	if hyperApiKey != nil {
+		requestCtx = service.WithYunwuModelRouting(requestCtx, hyperApiKey.Group, requestedModel)
+	}
+	requestStart := time.Now()
+
+	meta, err := h.hypervisorEngine.HandleRequest(requestCtx, ownerID, conversationID, body, c.Writer, platform)
 	if err != nil {
 		if errors.Is(err, yunwu.ErrNoPricingAvailable) || errors.Is(err, yunwu.ErrNoCompatibleNodes) {
 			h.errorResponseGateway(transportCtx, http.StatusBadRequest, "invalid_request_error", err.Error())
@@ -424,6 +435,24 @@ func (h *OpenAIGatewayHandler) handleHypervisorChatCompletions(c *gin.Context) {
 		}
 		h.errorResponseGateway(transportCtx, http.StatusBadGateway, "api_error", err.Error())
 		return
+	}
+
+	// Bill the end user for the completed Unofficial-provider request.
+	if meta != nil && hyperApiKey != nil && hyperApiKey.User != nil {
+		subscription, _ := middleware2.GetSubscriptionFromGatewayContext(transportCtx)
+		result := service.BuildYunwuOpenAIForwardResult("", requestedModel, meta.InputTokens, meta.OutputTokens, isStream, requestStart)
+		if billedErr := h.gatewayService.RecordYunwuUsage(c.Request.Context(), &service.OpenAIRecordYunwuUsageInput{
+			Result:        result,
+			APIKey:        hyperApiKey,
+			User:          hyperApiKey.User,
+			AccountID:     meta.NodeID,
+			Subscription:  subscription,
+			UserAgent:     c.GetHeader("User-Agent"),
+			IPAddress:     c.ClientIP(),
+			APIKeyService: h.apiKeyService,
+		}); billedErr != nil {
+			slog.Error("[OpenAIGatewayHandler] Yunwu usage billing failed", "error", billedErr, "model", requestedModel)
+		}
 	}
 }
 

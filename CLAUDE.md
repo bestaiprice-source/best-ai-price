@@ -182,32 +182,37 @@ Welcome to **sub2api** and the **AI Session Hypervisor (ASH / Yunwu Engine)** re
     - **Persistence**:
       - Persists `extra["balance_usd"]`, `extra["balance_updated_at"]`, and `extra["balance_source"]` directly to the PostgreSQL `account` row for administrative tracking and UI visibility.
       - Stores real-time `BalanceSnapshot` in Redis (`ash:yunwu:balance:{nodeID}`) with fresh/stale markers for the scheduler and health monitor.
-    - **Telegram Bot & Low Balance Notifications (`pkg/hypervisor/yunwu/telegram_notifier.go`, `telegram_bot.go`)**:
-      - Automated alert dispatched to Telegram when any account in the `yunwu` group drops to or below the configured threshold (default: `$20.00`).
-      - Hooked into authoritative balance sync updates (`StatsWorker.recordSyncedSnapshot`).
-      - **Strict Yunwu Group Restriction**:
-        - Balance synchronization and alert triggering are strictly restricted to accounts belonging to the `yunwu` group (where group `platform == "yunwu"` or group `name` matches `"yunwu"` case-insensitively). Accounts outside the `yunwu` group (such as direct Claude Max or OpenAI accounts) are strictly filtered out and never trigger balance alerts.
+    - **Telegram Bot & Administrative Alert Integration (`pkg/hypervisor/yunwu/telegram_notifier.go`, `telegram_bot.go`)**:
+      - Unified administrative Telegram bot and channel integration delivering real-time alerts for the complete suite of 8 critical system events:
+        1. **Provider Down / Degraded (`provider_down_degraded`)**: Triggered when a node or provider fails health checks, pool degradation occurs, or node transitions to cooldown/limited state. Deduplicated per provider/node with default 30-minute cooldown.
+        2. **Upstream API Key Invalid/Disabled (`upstream_key_invalid`)**: Triggered immediately when upstream returns HTTP 401 unauthorized or disabled key errors during requests or balance synchronization. Cooldown: 1 hour.
+        3. **Provider Balance Low (`balance_low`)**: Triggered during balance sync when node credit drops below threshold (per-node `min_balance_usd` or global setting, default $20.00). Cooldown: 12 hours (auto-resets when replenished).
+        4. **Both Providers Unavailable (`both_providers_unavailable`)**: Triggered when all compatible candidate nodes/providers for a specific model fail or are unavailable in the pool. Cooldown: 30 minutes per model.
+        5. **Failover Rate Exceeded (`failover_rate_exceeded`)**: Sliding window tracking (`RecordModelRequest`, `RecordModelFailover`) triggers when model failover rate exceeds threshold (default > 20% across $\ge 5$ requests in 10-minute window). Cooldown: 30 minutes.
+        6. **Surge in 429 / 5xx Errors (`error_spike_429_5xx`)**: Sliding window tracking (`RecordError`, `RecordModelRequest`) triggers when error spike exceeds threshold (default > 30% errors across $\ge 10$ requests in 5-minute window). Cooldown: 15 minutes.
+        7. **Cheaper Provider Found (`cheaper_provider_found`)**: Triggered by `CheaperProviderService` when BestAIPrice scanner discovers a cheaper provider alternative saving $\ge 1\%$ on average. Cooldown: 24 hours per model/provider.
+        8. **Provider Price Changed Significantly (`price_changed_significantly`)**: Triggered on vendor scrape when upstream pricing changes by $\ge 10\%$, alerting that retail prices require recalculation. Cooldown: 24 hours per provider/model.
+      - **Deduplication & Distributed Cooldown Engine**:
+        - Atomic Redis distributed lock (`SETNX ash:telegram:cooldown:<event_type>:<entity_id>`) with in-memory fallback map ensures multiple gateway workers never flood Telegram with duplicate alerts for the same incident.
+        - Cooldown keys are automatically cleared upon node recovery or account balance replenishment.
+      - **Channel & Direct User Broadcast (`channel_id` + User Whitelist)**:
+        - Supports dual delivery: broadcasts to a configured Telegram Channel / Group (`channel_id`, e.g. `-100...` or `@channel_name`) as well as direct messaging to authorized whitelisted Telegram user IDs or usernames.
+        - `resolveTargetChatIDs` transparently merges the channel ID with authorized recipients.
       - **Silent Admin Alert Mode (Pure Notification Bot)**:
         - The bot operates purely for administrative alerting; all interactive commands (`/start`, `/balance`, `/status`, `/help`) and conversational text have been removed.
-        - Authorized administrators simply message the bot once (e.g. `/start`) to quietly register their `chat_id` into active alert recipients. The bot silently registers the recipient without replying with conversational text.
-        - Unauthorized users attempting to message the bot are silently ignored (no responses sent, no recipient registered).
+        - Authorized administrators message the bot once (e.g. `/start`) to quietly register their `chat_id` into active alert recipients without conversational replies.
+        - Unauthorized users attempting to message the bot are silently ignored.
       - **Targeted User Whitelist & Active Recipient Management**:
-        - The bot operates with a strict whitelist of authorized Telegram users configured in Admin Settings -> Telegram (`telegram_allowed_users`).
+        - Strict whitelist configured in Admin Settings -> Telegram (`telegram_allowed_users`).
         - Supports numeric Telegram User IDs (`123456789`), usernames (`@admin` or `admin`, case-insensitive), or wildcard `*`.
-        - Direct numeric User IDs in the whitelist can receive notifications immediately.
-        - Connected recipients are stored in DB (`SettingKeyTelegramActiveRecipients`) and in Redis (`ash:yunwu:telegram:recipients`).
-      - **Deduplication, 12h Cooldown & State Transition**:
-        - Alert state tracked in Redis (`ash:yunwu:alerted:balance_low:<nodeID>`) via atomic `SetNX` with in-memory fallback.
-        - **12-Hour Cooldown & Single-Trigger Guarantee**: Emits an alert when crossing $\le$ the threshold (resolved per-node from `acc.Extra["min_balance_usd"]`, falling back to global threshold $20). Repeated balance syncs suppress duplicate alerts within a 12-hour cooldown window.
-        - **Automatic Reset on Replenishment**: When an account is recharged above the threshold (`available_usd > threshold`), the alert state is automatically purged (`DEL`), enabling immediate alerts if the balance drops again in the future.
-        - Multi-Recipient Delivery: Alerts are broadcast to all authorized connected recipients. If all deliveries fail, the alert state is reset to allow immediate retry on the next balance sync cycle.
-      - **Admin Settings & API Endpoints**:
-        - Dedicated Telegram tab in Admin Settings (`SettingsView.vue`) with live Bot Token configuration, Alerts Enabled toggle, Alert Threshold input, Whitelist textarea, Connected Recipients table with timestamps, and "Send Test Notification" action.
+        - Connected recipients are persisted in DB (`SettingKeyTelegramActiveRecipients`) and in Redis (`ash:yunwu:telegram:recipients`).
+      - **Admin Settings & Frontend Configuration**:
+        - Dedicated Telegram tab in Admin Settings (`SettingsView.vue`) with fields for Bot Token, Channel / Chat ID, Alerts Enabled toggle, Alert Threshold, Allowed Users Whitelist, Connected Recipients list, and "Send Test Notification" action.
         - Backend Endpoints: `GET /api/v1/admin/settings/telegram`, `PUT /api/v1/admin/settings/telegram`, `POST /api/v1/admin/settings/telegram/test`.
       - **Configuration Hierarchy**:
-        - Database `settings` take precedence: `telegram_bot_token`, `telegram_alert_threshold`, `telegram_alerts_enabled`, `telegram_allowed_users`, `telegram_active_recipients`.
-        - Environment variable fallbacks: `ASH_TELEGRAM_BOT_TOKEN` / `TELEGRAM_BOT_TOKEN`, `ASH_TELEGRAM_ALLOWED_USERS` / `TELEGRAM_ALLOWED_USERS`, `ASH_TELEGRAM_ALERT_THRESHOLD` / `TELEGRAM_ALERT_THRESHOLD` (default 20.0), `ASH_TELEGRAM_ALERTS_ENABLED` / `TELEGRAM_ALERTS_ENABLED` (default true).
-      - **Message Formatting**: HTML-formatted message specifying the upstream Provider name, Account name, Node ID, current balance, threshold, and UTC timestamp.
+        - Database `settings` take precedence: `telegram_bot_token`, `telegram_chat_id` (`channel_id`), `telegram_alert_threshold`, `telegram_alerts_enabled`, `telegram_allowed_users`, `telegram_active_recipients`.
+        - Environment variable fallbacks: `ASH_TELEGRAM_BOT_TOKEN` / `TELEGRAM_BOT_TOKEN`, `ASH_TELEGRAM_CHAT_ID` / `TELEGRAM_CHAT_ID`, `ASH_TELEGRAM_ALLOWED_USERS` / `TELEGRAM_ALLOWED_USERS`, `ASH_TELEGRAM_ALERT_THRESHOLD` / `TELEGRAM_ALERT_THRESHOLD` (default 20.0), `ASH_TELEGRAM_ALERTS_ENABLED` / `TELEGRAM_ALERTS_ENABLED` (default true).
+      - **Message Formatting**: Clean HTML-formatted notifications with incident emojis, event type titles, detailed entity metadata, timestamps, and actionable remediation notes.
   - **Group-Level & Cluster-Wide Sync (`YunwuHypervisor`)**:
     - `SyncGroupBalances(ctx, groupID)`: Queries all active accounts assigned to the specified group, decrypts credentials, syncs balances in parallel, and calculates group summaries (`total_nodes`, `synced_nodes`, `failed_nodes`, `total_available_usd`, `total_allocatable_usd`).
     - `SyncAllBalances(ctx, [groupID])`: Cluster-wide balance sync across all Yunwu accounts or filtered by group.
@@ -242,6 +247,21 @@ Welcome to **sub2api** and the **AI Session Hypervisor (ASH / Yunwu Engine)** re
   - **Payment Webhook Ingress & Resolution Hardening**:
     - `PaymentWebhookHandler` enforces strict order number format validation (`isValidOutTradeNo`) prior to executing database queries or provider candidate lookups. Rejects empty, over-length (>64 chars), or malformed inputs with HTTP 400 immediately.
     - Stripe multi-instance resolution and event parsing extracts `orderId`, `order_id`, `out_trade_no`, `outTradeNo`, `orderNo`, and `client_reference_id` from metadata. If instance resolution fails, returns HTTP 500 (retryable) instead of silently acknowledging with 200 OK. Missing order IDs log explicit warnings before acking to prevent provider retry floods.
+
+### 2.3.1 Unified End-User Billing, Explicit Model Routing & Failover Classification
+- **End-user billing for Unofficial (yunwu) requests** (`internal/service/yunwu_billing.go`):
+  - The Hypervisor engine returns the serving node ID via `runtime.ResponseMetadata.NodeID` (set in `YunwuHypervisor.HandleRequest`).
+  - Gateway handlers that dispatch to the Yunwu engine (`GatewayHandler.handleHypervisorMessages`, `OpenAIGatewayHandler.handleHypervisorChatCompletions` which also serves `/responses`, and `GatewayHandler.GeminiV1BetaModelsGateway` for Gemini native `generateContent`/`streamGenerateContent`) now call `GatewayService.RecordYunwuUsage` / `OpenAIGatewayService.RecordYunwuUsage`.
+  - These helpers load the execution account by its node/account ID and reuse the standard `RecordUsage` path, so a completed Unofficial-provider request deducts `users.balance`, writes a `usage_logs` row (with the applied retail price snapshot: `InputCost`, `OutputCost`, `TotalCost`, `ActualCost`, `RateMultiplier`), updates API-key quota/rate-limit usage and subscription consumption — exactly like official routes.
+  - Billing is computed with `ContextWithYunwuMaxPricing`; `BillingService.GetModelPricingWithContext` then resolves `GetModelPricingMaxAcrossProviders`, guaranteeing the charged price equals the published catalog retail price `max(primary_cost, backup_cost) × (1 + markup)` (no divergence between advertised and billed price, no free traffic).
+  - **Flat-rate / per-unit media billing**: `runtime.ResponseMetadata` also carries `MediaUsageUnit` / `MediaUnits` / `MediaCostMicroUSD` (populated by the engine from `resolveMediaPrice`). Handlers with media output (`OpenAIGatewayHandler.ImagesGateway` for `/v1/images/*` and the Gemini-image bridge, `GatewayHandler.GeminiV1BetaModelsGateway` for `imagen`/video) call `RecordYunwuMediaUsage` (via `OpenAIGatewayHandler.billYunwuResult`), which bills `upstreamCost × group rate multiplier` through the same `applyUsageBilling` path.
+- **Active health probes** (`pkg/hypervisor/yunwu/health_prober.go`, `YunwuHealthProber`): a periodic, free-endpoint probe (`GET <baseURL>/models` with the decrypted key) feeds latency and error signals into `NodeRuntimeState`, takes a node out of scheduling (`unavailable`) on `401/403` (invalid/disabled upstream key, with Telegram alert) and automatically restores it once the key works again. 4xx statuses other than 401/403/429 are treated as reachable. Interval via `ASH_YUNWU_HEALTH_PROBE_SECONDS` (default 300s; ≤0 disables), timeout via `ASH_YUNWU_HEALTH_PROBE_TIMEOUT_MS` (default 10000ms). No paid test generations are ever issued.
+- **Explicit Primary/Backup model routing** (`service.WithYunwuModelRouting`, `pkg/hypervisor/yunwu/routing.go`):
+  - `WithYunwuModelRouting` converts `group.ModelRouting[<canonical model>]` (ordered account IDs, written by `CheaperProviderService.PromoteOpportunity`) into a context route; the Yunwu engine reads it via `ModelRoutingFromContext` and restricts + orders candidate nodes strictly (Primary first, then Backup).
+  - When no route is configured (or none of the routed nodes are available), the engine falls back to cheapest-first pool scheduling. This makes cheaper-provider promotion actually effective for unofficial providers.
+- **Failover classification** (`isClientRequestError` in `pkg/hypervisor/yunwu/routing.go`):
+  - Client-side request errors (HTTP 400/422 whose body carries `invalid_request_error`, validation / unsupported-parameter / content-policy markers) no longer trigger failover/rebinding: the request fails closed with the original upstream error, avoiding wasted upstream calls and false node cooldowns.
+  - Network/timeout, 5xx, 429/overload, invalid/disabled upstream key, provider Down, and aggregator routing problems (`model_not_found`, `no available channel`) remain failover-eligible.
 
 ### 2.4 Unified AI Providers Section & Architecture (`/admin/providers`)
 - **Concept & Business Goal**:

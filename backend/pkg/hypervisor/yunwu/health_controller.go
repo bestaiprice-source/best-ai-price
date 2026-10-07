@@ -2,6 +2,7 @@ package yunwu
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"os"
 	"time"
@@ -11,8 +12,9 @@ import (
 )
 
 type YunwuHealthController struct {
-	store *storage.Storage
-	nm    *health.NodeManager
+	store    *storage.Storage
+	nm       *health.NodeManager
+	notifier *TelegramNotifier
 }
 
 func NewYunwuHealthController(store *storage.Storage) *YunwuHealthController {
@@ -20,6 +22,10 @@ func NewYunwuHealthController(store *storage.Storage) *YunwuHealthController {
 		store: store,
 		nm:    health.NewNodeManager(store),
 	}
+}
+
+func (hc *YunwuHealthController) SetNotifier(n *TelegramNotifier) {
+	hc.notifier = n
 }
 
 // ReconcileHealth evaluates Yunwu node states and computes Yunwu pool degradation state
@@ -58,6 +64,21 @@ func (hc *YunwuHealthController) ReconcileHealth(ctx context.Context, nodes []he
 
 		if node.State == "healthy" {
 			healthyCount++
+		} else if node.State == "cooldown" || node.State == "limited" {
+			notifier := hc.notifier
+			if notifier == nil {
+				notifier = GetDefaultNotifier()
+			}
+			if notifier != nil {
+				_, _ = notifier.NotifyProviderDownOrDegraded(
+					ctx,
+					node.Provider,
+					node.NodeID,
+					node.AccountName,
+					node.State,
+					fmt.Sprintf("Node entered %s state (429: %d, timeouts: %d)", node.State, state.Recent429, state.RecentTimeouts),
+				)
+			}
 		}
 	}
 
@@ -87,6 +108,24 @@ func (hc *YunwuHealthController) ReconcileHealth(ctx context.Context, nodes []he
 	)
 
 	_ = hc.store.Redis().Set(ctx, "ash:yunwu:system:state", systemState, 0).Err()
+
+	if systemState != "NORMAL" && totalCount > 0 {
+		notifier := hc.notifier
+		if notifier == nil {
+			notifier = GetDefaultNotifier()
+		}
+		if notifier != nil {
+			_, _ = notifier.NotifyProviderDownOrDegraded(
+				ctx,
+				"yunwu_pool",
+				"pool",
+				"Yunwu Channel Pool",
+				systemState,
+				fmt.Sprintf("Общая деградация пула: %d/%d узлов здоровы (%s)", healthyCount, totalCount, systemState),
+			)
+		}
+	}
+
 	return systemState
 }
 
