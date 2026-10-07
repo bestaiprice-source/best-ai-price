@@ -59,7 +59,7 @@
         <div
           @click="resetFilters"
           title="Reset filters and show all"
-          class="relative cursor-pointer overflow-hidden rounded-2xl border border-gray-200/80 bg-white/70 p-5 shadow-sm backdrop-blur-sm transition-transform hover:scale-[1.01] dark:border-dark-700/80 dark:bg-dark-800/70"
+          class="relative cursor-pointer overflow-hidden rounded-2xl border border-gray-200/80 bg-white/70 p-5 shadow-sm transition-transform hover:scale-[1.01] dark:border-dark-700/80 dark:bg-dark-800/70"
         >
           <div class="flex items-center justify-between">
             <span class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Total Providers</span>
@@ -75,7 +75,7 @@
         <div
           @click="filters.status = 'active'; filters.state = ''; fetchData()"
           title="Filter: active only"
-          class="relative cursor-pointer overflow-hidden rounded-2xl border border-gray-200/80 bg-white/70 p-5 shadow-sm backdrop-blur-sm transition-transform hover:scale-[1.01] dark:border-dark-700/80 dark:bg-dark-800/70"
+          class="relative cursor-pointer overflow-hidden rounded-2xl border border-gray-200/80 bg-white/70 p-5 shadow-sm transition-transform hover:scale-[1.01] dark:border-dark-700/80 dark:bg-dark-800/70"
         >
           <div class="flex items-center justify-between">
             <span class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Active</span>
@@ -91,7 +91,7 @@
         <div
           @click="filters.state = 'Low balance'; filters.status = ''; fetchData()"
           title="Filter: low balance"
-          class="relative cursor-pointer overflow-hidden rounded-2xl border border-gray-200/80 bg-white/70 p-5 shadow-sm backdrop-blur-sm transition-transform hover:scale-[1.01] dark:border-dark-700/80 dark:bg-dark-800/70"
+          class="relative cursor-pointer overflow-hidden rounded-2xl border border-gray-200/80 bg-white/70 p-5 shadow-sm transition-transform hover:scale-[1.01] dark:border-dark-700/80 dark:bg-dark-800/70"
           :class="{ 'ring-2 ring-red-500/30': summaryStats.low_balance_providers > 0 }"
         >
           <div class="flex items-center justify-between">
@@ -112,7 +112,7 @@
         </div>
 
         <!-- Total Balance USD -->
-        <div class="relative overflow-hidden rounded-2xl border border-gray-200/80 bg-white/70 p-5 shadow-sm backdrop-blur-sm dark:border-dark-700/80 dark:bg-dark-800/70">
+        <div class="relative overflow-hidden rounded-2xl border border-gray-200/80 bg-white/70 p-5 shadow-sm dark:border-dark-700/80 dark:bg-dark-800/70">
           <div class="flex items-center justify-between">
             <span class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Total Balance</span>
             <div class="rounded-xl bg-violet-500/10 p-2.5 text-violet-600 dark:bg-violet-500/20 dark:text-violet-400">
@@ -124,7 +124,7 @@
         </div>
 
         <!-- Total Spend USD -->
-        <div class="relative overflow-hidden rounded-2xl border border-gray-200/80 bg-white/70 p-5 shadow-sm backdrop-blur-sm dark:border-dark-700/80 dark:bg-dark-800/70">
+        <div class="relative overflow-hidden rounded-2xl border border-gray-200/80 bg-white/70 p-5 shadow-sm dark:border-dark-700/80 dark:bg-dark-800/70">
           <div class="flex items-center justify-between">
             <span class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Total Spend</span>
             <div class="rounded-xl bg-amber-500/10 p-2.5 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400">
@@ -461,6 +461,7 @@
       :show="showEditModal"
       title="Edit Provider"
       width="wide"
+      :keep-mounted="true"
       @close="closeEditModal"
     >
       <form @submit.prevent="saveProvider" class="space-y-5">

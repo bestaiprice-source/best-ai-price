@@ -3,6 +3,7 @@
     :show="show"
     :title="t('admin.accounts.createAccount')"
     width="wide"
+    :keep-mounted="keepMounted"
     @close="handleClose"
   >
     <!-- Step Indicator for OAuth accounts -->
@@ -3257,6 +3258,7 @@ interface Props {
   show: boolean
   proxies: Proxy[]
   groups: AdminGroup[]
+  keepMounted?: boolean
 }
 
 const props = defineProps<Props>()

@@ -57,7 +57,7 @@
     <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
       <!-- Model Distribution Chart -->
       <div class="bap-card relative overflow-hidden p-5">
-        <div v-if="loading" class="absolute inset-0 z-10 flex items-center justify-center bg-white/60 backdrop-blur-sm dark:bg-dark-900/60">
+        <div v-if="loading" class="absolute inset-0 z-10 flex items-center justify-center bg-white/70 dark:bg-dark-900/70">
           <LoadingSpinner size="md" />
         </div>
 

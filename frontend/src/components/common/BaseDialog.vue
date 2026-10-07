@@ -2,7 +2,8 @@
   <Teleport to="body">
     <Transition name="modal">
       <div
-        v-if="show"
+        v-if="renderContent"
+        v-show="show"
         class="modal-overlay"
         :style="zIndexStyle"
         :aria-labelledby="dialogId"
@@ -62,6 +63,9 @@ interface Props {
   closeOnEscape?: boolean
   closeOnClickOutside?: boolean
   zIndex?: number
+  // When true the dialog body is mounted once and then merely hidden (v-show),
+  // so reopening a heavy dialog is instant instead of re-mounting its whole form.
+  keepMounted?: boolean
 }
 
 interface Emits {
@@ -72,10 +76,16 @@ const props = withDefaults(defineProps<Props>(), {
   width: 'normal',
   closeOnEscape: true,
   closeOnClickOutside: false,
-  zIndex: 50
+  zIndex: 50,
+  keepMounted: false
 })
 
 const emit = defineEmits<Emits>()
+
+// Tracks whether the dialog has ever been opened, so keepMounted dialogs stay
+// mounted after their first open.
+const hasBeenShown = ref(false)
+const renderContent = computed(() => (props.keepMounted ? hasBeenShown.value : props.show))
 
 // Custom z-index style (overrides the default z-50 from CSS)
 const zIndexStyle = computed(() => {
@@ -113,6 +123,7 @@ watch(
   () => props.show,
   async (isOpen) => {
     if (isOpen) {
+      hasBeenShown.value = true
       // 保存当前焦点元素
       previousActiveElement = document.activeElement as HTMLElement
       // 使用CSS类而不是直接操作style,更易于管理多个对话框

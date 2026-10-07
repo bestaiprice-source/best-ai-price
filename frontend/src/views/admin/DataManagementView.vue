@@ -96,7 +96,7 @@
       <Transition name="dm-drawer-mask">
         <div
           v-if="soraProfileDrawerOpen"
-          class="fixed inset-0 z-[54] bg-black/40 backdrop-blur-sm"
+          class="fixed inset-0 z-[54] bg-black/40"
           @click="closeSoraProfileDrawer"
         ></div>
       </Transition>

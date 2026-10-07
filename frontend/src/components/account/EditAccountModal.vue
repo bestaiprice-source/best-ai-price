@@ -3,6 +3,7 @@
     :show="show"
     :title="t('admin.accounts.editAccount')"
     width="normal"
+    :keep-mounted="keepMounted"
     @close="handleClose"
   >
     <form
@@ -1920,6 +1921,7 @@ interface Props {
   account: Account | null
   proxies: Proxy[]
   groups: AdminGroup[]
+  keepMounted?: boolean
 }
 
 const props = defineProps<Props>()

@@ -598,6 +598,8 @@ sub2api/
   - `gatewayAccountReadyTier` & `openAIAccountReadyTier`: Accounts with `LoadRate >= 100` are explicitly marked with `slotFree = 0` (ReadyTier 2 / saturated), ensuring tiered schedulers properly prioritize accounts with available capacity over saturated accounts.
 
 ### 9.4 Visual Design & Theme System (`bestaiprice.com` / `api-center` Alignment)
+- **Modal / overlay performance (no full-viewport blur)**: `.modal-overlay` and all modal/overlay scrims deliberately avoid `backdrop-filter` — a full-viewport blur is re-composited on every paint and caused noticeable jank when opening dialogs over heavy tables. Scrims use a plain `bg-black/50` (or gradient) instead. The global `glass` / `glass-card` / `card-glass` utilities no longer use `backdrop-blur` either (opaque-ish backgrounds instead). Modal transitions are opacity-only (`.modal-*` in `style.css`) — a `transform: scale()` on a large dialog forces a full re-paint every frame.
+- **Keep-mounted dialogs**: `BaseDialog` supports `keepMounted` (default `false`). When enabled, the dialog body is mounted once and then toggled with `v-show`, so reopening a heavy dialog (account edit/create ~3.5k-line form, provider edit) is instant instead of re-mounting the whole form. Enabled on the Accounts create/edit modals and the Provider edit dialog.
 - **Enforced Light Mode Only**: The interface is permanently locked to a clean light theme. Dark mode toggles and automatic dark OS preferences have been removed to unify `sub2api` seamlessly with the `bestaiprice.com` (`api-center`) design language as a single continuous site experience.
 - **Design Tokens & Palette**:
   - **Page Background**: `#ededed` (matches `$colorBackground: #ededed;` in `api-center`).
