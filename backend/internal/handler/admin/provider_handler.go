@@ -742,6 +742,19 @@ func (h *ProviderHandler) CreateGateway(c gatewayctx.GatewayContext) {
 	}
 
 	resp := h.accountToProviderResponse(ctx, acc)
+	if resp != nil {
+		service.AuditAdminAction(ctx, service.AuditActionProviderCreate, "provider", strconv.FormatInt(resp.ID, 10),
+			fmt.Sprintf("admin:%d", getAdminIDFromGatewayContext(c)),
+			map[string]any{
+				"provider_name": resp.ProviderName,
+				"provider":      resp.Provider,
+				"domain":        resp.Domain,
+				"base_url":      resp.BaseURL,
+				"protocol":      resp.Protocol,
+				"status":        resp.Status,
+				"has_api_key":   resp.APIKeyMasked != "",
+			})
+	}
 	response.SuccessContext(gatewayJSONResponder{ctx: c}, resp)
 }
 
@@ -855,6 +868,19 @@ func (h *ProviderHandler) UpdateGateway(c gatewayctx.GatewayContext) {
 	}
 
 	resp := h.accountToProviderResponse(ctx, updatedAcc)
+	if resp != nil {
+		service.AuditAdminAction(ctx, service.AuditActionProviderUpdate, "provider", strconv.FormatInt(resp.ID, 10),
+			fmt.Sprintf("admin:%d", getAdminIDFromGatewayContext(c)),
+			map[string]any{
+				"provider_name":       resp.ProviderName,
+				"provider":            resp.Provider,
+				"domain":              resp.Domain,
+				"base_url":            resp.BaseURL,
+				"protocol":            resp.Protocol,
+				"status":              resp.Status,
+				"credentials_rotated": req.APIKey != "",
+			})
+	}
 	response.SuccessContext(gatewayJSONResponder{ctx: c}, resp)
 }
 
@@ -882,6 +908,9 @@ func (h *ProviderHandler) DeleteGateway(c gatewayctx.GatewayContext) {
 		_ = h.nodeManager.DeleteNodeRuntimeState(ctx, nodeID)
 	}
 
+	service.AuditAdminAction(ctx, service.AuditActionProviderDelete, "provider", strconv.FormatInt(id, 10),
+		fmt.Sprintf("admin:%d", getAdminIDFromGatewayContext(c)),
+		map[string]any{})
 	response.SuccessContext(gatewayJSONResponder{ctx: c}, map[string]any{"deleted": true, "id": id})
 }
 

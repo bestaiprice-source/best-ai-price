@@ -355,6 +355,13 @@ func (h *GroupHandler) UpdateGateway(c gatewayctx.GatewayContext) {
 		return
 	}
 
+	// §18: model routing (Primary/Backup) changes must be auditable.
+	service.AuditAdminAction(c.Request().Context(), service.AuditActionModelRoutingUpdate, "group", strconv.FormatInt(group.ID, 10),
+		fmt.Sprintf("admin:%d", getAdminIDFromGatewayContext(c)),
+		map[string]any{
+			"model_routing":         req.ModelRouting,
+			"model_routing_enabled": req.ModelRoutingEnabled,
+		})
 	response.SuccessContext(gatewayJSONResponder{ctx: c}, dto.GroupFromServiceAdmin(group))
 }
 

@@ -17,6 +17,7 @@
         </div>
       </main>
     </div>
+    <SupportWidget v-if="authStore.isAuthenticated" />
   </div>
 </template>
 
@@ -28,6 +29,7 @@ import { useOnboardingTour } from '@/composables/useOnboardingTour'
 import { useOnboardingStore } from '@/stores/onboarding'
 import AppSidebar from './AppSidebar.vue'
 import AppHeader from './AppHeader.vue'
+import SupportWidget from '@/components/common/SupportWidget.vue'
 
 const authStore = useAuthStore()
 const isAdmin = computed(() => authStore.user?.role === 'admin')

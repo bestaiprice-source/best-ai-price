@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -797,6 +798,14 @@ func (s *adminServiceImpl) UpdateUserBalance(ctx context.Context, userID int64, 
 // administrative balance adjustment (reason included). Best-effort: it must never
 // fail the adjustment itself.
 func (s *adminServiceImpl) writeBalanceAdjustmentAudit(ctx context.Context, userID int64, operator, operation string, oldBalance, newBalance, diff float64, reason string) {
+	// Unified durable admin audit log (§18).
+	AuditAdminAction(ctx, "ADMIN_BALANCE_ADJUSTMENT", "user", strconv.FormatInt(userID, 10), operator, map[string]any{
+		"operation":   operation,
+		"old_balance": oldBalance,
+		"new_balance": newBalance,
+		"diff":        diff,
+		"reason":      reason,
+	})
 	if s.entClient == nil {
 		return
 	}

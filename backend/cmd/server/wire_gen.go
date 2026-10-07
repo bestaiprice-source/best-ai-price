@@ -44,6 +44,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	if err != nil {
 		return nil, err
 	}
+	service.SetDefaultAdminAuditWriter(db)
 	userRepository := repository.NewUserRepository(client, db)
 	redeemCodeRepository := repository.NewRedeemCodeRepository(client)
 	redisClient := repository.ProvideRedis(configConfig)
@@ -323,6 +324,7 @@ func initializeCoordinatorApplication(buildInfo handler.BuildInfo) (*Coordinator
 	if err != nil {
 		return nil, err
 	}
+	service.SetDefaultAdminAuditWriter(db)
 	opsRepository := repository.NewOpsRepository(db)
 	settingRepository := repository.NewSettingRepository(client)
 	schedulerCache := repository.NewSchedulerCache(redisClient)

@@ -610,6 +610,15 @@ func (h *SettingHandler) auditSettingsUpdateGateway(c gatewayctx.GatewayContext,
 		role,
 		changed,
 	)
+	// Durable audit record (§18): settings changes include retail pricing
+	// (default_rate_multiplier) and per-model markups (model_markups).
+	service.AuditAdminAction(
+		c.Request().Context(),
+		service.AuditActionSettingsUpdate,
+		"settings", "",
+		fmt.Sprintf("admin:%d", subject.UserID),
+		map[string]any{"changed": changed, "role": role},
+	)
 }
 
 func diffSettings(before *service.SystemSettings, after *service.SystemSettings, req UpdateSettingsRequest) []string {

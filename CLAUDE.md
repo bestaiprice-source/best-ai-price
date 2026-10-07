@@ -379,6 +379,44 @@ In-product documentation page at `/docs` (`frontend/src/views/user/DocsView.vue`
 - **Models**: `GET /v1/models` with a copy-cURL button and a link to the catalog.
 - **Integrations & agents**: Claude Code (`ANTHROPIC_BASE_URL` + `ANTHROPIC_AUTH_TOKEN`), Codex / OpenAI SDK (`OPENAI_BASE_URL` + `OPENAI_API_KEY`), Gemini CLI/SDK, Cursor, OpenClaw, n8n (OpenAI node base URL), LangChain — all expressed as "custom base URL + API key" for OpenAI-compatible clients, each with a copyable config block.
 
+### Support Widget & FAQ (§15)
+- `frontend/src/components/common/SupportWidget.vue` — floating support widget mounted in `AppLayout.vue` (so it appears in the cabinet and on `/docs`). Opens a panel with:
+  - a 7-topic **FAQ** (top-up, API key, models, errors/charges, failover, limits) in en/zh — `support.faq_*` i18n keys;
+  - a **contact** link sourced from the public setting `contact_info` (rendered as `mailto:` when it is an email);
+  - a **disputed-charge** block: the user pastes the request ID and copies a support context containing only `user_id`, `request_id`, `page` and `timestamp` (§15) — API keys/credentials are never included.
+- The user-facing Usage log (`UsageView.vue`) now shows a **copyable Request ID** column (`usage.requestId` / `usage.copyRequestId`), which is the identifier the admin uses to trace the upstream cost and billing record (`usage_logs.request_id`).
+
+### Administrative Panel Coverage (§16)
+The existing Sub2API admin is extended rather than replaced; the required structure maps onto it: `Dashboard` (`/admin/dashboard`), `Users` (`/admin/users`), `API Keys` (`/admin/api-keys`), `Providers` (`/admin/providers` — credentials/endpoint/balance/status/models/spend/actions), `Model Routing` (Model Routing tab on `/admin/providers` + read-only "Resolved routes" table), `Provider Prices` (`/admin/vendors` — current + historical cost, last checked, cheaper-alternative candidates), `Provider Health` (`/admin/provider-health` — latency, 429/5xx, auth status, failover, incidents), `Payments` (`/admin/orders` + `/admin/nowpayments` — deposits, status, hashes, audit logs of each order), `Usage` (`/admin/usage`), `Alerts` (`/admin/alerts` — Telegram settings, thresholds, cooldowns, alert history).
+
+### Catalog ↔ Gateway Price Coupling (§17)
+- A single canonicalization function `ToCanonicalModelID` (`internal/service/public_models_pricing.go`) is the one place canonical model IDs are derived; it is reused by the public catalog (`GET /api/v1/models`), routing, and the cheaper-provider checker, so a model cannot be named differently across catalog/docs/API.
+- The catalog's BestAIPrice row and the gateway bill from the **same** retail table: `Retail = max(primary_cost, backup_cost) × (1 + markup)`, resolved live by `GetModelPricingMaxAcrossProviders`. The vitrine (`api-center`) only renders what `/api/gateway/pricing` (→ sub2api `/models`) returns; it never computes or caches its own price.
+- Third-party offers/normalized prices live in the catalog layer; the gateway stores only connected providers, real credentials, active routes and retail pricing.
+
+### Security & Reliability (§18)
+- Upstream credentials encrypted at rest (`credentials.EncryptMap`, AES-GCM); secrets masked in every admin response (`MaskAPIKey`).
+- **Durable administrative audit log** (migration `149_add_admin_audit_logs.sql`, `internal/service/admin_audit.go`): append-only `admin_audit_logs`, written for provider create/update/delete, model-routing changes, settings updates (retail `default_rate_multiplier` + per-model `model_markups`) and balance adjustments — replacing the previous stdout-only `AUDIT:` logging. `sanitizeAuditDetail` redacts anything that looks like a key/token/secret so credentials can never reach the audit log. The writer is installed once at startup (`SetDefaultAdminAuditWriter(db)` in `wire_gen.go`) and degrades to a structured log line when unset.
+- Rate limiting/concurrency come from Sub2API (per-key 5h/1d/7d limits, `CalculateEffectiveConcurrency`); balance updates are atomic (`UPDATE users SET balance = balance - $1 … RETURNING balance`) with Redis CAS versioning, so parallel requests cannot drive the balance below the allowed threshold. Redis is a cache — the authoritative balance lives in PostgreSQL (`users.balance`).
+- Billing/payment webhooks are transactional and idempotent (order state transitions + `payment_audit_logs`); billing fails closed via fail-safe pricing and the guaranteed usage-record worker pool.
+- Separate staging/production credentials/routes are a deployment concern (env + `payment_provider_instances` / account records per environment), not in-code state.
+
+### Acceptance Scenarios (§19)
+| Scenario | Status |
+|---|---|
+| BestAIPrice appears first in the catalog with the live retail price | ✅ `BestAiPriceRow` renders outside the sorted list; price from the shared retail table |
+| New user registers, tops up USDT, gets a balance | ✅ registration + NOWPayments idempotent crediting |
+| One key serves Claude / OpenAI / Gemini / Kimi | ✅ `apiKeyIsYunwu` routes one key through all families |
+| Usage shows model, tokens/units and the billed price snapshot | ✅ `usage_logs` price snapshot + Request ID column |
+| Primary down → next request goes through Backup with the same key | ✅ price-based Primary/Backup + rebinding |
+| Both providers down → clear error + admin Telegram alert | ✅ normalized error + `both_providers_unavailable` |
+| Upstream balance below threshold → Telegram alert | ✅ `balance_low` |
+| Cheaper candidate → notification with comparison | ✅ `cheaper_provider_found` |
+| After Primary/Backup swap the user changes nothing | ✅ client key is decoupled from upstream accounts |
+| Payment history and API usage are separate but reconcile | ✅ `/billing` ledger vs `/usage`; ledger sums from the same sources |
+| Docs cURL/Python/Node examples pass a real request | ⚠️ not verifiable here (no live gateway/credentials in the dev env) — snippets match the code contract |
+| Upstream keys never visible to users or in app logs | ✅ masked everywhere; audit sanitizer + encrypted at rest |
+
 ### Money Balance, USDT & Payment History (§12)
 - **Single balance**: every user has one money balance (`users.balance`) that all API charges (official and Yunwu) are deducted from; no second wallet.
 - **Money ledger (separate from the API log)**: `BalanceLedgerService` (`internal/service/balance_ledger.go`) is a read-model over the existing tables (nothing new is stored) projecting the four required entry types into one history: `deposit` (`payment_orders` in a paid/completed status + balance redeem codes), `usage` (`usage_logs.actual_cost`, negative), `refund` (`payment_orders.refund_amount > 0`) and `adjustment` (`redeem_codes.type = admin_balance`). Amounts are signed USD so the ledger reconciles with the balance. Endpoint `GET /api/v1/payment/ledger?type=&page=&page_size=` (user auth) returns the paginated page plus per-type totals; UI at `/billing` (`BillingHistoryView.vue`, sidebar `nav.billing`) with type filters and totals — deliberately a different screen from `/usage`.

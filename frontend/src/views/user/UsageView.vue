@@ -160,6 +160,21 @@
             <span class="font-medium text-gray-900 dark:text-white">{{ value }}</span>
           </template>
 
+          <template #cell-request_id="{ row }">
+            <button
+              v-if="row.request_id"
+              class="group inline-flex max-w-[200px] items-center gap-1 truncate font-mono text-xs text-gray-500 hover:text-primary-600 dark:text-gray-400"
+              :title="t('usage.copyRequestId')"
+              @click="copyRequestId(row.request_id)"
+            >
+              <span class="truncate">{{ row.request_id }}</span>
+              <span class="flex-shrink-0 opacity-0 transition-opacity group-hover:opacity-100">
+                {{ copiedRequestId === row.request_id ? '✓' : '⧉' }}
+              </span>
+            </button>
+            <span v-else class="text-gray-400">—</span>
+          </template>
+
           <template #cell-reasoning_effort="{ row }">
             <span class="text-sm text-gray-900 dark:text-white">
               {{ formatReasoningEffort(row.reasoning_effort) }}
@@ -519,9 +534,23 @@ const tokenTooltipData = ref<UsageLog | null>(null)
 // Usage stats from API
 const usageStats = ref<UsageStatsResponse | null>(null)
 
+const copiedRequestId = ref('')
+async function copyRequestId(id: string) {
+  try {
+    await navigator.clipboard.writeText(id)
+    copiedRequestId.value = id
+    setTimeout(() => {
+      if (copiedRequestId.value === id) copiedRequestId.value = ''
+    }, 1500)
+  } catch (e) {
+    console.warn('Copy failed:', e)
+  }
+}
+
 const columns = computed<Column[]>(() => [
   { key: 'api_key', label: t('usage.apiKeyFilter'), sortable: false },
   { key: 'model', label: t('usage.model'), sortable: true },
+  { key: 'request_id', label: t('usage.requestId'), sortable: false },
   { key: 'reasoning_effort', label: t('usage.reasoningEffort'), sortable: false },
   { key: 'endpoint', label: t('usage.endpoint'), sortable: false },
   { key: 'stream', label: t('usage.type'), sortable: false },
