@@ -281,7 +281,7 @@ func TestTelegramNotifier_DBOverridesAndRedis(t *testing.T) {
 	cfg := &config.HypervisorConfig{
 		TelegramBotToken:          "cfg-token",
 		TelegramChatID:            "cfg-chat",
-		TelegramAlertThresholdUSD: 10.0, // cfg is 10.0, DB is 35.0
+		TelegramAlertThresholdUSD: 10.0,  // cfg is 10.0, DB is 35.0
 		TelegramAlertsEnabled:     false, // cfg is false, DB overrides to true
 	}
 
@@ -803,7 +803,7 @@ func TestTelegramNotifier_ChannelBroadcastWithRecipients(t *testing.T) {
 
 	cfg := &config.HypervisorConfig{
 		TelegramBotToken:      "test-token",
-		TelegramChatID:        "-100999888777", // Broadcast channel ID
+		TelegramChatID:        "-100999888777",    // Broadcast channel ID
 		TelegramAllowedUsers:  []string{"111222"}, // Whitelisted admin user
 		TelegramAlertsEnabled: true,
 	}
@@ -821,6 +821,65 @@ func TestTelegramNotifier_ChannelBroadcastWithRecipients(t *testing.T) {
 	assert.Len(t, sentRecipients, 2)
 	assert.Contains(t, sentRecipients, "-100999888777")
 	assert.Contains(t, sentRecipients, "111222")
+}
+
+func TestTelegramNotifier_ContentDeduplication(t *testing.T) {
+	ctx := context.Background()
+	var sent int32
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&sent, 1)
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
+	}))
+	defer server.Close()
+
+	cfg := &config.HypervisorConfig{
+		TelegramBotToken:      "test-token",
+		TelegramAllowedUsers:  []string{"123456"},
+		TelegramAlertsEnabled: true,
+	}
+	n := NewTelegramNotifier(nil, cfg)
+	n.SetBaseURL(server.URL)
+	n.SetHTTPClient(server.Client())
+
+	format := func(reason string) func() string {
+		return func() string {
+			return formatProviderDownDegradedMessage("openlux", "node-1", "Acc", "down", reason)
+		}
+	}
+	shortCooldown := 2 * time.Millisecond
+
+	// First delivery.
+	ok, err := n.CheckCooldownAndNotify(ctx, EventProviderDownDegraded, "openlux:node-1", shortCooldown, format("Connection refused"))
+	require.NoError(t, err)
+	assert.True(t, ok)
+	assert.Equal(t, int32(1), atomic.LoadInt32(&sent))
+
+	// Cooldown elapses; identical content must NOT be re-delivered.
+	time.Sleep(10 * time.Millisecond)
+	ok, err = n.CheckCooldownAndNotify(ctx, EventProviderDownDegraded, "openlux:node-1", shortCooldown, format("Connection refused"))
+	require.NoError(t, err)
+	assert.False(t, ok)
+	assert.Equal(t, int32(1), atomic.LoadInt32(&sent))
+
+	// Content changes -> delivered again.
+	time.Sleep(10 * time.Millisecond)
+	ok, err = n.CheckCooldownAndNotify(ctx, EventProviderDownDegraded, "openlux:node-1", shortCooldown, format("Timeout"))
+	require.NoError(t, err)
+	assert.True(t, ok)
+	assert.Equal(t, int32(2), atomic.LoadInt32(&sent))
+}
+
+func TestNotificationSignature_IgnoresTimestamp(t *testing.T) {
+	// Two bodies differing only in the timestamp line share a fingerprint.
+	m1 := "body line\n• <b>Время:</b> 2020-01-01 00:00:00 UTC"
+	m2 := "body line\n• <b>Время:</b> 2031-12-31 23:59:59 UTC"
+	assert.Equal(t, notificationSignature(m1), notificationSignature(m2))
+
+	// A meaningful change produces a different fingerprint.
+	m3 := "other body line\n• <b>Время:</b> 2020-01-01 00:00:00 UTC"
+	assert.NotEqual(t, notificationSignature(m1), notificationSignature(m3))
 }
 
 func TestTelegramNotifier_EdgeCasesAndCoverage(t *testing.T) {
@@ -906,6 +965,3 @@ func TestTelegramNotifier_EdgeCasesAndCoverage(t *testing.T) {
 	assert.Equal(t, "***", maskKey("short"))
 	assert.Equal(t, "sk-1...8901", maskKey("sk-12345678901"))
 }
-
-
-

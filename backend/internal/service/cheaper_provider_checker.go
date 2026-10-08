@@ -2,7 +2,9 @@ package service
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -142,6 +144,11 @@ func (s *CheaperProviderService) ensureTable(ctx context.Context) {
 		CREATE INDEX IF NOT EXISTS idx_ash_cheaper_opportunities_status ON ash_cheaper_provider_opportunities(status);
 		CREATE INDEX IF NOT EXISTS idx_ash_cheaper_opportunities_family ON ash_cheaper_provider_opportunities(model_family);
 		CREATE INDEX IF NOT EXISTS idx_ash_cheaper_opportunities_model ON ash_cheaper_provider_opportunities(canonical_model_id);
+		CREATE TABLE IF NOT EXISTS ash_telegram_message_state (
+			dedup_key TEXT PRIMARY KEY,
+			signature TEXT NOT NULL,
+			updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+		);
 	`)
 }
 
@@ -618,9 +625,21 @@ func (s *CheaperProviderService) CheckOpportunities(ctx context.Context) ([]mode
 				grp.candidateDomain,
 			)
 
+			// Content-based deduplication: only (re-)notify when this family's
+			// cheaper-provider recommendation actually changed. An unchanged
+			// message is never repeated, even across periodic scans.
+			sigKey := "cheaper_provider:" + grp.family
+			signature := telegramMessageSignature(tgMsg)
+			if prev, ok := s.lastTelegramSignature(ctx, sigKey); ok && prev == signature {
+				slog.Info("[CheaperProviderChecker] Telegram alert suppressed: recommendation unchanged since last notification",
+					"family", grp.family, "candidate", grp.candidateDomain)
+				continue
+			}
+
 			slog.Info("[CheaperProviderChecker] Dispatching Telegram alert for family", "family", grp.family, "candidate", grp.candidateDomain, "savings", grp.familySavings)
 			sentCount, tgErr := s.settingService.SendTelegramNotification(ctx, tgMsg)
 			if tgErr == nil && sentCount > 0 {
+				s.recordTelegramSignature(ctx, sigKey, signature)
 				slog.Info("[CheaperProviderChecker] Telegram alert dispatched successfully", "family", grp.family, "recipients", sentCount)
 				var ids []string
 				for _, o := range grp.models {
@@ -753,6 +772,44 @@ func (s *CheaperProviderService) DismissOpportunity(ctx context.Context, opportu
 		WHERE id = $1
 	`, opportunityID)
 	return err
+}
+
+// telegramMessageSignature returns a stable fingerprint of a Telegram message
+// body with the volatile "Время:" timestamp line removed, so an unchanged
+// message compares equal across scans while any change to its meaningful content
+// produces a different fingerprint.
+func telegramMessageSignature(msg string) string {
+	var b strings.Builder
+	for _, line := range strings.Split(msg, "\n") {
+		if strings.Contains(line, "Время:</b>") {
+			continue
+		}
+		b.WriteString(line)
+		b.WriteByte('\n')
+	}
+	sum := sha256.Sum256([]byte(b.String()))
+	return hex.EncodeToString(sum[:])
+}
+
+// lastTelegramSignature returns the fingerprint of the last delivered message
+// for dedupKey, if one was recorded.
+func (s *CheaperProviderService) lastTelegramSignature(ctx context.Context, dedupKey string) (string, bool) {
+	var sig string
+	if err := s.db.QueryRowContext(ctx, `SELECT signature FROM ash_telegram_message_state WHERE dedup_key = $1`, dedupKey).Scan(&sig); err != nil {
+		return "", false
+	}
+	return sig, true
+}
+
+// recordTelegramSignature persists the fingerprint of a delivered message so the
+// identical message is not delivered again until its content changes.
+func (s *CheaperProviderService) recordTelegramSignature(ctx context.Context, dedupKey, signature string) {
+	_, _ = s.db.ExecContext(ctx, `
+		INSERT INTO ash_telegram_message_state (dedup_key, signature, updated_at)
+		VALUES ($1, $2, NOW())
+		ON CONFLICT (dedup_key) DO UPDATE
+		SET signature = EXCLUDED.signature, updated_at = EXCLUDED.updated_at
+	`, dedupKey, signature)
 }
 
 func formatFamilyName(family string) string {

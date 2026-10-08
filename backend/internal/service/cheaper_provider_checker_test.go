@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -81,6 +82,45 @@ func TestCheaperProviderChecker_FetchAndCompare(t *testing.T) {
 	assert.Equal(t, 18.0, opps[0].CurrentPrimaryPrice)
 	assert.Equal(t, 33.33, opps[0].DiffPercent)
 	assert.Equal(t, "https://bestaiprice.com/provider/cheapcloud.ai", *opps[0].ProviderCardURL)
+
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestCheaperProviderChecker_TelegramSignatureStore(t *testing.T) {
+	// Pure helper: identical content (modulo the timestamp) => identical signature.
+	msg := "💡 header\n• <b>Модель:</b> claude-3-7-sonnet\n• <b>Время:</b> 2020-01-01 00:00:00 UTC"
+	sameContent := "💡 header\n• <b>Модель:</b> claude-3-7-sonnet\n• <b>Время:</b> 2031-12-31 23:59:59 UTC"
+	changed := "💡 header\n• <b>Модель:</b> claude-3-5-sonnet\n• <b>Время:</b> 2020-01-01 00:00:00 UTC"
+	assert.Equal(t, telegramMessageSignature(msg), telegramMessageSignature(sameContent))
+	assert.NotEqual(t, telegramMessageSignature(msg), telegramMessageSignature(changed))
+
+	// DB-backed store: miss -> record -> hit.
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	svc := NewCheaperProviderService(db, nil, nil, nil)
+	ctx := context.Background()
+	key := "cheaper_provider:claude"
+	sig := telegramMessageSignature(msg)
+
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT signature FROM ash_telegram_message_state WHERE dedup_key = $1")).
+		WithArgs(key).
+		WillReturnError(sql.ErrNoRows)
+	_, ok := svc.lastTelegramSignature(ctx, key)
+	assert.False(t, ok)
+
+	mock.ExpectExec(regexp.QuoteMeta("INSERT INTO ash_telegram_message_state")).
+		WithArgs(key, sig).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	svc.recordTelegramSignature(ctx, key, sig)
+
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT signature FROM ash_telegram_message_state WHERE dedup_key = $1")).
+		WithArgs(key).
+		WillReturnRows(sqlmock.NewRows([]string{"signature"}).AddRow(sig))
+	got, ok := svc.lastTelegramSignature(ctx, key)
+	assert.True(t, ok)
+	assert.Equal(t, sig, got)
 
 	require.NoError(t, mock.ExpectationsWereMet())
 }
@@ -324,6 +364,3 @@ func TestCheaperProviderChecker_SingleBestCandidatePerFamily(t *testing.T) {
 
 	require.NoError(t, mock.ExpectationsWereMet())
 }
-
-
-

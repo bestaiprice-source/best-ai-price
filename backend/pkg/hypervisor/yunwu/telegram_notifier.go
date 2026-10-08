@@ -3,6 +3,8 @@ package yunwu
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"html"
@@ -50,6 +52,12 @@ const (
 	DefaultFailoverMinRequests   = 5
 	DefaultErrorSpikeThreshold   = 15 // 15 errors in window
 	DefaultErrorSpikeWindowMins  = 5
+
+	// DefaultSignatureTTL bounds how long the content-deduplication signature of
+	// the last delivered alert is retained. It is deliberately long: an alert is
+	// only re-sent once its content actually changes, so the marker must outlive
+	// the (much shorter) cooldown window.
+	DefaultSignatureTTL = 30 * 24 * time.Hour
 )
 
 var (
@@ -85,6 +93,7 @@ type TelegramNotifier struct {
 	memModelFailovers map[string][]int64
 	memErrors429      map[string][]int64
 	memErrors5xx      map[string][]int64
+	memLastSig        map[string]string
 }
 
 func alertKey(nodeID string) string {
@@ -97,6 +106,34 @@ func cooldownKey(eventType TelegramEventType, entityID string) string {
 		cleanEntity = "global"
 	}
 	return fmt.Sprintf("ash:telegram:cooldown:%s:%s", eventType, cleanEntity)
+}
+
+// lastSignatureKey is the Redis key that stores the fingerprint of the last
+// delivered message for a given (event, entity). It is used for content-based
+// deduplication: the same message is never delivered twice in a row.
+func lastSignatureKey(eventType TelegramEventType, entityID string) string {
+	cleanEntity := strings.TrimSpace(entityID)
+	if cleanEntity == "" {
+		cleanEntity = "global"
+	}
+	return fmt.Sprintf("ash:telegram:lastsig:%s:%s", eventType, cleanEntity)
+}
+
+// notificationSignature returns a stable fingerprint of a notification body with
+// the volatile "Время:" timestamp line removed, so an unchanged alert compares
+// equal across invocations while any change to its meaningful content (state,
+// reason, counters, prices) produces a different fingerprint.
+func notificationSignature(msg string) string {
+	var b strings.Builder
+	for _, line := range strings.Split(msg, "\n") {
+		if strings.Contains(line, "Время:</b>") {
+			continue
+		}
+		b.WriteString(line)
+		b.WriteByte('\n')
+	}
+	sum := sha256.Sum256([]byte(b.String()))
+	return hex.EncodeToString(sum[:])
 }
 
 func NewTelegramNotifier(store *storage.Storage, cfg *config.HypervisorConfig) *TelegramNotifier {
@@ -113,6 +150,7 @@ func NewTelegramNotifier(store *storage.Storage, cfg *config.HypervisorConfig) *
 		memModelFailovers: make(map[string][]int64),
 		memErrors429:      make(map[string][]int64),
 		memErrors5xx:      make(map[string][]int64),
+		memLastSig:        make(map[string]string),
 	}
 	SetDefaultNotifier(n)
 	return n
@@ -311,6 +349,33 @@ func (n *TelegramNotifier) isCooldownActive(ctx context.Context, dedupKey string
 	return false
 }
 
+// lastSignatureMatches reports whether the given fingerprint equals the one
+// stored for dedupKey (i.e. the exact same message was already delivered).
+func (n *TelegramNotifier) lastSignatureMatches(ctx context.Context, dedupKey, signature string) bool {
+	if n.store != nil && n.store.Redis() != nil {
+		if v, err := n.store.Redis().Get(ctx, dedupKey).Result(); err == nil {
+			return v == signature
+		}
+	}
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	return n.memLastSig[dedupKey] == signature
+}
+
+// recordSignature stores the fingerprint of the last delivered message so the
+// identical message is not delivered again until its content changes.
+func (n *TelegramNotifier) recordSignature(ctx context.Context, dedupKey, signature string) {
+	if n.store != nil && n.store.Redis() != nil {
+		_ = n.store.Redis().Set(ctx, dedupKey, signature, DefaultSignatureTTL).Err()
+	}
+	n.mu.Lock()
+	if n.memLastSig == nil {
+		n.memLastSig = make(map[string]string)
+	}
+	n.memLastSig[dedupKey] = signature
+	n.mu.Unlock()
+}
+
 // CheckCooldownAndNotify sends a Telegram notification if not within cooldown/deduplication window.
 func (n *TelegramNotifier) CheckCooldownAndNotify(
 	ctx context.Context,
@@ -352,13 +417,23 @@ func (n *TelegramNotifier) CheckCooldownAndNotify(
 		}
 	}
 
+	msg := formatFunc()
+	sigKey := lastSignatureKey(eventType, entityID)
+	signature := notificationSignature(msg)
+	// Content-based deduplication: never re-deliver an identical message (the
+	// volatile timestamp line is ignored). This is checked BEFORE the cooldown so
+	// that an unchanged message does not consume the cooldown budget, and a
+	// changed message can still be delivered once the cooldown window elapses.
+	if n.lastSignatureMatches(ctx, sigKey, signature) {
+		return false, nil
+	}
+
 	dedupKey := cooldownKey(eventType, entityID)
 	if !n.checkAndSetCooldown(ctx, dedupKey, cooldown) {
 		// Suppressed due to cooldown / deduplication
 		return false, nil
 	}
 
-	msg := formatFunc()
 	sentCount := 0
 	var lastErr error
 	for _, chatID := range targetChatIDs {
@@ -379,6 +454,8 @@ func (n *TelegramNotifier) CheckCooldownAndNotify(
 		n.clearCooldown(ctx, dedupKey)
 		return false, lastErr
 	}
+
+	n.recordSignature(ctx, sigKey, signature)
 
 	slog.Info("[TelegramNotifier] Dispatched Telegram alert",
 		"event_type", string(eventType),
