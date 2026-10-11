@@ -17,7 +17,7 @@
         </div>
       </main>
     </div>
-    <SupportWidget v-if="authStore.isAuthenticated" />
+    <SupportWidget />
   </div>
 </template>
 

@@ -1,0 +1,15 @@
+# Cursor Rules for BestAIPrice Gateway Projects
+
+# Response Style
+- Deliver clean, production-grade, bug-free code.
+- Avoid unnecessary conversational fluff; prioritize working solutions and diffs.
+- Always check that dependencies and imports are minimal.
+
+# Security
+- Never commit hardcoded API keys or credentials.
+- Always read sensitive configurations from environment variables (`process.env` or `os.environ`).
+- Protect against leaking upstream provider endpoints.
+
+# Performance & Cost Optimization
+- Utilize prompt caching where applicable.
+- Keep prompt contexts relevant and avoid duplicate repetitive instructions.

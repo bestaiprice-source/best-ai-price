@@ -47,12 +47,20 @@
         <div class="mt-4 rounded-xl border border-gray-100 p-3 dark:border-dark-700">
           <p class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">{{ t('support.dispute') }}</p>
           <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t('support.disputeHint') }}</p>
-          <input
-            v-model="requestId"
-            type="text"
-            class="input mt-2 w-full text-xs"
-            :placeholder="t('support.requestIdPlaceholder')"
-          />
+          <div class="mt-2 grid grid-cols-2 gap-2">
+            <input
+              v-model="requestId"
+              type="text"
+              class="input w-full text-xs"
+              :placeholder="t('support.requestIdPlaceholder')"
+            />
+            <input
+              v-model="modelName"
+              type="text"
+              class="input w-full text-xs"
+              placeholder="Model (optional, e.g. gpt-4o)"
+            />
+          </div>
           <pre class="mt-2 overflow-x-auto rounded-lg bg-gray-900 p-3 text-[11px] leading-relaxed text-gray-100"><code>{{ contextText }}</code></pre>
           <button
             class="mt-2 w-full rounded-lg bg-primary-600 px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-primary-500"
@@ -83,6 +91,7 @@ const authStore = useAuthStore()
 const open = ref(false)
 const expanded = ref<number | null>(0)
 const requestId = ref('')
+const modelName = ref('')
 const copied = ref(false)
 
 function toggleFaq(i: number) {
@@ -114,8 +123,9 @@ const contactText = computed(() => contactRaw.value)
 const contextText = computed(() => {
   const user = authStore.user
   const lines = [
-    `user_id: ${user?.id ?? 'n/a'}`,
+    `user_id: ${user?.id ?? 'guest'}`,
     `request_id: ${requestId.value.trim() || 'n/a'}`,
+    `model: ${modelName.value.trim() || 'n/a'}`,
     `page: ${route.fullPath}`,
     `timestamp: ${new Date().toISOString()}`,
   ]

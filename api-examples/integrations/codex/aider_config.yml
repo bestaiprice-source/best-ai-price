@@ -1,0 +1,7 @@
+# Aider configuration for BestAIPrice Gateway
+openai-api-base: https://api.bestaiprice.com/v1
+model: openai/gpt-4o
+weak-model: openai/gpt-4o-mini
+editor-model: openai/claude-3-7-sonnet
+stream: true
+cache-prompts: true

@@ -1,0 +1,21 @@
+{
+  "name": "bestaiprice-nodejs-examples",
+  "version": "1.0.0",
+  "description": "Node.js examples for connecting to the BestAIPrice API Gateway",
+  "type": "module",
+  "scripts": {
+    "test": "node fetch_chat.mjs"
+  },
+  "dependencies": {
+    "openai": "^4.70.0",
+    "@anthropic-ai/sdk": "^0.30.0"
+  },
+  "keywords": [
+    "bestaiprice",
+    "openai",
+    "anthropic",
+    "llm",
+    "ai-gateway"
+  ],
+  "license": "MIT"
+}

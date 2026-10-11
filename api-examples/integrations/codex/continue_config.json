@@ -1,0 +1,32 @@
+{
+  "models": [
+    {
+      "title": "BestAIPrice GPT-4o",
+      "provider": "openai",
+      "model": "gpt-4o",
+      "apiBase": "https://api.bestaiprice.com/v1",
+      "apiKey": "${BESTAIPRICE_API_KEY}"
+    },
+    {
+      "title": "BestAIPrice Claude 3.7 Sonnet",
+      "provider": "openai",
+      "model": "claude-3-7-sonnet",
+      "apiBase": "https://api.bestaiprice.com/v1",
+      "apiKey": "${BESTAIPRICE_API_KEY}"
+    },
+    {
+      "title": "BestAIPrice DeepSeek R1",
+      "provider": "openai",
+      "model": "deepseek-reasoner",
+      "apiBase": "https://api.bestaiprice.com/v1",
+      "apiKey": "${BESTAIPRICE_API_KEY}"
+    }
+  ],
+  "tabAutocompleteModel": {
+    "title": "BestAIPrice Qwen Coder",
+    "provider": "openai",
+    "model": "qwen-2.5-coder-32b",
+    "apiBase": "https://api.bestaiprice.com/v1",
+    "apiKey": "${BESTAIPRICE_API_KEY}"
+  }
+}

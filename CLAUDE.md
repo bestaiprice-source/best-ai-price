@@ -722,13 +722,6 @@ sub2api/
   - Global `siteName` fallback resolves to `'Best Ai Price'` in `stores/app.ts` whenever unconfigured or set to legacy defaults.
   - Fully responsive: scales smoothly to mobile with off-canvas sidebar drawer and scalable header branding.
 
-### Running Backend Tests & Build Verification
-```bash
-cd backend
-go test -tags=unit ./...
-go build ./...
-```
-
 ### Running Frontend Verification
 ```bash
 cd frontend
@@ -737,5 +730,38 @@ npm run typecheck
 npm run test:run
 npm run build
 ```
+
+---
+
+## 11. Developer Ecosystem, Documentation & Agent Integrations (§14 & §15)
+
+### 11.1 Public Examples Repository (`api-examples/`)
+To empower developers and agent builders with zero barrier to entry, BestAIPrice maintains a public code sample suite:
+- **`README.md` & `README_CN.md`**: Quick-start guide covering key creation, unified base URLs, model IDs, and first requests.
+- **`/examples/curl/`**: Production cURL scripts for OpenAI `/v1/chat/completions`, Anthropic `/v1/messages`, Gemini `/v1beta/...`, and streaming SSE.
+- **`/examples/python/`**: Official `openai`, `anthropic`, `langchain-openai`, and native requests examples.
+- **`/examples/nodejs/`**: Native fetch and official npm SDK examples.
+- **`/integrations/claude-code/`**: Routing configuration (`ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN`) with automatic Hypervisor failover and session affinity.
+- **`/integrations/cursor/`**: Settings and project `.cursorrules`.
+- **`/integrations/openclaw/`**: Upstream proxy `config.yaml` for high-throughput routing.
+- **`/integrations/n8n/`**: Importable n8n workflow JSON with custom OpenAI and Anthropic credentials.
+- **`/integrations/codex/`**: Setup for Aider CLI pair programmer and Continue.dev extension.
+- **`/integrations/gemini/`**: Native Google Gemini v1beta REST and SDK configuration.
+
+### 11.2 Support & Disputed Charges Policy (§15)
+- **Consultant / Chat Widget (`SupportWidget.vue`)**:
+  - Embedded in `AppLayout.vue` and accessible across all pages including `/docs`.
+  - Includes interactive FAQ search covering top-up, API keys, models, errors (401, 402, 429, 502/503), billing, failover, and quotas.
+  - Generates sanitized **Support Context**:
+    ```text
+    user_id: <user_id>
+    request_id: <request_id>
+    model: <model>
+    page: <route>
+    timestamp: <iso8601>
+    ```
+  - **Zero-Secrets Rule**: Never leaks upstream secret keys or client API tokens to support logs or contexts.
+  - **Disputed Charge Investigation**: Users provide the `request_id` (from their Usage log), allowing system administrators to look up the exact upstream transaction log, tokens, and billing audit entry to resolve disputes.
+
 
 

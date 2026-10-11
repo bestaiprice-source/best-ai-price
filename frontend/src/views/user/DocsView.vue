@@ -2,10 +2,46 @@
   <AppLayout>
     <div class="mx-auto max-w-4xl space-y-8 pb-16">
       <!-- Header -->
-      <div>
-        <h1 class="text-3xl font-bold tracking-tight text-gray-900 dark:text-white">{{ t('docs.title') }}</h1>
-        <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">{{ t('docs.subtitle') }}</p>
+      <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 class="text-3xl font-bold tracking-tight text-gray-900 dark:text-white">{{ t('docs.title') }}</h1>
+          <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">{{ t('docs.subtitle') }}</p>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <a
+            href="https://github.com/bestaiprice/api-examples"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="inline-flex items-center gap-2 rounded-xl bg-gray-900 px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-gray-800 dark:bg-dark-700 dark:hover:bg-dark-600"
+          >
+            <span>GitHub Examples</span>
+            <span class="text-xs opacity-75">↗</span>
+          </a>
+        </div>
       </div>
+
+      <!-- GitHub Developer Solutions Banner (§14) -->
+      <section class="rounded-2xl border border-primary-200/80 bg-gradient-to-r from-primary-50/70 via-white to-blue-50/50 p-6 shadow-sm dark:border-primary-900/40 dark:from-primary-950/20 dark:via-dark-800 dark:to-blue-950/20">
+        <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div class="space-y-1">
+            <div class="inline-flex items-center gap-1.5 rounded-full bg-primary-100/80 px-2.5 py-0.5 text-[11px] font-semibold text-primary-800 dark:bg-primary-900/50 dark:text-primary-300">
+              <span>🚀 Section 14 · Public Developer Solutions</span>
+            </div>
+            <h2 class="text-base font-bold text-gray-900 dark:text-white">BestAIPrice Code Samples & Agent Integrations</h2>
+            <p class="text-xs text-gray-600 dark:text-gray-300">
+              Verified boilerplate, zero-secrets configs, and CLI setups for cURL, Python, Node.js, Claude Code, Cursor, OpenClaw & n8n.
+            </p>
+          </div>
+          <div class="flex flex-shrink-0 items-center gap-2">
+            <button
+              class="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-700 shadow-sm transition hover:bg-gray-50 dark:border-dark-700 dark:bg-dark-800 dark:text-gray-200"
+              @click="copy('git clone https://github.com/bestaiprice/api-examples.git')"
+            >
+              <span>{{ copied === 'git clone https://github.com/bestaiprice/api-examples.git' ? t('docs.copied') : 'Copy Clone Command' }}</span>
+            </button>
+          </div>
+        </div>
+      </section>
 
       <!-- Quick start -->
       <section class="rounded-2xl border border-gray-200/80 bg-white/85 p-6 shadow-sm dark:border-dark-700/80 dark:bg-dark-800/85">
@@ -149,6 +185,73 @@
           </div>
         </div>
       </section>
+
+      <!-- FAQ Section (§15) -->
+      <section class="rounded-2xl border border-gray-200/80 bg-white/85 p-6 shadow-sm dark:border-dark-700/80 dark:bg-dark-800/85">
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Frequently Asked Questions (FAQ)</h2>
+            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Everything you need to know about top-ups, keys, model routing, failover, and limits.</p>
+          </div>
+        </div>
+        <div class="mt-4 divide-y divide-gray-100 dark:divide-dark-700">
+          <div v-for="(item, idx) in faqItems" :key="idx" class="py-3">
+            <button
+              class="flex w-full items-center justify-between text-left text-sm font-medium text-gray-800 dark:text-gray-200"
+              @click="toggleFaq(idx)"
+            >
+              <span>{{ item.q }}</span>
+              <span class="ml-2 font-mono text-gray-400">{{ expandedFaq === idx ? '−' : '+' }}</span>
+            </button>
+            <p v-if="expandedFaq === idx" class="mt-2 text-xs leading-relaxed text-gray-600 dark:text-gray-400">
+              {{ item.a }}
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Support & Disputed Charges (§15) -->
+      <section class="rounded-2xl border border-gray-200/80 bg-white/85 p-6 shadow-sm dark:border-dark-700/80 dark:bg-dark-800/85">
+        <h2 class="text-lg font-semibold text-gray-900 dark:text-white">{{ t('support.dispute') }}</h2>
+        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t('support.disputeHint') }}</p>
+
+        <div class="mt-4 space-y-3">
+          <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <label class="block text-xs font-medium text-gray-700 dark:text-gray-300">Request ID</label>
+              <input
+                v-model="disputeRequestId"
+                type="text"
+                class="input mt-1 w-full text-xs"
+                placeholder="req_01j7..."
+              />
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-gray-700 dark:text-gray-300">Model Name (optional)</label>
+              <input
+                v-model="disputeModelName"
+                type="text"
+                class="input mt-1 w-full text-xs"
+                placeholder="claude-3-7-sonnet"
+              />
+            </div>
+          </div>
+
+          <div>
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-medium text-gray-500 dark:text-gray-400">Sanitized Support Context</span>
+              <button
+                class="rounded-lg border border-gray-200 px-2 py-1 text-xs text-gray-600 hover:bg-gray-50 dark:border-dark-700 dark:text-gray-300"
+                @click="copy(disputeContextText)"
+              >
+                {{ copied === disputeContextText ? t('docs.copied') : t('docs.copy') }}
+              </button>
+            </div>
+            <pre class="mt-1 overflow-x-auto rounded-xl bg-gray-900 p-4 font-mono text-xs text-gray-100"><code>{{ disputeContextText }}</code></pre>
+            <p class="mt-1.5 text-[11px] text-gray-400">{{ t('support.noSecrets') }}</p>
+          </div>
+        </div>
+      </section>
     </div>
   </AppLayout>
 </template>
@@ -156,13 +259,24 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRoute } from 'vue-router'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import { useAppStore } from '@/stores'
+import { useAuthStore } from '@/stores/auth'
 
 const { t } = useI18n()
+const route = useRoute()
 const appStore = useAppStore()
+const authStore = useAuthStore()
 
 const copied = ref('')
+const expandedFaq = ref<number | null>(0)
+const disputeRequestId = ref('')
+const disputeModelName = ref('')
+
+function toggleFaq(idx: number) {
+  expandedFaq.value = expandedFaq.value === idx ? null : idx
+}
 
 // The public API base URL, as configured in Admin Settings; falls back to the
 // current origin so the examples are always copy-paste runnable.
@@ -197,6 +311,8 @@ const exampleTabs = computed(() => [
   { id: 'curl', label: 'cURL' },
   { id: 'python', label: 'Python' },
   { id: 'node', label: 'Node.js' },
+  { id: 'stream', label: 'Streaming (SSE)' },
+  { id: 'gemini', label: 'Google Gemini' },
 ])
 
 const activeSnippets = computed(() => {
@@ -206,23 +322,31 @@ const activeSnippets = computed(() => {
       {
         label: 'OpenAI SDK',
         code: `from openai import OpenAI
+import os
 
-client = OpenAI(base_url="${base}/v1", api_key="YOUR_API_KEY")
+client = OpenAI(
+    base_url="${base}/v1",
+    api_key=os.environ.get("BESTAIPRICE_API_KEY"),
+)
 resp = client.chat.completions.create(
     model="gpt-4o",
-    messages=[{"role": "user", "content": "Hello!"}],
+    messages=[{"role": "user", "content": "Hello BestAIPrice!"}],
 )
 print(resp.choices[0].message.content)`,
       },
       {
         label: 'Anthropic SDK',
         code: `from anthropic import Anthropic
+import os
 
-client = Anthropic(base_url="${base}", api_key="YOUR_API_KEY")
+client = Anthropic(
+    base_url="${base}",
+    api_key=os.environ.get("BESTAIPRICE_API_KEY"),
+)
 msg = client.messages.create(
     model="claude-3-7-sonnet",
     max_tokens=256,
-    messages=[{"role": "user", "content": "Hello!"}],
+    messages=[{"role": "user", "content": "Hello Claude!"}],
 )
 print(msg.content[0].text)`,
       },
@@ -231,7 +355,7 @@ print(msg.content[0].text)`,
   if (activeExample.value === 'node') {
     return [
       {
-        label: 'fetch (OpenAI Chat Completions)',
+        label: 'Native fetch (Node.js 18+)',
         code: `const res = await fetch("${base}/v1/chat/completions", {
   method: "POST",
   headers: {
@@ -262,9 +386,56 @@ console.log(resp.choices[0].message.content);`,
       },
     ]
   }
+  if (activeExample.value === 'stream') {
+    return [
+      {
+        label: 'cURL Unbuffered SSE Stream',
+        code: `curl -N --no-buffer -X POST "${base}/v1/chat/completions" \\
+  -H "Authorization: Bearer $BESTAIPRICE_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -H "Accept: text/event-stream" \\
+  -d '{
+    "model": "gpt-4o",
+    "stream": true,
+    "messages": [{"role": "user", "content": "Stream a short story"}]
+  }'`,
+      },
+      {
+        label: 'Python Token Stream',
+        code: `from openai import OpenAI
+import os, sys
+
+client = OpenAI(base_url="${base}/v1", api_key=os.environ["BESTAIPRICE_API_KEY"])
+stream = client.chat.completions.create(
+    model="deepseek-chat",
+    messages=[{"role": "user", "content": "Stream a story"}],
+    stream=True,
+)
+for chunk in stream:
+    if chunk.choices and chunk.choices[0].delta.content:
+        sys.stdout.write(chunk.choices[0].delta.content)
+        sys.stdout.flush()`,
+      },
+    ]
+  }
+  if (activeExample.value === 'gemini') {
+    return [
+      {
+        label: 'Gemini v1beta REST API',
+        code: `curl -X POST "${base}/v1beta/models/gemini-2.5-flash:generateContent" \\
+  -H "x-goog-api-key: $BESTAIPRICE_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "contents": [
+      { "parts": [{ "text": "Explain quantum computing in 1 sentence." }] }
+    ]
+  }'`,
+      },
+    ]
+  }
   return [
     {
-      label: 'Anthropic Messages',
+      label: 'Anthropic Messages API',
       code: `curl ${base}/v1/messages \\
   -H "x-api-key: $BESTAIPRICE_API_KEY" \\
   -H "anthropic-version: 2023-06-01" \\
@@ -276,7 +447,7 @@ console.log(resp.choices[0].message.content);`,
   }'`,
     },
     {
-      label: 'OpenAI Chat Completions',
+      label: 'OpenAI Chat Completions API',
       code: `curl ${base}/v1/chat/completions \\
   -H "Authorization: Bearer $BESTAIPRICE_API_KEY" \\
   -H "content-type: application/json" \\
@@ -292,49 +463,76 @@ const integrations = computed(() => {
   const base = baseUrl.value
   return [
     {
-      name: 'Claude Code',
+      name: 'Claude Code CLI',
       desc: t('docs.integrations.claudeCodeDesc'),
       config: `export ANTHROPIC_BASE_URL="${base}"
 export ANTHROPIC_AUTH_TOKEN="YOUR_API_KEY"
 claude`,
     },
     {
-      name: 'Codex / OpenAI SDK',
-      desc: t('docs.integrations.codexDesc'),
-      config: `export OPENAI_BASE_URL="${base}/v1"
-export OPENAI_API_KEY="YOUR_API_KEY"`,
-    },
-    {
-      name: 'Gemini CLI / Gemini SDK',
-      desc: t('docs.integrations.geminiDesc'),
-      config: `export GEMINI_API_KEY="YOUR_API_KEY"
-# point the SDK's base URL at ${base} where supported`,
-    },
-    {
-      name: 'Cursor',
+      name: 'Cursor IDE',
       desc: t('docs.integrations.cursorDesc'),
-      config: `Base URL: ${base}/v1
-API Key:  YOUR_API_KEY`,
-    },
-    {
-      name: 'OpenClaw',
-      desc: t('docs.integrations.openclawDesc'),
-      config: `Base URL: ${base}/v1
-API Key:  YOUR_API_KEY`,
-    },
-    {
-      name: 'n8n',
-      desc: t('docs.integrations.n8nDesc'),
-      config: `OpenAI node → Credentials
+      config: `Cursor Settings → Models → OpenAI API Key:
+Override OpenAI Base URL: ON
 Base URL: ${base}/v1
 API Key:  YOUR_API_KEY`,
     },
     {
-      name: 'LangChain / agents',
+      name: 'OpenClaw Gateway',
+      desc: t('docs.integrations.openclawDesc'),
+      config: `upstreams:
+  - id: "bestaiprice"
+    protocol: "openai"
+    base_url: "${base}/v1"
+    api_key: "YOUR_API_KEY"`,
+    },
+    {
+      name: 'n8n Automation',
+      desc: t('docs.integrations.n8nDesc'),
+      config: `OpenAI / Anthropic Node → Credentials:
+Base URL: ${base}/v1
+API Key:  YOUR_API_KEY`,
+    },
+    {
+      name: 'Codex / Aider / Continue',
+      desc: t('docs.integrations.codexDesc'),
+      config: `export OPENAI_API_BASE="${base}/v1"
+export OPENAI_API_KEY="YOUR_API_KEY"
+aider --model openai/gpt-4o`,
+    },
+    {
+      name: 'Google Gemini CLI & SDK',
+      desc: t('docs.integrations.geminiDesc'),
+      config: `export GEMINI_API_KEY="YOUR_API_KEY"
+export GEMINI_BASE_URL="${base}"`,
+    },
+    {
+      name: 'LangChain / Multi-Agent',
       desc: t('docs.integrations.langchainDesc'),
       config: `from langchain_openai import ChatOpenAI
 llm = ChatOpenAI(base_url="${base}/v1", api_key="YOUR_API_KEY", model="gpt-4o")`,
     },
   ]
+})
+
+const faqItems = computed(() => [
+  { q: t('support.faq_topup_q'), a: t('support.faq_topup_a') },
+  { q: t('support.faq_key_q'), a: t('support.faq_key_a') },
+  { q: t('support.faq_models_q'), a: t('support.faq_models_a') },
+  { q: t('support.faq_errors_q'), a: t('support.faq_errors_a') },
+  { q: t('support.faq_charges_q'), a: t('support.faq_charges_a') },
+  { q: t('support.faq_failover_q'), a: t('support.faq_failover_a') },
+  { q: t('support.faq_limits_q'), a: t('support.faq_limits_a') },
+])
+
+const disputeContextText = computed(() => {
+  const user = authStore.user
+  return [
+    `user_id: ${user?.id ?? 'guest'}`,
+    `request_id: ${disputeRequestId.value.trim() || 'n/a'}`,
+    `model: ${disputeModelName.value.trim() || 'n/a'}`,
+    `page: ${route.fullPath}`,
+    `timestamp: ${new Date().toISOString()}`,
+  ].join('\n')
 })
 </script>
