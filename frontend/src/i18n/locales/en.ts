@@ -351,6 +351,10 @@ export default {
     dispute: 'Disputed charge',
     disputeHint: 'Paste the request ID from your Usage log and copy the support context — an admin can trace the actual upstream cost and billing record with it.',
     requestIdPlaceholder: 'Request ID (from the Usage log)',
+    requestIdLabel: 'Request ID',
+    modelNameLabel: 'Model Name (optional)',
+    modelNamePlaceholder: 'e.g. claude-3-7-sonnet',
+    sanitizedContext: 'Sanitized Support Context',
     copyContext: 'Copy support context',
     copied: 'Copied',
     noSecrets: 'Only non-sensitive identifiers are included — never API keys or credentials.',
@@ -422,6 +426,17 @@ export default {
       openclawDesc: 'OpenAI-compatible base URL + key.',
       n8nDesc: 'Use the OpenAI node with a custom base URL.',
       langchainDesc: 'Pass base_url + api_key to any LangChain chat model.',
+    },
+    banner: {
+      badge: '🚀 Section 14 · Public Developer Solutions',
+      title: 'BestAIPrice Code Samples & Agent Integrations',
+      subtitle: 'Verified boilerplate, zero-secrets configs, and CLI setups for cURL, Python, Node.js, Claude Code, Cursor, OpenClaw & n8n.',
+      copyClone: 'Copy Clone Command',
+      githubLink: 'GitHub Examples',
+    },
+    faq: {
+      title: 'Frequently Asked Questions (FAQ)',
+      subtitle: 'Everything you need to know about top-ups, keys, model routing, failover, and limits.',
     },
   },
   billing: {

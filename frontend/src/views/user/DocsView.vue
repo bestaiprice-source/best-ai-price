@@ -14,7 +14,7 @@
             rel="noopener noreferrer"
             class="inline-flex items-center gap-2 rounded-xl bg-gray-900 px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-gray-800 dark:bg-dark-700 dark:hover:bg-dark-600"
           >
-            <span>GitHub Examples</span>
+            <span>{{ t('docs.banner.githubLink') }}</span>
             <span class="text-xs opacity-75">↗</span>
           </a>
         </div>
@@ -25,11 +25,11 @@
         <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div class="space-y-1">
             <div class="inline-flex items-center gap-1.5 rounded-full bg-primary-100/80 px-2.5 py-0.5 text-[11px] font-semibold text-primary-800 dark:bg-primary-900/50 dark:text-primary-300">
-              <span>🚀 Section 14 · Public Developer Solutions</span>
+              <span>{{ t('docs.banner.badge') }}</span>
             </div>
-            <h2 class="text-base font-bold text-gray-900 dark:text-white">BestAIPrice Code Samples & Agent Integrations</h2>
+            <h2 class="text-base font-bold text-gray-900 dark:text-white">{{ t('docs.banner.title') }}</h2>
             <p class="text-xs text-gray-600 dark:text-gray-300">
-              Verified boilerplate, zero-secrets configs, and CLI setups for cURL, Python, Node.js, Claude Code, Cursor, OpenClaw & n8n.
+              {{ t('docs.banner.subtitle') }}
             </p>
           </div>
           <div class="flex flex-shrink-0 items-center gap-2">
@@ -37,7 +37,7 @@
               class="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-700 shadow-sm transition hover:bg-gray-50 dark:border-dark-700 dark:bg-dark-800 dark:text-gray-200"
               @click="copy('git clone https://github.com/bestaiprice/api-examples.git')"
             >
-              <span>{{ copied === 'git clone https://github.com/bestaiprice/api-examples.git' ? t('docs.copied') : 'Copy Clone Command' }}</span>
+              <span>{{ copied === 'git clone https://github.com/bestaiprice/api-examples.git' ? t('docs.copied') : t('docs.banner.copyClone') }}</span>
             </button>
           </div>
         </div>
@@ -190,8 +190,8 @@
       <section class="rounded-2xl border border-gray-200/80 bg-white/85 p-6 shadow-sm dark:border-dark-700/80 dark:bg-dark-800/85">
         <div class="flex items-center justify-between">
           <div>
-            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Frequently Asked Questions (FAQ)</h2>
-            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Everything you need to know about top-ups, keys, model routing, failover, and limits.</p>
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">{{ t('docs.faq.title') }}</h2>
+            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t('docs.faq.subtitle') }}</p>
           </div>
         </div>
         <div class="mt-4 divide-y divide-gray-100 dark:divide-dark-700">
@@ -218,7 +218,7 @@
         <div class="mt-4 space-y-3">
           <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
-              <label class="block text-xs font-medium text-gray-700 dark:text-gray-300">Request ID</label>
+              <label class="block text-xs font-medium text-gray-700 dark:text-gray-300">{{ t('support.requestIdLabel') }}</label>
               <input
                 v-model="disputeRequestId"
                 type="text"
@@ -227,19 +227,19 @@
               />
             </div>
             <div>
-              <label class="block text-xs font-medium text-gray-700 dark:text-gray-300">Model Name (optional)</label>
+              <label class="block text-xs font-medium text-gray-700 dark:text-gray-300">{{ t('support.modelNameLabel') }}</label>
               <input
                 v-model="disputeModelName"
                 type="text"
                 class="input mt-1 w-full text-xs"
-                placeholder="claude-3-7-sonnet"
+                :placeholder="t('support.modelNamePlaceholder')"
               />
             </div>
           </div>
 
           <div>
             <div class="flex items-center justify-between">
-              <span class="text-xs font-medium text-gray-500 dark:text-gray-400">Sanitized Support Context</span>
+              <span class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('support.sanitizedContext') }}</span>
               <button
                 class="rounded-lg border border-gray-200 px-2 py-1 text-xs text-gray-600 hover:bg-gray-50 dark:border-dark-700 dark:text-gray-300"
                 @click="copy(disputeContextText)"

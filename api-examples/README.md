@@ -6,7 +6,7 @@
 [![Gemini Compatible](https://img.shields.io/badge/API-Gemini%20Compatible-purple.svg)](https://bestaiprice.com)
 [![Status: Production Ready](https://img.shields.io/badge/Status-Verified-brightgreen.svg)](https://bestaiprice.com)
 
-[English](README.md) | [中文说明](README_CN.md)
+[English](README.md) | [中文说明](README_CN.md) | [Русский](README_RU.md)
 
 Welcome to the official developer integration repository for **BestAIPrice**.  
 This repository provides production-tested code samples, CLI configurations, and agent setups for connecting any application, coding agent, or automation workflow to the BestAIPrice API Gateway.

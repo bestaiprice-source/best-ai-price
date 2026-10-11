@@ -5,7 +5,7 @@
 [![Anthropic 兼容](https://img.shields.io/badge/API-Anthropic%20兼容-orange.svg)](https://bestaiprice.com)
 [![Gemini 兼容](https://img.shields.io/badge/API-Gemini%20兼容-purple.svg)](https://bestaiprice.com)
 
-[English](README.md) | [中文说明](README_CN.md)
+[English](README.md) | [中文说明](README_CN.md) | [Русский](README_RU.md)
 
 BestAIPrice 官方开发者示例仓库。本仓库为开发者和 AI Agent 提供开箱即用的配置、代码示例与集成指南，帮助您快速接入统一的大模型路由网关。
 

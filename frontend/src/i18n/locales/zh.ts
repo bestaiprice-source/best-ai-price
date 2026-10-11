@@ -351,6 +351,10 @@ export default {
     dispute: '争议扣费',
     disputeHint: '粘贴用量日志中的 request ID 并复制支持信息 — 管理员可据此定位实际上游成本与计费记录。',
     requestIdPlaceholder: 'Request ID（来自用量日志）',
+    requestIdLabel: 'Request ID',
+    modelNameLabel: '模型名称（选填）',
+    modelNamePlaceholder: '例如 claude-3-7-sonnet',
+    sanitizedContext: '已脱敏的支持信息',
     copyContext: '复制支持信息',
     copied: '已复制',
     noSecrets: '仅包含非敏感标识 — 绝不包含 API 密钥或凭据。',
@@ -422,6 +426,17 @@ export default {
       openclawDesc: '兼容 OpenAI 的 Base URL + 密钥。',
       n8nDesc: '使用 OpenAI 节点并自定义 Base URL。',
       langchainDesc: '为任意 LangChain 对话模型传入 base_url + api_key。',
+    },
+    banner: {
+      badge: '🚀 第14节 · 开发者公共方案',
+      title: 'BestAIPrice 代码示例与 Agent 接入方案',
+      subtitle: '适用于 cURL、Python、Node.js、Claude Code、Cursor、OpenClaw 与 n8n 的免泄密配置与验证脚手架。',
+      copyClone: '复制克隆命令',
+      githubLink: 'GitHub 示例仓库',
+    },
+    faq: {
+      title: '常见问题解答 (FAQ)',
+      subtitle: '关于充值、密钥、模型路由、故障转移与限额的完整解答。',
     },
   },
   billing: {
