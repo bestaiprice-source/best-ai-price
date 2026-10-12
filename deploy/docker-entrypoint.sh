@@ -12,6 +12,9 @@ if [ "$(id -u)" = "0" ]; then
     if [ -d "/srv/parser-data" ]; then
         chmod -R a+rX /srv/parser-data 2>/dev/null || true
     fi
+    if [ -d "/root/bestai_prices_parser" ]; then
+        chmod -R a+rX /root/bestai_prices_parser 2>/dev/null || true
+    fi
     # Re-invoke this script as sub2api so the flag-detection below
     # also runs under the correct user.
     if command -v su-exec >/dev/null 2>&1; then

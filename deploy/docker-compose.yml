@@ -32,6 +32,7 @@ services:
       # Data persistence (config.yaml will be auto-generated here)
       - sub2api_data:/app/data
       - /root/bestai_prices_parser/public/data:/app/data/parser
+      - /root/bestai_prices_parser/public/data:/root/bestai_prices_parser/public/data:ro
       # Optional: Mount custom config.yaml (uncomment and create the file first)
       # Copy config.example.yaml to config.yaml, modify it, then uncomment:
       # - ./config.yaml:/app/data/config.yaml
@@ -52,8 +53,8 @@ services:
       # =======================================================================
       # Parser Data Configuration
       # =======================================================================
-      - PARSER_DATA_DIR=${PARSER_DATA_DIR:-/app/data/parser}
-      - RUN_STATS_PATH=${RUN_STATS_PATH:-/app/data/parser/run_stats.json}
+      - PARSER_DATA_DIR=${PARSER_DATA_DIR:-/root/bestai_prices_parser/public/data}
+      - RUN_STATS_PATH=${RUN_STATS_PATH:-/root/bestai_prices_parser/public/data/run_stats.json}
 
       # =======================================================================
       # Database Configuration (PostgreSQL)
