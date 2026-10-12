@@ -50,6 +50,12 @@ services:
       - RUN_MODE=${RUN_MODE:-standard}
 
       # =======================================================================
+      # Parser Data Configuration
+      # =======================================================================
+      - PARSER_DATA_DIR=${PARSER_DATA_DIR:-/app/data/parser}
+      - RUN_STATS_PATH=${RUN_STATS_PATH:-/app/data/parser/run_stats.json}
+
+      # =======================================================================
       # Database Configuration (PostgreSQL)
       # =======================================================================
       - DATABASE_HOST=postgres
