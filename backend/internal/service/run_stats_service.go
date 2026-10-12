@@ -86,14 +86,24 @@ type RunStatsSnapshot struct {
 	Offers    any      `json:"offers"`
 }
 
+type RunStatsOfficialPrices struct {
+	At         *string `json:"at"`
+	Added      []any   `json:"added"`
+	Updated    []any   `json:"updated"`
+	Suspicious []any   `json:"suspicious"`
+	History    []any   `json:"history"`
+}
+
 type RunStatsData struct {
-	LastSyncAt  *string             `json:"last_sync_at"`
-	Totals      RunStatsTotals      `json:"totals"`
-	LastChange  *RunStatsChange     `json:"last_change"`
-	History     []RunStatsChange    `json:"history"`
-	CurrentRun  *RunStatsCurrentRun `json:"current_run"`
-	LastFullRun *RunStatsFullRun    `json:"last_full_run"`
-	Snapshot    *RunStatsSnapshot   `json:"snapshot"`
+	LastSyncAt     *string                 `json:"last_sync_at"`
+	Totals         RunStatsTotals          `json:"totals"`
+	LastChange     *RunStatsChange         `json:"last_change"`
+	History        []RunStatsChange        `json:"history"`
+	CurrentRun     *RunStatsCurrentRun     `json:"current_run"`
+	LastFullRun    *RunStatsFullRun        `json:"last_full_run"`
+	Snapshot       *RunStatsSnapshot       `json:"snapshot"`
+	OfficialPrices *RunStatsOfficialPrices `json:"official_prices,omitempty"`
+	Errors         []any                   `json:"errors,omitempty"`
 }
 
 type RunStatsResult struct {

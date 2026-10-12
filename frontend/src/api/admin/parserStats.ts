@@ -61,6 +61,14 @@ export interface RunStatsSnapshot {
   offers: [string, string][]
 }
 
+export interface RunStatsOfficialPrices {
+  at: string | null
+  added: any[]
+  updated: any[]
+  suspicious: any[]
+  history: any[]
+}
+
 export interface RunStatsData {
   last_sync_at: string | null
   totals: RunStatsTotals
@@ -69,6 +77,8 @@ export interface RunStatsData {
   current_run: RunStatsCurrentRun | null
   last_full_run: RunStatsFullRun | null
   snapshot: RunStatsSnapshot | null
+  official_prices?: RunStatsOfficialPrices | null
+  errors?: any[]
   source_path?: string
   file_exists: boolean
   file_mod_time?: string

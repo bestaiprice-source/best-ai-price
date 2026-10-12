@@ -215,3 +215,44 @@ func TestFindActiveProvidersDir(t *testing.T) {
 	require.Equal(t, statsFile, res.SourcePath)
 }
 
+func TestRunStatsService_OfficialPricesAndErrors(t *testing.T) {
+	tempDir := t.TempDir()
+	filePath := filepath.Join(tempDir, "run_stats.json")
+
+	content := `{
+  "last_sync_at": "2026-10-12T19:00:00Z",
+  "totals": {
+    "models": 50,
+    "providers": 10,
+    "auth_providers": 2,
+    "offers": 200
+  },
+  "official_prices": {
+    "at": "2026-10-12T19:00:00Z",
+    "added": [{"model": "gpt-5", "price": 0.05}],
+    "updated": [{"model": "claude-3-5-sonnet", "new_price": 0.003}],
+    "suspicious": [{"model": "gemini-pro", "diff": "+500%"}],
+    "history": [{"timestamp": "2026-10-11T12:00:00Z", "count": 1}]
+  },
+  "errors": ["Failed to crawl xyz: 403 Forbidden"]
+}`
+
+	err := os.WriteFile(filePath, []byte(content), 0644)
+	require.NoError(t, err)
+
+	svc := NewRunStatsServiceWithPaths([]string{filePath})
+	res, err := svc.GetStats()
+	require.NoError(t, err)
+	require.NotNil(t, res)
+	require.True(t, res.FileExists)
+	require.NotNil(t, res.OfficialPrices)
+	require.NotNil(t, res.OfficialPrices.At)
+	require.Equal(t, "2026-10-12T19:00:00Z", *res.OfficialPrices.At)
+	require.Len(t, res.OfficialPrices.Added, 1)
+	require.Len(t, res.OfficialPrices.Updated, 1)
+	require.Len(t, res.OfficialPrices.Suspicious, 1)
+	require.Len(t, res.OfficialPrices.History, 1)
+	require.Len(t, res.Errors, 1)
+	require.Equal(t, "Failed to crawl xyz: 403 Forbidden", res.Errors[0])
+}
+

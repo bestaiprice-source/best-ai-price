@@ -244,12 +244,12 @@
       </div>
 
       <!-- Navigation Tabs for Sections -->
-      <div class="flex border-b border-gray-200 dark:border-dark-700">
+      <div class="flex border-b border-gray-200 dark:border-dark-700 overflow-x-auto">
         <button
           type="button"
           v-for="tab in tabs"
           :key="tab.id"
-          class="flex items-center gap-2 border-b-2 px-5 py-3 text-sm font-medium transition-all"
+          class="flex items-center gap-2 border-b-2 px-5 py-3 text-sm font-medium transition-all whitespace-nowrap"
           :class="activeTab === tab.id
             ? 'border-primary-600 text-primary-600 dark:border-primary-400 dark:text-primary-400'
             : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'"
@@ -259,9 +259,9 @@
           <span
             v-if="tab.badge !== undefined"
             class="rounded-full px-2 py-0.5 text-xs font-semibold"
-            :class="activeTab === tab.id
+            :class="tab.badgeClass ? tab.badgeClass : (activeTab === tab.id
               ? 'bg-primary-100 text-primary-700 dark:bg-primary-950 dark:text-primary-300'
-              : 'bg-gray-100 text-gray-600 dark:bg-dark-700 dark:text-gray-300'"
+              : 'bg-gray-100 text-gray-600 dark:bg-dark-700 dark:text-gray-300')"
           >
             {{ tab.badge }}
           </span>
@@ -583,6 +583,197 @@
         </div>
       </div>
 
+      <!-- TAB 4: Official Prices -->
+      <div v-if="activeTab === 'official_prices'" class="space-y-6">
+        <div v-if="!stats?.official_prices" class="rounded-2xl border border-gray-200/80 bg-white/85 p-8 text-center text-sm text-gray-500 dark:border-dark-700/80 dark:bg-dark-800/85 dark:text-gray-400">
+          No official pricing telemetry recorded yet.
+        </div>
+
+        <div v-else class="space-y-6">
+          <!-- Overview Card -->
+          <div class="rounded-2xl border border-gray-200/80 bg-white/85 p-6 shadow-sm dark:border-dark-700/80 dark:bg-dark-800/85">
+            <div class="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <h3 class="text-base font-semibold text-gray-900 dark:text-white">
+                  Official Provider Pricing & Verification
+                </h3>
+                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  Audit log of canonical provider price changes, detected price spikes/drops, and verification history.
+                  <span v-if="stats.official_prices.at" class="ml-1">
+                    Recorded at {{ formatDate(stats.official_prices.at) }} ({{ timeAgo(stats.official_prices.at) }})
+                  </span>
+                </p>
+              </div>
+            </div>
+
+            <!-- Metric summary cards -->
+            <div class="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
+              <div class="rounded-xl border border-emerald-100 bg-emerald-50/50 p-4 text-center dark:border-emerald-900/40 dark:bg-emerald-950/20">
+                <p class="text-xs font-medium text-emerald-700 dark:text-emerald-400">Newly Added</p>
+                <p class="mt-1 text-2xl font-bold text-emerald-800 dark:text-emerald-300">
+                  {{ stats.official_prices.added?.length || 0 }}
+                </p>
+              </div>
+              <div class="rounded-xl border border-blue-100 bg-blue-50/50 p-4 text-center dark:border-blue-900/40 dark:bg-blue-950/20">
+                <p class="text-xs font-medium text-blue-700 dark:text-blue-400">Price Updates</p>
+                <p class="mt-1 text-2xl font-bold text-blue-800 dark:text-blue-300">
+                  {{ stats.official_prices.updated?.length || 0 }}
+                </p>
+              </div>
+              <div
+                class="rounded-xl border p-4 text-center"
+                :class="(stats.official_prices.suspicious?.length || 0) > 0
+                  ? 'border-amber-200 bg-amber-50/70 dark:border-amber-900/40 dark:bg-amber-950/20'
+                  : 'border-gray-100 bg-gray-50/70 dark:border-dark-700 dark:bg-dark-900/40'"
+              >
+                <p
+                  class="text-xs font-medium"
+                  :class="(stats.official_prices.suspicious?.length || 0) > 0 ? 'text-amber-800 dark:text-amber-400' : 'text-gray-500 dark:text-gray-400'"
+                >
+                  Suspicious Flags
+                </p>
+                <p
+                  class="mt-1 text-2xl font-bold"
+                  :class="(stats.official_prices.suspicious?.length || 0) > 0 ? 'text-amber-700 dark:text-amber-300' : 'text-gray-900 dark:text-white'"
+                >
+                  {{ stats.official_prices.suspicious?.length || 0 }}
+                </p>
+              </div>
+              <div class="rounded-xl border border-gray-100 bg-gray-50/70 p-4 text-center dark:border-dark-700 dark:bg-dark-900/40">
+                <p class="text-xs font-medium text-gray-500 dark:text-gray-400">History Records</p>
+                <p class="mt-1 text-2xl font-bold text-gray-900 dark:text-white">
+                  {{ stats.official_prices.history?.length || 0 }}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Suspicious Price Items Section -->
+          <div
+            v-if="stats.official_prices.suspicious && stats.official_prices.suspicious.length > 0"
+            class="overflow-hidden rounded-2xl border border-amber-200 bg-amber-50/30 shadow-sm dark:border-amber-900/40 dark:bg-amber-950/10"
+          >
+            <div class="flex items-center gap-2 border-b border-amber-200/60 px-6 py-3.5 dark:border-amber-900/40">
+              <Icon name="exclamationTriangle" size="sm" class="text-amber-600 dark:text-amber-400" />
+              <h4 class="text-sm font-semibold text-amber-900 dark:text-amber-200">
+                Suspicious Price Changes Flagged ({{ stats.official_prices.suspicious.length }})
+              </h4>
+            </div>
+            <div class="p-4 space-y-3">
+              <div
+                v-for="(item, idx) in stats.official_prices.suspicious"
+                :key="idx"
+                class="rounded-xl border border-amber-200/80 bg-white p-4 shadow-xs dark:border-amber-900/30 dark:bg-dark-800"
+              >
+                <pre v-if="typeof item === 'object'" class="font-mono text-xs text-gray-800 dark:text-gray-200 overflow-x-auto">{{ JSON.stringify(item, null, 2) }}</pre>
+                <p v-else class="text-sm text-gray-800 dark:text-gray-200">{{ item }}</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Added Prices Section -->
+          <div
+            v-if="stats.official_prices.added && stats.official_prices.added.length > 0"
+            class="overflow-hidden rounded-2xl border border-gray-200/80 bg-white/85 shadow-sm dark:border-dark-700/80 dark:bg-dark-800/85"
+          >
+            <div class="border-b border-gray-200 px-6 py-3.5 dark:border-dark-700">
+              <h4 class="text-sm font-semibold text-gray-900 dark:text-white">
+                Newly Added Official Prices ({{ stats.official_prices.added.length }})
+              </h4>
+            </div>
+            <div class="p-4 space-y-3">
+              <div
+                v-for="(item, idx) in stats.official_prices.added"
+                :key="idx"
+                class="rounded-xl border border-gray-100 bg-gray-50/50 p-4 dark:border-dark-700 dark:bg-dark-900/40"
+              >
+                <pre v-if="typeof item === 'object'" class="font-mono text-xs text-gray-800 dark:text-gray-200 overflow-x-auto">{{ JSON.stringify(item, null, 2) }}</pre>
+                <p v-else class="text-sm text-gray-800 dark:text-gray-200">{{ item }}</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Updated Prices Section -->
+          <div
+            v-if="stats.official_prices.updated && stats.official_prices.updated.length > 0"
+            class="overflow-hidden rounded-2xl border border-gray-200/80 bg-white/85 shadow-sm dark:border-dark-700/80 dark:bg-dark-800/85"
+          >
+            <div class="border-b border-gray-200 px-6 py-3.5 dark:border-dark-700">
+              <h4 class="text-sm font-semibold text-gray-900 dark:text-white">
+                Updated Official Prices ({{ stats.official_prices.updated.length }})
+              </h4>
+            </div>
+            <div class="p-4 space-y-3">
+              <div
+                v-for="(item, idx) in stats.official_prices.updated"
+                :key="idx"
+                class="rounded-xl border border-gray-100 bg-gray-50/50 p-4 dark:border-dark-700 dark:bg-dark-900/40"
+              >
+                <pre v-if="typeof item === 'object'" class="font-mono text-xs text-gray-800 dark:text-gray-200 overflow-x-auto">{{ JSON.stringify(item, null, 2) }}</pre>
+                <p v-else class="text-sm text-gray-800 dark:text-gray-200">{{ item }}</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Empty state when no items in added/updated/suspicious -->
+          <div
+            v-if="(!stats.official_prices.added || stats.official_prices.added.length === 0) &&
+                   (!stats.official_prices.updated || stats.official_prices.updated.length === 0) &&
+                   (!stats.official_prices.suspicious || stats.official_prices.suspicious.length === 0)"
+            class="rounded-2xl border border-gray-200/80 bg-white/85 p-8 text-center text-sm text-gray-500 dark:border-dark-700/80 dark:bg-dark-800/85 dark:text-gray-400"
+          >
+            <Icon name="checkCircle" size="lg" class="mx-auto mb-2 text-emerald-500" />
+            <p class="font-medium text-gray-900 dark:text-white">All Official Prices Up-to-Date</p>
+            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">No added, updated, or suspicious official pricing changes detected in this synchronization run.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 5: Errors -->
+      <div v-if="activeTab === 'errors'" class="space-y-6">
+        <div v-if="!stats?.errors || stats.errors.length === 0" class="rounded-2xl border border-emerald-200/70 bg-emerald-50/40 p-8 text-center dark:border-emerald-900/40 dark:bg-emerald-950/20">
+          <Icon name="checkCircle" size="lg" class="mx-auto mb-2 text-emerald-600 dark:text-emerald-400" />
+          <h4 class="text-base font-semibold text-emerald-950 dark:text-emerald-200">Zero Parser Errors</h4>
+          <p class="mt-1 text-xs text-emerald-700 dark:text-emerald-400">
+            All crawlers, network fetches, and pricing page processors finished cleanly without reported exceptions.
+          </p>
+        </div>
+
+        <div v-else class="space-y-4">
+          <div class="rounded-2xl border border-red-200 bg-red-50/60 p-4 dark:border-red-900/50 dark:bg-red-950/20">
+            <div class="flex items-center gap-3">
+              <Icon name="exclamationTriangle" size="md" class="text-red-600 dark:text-red-400" />
+              <div>
+                <h4 class="text-sm font-semibold text-red-900 dark:text-red-200">
+                  {{ stats.errors.length }} {{ stats.errors.length === 1 ? 'Error' : 'Errors' }} Encountered
+                </h4>
+                <p class="text-xs text-red-700 dark:text-red-300">
+                  The crawler reported failure events during page fetching or data parsing.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div class="space-y-3">
+            <div
+              v-for="(err, idx) in stats.errors"
+              :key="idx"
+              class="rounded-xl border border-gray-200/80 bg-white/90 p-4 shadow-sm dark:border-dark-700/80 dark:bg-dark-800/90"
+            >
+              <div class="flex items-start justify-between gap-3">
+                <span class="rounded bg-red-100 px-2 py-0.5 font-mono text-xs font-semibold text-red-800 dark:bg-red-950/70 dark:text-red-300">
+                  #{{ idx + 1 }}
+                </span>
+              </div>
+              <div class="mt-2">
+                <pre v-if="typeof err === 'object'" class="font-mono text-xs leading-relaxed text-red-700 dark:text-red-300 overflow-x-auto">{{ JSON.stringify(err, null, 2) }}</pre>
+                <p v-else class="font-mono text-xs leading-relaxed text-red-700 dark:text-red-300">{{ err }}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Raw JSON Modal -->
       <Teleport to="body">
         <div v-if="showRawModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -626,14 +817,53 @@ import { getParserRunStats, type RunStatsData } from '@/api/admin/parserStats'
 
 const loading = ref(false)
 const stats = ref<RunStatsData | null>(null)
-const activeTab = ref<'full_run' | 'last_change' | 'history'>('full_run')
+const activeTab = ref<'full_run' | 'last_change' | 'official_prices' | 'history' | 'errors'>('full_run')
 const showRawModal = ref(false)
 const copySuccess = ref(false)
 
 const tabs = computed(() => [
-  { id: 'full_run' as const, label: 'Last Full Run', badge: stats.value?.last_full_run ? (stats.value.last_full_run.success ? '✓' : '✗') : undefined },
-  { id: 'last_change' as const, label: 'Recent Changes', badge: stats.value?.last_change?.new_models?.length ? `+${stats.value.last_change.new_models.length}` : undefined },
-  { id: 'history' as const, label: 'Change History', badge: stats.value?.history?.length || 0 }
+  {
+    id: 'full_run' as const,
+    label: 'Last Full Run',
+    badge: stats.value?.last_full_run ? (stats.value.last_full_run.success ? '✓' : '✗') : undefined,
+    badgeClass: stats.value?.last_full_run
+      ? (stats.value.last_full_run.success
+          ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300'
+          : 'bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-300')
+      : undefined
+  },
+  {
+    id: 'last_change' as const,
+    label: 'Recent Changes',
+    badge: stats.value?.last_change?.new_models?.length ? `+${stats.value.last_change.new_models.length}` : undefined,
+    badgeClass: undefined
+  },
+  {
+    id: 'official_prices' as const,
+    label: 'Official Prices',
+    badge: stats.value?.official_prices
+      ? ((stats.value.official_prices.added?.length || 0) +
+         (stats.value.official_prices.updated?.length || 0) +
+         (stats.value.official_prices.suspicious?.length || 0)) || undefined
+      : undefined,
+    badgeClass: (stats.value?.official_prices?.suspicious?.length || 0) > 0
+      ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300'
+      : undefined
+  },
+  {
+    id: 'history' as const,
+    label: 'Change History',
+    badge: stats.value?.history?.length || 0,
+    badgeClass: undefined
+  },
+  {
+    id: 'errors' as const,
+    label: 'Errors',
+    badge: stats.value?.errors !== undefined ? stats.value.errors.length : undefined,
+    badgeClass: (stats.value?.errors?.length || 0) > 0
+      ? 'bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-300'
+      : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300'
+  }
 ])
 
 const rawJSONString = computed(() => {
