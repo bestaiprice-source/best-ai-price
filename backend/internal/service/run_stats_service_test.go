@@ -192,3 +192,26 @@ func TestRunStatsService_EnvOverrides(t *testing.T) {
 	require.Equal(t, 77, res.Totals.Models)
 	require.Equal(t, customFile, res.SourcePath)
 }
+
+func TestFindActiveProvidersDir(t *testing.T) {
+	tempDir := t.TempDir()
+	provFile := filepath.Join(tempDir, "providers.json")
+	statsFile := filepath.Join(tempDir, "run_stats.json")
+
+	require.NoError(t, os.WriteFile(provFile, []byte(`[]`), 0644))
+	require.NoError(t, os.WriteFile(statsFile, []byte(`{"totals":{"providers":42}}`), 0644))
+
+	t.Setenv("PROVIDERS_PATH", provFile)
+
+	foundDir := FindActiveProvidersDir()
+	require.Equal(t, tempDir, foundDir)
+
+	svc := NewRunStatsService()
+	res, err := svc.GetStats()
+	require.NoError(t, err)
+	require.NotNil(t, res)
+	require.True(t, res.FileExists)
+	require.Equal(t, 42, res.Totals.Providers)
+	require.Equal(t, statsFile, res.SourcePath)
+}
+

@@ -121,6 +121,33 @@ func NewRunStatsServiceWithPaths(paths []string) *RunStatsService {
 	}
 }
 
+// FindActiveProvidersDir locates the directory where providers.json currently exists on disk.
+func FindActiveProvidersDir() string {
+	candidateProvidersPaths := []string{
+		"/app/data/parser/providers.json",
+		"/srv/parser-data/data/providers.json",
+		"/srv/parser-data/providers.json",
+		"/root/bestai_prices_parser/public/data/providers.json",
+		"/root/bestai_prices_parser/data/providers.json",
+		"/app/data/providers.json",
+		"./data/providers.json",
+		"../data/providers.json",
+		"/home/cucum/dev/bestai_prices_parser/public/data/providers.json",
+	}
+	if envDir := os.Getenv("PARSER_DATA_DIR"); envDir != "" {
+		candidateProvidersPaths = append([]string{filepath.Join(envDir, "providers.json")}, candidateProvidersPaths...)
+	}
+	if envProv := os.Getenv("PROVIDERS_PATH"); envProv != "" {
+		candidateProvidersPaths = append([]string{envProv}, candidateProvidersPaths...)
+	}
+	for _, p := range candidateProvidersPaths {
+		if info, err := os.Stat(p); err == nil && !info.IsDir() {
+			return filepath.Dir(p)
+		}
+	}
+	return ""
+}
+
 func (s *RunStatsService) getPaths() []string {
 	if len(s.customPaths) > 0 {
 		return s.customPaths
@@ -135,6 +162,11 @@ func (s *RunStatsService) getPaths() []string {
 	}
 	if envProv := os.Getenv("PROVIDERS_PATH"); envProv != "" {
 		paths = append(paths, filepath.Join(filepath.Dir(envProv), "run_stats.json"))
+	}
+
+	// 1. Top priority: wherever providers.json is located on the system!
+	if provDir := FindActiveProvidersDir(); provDir != "" {
+		paths = append(paths, filepath.Join(provDir, "run_stats.json"))
 	}
 
 	paths = append(paths, DefaultRunStatsPaths...)
