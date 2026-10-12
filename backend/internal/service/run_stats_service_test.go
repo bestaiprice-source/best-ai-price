@@ -138,7 +138,7 @@ func TestRunStatsService_DefaultPaths(t *testing.T) {
 	paths := svc.getPaths()
 	require.NotEmpty(t, paths)
 	require.Contains(t, paths, "/app/data/parser/run_stats.json")
-	require.Contains(t, paths, "./data/run_stats.json")
+	require.Contains(t, paths, filepath.Clean("./data/run_stats.json"))
 }
 
 func TestRunStatsService_MultipleFilesNewestWins(t *testing.T) {
@@ -161,4 +161,51 @@ func TestRunStatsService_MultipleFilesNewestWins(t *testing.T) {
 	require.NotNil(t, res)
 	require.Equal(t, 25, res.Totals.Models)
 	require.Equal(t, newFile, res.SourcePath)
+}
+
+func TestRunStatsService_AdjacentToProvidersWins(t *testing.T) {
+	tempDir := t.TempDir()
+	dirWithoutProviders := filepath.Join(tempDir, "stray")
+	dirWithProviders := filepath.Join(tempDir, "parser_data")
+
+	require.NoError(t, os.MkdirAll(dirWithoutProviders, 0755))
+	require.NoError(t, os.MkdirAll(dirWithProviders, 0755))
+
+	// Write run_stats in dirWithProviders (older) and providers.json
+	realStats := filepath.Join(dirWithProviders, "run_stats.json")
+	require.NoError(t, os.WriteFile(realStats, []byte(`{"totals":{"models":88}}`), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(dirWithProviders, "providers.json"), []byte(`[]`), 0644))
+
+	time.Sleep(10 * time.Millisecond)
+
+	// Write stray run_stats in dirWithoutProviders (newer, but stray)
+	strayStats := filepath.Join(dirWithoutProviders, "run_stats.json")
+	require.NoError(t, os.WriteFile(strayStats, []byte(`{"totals":{"models":999}}`), 0644))
+
+	// Save original DefaultParserDirs and restore
+	origDirs := DefaultParserDirs
+	defer func() { DefaultParserDirs = origDirs }()
+	DefaultParserDirs = []string{dirWithoutProviders, dirWithProviders}
+
+	svc := NewRunStatsService()
+	res, err := svc.GetStats()
+	require.NoError(t, err)
+	require.NotNil(t, res)
+	require.Equal(t, 88, res.Totals.Models, "Should prefer run_stats.json in directory containing providers.json")
+	require.Equal(t, realStats, res.SourcePath)
+}
+
+func TestLocateParserDataFile_EnvOverrides(t *testing.T) {
+	tempDir := t.TempDir()
+	customDir := filepath.Join(tempDir, "custom")
+	require.NoError(t, os.MkdirAll(customDir, 0755))
+
+	t.Setenv("PARSER_DATA_DIR", customDir)
+	candidates := LocateParserDataFile("run_stats.json")
+	require.NotEmpty(t, candidates)
+	require.Equal(t, filepath.Join(customDir, "run_stats.json"), candidates[0])
+
+	t.Setenv("PROVIDERS_PATH", filepath.Join(customDir, "sub", "providers.json"))
+	candidates2 := LocateParserDataFile("run_stats.json")
+	require.Contains(t, candidates2, filepath.Join(customDir, "sub", "run_stats.json"))
 }

@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/Wei-Shaw/sub2api/internal/server/gatewayctx"
+	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
 )
 
@@ -320,73 +321,19 @@ func commonSetupStatus(c gatewayctx.GatewayContext) {
 }
 
 func commonProvidersJSON(c gatewayctx.GatewayContext) {
-	paths := []string{
-		"/app/data/parser/providers.json",
-		"/app/data/providers.json",
-		"./data/providers.json",
-		"/srv/parser-data/data/providers.json",
-		"/root/bestai_prices_parser/public/data/providers.json",
-	}
-	for _, p := range paths {
-		if _, err := os.Stat(p); err == nil {
-			c.SetHeader("Cache-Control", "public, max-age=300")
-			c.SetHeader("Access-Control-Allow-Origin", "*")
-			if err := c.ServeFile(p); err == nil {
-				return
-			}
-		}
-	}
-	c.WriteJSON(http.StatusNotFound, map[string]any{"error": "providers.json not found"})
+	serveStaticDataJSON(c, "providers.json")
 }
 
 func commonModelsJSON(c gatewayctx.GatewayContext) {
-	paths := []string{
-		"/app/data/parser/models.json",
-		"/app/data/models.json",
-		"./data/models.json",
-		"/srv/parser-data/data/models.json",
-		"/root/bestai_prices_parser/public/data/models.json",
-	}
-	for _, p := range paths {
-		if _, err := os.Stat(p); err == nil {
-			c.SetHeader("Cache-Control", "public, max-age=300")
-			c.SetHeader("Access-Control-Allow-Origin", "*")
-			if err := c.ServeFile(p); err == nil {
-				return
-			}
-		}
-	}
-	c.WriteJSON(http.StatusNotFound, map[string]any{"error": "models.json not found"})
+	serveStaticDataJSON(c, "models.json")
 }
 
 func commonApiDescriptionsJSON(c gatewayctx.GatewayContext) {
-	paths := []string{
-		"/app/data/parser/api_descriptions.json",
-		"/app/data/api_descriptions.json",
-		"./data/api_descriptions.json",
-		"/srv/parser-data/data/api_descriptions.json",
-		"/root/bestai_prices_parser/public/data/api_descriptions.json",
-	}
-	for _, p := range paths {
-		if _, err := os.Stat(p); err == nil {
-			c.SetHeader("Cache-Control", "public, max-age=300")
-			c.SetHeader("Access-Control-Allow-Origin", "*")
-			if err := c.ServeFile(p); err == nil {
-				return
-			}
-		}
-	}
-	c.WriteJSON(http.StatusNotFound, map[string]any{"error": "api_descriptions.json not found"})
+	serveStaticDataJSON(c, "api_descriptions.json")
 }
 
 func serveStaticDataJSON(c gatewayctx.GatewayContext, filename string) {
-	paths := []string{
-		"/app/data/parser/" + filename,
-		"/app/data/" + filename,
-		"./data/" + filename,
-		"/srv/parser-data/data/" + filename,
-		"/root/bestai_prices_parser/public/data/" + filename,
-	}
+	paths := service.LocateParserDataFile(filename)
 	for _, p := range paths {
 		if _, err := os.Stat(p); err == nil {
 			c.SetHeader("Cache-Control", "public, max-age=300")
@@ -420,24 +367,15 @@ func commonSpeechToTextRankingsJSON(c gatewayctx.GatewayContext) {
 }
 
 func commonProviderDescriptionsJSON(c gatewayctx.GatewayContext) {
-	paths := []string{
-		"/app/data/parser/providers_description.json",
-		"/app/data/parser/provider_descriptions.json",
-		"/app/data/providers_description.json",
-		"/app/data/provider_descriptions.json",
-		"./data/providers_description.json",
-		"./data/provider_descriptions.json",
-		"/srv/parser-data/data/providers_description.json",
-		"/srv/parser-data/data/provider_descriptions.json",
-		"/root/bestai_prices_parser/public/data/providers_description.json",
-		"/root/bestai_prices_parser/public/data/provider_descriptions.json",
-	}
-	for _, p := range paths {
-		if _, err := os.Stat(p); err == nil {
-			c.SetHeader("Cache-Control", "public, max-age=300")
-			c.SetHeader("Access-Control-Allow-Origin", "*")
-			if err := c.ServeFile(p); err == nil {
-				return
+	for _, fname := range []string{"providers_description.json", "provider_descriptions.json"} {
+		paths := service.LocateParserDataFile(fname)
+		for _, p := range paths {
+			if _, err := os.Stat(p); err == nil {
+				c.SetHeader("Cache-Control", "public, max-age=300")
+				c.SetHeader("Access-Control-Allow-Origin", "*")
+				if err := c.ServeFile(p); err == nil {
+					return
+				}
 			}
 		}
 	}
@@ -445,19 +383,7 @@ func commonProviderDescriptionsJSON(c gatewayctx.GatewayContext) {
 }
 
 func commonRunStatsJSON(c gatewayctx.GatewayContext) {
-	paths := []string{
-		"/app/data/parser/run_stats.json",
-		"/app/data/run_stats.json",
-		"./data/run_stats.json",
-		"../data/run_stats.json",
-		"/data/run_stats.json",
-		"/srv/parser-data/data/run_stats.json",
-		"/root/bestai_prices_parser/public/data/run_stats.json",
-		"/home/cucum/dev/bestai_prices_parser/public/data/run_stats.json",
-	}
-	if envPath := os.Getenv("RUN_STATS_PATH"); envPath != "" {
-		paths = append([]string{envPath}, paths...)
-	}
+	paths := service.LocateParserDataFile("run_stats.json")
 	for _, p := range paths {
 		if _, err := os.Stat(p); err == nil {
 			c.SetHeader("Cache-Control", "public, max-age=60")
