@@ -11,10 +11,10 @@ import (
 // matching the exact locations where providers.json is located.
 var DefaultRunStatsPaths = []string{
 	"/app/data/parser/run_stats.json",
+	"/root/bestai_prices_parser/public/data/run_stats.json",
+	"/srv/parser-data/data/run_stats.json",
 	"/app/data/run_stats.json",
 	"./data/run_stats.json",
-	"/srv/parser-data/data/run_stats.json",
-	"/root/bestai_prices_parser/public/data/run_stats.json",
 }
 
 type RunStatsTotals struct {
