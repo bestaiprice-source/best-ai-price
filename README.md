@@ -1,585 +1,260 @@
-# Sub2API
+# BestAIPrice Gateway & Session Hypervisor
 
 <div align="center">
 
-[![Go](https://img.shields.io/badge/Go-1.25.7-00ADD8.svg)](https://golang.org/)
-[![Vue](https://img.shields.io/badge/Vue-3.4+-4FC08D.svg)](https://vuejs.org/)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15+-336791.svg)](https://www.postgresql.org/)
-[![Redis](https://img.shields.io/badge/Redis-7+-DC382D.svg)](https://redis.io/)
-[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg)](https://www.docker.com/)
+[![Go](https://img.shields.io/badge/Go-1.25.7-00ADD8.svg?style=flat&logo=go)](https://golang.org/)
+[![Vue](https://img.shields.io/badge/Vue-3.4+-4FC08D.svg?style=flat&logo=vuedotjs)](https://vuejs.org/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15+-336791.svg?style=flat&logo=postgresql)](https://www.postgresql.org/)
+[![Redis](https://img.shields.io/badge/Redis-7+-DC382D.svg?style=flat&logo=redis)](https://redis.io/)
+[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg?style=flat&logo=docker)](https://www.docker.com/)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-<a href="https://trendshift.io/repositories/21823" target="_blank"><img src="https://trendshift.io/api/badge/repositories/21823" alt="Wei-Shaw%2Fsub2api | Trendshift" width="250" height="55"/></a>
+**Enterprise-Grade AI Gateway, Multi-Account Session Hypervisor & Cost Optimizer**
 
-**AI API Gateway Platform for Subscription Quota Distribution**
-
-English | [中文](README_CN.md)
+[Features](#-key-features) • [Architecture](#-architecture) • [Quick Start](#-quick-start) • [API & SDK Examples](#-api-and-integrations) • [Configuration](#-configuration) • [Documentation](#-documentation)
 
 </div>
 
-> **Sub2API officially uses only the domains `sub2api.org` and `pincc.ai`. Other websites using the Sub2API name may be third-party deployments or services and are not affiliated with this project. Please verify and exercise your own judgment.**
-
 ---
 
-## Demo
+## 🚀 Overview
 
-Try Sub2API online: **[https://demo.sub2api.org/](https://demo.sub2api.org/)**
+**BestAIPrice Gateway** is a high-performance, fault-tolerant AI Gateway and **AI Session Hypervisor (ASH / Yunwu Engine)**. It coordinates pools of upstream AI accounts (Claude Max 20x, OpenAI / ChatGPT Pro, Codex, Google Gemini, Moonshot / Kimi, DeepSeek, and third-party aggregators), distributing high-throughput capacity to end users through a single, unified API key.
 
-Demo credentials (shared demo environment; **not** created automatically for self-hosted installs):
+The platform decouples client software (Claude Code CLI, Cursor, Continue, Codex, OpenAI / Anthropic SDKs) from physical accounts and upstream resellers, guaranteeing continuous service delivery even through upstream `429 Too Many Requests`, token exhaustion, network drops, or price changes.
 
-| Email | Password |
-|-------|----------|
-| admin@sub2api.org | admin123 |
-
-## Overview
-
-Sub2API is an AI API gateway platform designed to distribute and manage API quotas from AI product subscriptions. Users can access upstream AI services through platform-generated API Keys, while the platform handles authentication, billing, load balancing, and request forwarding.
-
-## Features
-
-- **Multi-Account Management** - Support multiple upstream account types (OAuth, API Key)
-- **API Key Distribution** - Generate and manage API Keys for users
-- **Precise Billing** - Token-level usage tracking and cost calculation
-- **Smart Scheduling** - Intelligent account selection with sticky sessions
-- **Concurrency Control** - Per-user and per-account concurrency limits
-- **Rate Limiting** - Configurable request and token rate limits
-- **Admin Dashboard** - Web interface for monitoring and management
-- **External System Integration** - Embed external systems (e.g. payment, ticketing) via iframe to extend the admin dashboard
-
-## Don't Want to Self-Host?
-
-<table>
-<tr>
-<td width="180" align="center" valign="middle"><a href="https://shop.pincc.ai/"><img src="assets/partners/logos/pincc-logo.png" alt="pincc" width="120"></a></td>
-<td valign="middle"><b><a href="https://shop.pincc.ai/">PinCC</a></b> is the official relay service built on Sub2API, offering stable access to Claude Code, Codex, Gemini and other popular models — ready to use, no deployment or maintenance required.</td>
-</tr>
-</table>
-
-## Ecosystem
-
-Community projects that extend or integrate with Sub2API:
-
-| Project | Description | Features |
-|---------|-------------|----------|
-| [Sub2ApiPay](https://github.com/touwaeriol/sub2apipay) | Self-service payment system | Self-service top-up and subscription purchase; supports YiPay protocol, WeChat Pay, Alipay, Stripe; embeddable via iframe |
-| [sub2api-mobile](https://github.com/ckken/sub2api-mobile) | Mobile admin console | Cross-platform app (iOS/Android/Web) for user management, account management, monitoring dashboard, and multi-backend switching; built with Expo + React Native |
-
-## Tech Stack
-
-| Component | Technology |
-|-----------|------------|
-| Backend | Go 1.25.7, Gin, Ent |
-| Frontend | Vue 3.4+, Vite 5+, TailwindCSS |
-| Database | PostgreSQL 15+ |
-| Cache/Queue | Redis 7+ |
-
----
-
-## Nginx Reverse Proxy Note
-
-When using Nginx as a reverse proxy for Sub2API (or CRS) with Codex CLI, add the following to the `http` block in your Nginx configuration:
-
-```nginx
-underscores_in_headers on;
+```text
++-----------------------------------------------------------------------------------+
+|                                  Client Requests                                  |
+|         (Claude Code CLI, Cursor, OpenAI/Anthropic SDKs, Gemini CLI, n8n)         |
++-----------------------------------------------------------------------------------+
+                                          |
+                                          v
++-----------------------------------------------------------------------------------+
+|                   BestAIPrice High-Throughput Gateway Layer                       |
+|           • Unified Auth (Single Key for All Models)  • GNet / HTTP Ingress       |
+|           • Pre-Admission Pricing Guard               • Anti-Overdraft Balance    |
++-----------------------------------------------------------------------------------+
+                                          |
+                                          v
++-----------------------------------------------------------------------------------+
+|                      AI Session Hypervisor (ASH / Yunwu)                          |
+|  • VirtualSession State Engine      • Context Compiler & Rebinding                |
+|  • Dynamic Price-Based Routing      • Health Prober & Cooldown Controller         |
+|  • Organic Token Load Balancer      • Cheaper Provider Auto-Scanner               |
++-----------------------------------------------------------------------------------+
+            |                           |                           |
+            v                           v                           v
++-----------------------+   +-----------------------+   +-----------------------+
+|  Claude (Anthropic)   |   |   OpenAI & Codex      |   |  Multi-Provider Hub   |
+|  • OAuth & Setup-Token|   |  • Responses API      |   |  • Portdan, OpenLux   |
+|  • System Banner Inject|  |  • Native Chat Format |   |  • Top-API, Yuanqiao  |
+|  • Context Compilation|   |  • Model Routing      |   |  • X-LLM, Custom Hub  |
++-----------------------+   +-----------------------+   +-----------------------+
 ```
 
-Nginx drops headers containing underscores by default (e.g. `session_id`), which breaks sticky session routing in multi-account setups.
+---
+
+## ✨ Key Features
+
+### 1. Unified Gateway & Single API Key Access
+- **Universal Single Key**: Issue a single API key to users that operates seamlessly across all permitted models—no need for separate keys per provider or model family.
+- **Protocol Parity**:
+  - Anthropic Messages API (`/v1/messages` with streaming SSE)
+  - OpenAI Chat Completions (`/v1/chat/completions`) & Codex Responses API (`/responses`, `/v1/responses`)
+  - Google Gemini Native API (`/v1beta/models/...`) & Gemini Live Bidirectional WebSocket
+  - Multimodal media generation (Images, Audio, Video, and Sora endpoints)
+  - Public model catalog and live pricing endpoint (`/v1/models`, `/models`)
+
+### 2. AI Session Hypervisor (ASH)
+- **Virtual Sessions & Session Affinity**: Locks conversational state to underlying physical nodes to preserve upstream prompt caching benefits.
+- **Zero-Downtime Automatic Rebinding**: Upon encountering upstream `429 Too Many Requests`, timeouts, or node errors, ASH automatically acquires an alternative healthy execution node, recompiles prompt context (system instructions, summaries, recent messages), and transparently completes the request without client-visible failures.
+- **Upstream Failover Loss Accounting**: If an upstream attempt fails mid-stream after burning tokens, the client is **never double-charged**; internal losses are attributed directly to operational margin metrics.
+
+### 3. Intelligent Multi-Provider Hub & Price Routing
+- **Primary / Backup Routing**: Automatically derives routes based on real-time price tiers—the cheapest provider serves as Primary, while the next-cheapest acts as Backup.
+- **Continuous Cheaper Provider Checker**: Periodically inspects candidate providers against configured routes, groups opportunities by model family, calculates family-wide average savings, and alerts operators when cheaper providers are available.
+- **Supported Aggregators**: Out-of-the-box support for OpenLux, Portdan, Top-API, Yuanqiaoyun, X-LLM, and arbitrary custom upstream endpoints.
+- **Provider Balance Auto-Sync**: Queries upstream credit grants, token quotas, and wallet balances every few minutes with usage-based fallback estimation.
+
+### 4. Real-Time Billing & Anti-Overdraft Protection
+- **Atomic Compare-And-Swap (CAS)**: High-speed Redis balance cache with monotonic version tracking prevents concurrency race conditions and stale balance overwrites.
+- **Strict Anti-Overdraft Guard**: Automatically clamps concurrency for low-balance pay-as-you-go users, and denies requests upfront if balance falls below the minimum operational threshold (`$0.002`).
+- **Separate Money Ledger & API Logs**: Detailed ledger for deposits, usage deductions, refunds, and administrator adjustments, completely decoupled from technical request logs.
+
+### 5. Administrative Observability & Telegram Alerts
+- **Telegram Alert Bot**: Real-time notifications for 8 critical events (Provider Down, Upstream Key Invalid, Low Balance, Both Providers Down, Spike in 429/5xx, Failover Rate Exceeded, Cheaper Provider Found, Significant Price Change).
+- **Deduplication & Distributed Cooldowns**: SHA-256 body fingerprinting and Redis distributed locks eliminate notification spam.
+- **Gross Margin Analytics**: Real-time monitoring of Gross Revenue, Upstream Cost, Net Profit, and Gross Margin % with per-model and per-provider breakdowns.
+- **Durable Audit Trail**: Append-only audit logs for all administrative modifications (provider changes, routing rules, balance adjustments).
 
 ---
 
-## Deployment
+## 🛠 Tech Stack
 
-### Method 1: Script Installation (Recommended)
+| Layer | Technologies |
+|---|---|
+| **Backend** | Go 1.25+ • Gin • GNet (High-Performance Event-Driven Ingress) • Ent ORM |
+| **Frontend** | Vue 3 • Vite • TailwindCSS • Pinia • Vue Router • Lucide Icons |
+| **Storage & Cache** | PostgreSQL 15+ • Redis 7+ (CAS Lua scripts & Distributed Locks) |
+| **TLS & Networking** | Rust FFI / Sidecar • TLS Fingerprint Spoofing (`curl-cffi`, uTLS) |
+| **Deployment** | Docker & Docker Compose • Systemd Service • Pre-built Binaries |
 
-One-click installation script that downloads pre-built binaries from GitHub Releases.
+---
+
+## 📦 Quick Start
+
+### Option 1: Docker Compose (Recommended)
+
+1. **Clone the repository**:
+   ```bash
+   git clone git@github.com:bestaiprice-source/best-ai-price.git
+   cd best-ai-price/deploy
+   ```
+
+2. **Configure environment**:
+   ```bash
+   cp .env.example .env
+   ```
+   Generate secure secrets and update `.env`:
+   ```bash
+   # Generate secrets:
+   openssl rand -hex 32 # Set as JWT_SECRET
+   openssl rand -hex 32 # Set as TOTP_ENCRYPTION_KEY
+   openssl rand -hex 32 # Set as POSTGRES_PASSWORD
+   ```
+
+3. **Start the stack**:
+   ```bash
+   docker compose -f docker-compose.local.yml up -d
+   ```
+
+4. **Access the Web Console**:
+   Open `http://localhost:8080` in your browser. Complete the initial setup wizard or sign in with the configured credentials.
+
+---
+
+### Option 2: Local Development Setup
 
 #### Prerequisites
-
-- Linux server (amd64 or arm64)
-- PostgreSQL 15+ (installed and running)
-- Redis 7+ (installed and running)
-- Root privileges
-
-#### Installation Steps
-
-```bash
-curl -sSL https://raw.githubusercontent.com/DR-lin-eng/sub2api/main/deploy/install.sh | sudo bash
-```
-
-The script will:
-1. Detect your system architecture
-2. Download the latest release
-3. Install binary to `/opt/sub2api`
-4. Create systemd service
-5. Configure system user and permissions
-
-#### Post-Installation
-
-```bash
-# 1. Start the service
-sudo systemctl start sub2api
-
-# 2. Enable auto-start on boot
-sudo systemctl enable sub2api
-
-# 3. Open Setup Wizard in browser
-# http://YOUR_SERVER_IP:8080
-```
-
-The Setup Wizard will guide you through:
-- Database configuration
-- Redis configuration
-- Admin account creation
-
-#### Upgrade
-
-You can upgrade directly from the **Admin Dashboard** by clicking the **Check for Updates** button in the top-left corner.
-
-The web interface will:
-- Check for new versions automatically
-- Download and apply updates with one click
-- Support rollback if needed
-
-#### Useful Commands
-
-```bash
-# Check status
-sudo systemctl status sub2api
-
-# View logs
-sudo journalctl -u sub2api -f
-
-# Restart service
-sudo systemctl restart sub2api
-
-# Uninstall
-curl -sSL https://raw.githubusercontent.com/DR-lin-eng/sub2api/main/deploy/install.sh | sudo bash -s -- uninstall -y
-```
-
----
-
-### Method 2: Docker Compose (Recommended)
-
-Deploy with Docker Compose, including PostgreSQL and Redis containers.
-
-#### Prerequisites
-
-- Docker 20.10+
-- Docker Compose v2+
-
-#### Quick Start (One-Click Deployment)
-
-Use the automated deployment script for easy setup:
-
-```bash
-# Create deployment directory
-mkdir -p sub2api-deploy && cd sub2api-deploy
-
-# Download and run deployment preparation script
-curl -sSL https://raw.githubusercontent.com/DR-lin-eng/sub2api/main/deploy/docker-deploy.sh | bash
-
-# Start services
-docker compose up -d
-
-# View logs
-docker compose logs -f sub2api
-```
-
-**What the script does:**
-- Downloads `docker-compose.local.yml` (saved as `docker-compose.yml`) and `.env.example`
-- Generates secure credentials (JWT_SECRET, TOTP_ENCRYPTION_KEY, POSTGRES_PASSWORD)
-- Creates `.env` file with auto-generated secrets
-- Creates data directories (uses local directories for easy backup/migration)
-- Displays generated credentials for your reference
-
-#### Manual Deployment
-
-If you prefer manual setup:
-
-```bash
-# 1. Clone the repository
-git clone https://github.com/DR-lin-eng/sub2api.git
-cd sub2api/deploy
-
-# 2. Copy environment configuration
-cp .env.example .env
-
-# 3. Edit configuration (generate secure passwords)
-nano .env
-```
-
-**Required configuration in `.env`:**
-
-```bash
-# PostgreSQL password (REQUIRED)
-POSTGRES_PASSWORD=your_secure_password_here
-
-# JWT Secret (RECOMMENDED - keeps users logged in after restart)
-JWT_SECRET=your_jwt_secret_here
-
-# TOTP Encryption Key (RECOMMENDED - preserves 2FA after restart)
-TOTP_ENCRYPTION_KEY=your_totp_key_here
-
-# Optional: Admin account
-ADMIN_EMAIL=admin@example.com
-ADMIN_PASSWORD=your_admin_password
-
-# Optional: Custom port
-SERVER_PORT=8080
-```
-
-**Generate secure secrets:**
-```bash
-# Generate JWT_SECRET
-openssl rand -hex 32
-
-# Generate TOTP_ENCRYPTION_KEY
-openssl rand -hex 32
-
-# Generate POSTGRES_PASSWORD
-openssl rand -hex 32
-```
-
-```bash
-# 4. Create data directories (for local version)
-mkdir -p data postgres_data redis_data
-
-# 5. Start all services
-# Option A: Local directory version (recommended - easy migration)
-docker compose -f docker-compose.local.yml up -d
-
-# Option B: Named volumes version (simple setup)
-docker compose up -d
-
-# 6. Check status
-docker compose -f docker-compose.local.yml ps
-
-# 7. View logs
-docker compose -f docker-compose.local.yml logs -f sub2api
-```
-
-#### Deployment Versions
-
-| Version | Data Storage | Migration | Best For |
-|---------|-------------|-----------|----------|
-| **docker-compose.local.yml** | Local directories | ✅ Easy (tar entire directory) | Production, frequent backups |
-| **docker-compose.yml** | Named volumes | ⚠️ Requires docker commands | Simple setup |
-
-**Recommendation:** Use `docker-compose.local.yml` (deployed by script) for easier data management.
-
-#### Access
-
-Open `http://YOUR_SERVER_IP:8080` in your browser.
-
-If admin password was auto-generated, find it in logs:
-```bash
-docker compose -f docker-compose.local.yml logs sub2api | grep "admin password"
-```
-
-#### Upgrade
-
-```bash
-# Pull latest image and recreate container
-docker compose -f docker-compose.local.yml pull
-docker compose -f docker-compose.local.yml up -d
-```
-
-#### Easy Migration (Local Directory Version)
-
-When using `docker-compose.local.yml`, migrate to a new server easily:
-
-```bash
-# On source server
-docker compose -f docker-compose.local.yml down
-cd ..
-tar czf sub2api-complete.tar.gz sub2api-deploy/
-
-# Transfer to new server
-scp sub2api-complete.tar.gz user@new-server:/path/
-
-# On new server
-tar xzf sub2api-complete.tar.gz
-cd sub2api-deploy/
-docker compose -f docker-compose.local.yml up -d
-```
-
-#### Useful Commands
-
-```bash
-# Stop all services
-docker compose -f docker-compose.local.yml down
-
-# Restart
-docker compose -f docker-compose.local.yml restart
-
-# View all logs
-docker compose -f docker-compose.local.yml logs -f
-
-# Remove all data (caution!)
-docker compose -f docker-compose.local.yml down
-rm -rf data/ postgres_data/ redis_data/
-```
-
----
-
-### Method 3: Build from Source
-
-Build and run from source code for development or customization.
-
-#### Prerequisites
-
-- Go 1.21+
-- Node.js 18+
+- Go 1.25+
+- Node.js 20+ & pnpm
 - PostgreSQL 15+
 - Redis 7+
 
-#### Build Steps
-
+#### Backend Setup
 ```bash
-# 1. Clone the repository
-git clone https://github.com/DR-lin-eng/sub2api.git
-cd sub2api
+cd backend
+cp .env.example .env # Set DB and Redis credentials
+go mod download
+go run cmd/server/main.go
+```
 
-# 2. Install pnpm (if not already installed)
-npm install -g pnpm
-
-# 3. Build frontend
+#### Frontend Setup
+```bash
 cd frontend
 pnpm install
-pnpm run build
-# Output will be in ../backend/internal/web/dist/
-
-# 4. Build backend with embedded frontend
-cd ../backend
-go build -tags embed -o sub2api ./cmd/server
-
-# 5. Create configuration file
-cp ../deploy/config.example.yaml ./config.yaml
-
-# 6. Edit configuration
-nano config.yaml
+pnpm dev
 ```
 
-> **Note:** The `-tags embed` flag embeds the frontend into the binary. Without this flag, the binary will not serve the frontend UI.
+---
 
-**Key configuration in `config.yaml`:**
+## 💡 API and Integrations
 
-```yaml
-server:
-  host: "0.0.0.0"
-  port: 8080
-  mode: "release"
+Clients communicate with the gateway using standard OpenAI or Anthropic protocols. Set the base URL to your BestAIPrice instance and pass your generated user API key.
 
-database:
-  host: "localhost"
-  port: 5432
-  user: "postgres"
-  password: "your_password"
-  dbname: "sub2api"
-
-redis:
-  host: "localhost"
-  port: 6379
-  password: ""
-
-jwt:
-  secret: "change-this-to-a-secure-random-string"
-  expire_hour: 24
-
-default:
-  user_concurrency: 5
-  user_balance: 0
-  api_key_prefix: "sk-"
-  rate_multiplier: 1.0
-```
-
-### Sora Status (Temporarily Unavailable)
-
-> ⚠️ Sora-related features are temporarily unavailable due to technical issues in upstream integration and media delivery.
-> Please do not rely on Sora in production at this time.
-> Existing `gateway.sora_*` configuration keys are reserved and may not take effect until these issues are resolved.
-
-Additional security-related options are available in `config.yaml`:
-
-- `cors.allowed_origins` for CORS allowlist
-- `security.url_allowlist` for upstream/pricing/CRS host allowlists
-- `security.url_allowlist.enabled` to disable URL validation (use with caution)
-- `security.url_allowlist.allow_insecure_http` to allow HTTP URLs when validation is disabled
-- `security.url_allowlist.allow_private_hosts` to allow private/local IP addresses
-- `security.response_headers.enabled` to enable configurable response header filtering (disabled uses default allowlist)
-- `security.csp` to control Content-Security-Policy headers
-- `billing.circuit_breaker` to fail closed on billing errors
-- `server.trusted_proxies` to enable X-Forwarded-For parsing
-- `turnstile.required` to require Turnstile in release mode
-
-**⚠️ Security Warning: HTTP URL Configuration**
-
-When `security.url_allowlist.enabled=false`, the system performs minimal URL validation by default, **rejecting HTTP URLs** and only allowing HTTPS. To allow HTTP URLs (e.g., for development or internal testing), you must explicitly set:
-
-```yaml
-security:
-  url_allowlist:
-    enabled: false                # Disable allowlist checks
-    allow_insecure_http: true     # Allow HTTP URLs (⚠️ INSECURE)
-```
-
-**Or via environment variable:**
-
+### 1. Anthropic Messages Protocol
 ```bash
-SECURITY_URL_ALLOWLIST_ENABLED=false
-SECURITY_URL_ALLOWLIST_ALLOW_INSECURE_HTTP=true
+curl -X POST https://api.bestaiprice.com/v1/messages \
+  -H "Authorization: Bearer <YOUR_API_KEY>" \
+  -H "Content-Type: application/json" \
+  -H "anthropic-version: 2023-06-01" \
+  -d '{
+    "model": "claude-3-7-sonnet",
+    "max_tokens": 1024,
+    "messages": [
+      {"role": "user", "content": "Explain quantum computing in simple terms."}
+    ]
+  }'
 ```
 
-**Risks of allowing HTTP:**
-- API keys and data transmitted in **plaintext** (vulnerable to interception)
-- Susceptible to **man-in-the-middle (MITM) attacks**
-- **NOT suitable for production** environments
-
-**When to use HTTP:**
-- ✅ Development/testing with local servers (http://localhost)
-- ✅ Internal networks with trusted endpoints
-- ✅ Testing account connectivity before obtaining HTTPS
-- ❌ Production environments (use HTTPS only)
-
-**Example error without this setting:**
-```
-Invalid base URL: invalid url scheme: http
-```
-
-If you disable URL validation or response header filtering, harden your network layer:
-- Enforce an egress allowlist for upstream domains/IPs
-- Block private/loopback/link-local ranges
-- Enforce TLS-only outbound traffic
-- Strip sensitive upstream response headers at the proxy
-
+### 2. OpenAI Chat Completions Protocol
 ```bash
-# 6. Run the application
-./sub2api
+curl -X POST https://api.bestaiprice.com/v1/chat/completions \
+  -H "Authorization: Bearer <YOUR_API_KEY>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-4o",
+    "messages": [
+      {"role": "user", "content": "Write a hello world program in Go."}
+    ]
+  }'
 ```
 
-#### Development Mode
-
+### 3. Claude Code CLI Integration
 ```bash
-# Backend (with hot reload)
-cd backend
-go run ./cmd/server
-
-# Frontend (with hot reload)
-cd frontend
-pnpm run dev
+export ANTHROPIC_BASE_URL="https://api.bestaiprice.com"
+export ANTHROPIC_AUTH_TOKEN="<YOUR_API_KEY>"
+claude
 ```
 
-#### Code Generation
+### 4. Codex & Cursor Integration
+Configure your `.cursorrules` or OpenAI client settings:
+```json
+{
+  "openai.baseUrl": "https://api.bestaiprice.com/v1",
+  "openai.apiKey": "<YOUR_API_KEY>"
+}
+```
 
-When editing `backend/ent/schema`, regenerate Ent + Wire:
+> 📖 **Comprehensive SDK & tool examples**: Explore the [`api-examples`](api-examples/) directory for ready-to-run code snippets in Python, Node.js, cURL, LangChain, n8n, OpenClaw, Continue, and Aider.
+
+---
+
+## ⚙️ Configuration Reference
+
+Key environment variables to configure in `.env`:
+
+| Variable | Default | Description |
+|---|---|---|
+| `SERVER_PORT` | `8080` | Gateway HTTP server listening port |
+| `DATABASE_URL` | - | PostgreSQL connection string (`postgres://user:pass@host:5432/db`) |
+| `REDIS_URL` | - | Redis connection string (`redis://:pass@host:6379/0`) |
+| `JWT_SECRET` | - | 32+ byte secret for user authentication tokens |
+| `TOTP_ENCRYPTION_KEY` | - | 32-byte AES key for encrypting provider credentials at rest |
+| `ASH_ENABLED` | `true` | Enable AI Session Hypervisor core engine |
+| `ASH_ENABLE_REBINDING` | `true` | Enable automatic failover & node rebinding on errors |
+| `ASH_ENABLE_AFFINITY` | `true` | Enable virtual session affinity for prompt cache hits |
+| `ASH_CHEAPER_PROVIDER_CHECK_SECONDS` | `21600` | Interval for cheaper provider background scans (6h) |
+| `ASH_TELEGRAM_BOT_TOKEN` | - | Telegram Bot token for administrative alerts |
+| `ASH_TELEGRAM_CHAT_ID` | - | Target Telegram channel or group ID for incident broadcasts |
+| `ASH_TELEGRAM_ALLOWED_USERS` | - | Whitelist of Telegram user IDs/usernames allowed to manage the bot |
+
+---
+
+## 🧪 Testing
+
+To run the complete unit test suite across all modules:
 
 ```bash
 cd backend
-go generate ./ent
-go generate ./cmd/server
+go test ./...
 ```
 
----
-
-## Simple Mode
-
-Simple Mode is designed for individual developers or internal teams who want quick access without full SaaS features.
-
-- Enable: Set environment variable `RUN_MODE=simple`
-- Difference: Hides SaaS-related features and skips billing process
-- Security note: In production, you must also set `SIMPLE_MODE_CONFIRM=true` to allow startup
+For mock hypervisor execution without live upstream accounts, set `ASH_ENABLE_MOCK_RUNTIME=true` in your `.env`.
 
 ---
 
-## Antigravity Support
+## 📚 Documentation
 
-Sub2API supports [Antigravity](https://antigravity.so/) accounts. After authorization, dedicated endpoints are available for Claude and Gemini models.
-
-### Dedicated Endpoints
-
-| Endpoint | Model |
-|----------|-------|
-| `/antigravity/v1/messages` | Claude models |
-| `/antigravity/v1beta/` | Gemini models |
-
-### Claude Code Configuration
-
-```bash
-export ANTHROPIC_BASE_URL="http://localhost:8080/antigravity"
-export ANTHROPIC_AUTH_TOKEN="sk-xxx"
-```
-
-### Hybrid Scheduling Mode
-
-Antigravity accounts support optional **hybrid scheduling**. When enabled, the general endpoints `/v1/messages` and `/v1beta/` will also route requests to Antigravity accounts.
-
-> **⚠️ Warning**: Anthropic Claude and Antigravity Claude **cannot be mixed within the same conversation context**. Use groups to isolate them properly.
-
-### Known Issues
-
-In Claude Code, Plan Mode cannot exit automatically. (Normally when using the native Claude API, after planning is complete, Claude Code will pop up options for users to approve or reject the plan.)
-
-**Workaround**: Press `Shift + Tab` to manually exit Plan Mode, then type your response to approve or reject the plan.
+- [CLAUDE.md](CLAUDE.md) — Comprehensive technical master guide for developers and AI agents.
+- [api-examples/](api-examples/) — Ready-to-use examples for Python, Node.js, cURL, and agent frameworks.
+- [AUTH_API_GUIDE.md](AUTH_API_GUIDE.md) — Authentication, SSO, and user session specification.
+- [COMMENTS_API_GUIDE.md](COMMENTS_API_GUIDE.md) — Provider review, comments, and community rating APIs.
+- [DEV_GUIDE.md](DEV_GUIDE.md) — Local developer environment and contribution guidelines.
 
 ---
 
-## Project Structure
+## 📄 License
 
-```
-sub2api/
-├── backend/                  # Go backend service
-│   ├── cmd/server/           # Application entry
-│   ├── internal/             # Internal modules
-│   │   ├── config/           # Configuration
-│   │   ├── model/            # Data models
-│   │   ├── service/          # Business logic
-│   │   ├── handler/          # HTTP handlers
-│   │   └── gateway/          # API gateway core
-│   └── resources/            # Static resources
-│
-├── frontend/                 # Vue 3 frontend
-│   └── src/
-│       ├── api/              # API calls
-│       ├── stores/           # State management
-│       ├── views/            # Page components
-│       └── components/       # Reusable components
-│
-└── deploy/                   # Deployment files
-    ├── docker-compose.yml    # Docker Compose configuration
-    ├── .env.example          # Environment variables for Docker Compose
-    ├── config.example.yaml   # Full config file for binary deployment
-    └── install.sh            # One-click installation script
-```
-
-## Disclaimer
-
-> **Please read carefully before using this project:**
->
-> :rotating_light: **Terms of Service Risk**: Using this project may violate Anthropic's Terms of Service. Please read Anthropic's user agreement carefully before use. All risks arising from the use of this project are borne solely by the user.
->
-> :book: **Disclaimer**: This project is for technical learning and research purposes only. The author assumes no responsibility for account suspension, service interruption, or any other losses caused by the use of this project.
-
----
-
-## Star History
-
-<a href="https://star-history.com/#DR-lin-eng/sub2api&Date">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=DR-lin-eng/sub2api&type=Date&theme=dark" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=DR-lin-eng/sub2api&type=Date" />
-   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=DR-lin-eng/sub2api&type=Date" />
- </picture>
-</a>
-
----
-
-## License
-
-MIT License
-
----
-
-<div align="center">
-
-**If you find this project useful, please give it a star!**
-
-</div>
+This project is licensed under the [MIT License](LICENSE).
