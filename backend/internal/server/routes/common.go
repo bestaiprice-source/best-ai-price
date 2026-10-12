@@ -5,7 +5,6 @@ import (
 	"os"
 
 	"github.com/Wei-Shaw/sub2api/internal/server/gatewayctx"
-	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
 )
 
@@ -74,11 +73,6 @@ func RegisterCommonRoutes(r gin.IRoutes) {
 	r.GET("/data/providers_description.json", gatewayctx.AdaptGinHandler(commonProviderDescriptionsJSON))
 	r.GET("/api/data/providers_description.json", gatewayctx.AdaptGinHandler(commonProviderDescriptionsJSON))
 	r.GET("/api/v1/data/providers_description.json", gatewayctx.AdaptGinHandler(commonProviderDescriptionsJSON))
-
-	// Parser run_stats.json static endpoints
-	r.GET("/data/run_stats.json", gatewayctx.AdaptGinHandler(commonRunStatsJSON))
-	r.GET("/api/data/run_stats.json", gatewayctx.AdaptGinHandler(commonRunStatsJSON))
-	r.GET("/api/v1/data/run_stats.json", gatewayctx.AdaptGinHandler(commonRunStatsJSON))
 }
 
 func ExecutableCommonRoutes() []gatewayctx.RouteDef {
@@ -281,24 +275,6 @@ func ExecutableCommonRoutes() []gatewayctx.RouteDef {
 			Handler:    commonProviderDescriptionsJSON,
 			Middleware: []string{middlewareRequestLogger, middlewareCORS, middlewareSecurity},
 		},
-		{
-			Method:     http.MethodGet,
-			Path:       "/data/run_stats.json",
-			Handler:    commonRunStatsJSON,
-			Middleware: []string{middlewareRequestLogger, middlewareCORS, middlewareSecurity},
-		},
-		{
-			Method:     http.MethodGet,
-			Path:       "/api/data/run_stats.json",
-			Handler:    commonRunStatsJSON,
-			Middleware: []string{middlewareRequestLogger, middlewareCORS, middlewareSecurity},
-		},
-		{
-			Method:     http.MethodGet,
-			Path:       "/api/v1/data/run_stats.json",
-			Handler:    commonRunStatsJSON,
-			Middleware: []string{middlewareRequestLogger, middlewareCORS, middlewareSecurity},
-		},
 	}
 }
 
@@ -321,19 +297,73 @@ func commonSetupStatus(c gatewayctx.GatewayContext) {
 }
 
 func commonProvidersJSON(c gatewayctx.GatewayContext) {
-	serveStaticDataJSON(c, "providers.json")
+	paths := []string{
+		"/app/data/parser/providers.json",
+		"/app/data/providers.json",
+		"./data/providers.json",
+		"/srv/parser-data/data/providers.json",
+		"/root/bestai_prices_parser/public/data/providers.json",
+	}
+	for _, p := range paths {
+		if _, err := os.Stat(p); err == nil {
+			c.SetHeader("Cache-Control", "public, max-age=300")
+			c.SetHeader("Access-Control-Allow-Origin", "*")
+			if err := c.ServeFile(p); err == nil {
+				return
+			}
+		}
+	}
+	c.WriteJSON(http.StatusNotFound, map[string]any{"error": "providers.json not found"})
 }
 
 func commonModelsJSON(c gatewayctx.GatewayContext) {
-	serveStaticDataJSON(c, "models.json")
+	paths := []string{
+		"/app/data/parser/models.json",
+		"/app/data/models.json",
+		"./data/models.json",
+		"/srv/parser-data/data/models.json",
+		"/root/bestai_prices_parser/public/data/models.json",
+	}
+	for _, p := range paths {
+		if _, err := os.Stat(p); err == nil {
+			c.SetHeader("Cache-Control", "public, max-age=300")
+			c.SetHeader("Access-Control-Allow-Origin", "*")
+			if err := c.ServeFile(p); err == nil {
+				return
+			}
+		}
+	}
+	c.WriteJSON(http.StatusNotFound, map[string]any{"error": "models.json not found"})
 }
 
 func commonApiDescriptionsJSON(c gatewayctx.GatewayContext) {
-	serveStaticDataJSON(c, "api_descriptions.json")
+	paths := []string{
+		"/app/data/parser/api_descriptions.json",
+		"/app/data/api_descriptions.json",
+		"./data/api_descriptions.json",
+		"/srv/parser-data/data/api_descriptions.json",
+		"/root/bestai_prices_parser/public/data/api_descriptions.json",
+	}
+	for _, p := range paths {
+		if _, err := os.Stat(p); err == nil {
+			c.SetHeader("Cache-Control", "public, max-age=300")
+			c.SetHeader("Access-Control-Allow-Origin", "*")
+			if err := c.ServeFile(p); err == nil {
+				return
+			}
+		}
+	}
+	c.WriteJSON(http.StatusNotFound, map[string]any{"error": "api_descriptions.json not found"})
 }
 
 func serveStaticDataJSON(c gatewayctx.GatewayContext, filename string) {
-	paths := service.LocateParserDataFile(filename)
+	paths := []string{
+		"/app/data/parser/" + filename,
+		"/app/data/" + filename,
+		"./data/" + filename,
+		"/srv/parser-data/data/" + filename,
+		"/root/bestai_prices_parser/public/data/" + filename,
+	}
 	for _, p := range paths {
 		if _, err := os.Stat(p); err == nil {
 			c.SetHeader("Cache-Control", "public, max-age=300")
@@ -367,32 +397,27 @@ func commonSpeechToTextRankingsJSON(c gatewayctx.GatewayContext) {
 }
 
 func commonProviderDescriptionsJSON(c gatewayctx.GatewayContext) {
-	for _, fname := range []string{"providers_description.json", "provider_descriptions.json"} {
-		paths := service.LocateParserDataFile(fname)
-		for _, p := range paths {
-			if _, err := os.Stat(p); err == nil {
-				c.SetHeader("Cache-Control", "public, max-age=300")
-				c.SetHeader("Access-Control-Allow-Origin", "*")
-				if err := c.ServeFile(p); err == nil {
-					return
-				}
-			}
-		}
+	paths := []string{
+		"/app/data/parser/providers_description.json",
+		"/app/data/parser/provider_descriptions.json",
+		"/app/data/providers_description.json",
+		"/app/data/provider_descriptions.json",
+		"./data/providers_description.json",
+		"./data/provider_descriptions.json",
+		"/srv/parser-data/data/providers_description.json",
+		"/srv/parser-data/data/provider_descriptions.json",
+		"/root/bestai_prices_parser/public/data/providers_description.json",
+		"/root/bestai_prices_parser/public/data/provider_descriptions.json",
 	}
-	c.WriteJSON(http.StatusNotFound, map[string]any{"error": "providers_description.json not found"})
-}
-
-func commonRunStatsJSON(c gatewayctx.GatewayContext) {
-	paths := service.LocateParserDataFile("run_stats.json")
 	for _, p := range paths {
 		if _, err := os.Stat(p); err == nil {
-			c.SetHeader("Cache-Control", "public, max-age=60")
+			c.SetHeader("Cache-Control", "public, max-age=300")
 			c.SetHeader("Access-Control-Allow-Origin", "*")
 			if err := c.ServeFile(p); err == nil {
 				return
 			}
 		}
 	}
-	c.WriteJSON(http.StatusNotFound, map[string]any{"error": "run_stats.json not found"})
+	c.WriteJSON(http.StatusNotFound, map[string]any{"error": "providers_description.json not found"})
 }
 

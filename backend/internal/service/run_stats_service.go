@@ -3,83 +3,18 @@ package service
 import (
 	"encoding/json"
 	"os"
-	"path/filepath"
 	"sync"
 	"time"
 )
 
-// DefaultParserDirs defines directories searched for parser data files (providers.json, run_stats.json, etc.)
-var DefaultParserDirs = []string{
-	"/app/data/parser",
-	"/app/data",
-	"./data",
-	"../data",
-	"/data",
-	"/srv/parser-data/data",
-	"/root/bestai_prices_parser/public/data",
-	"./deploy/data/parser",
-	"./deploy/data",
-}
-
-// LocateParserDataFile returns candidate filepaths for a given parser file (e.g. "run_stats.json" or "providers.json").
-// As required by architecture, run_stats.json is located next to providers.json in the parser data directory.
-// Candidates in directories where providers.json actually exists are prioritized first.
-func LocateParserDataFile(filename string) []string {
-	var candidates []string
-
-	// Specific override env vars
-	if filename == "run_stats.json" {
-		if envRunStats := os.Getenv("RUN_STATS_PATH"); envRunStats != "" {
-			candidates = append(candidates, envRunStats)
-		}
-	}
-	if envParserDir := os.Getenv("PARSER_DATA_DIR"); envParserDir != "" {
-		candidates = append(candidates, filepath.Join(envParserDir, filename))
-	}
-	if envProviders := os.Getenv("PROVIDERS_PATH"); envProviders != "" {
-		candidates = append(candidates, filepath.Join(filepath.Dir(envProviders), filename))
-	}
-
-	// 1. Probe for directories where providers.json actually exists:
-	// run_stats.json and other parser data files lie next to providers.json.
-	for _, dir := range DefaultParserDirs {
-		provPath := filepath.Join(dir, "providers.json")
-		if info, err := os.Stat(provPath); err == nil && !info.IsDir() {
-			candidates = append(candidates, filepath.Join(dir, filename))
-		}
-	}
-
-	// 2. Default candidate paths across all parser dirs as fallbacks
-	for _, dir := range DefaultParserDirs {
-		candidates = append(candidates, filepath.Join(dir, filename))
-	}
-
-	return deduplicatePaths(candidates)
-}
-
-func deduplicatePaths(paths []string) []string {
-	seen := make(map[string]bool, len(paths))
-	var result []string
-	for _, p := range paths {
-		if p == "" || seen[p] {
-			continue
-		}
-		seen[p] = true
-		result = append(result, p)
-	}
-	return result
-}
-
+// DefaultRunStatsPaths defines candidate paths for run_stats.json,
+// matching the exact locations where providers.json is located.
 var DefaultRunStatsPaths = []string{
 	"/app/data/parser/run_stats.json",
 	"/app/data/run_stats.json",
 	"./data/run_stats.json",
-	"../data/run_stats.json",
-	"/data/run_stats.json",
 	"/srv/parser-data/data/run_stats.json",
 	"/root/bestai_prices_parser/public/data/run_stats.json",
-	"./deploy/data/parser/run_stats.json",
-	"./deploy/data/run_stats.json",
 }
 
 type RunStatsTotals struct {
@@ -160,7 +95,7 @@ type RunStatsResult struct {
 	FileModTime *time.Time `json:"file_mod_time,omitempty"`
 }
 
-// RunStatsService provides access to parser run_stats.json
+// RunStatsService provides access to parser run_stats.json for the admin panel.
 type RunStatsService struct {
 	mu          sync.RWMutex
 	customPaths []string
@@ -180,11 +115,15 @@ func (s *RunStatsService) getPaths() []string {
 	if len(s.customPaths) > 0 {
 		return s.customPaths
 	}
-	return LocateParserDataFile("run_stats.json")
+	return DefaultRunStatsPaths
 }
 
-// readNewestFrom reads the newest file from an explicit slice of candidate paths
-func readNewestFrom(paths []string) ([]byte, string, time.Time, error) {
+// ReadRaw searches candidate locations and returns the newest content among existing files.
+func (s *RunStatsService) ReadRaw() ([]byte, string, time.Time, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	paths := s.getPaths()
 	var latestData []byte
 	var latestPath string
 	var latestModTime time.Time
@@ -210,60 +149,6 @@ func readNewestFrom(paths []string) ([]byte, string, time.Time, error) {
 	}
 
 	return latestData, latestPath, latestModTime, nil
-}
-
-// ReadRaw searches candidate locations and returns the newest content.
-// Per system requirements, run_stats.json is located next to providers.json;
-// candidate files in directories where providers.json actually exists are strictly prioritized.
-func (s *RunStatsService) ReadRaw() ([]byte, string, time.Time, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	if len(s.customPaths) > 0 {
-		return readNewestFrom(s.customPaths)
-	}
-
-	paths := s.getPaths()
-	var bestData []byte
-	var bestPath string
-	var bestModTime time.Time
-	foundAdjacent := false
-
-	for _, p := range paths {
-		dir := filepath.Dir(p)
-		provPath := filepath.Join(dir, "providers.json")
-		hasProviders := false
-		if provInfo, err := os.Stat(provPath); err == nil && !provInfo.IsDir() {
-			hasProviders = true
-		}
-
-		info, err := os.Stat(p)
-		if err == nil && !info.IsDir() {
-			data, err := os.ReadFile(p)
-			if err == nil {
-				if hasProviders {
-					if !foundAdjacent || info.ModTime().After(bestModTime) {
-						bestData = data
-						bestPath = p
-						bestModTime = info.ModTime()
-						foundAdjacent = true
-					}
-				} else if !foundAdjacent {
-					if bestPath == "" || info.ModTime().After(bestModTime) {
-						bestData = data
-						bestPath = p
-						bestModTime = info.ModTime()
-					}
-				}
-			}
-		}
-	}
-
-	if bestPath == "" {
-		return nil, "", time.Time{}, os.ErrNotExist
-	}
-
-	return bestData, bestPath, bestModTime, nil
 }
 
 // GetStats returns the parsed run stats or a graceful empty result

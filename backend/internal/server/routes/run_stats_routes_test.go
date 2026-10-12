@@ -10,7 +10,6 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/handler"
 	"github.com/Wei-Shaw/sub2api/internal/handler/admin"
-	"github.com/Wei-Shaw/sub2api/internal/server/gatewayctx"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
@@ -78,15 +77,9 @@ func TestRunStatsRoutes_CommonAndAdmin(t *testing.T) {
 	require.Equal(t, 99, resp.Data.Totals.Models)
 	require.Equal(t, 12, resp.Data.Totals.Providers)
 
-	// 3. Test static route using common.go handler
-	t.Setenv("RUN_STATS_PATH", filePath)
-	commonR := gin.New()
-	commonR.GET("/data/run_stats.json", gatewayctx.AdaptGinHandler(commonRunStatsJSON))
-
-	w2 := httptest.NewRecorder()
-	req2 := httptest.NewRequest(http.MethodGet, "/data/run_stats.json", nil)
-	commonR.ServeHTTP(w2, req2)
-
-	require.Equal(t, http.StatusOK, w2.Code)
-	require.Contains(t, w2.Body.String(), `"models": 99`)
+	// 3. Verify that run_stats.json is NOT in common public routes (admin only)
+	commonRoutes := ExecutableCommonRoutes()
+	for _, cr := range commonRoutes {
+		require.NotContains(t, cr.Path, "run_stats.json", "run_stats.json must not be publicly exposed in common routes")
+	}
 }
