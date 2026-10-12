@@ -2,19 +2,27 @@ package service
 
 import (
 	"encoding/json"
+	"log/slog"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 )
 
 // DefaultRunStatsPaths defines candidate paths for run_stats.json,
-// matching the exact locations where providers.json is located.
+// covering host deployments, Docker containers, and standard paths.
 var DefaultRunStatsPaths = []string{
-	"/app/data/parser/run_stats.json",
 	"/root/bestai_prices_parser/public/data/run_stats.json",
+	"/root/bestai_prices_parser/data/run_stats.json",
+	"/app/data/parser/run_stats.json",
 	"/srv/parser-data/data/run_stats.json",
+	"/srv/parser-data/run_stats.json",
 	"/app/data/run_stats.json",
 	"./data/run_stats.json",
+	"../data/run_stats.json",
+	"./data/parser/run_stats.json",
+	"/opt/sub2api/data/parser/run_stats.json",
+	"/opt/sub2api/data/run_stats.json",
 }
 
 type RunStatsTotals struct {
@@ -90,9 +98,11 @@ type RunStatsData struct {
 
 type RunStatsResult struct {
 	RunStatsData
-	SourcePath  string     `json:"source_path"`
-	FileExists  bool       `json:"file_exists"`
-	FileModTime *time.Time `json:"file_mod_time,omitempty"`
+	SourcePath     string            `json:"source_path"`
+	FileExists     bool              `json:"file_exists"`
+	FileModTime    *time.Time        `json:"file_mod_time,omitempty"`
+	CandidatePaths []string          `json:"candidate_paths,omitempty"`
+	CheckedErrors  map[string]string `json:"checked_errors,omitempty"`
 }
 
 // RunStatsService provides access to parser run_stats.json for the admin panel.
@@ -115,11 +125,50 @@ func (s *RunStatsService) getPaths() []string {
 	if len(s.customPaths) > 0 {
 		return s.customPaths
 	}
-	return DefaultRunStatsPaths
+	var paths []string
+
+	if envPath := os.Getenv("RUN_STATS_PATH"); envPath != "" {
+		paths = append(paths, envPath)
+	}
+	if envDir := os.Getenv("PARSER_DATA_DIR"); envDir != "" {
+		paths = append(paths, filepath.Join(envDir, "run_stats.json"))
+	}
+	if envProv := os.Getenv("PROVIDERS_PATH"); envProv != "" {
+		paths = append(paths, filepath.Join(filepath.Dir(envProv), "run_stats.json"))
+	}
+
+	paths = append(paths, DefaultRunStatsPaths...)
+
+	if homeDir, err := os.UserHomeDir(); err == nil && homeDir != "" {
+		paths = append(paths,
+			filepath.Join(homeDir, "dev/bestai_prices_parser/public/data/run_stats.json"),
+			filepath.Join(homeDir, "bestai_prices_parser/public/data/run_stats.json"),
+			filepath.Join(homeDir, "bestai_prices_parser/data/run_stats.json"),
+		)
+	}
+
+	paths = append(paths,
+		"/home/cucum/dev/bestai_prices_parser/public/data/run_stats.json",
+	)
+
+	return deduplicatePaths(paths)
 }
 
-// ReadRaw searches candidate locations and returns the newest content among existing files.
-func (s *RunStatsService) ReadRaw() ([]byte, string, time.Time, error) {
+func deduplicatePaths(paths []string) []string {
+	seen := make(map[string]bool, len(paths))
+	var result []string
+	for _, p := range paths {
+		if p == "" || seen[p] {
+			continue
+		}
+		seen[p] = true
+		result = append(result, p)
+	}
+	return result
+}
+
+// ReadRawWithDiagnostics searches candidate locations and records any access errors for troubleshooting.
+func (s *RunStatsService) ReadRawWithDiagnostics() ([]byte, string, time.Time, []string, map[string]string, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -128,36 +177,62 @@ func (s *RunStatsService) ReadRaw() ([]byte, string, time.Time, error) {
 	var latestPath string
 	var latestModTime time.Time
 	found := false
+	checkedErrors := make(map[string]string)
 
 	for _, p := range paths {
 		info, err := os.Stat(p)
-		if err == nil && !info.IsDir() {
-			data, err := os.ReadFile(p)
-			if err == nil {
-				if !found || info.ModTime().After(latestModTime) {
-					latestData = data
-					latestPath = p
-					latestModTime = info.ModTime()
-					found = true
-				}
-			}
+		if err != nil {
+			checkedErrors[p] = err.Error()
+			continue
+		}
+		if info.IsDir() {
+			checkedErrors[p] = "target is a directory, not a file"
+			continue
+		}
+		data, err := os.ReadFile(p)
+		if err != nil {
+			checkedErrors[p] = err.Error()
+			continue
+		}
+		checkedErrors[p] = "ok"
+		if !found || info.ModTime().After(latestModTime) {
+			latestData = data
+			latestPath = p
+			latestModTime = info.ModTime()
+			found = true
 		}
 	}
 
 	if !found {
-		return nil, "", time.Time{}, os.ErrNotExist
+		slog.Warn("[RunStatsService] run_stats.json not found in any candidate path",
+			"checked_paths", paths,
+			"errors", checkedErrors,
+		)
+		return nil, "", time.Time{}, paths, checkedErrors, os.ErrNotExist
 	}
 
-	return latestData, latestPath, latestModTime, nil
+	slog.Info("[RunStatsService] Successfully located and loaded run_stats.json",
+		"source_path", latestPath,
+		"mod_time", latestModTime,
+	)
+	return latestData, latestPath, latestModTime, paths, checkedErrors, nil
 }
 
-// GetStats returns the parsed run stats or a graceful empty result
+// ReadRaw searches candidate locations and returns the newest content among existing files.
+func (s *RunStatsService) ReadRaw() ([]byte, string, time.Time, error) {
+	data, path, modTime, _, _, err := s.ReadRawWithDiagnostics()
+	return data, path, modTime, err
+}
+
+// GetStats returns the parsed run stats or a graceful result with full diagnostics.
 func (s *RunStatsService) GetStats() (*RunStatsResult, error) {
-	data, path, modTime, err := s.ReadRaw()
+	data, path, modTime, paths, checkedErrors, err := s.ReadRawWithDiagnostics()
 	if err != nil {
 		if os.IsNotExist(err) {
 			return &RunStatsResult{
-				FileExists: false,
+				FileExists:     false,
+				CandidatePaths: paths,
+				CheckedErrors:  checkedErrors,
 			}, nil
 		}
 		return nil, err
@@ -165,14 +240,17 @@ func (s *RunStatsService) GetStats() (*RunStatsResult, error) {
 
 	var parsed RunStatsData
 	if err := json.Unmarshal(data, &parsed); err != nil {
+		slog.Error("[RunStatsService] Failed to parse run_stats.json JSON", "path", path, "error", err)
 		return nil, err
 	}
 
 	result := &RunStatsResult{
-		RunStatsData: parsed,
-		SourcePath:   path,
-		FileExists:   true,
-		FileModTime:  &modTime,
+		RunStatsData:   parsed,
+		SourcePath:     path,
+		FileExists:     true,
+		FileModTime:    &modTime,
+		CandidatePaths: paths,
+		CheckedErrors:  checkedErrors,
 	}
 	return result, nil
 }

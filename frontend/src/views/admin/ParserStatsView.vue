@@ -79,8 +79,11 @@
               <span class="font-medium text-gray-900 dark:text-white">
                 {{ stats?.file_exists ? 'Source File:' : 'File Status:' }}
               </span>
-              <span class="ml-2 font-mono text-xs text-gray-600 dark:text-gray-300">
-                {{ stats?.source_path || 'data/run_stats.json' }}
+              <span
+                class="ml-2 font-mono text-xs"
+                :class="stats?.file_exists ? 'text-gray-600 dark:text-gray-300' : 'text-amber-700 dark:text-amber-400 font-semibold'"
+              >
+                {{ stats?.file_exists ? stats.source_path : 'Not found in candidate paths' }}
               </span>
             </div>
           </div>
@@ -98,8 +101,25 @@
           </div>
         </div>
 
-        <div v-if="!stats?.file_exists" class="mt-2 text-xs text-amber-800 dark:text-amber-300">
-          ⚠️ File <code class="font-mono">run_stats.json</code> has not yet been generated or is not found in candidate paths (<code class="font-mono">data/run_stats.json</code>, <code class="font-mono">/app/data/parser/run_stats.json</code>). Metrics will be displayed automatically once the crawler pipeline runs.
+        <div v-if="!stats?.file_exists" class="mt-3 border-t border-amber-200/80 pt-3 text-xs text-amber-900 dark:border-amber-900/40 dark:text-amber-200">
+          <p class="font-medium">
+            ⚠️ File <code class="font-mono">run_stats.json</code> could not be read. Checked candidate paths:
+          </p>
+          <div v-if="stats?.candidate_paths && stats.candidate_paths.length" class="mt-2 max-h-48 overflow-y-auto rounded-lg border border-amber-300/60 bg-amber-100/50 p-2 dark:border-amber-900/60 dark:bg-amber-950/40 font-mono text-[11px] space-y-1">
+            <div
+              v-for="path in stats.candidate_paths"
+              :key="path"
+              class="flex flex-col sm:flex-row sm:items-center justify-between gap-1 py-0.5 border-b border-amber-200/40 dark:border-amber-900/30 last:border-0"
+            >
+              <span class="text-gray-800 dark:text-gray-200 break-all">{{ path }}</span>
+              <span class="text-amber-700 dark:text-amber-400 text-[10px] shrink-0 font-sans">
+                {{ stats.checked_errors?.[path] || 'not found' }}
+              </span>
+            </div>
+          </div>
+          <p class="mt-2 text-[11px] text-amber-800/90 dark:text-amber-300/80">
+            💡 Tip: You can set an exact path using environment variable <code class="font-mono">RUN_STATS_PATH=/path/to/run_stats.json</code> or ensure user permissions permit reading <code class="font-mono">/root/bestai_prices_parser/public/data/run_stats.json</code>.
+          </p>
         </div>
       </div>
 

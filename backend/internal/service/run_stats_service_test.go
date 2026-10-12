@@ -164,3 +164,31 @@ func TestRunStatsService_MultipleFilesNewestWins(t *testing.T) {
 	require.Equal(t, 25, res.Totals.Models)
 	require.Equal(t, newFile, res.SourcePath)
 }
+
+func TestRunStatsService_Diagnostics(t *testing.T) {
+	tempDir := t.TempDir()
+	nonExistent := filepath.Join(tempDir, "missing.json")
+
+	svc := NewRunStatsServiceWithPaths([]string{nonExistent})
+	res, err := svc.GetStats()
+	require.NoError(t, err)
+	require.NotNil(t, res)
+	require.False(t, res.FileExists)
+	require.Contains(t, res.CandidatePaths, nonExistent)
+	require.Contains(t, res.CheckedErrors, nonExistent)
+}
+
+func TestRunStatsService_EnvOverrides(t *testing.T) {
+	tempDir := t.TempDir()
+	customFile := filepath.Join(tempDir, "custom_stats.json")
+	require.NoError(t, os.WriteFile(customFile, []byte(`{"totals":{"models":77}}`), 0644))
+
+	t.Setenv("RUN_STATS_PATH", customFile)
+	svc := NewRunStatsService()
+	res, err := svc.GetStats()
+	require.NoError(t, err)
+	require.NotNil(t, res)
+	require.True(t, res.FileExists)
+	require.Equal(t, 77, res.Totals.Models)
+	require.Equal(t, customFile, res.SourcePath)
+}

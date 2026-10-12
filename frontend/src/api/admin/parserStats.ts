@@ -72,6 +72,8 @@ export interface RunStatsData {
   source_path?: string
   file_exists: boolean
   file_mod_time?: string
+  candidate_paths?: string[]
+  checked_errors?: Record<string, string>
 }
 
 export interface ParserStatsApiResponse {
