@@ -97,7 +97,9 @@ func executableAdminFeatureRoutes(h *handler.Handlers) []gatewayctx.RouteDef {
 	if h.Admin.RunStats != nil {
 		out = append(out,
 			gatewayctx.RouteDef{Method: http.MethodGet, Path: "/api/v1/admin/parser/run-stats", Handler: h.Admin.RunStats.GetRunStatsGateway, Middleware: mw},
+			gatewayctx.RouteDef{Method: http.MethodGet, Path: "/api/v1/api/v1/admin/parser/run-stats", Handler: h.Admin.RunStats.GetRunStatsGateway, Middleware: mw},
 			gatewayctx.RouteDef{Method: http.MethodGet, Path: "/api/v1/admin/data/run_stats.json", Handler: h.Admin.RunStats.GetRunStatsRawGateway, Middleware: mw},
+			gatewayctx.RouteDef{Method: http.MethodGet, Path: "/api/v1/api/v1/admin/data/run_stats.json", Handler: h.Admin.RunStats.GetRunStatsRawGateway, Middleware: mw},
 		)
 	}
 

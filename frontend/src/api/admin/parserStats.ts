@@ -83,7 +83,7 @@ export interface ParserStatsApiResponse {
 }
 
 export async function getParserRunStats(): Promise<RunStatsData> {
-  const res = await apiClient.get<any>('/api/v1/admin/parser/run-stats')
+  const res = await apiClient.get<any>('/admin/parser/run-stats')
   // apiClient response interceptor already unwraps standard ApiResponse<T>,
   // so res.data is already RunStatsData. Support both unwrapped and raw forms.
   if (res.data && typeof res.data === 'object' && 'data' in res.data && res.data.data) {

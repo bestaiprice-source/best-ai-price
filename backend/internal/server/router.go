@@ -135,4 +135,9 @@ func registerRoutes(
 		r.POST("/api/v1/data/auth_providers.json", gin.HandlerFunc(adminAuth), h.Admin.AuthProviders.SaveAuthProviders)
 		r.PUT("/api/v1/data/auth_providers.json", gin.HandlerFunc(adminAuth), h.Admin.AuthProviders.SaveAuthProviders)
 	}
+
+	if h != nil && h.Admin != nil && h.Admin.RunStats != nil && adminAuth != nil {
+		r.GET("/api/v1/api/v1/admin/parser/run-stats", gin.HandlerFunc(adminAuth), h.Admin.RunStats.GetRunStats)
+		r.GET("/api/v1/api/v1/admin/data/run_stats.json", gin.HandlerFunc(adminAuth), h.Admin.RunStats.GetRunStatsRaw)
+	}
 }
