@@ -73,6 +73,11 @@ func RegisterCommonRoutes(r gin.IRoutes) {
 	r.GET("/data/providers_description.json", gatewayctx.AdaptGinHandler(commonProviderDescriptionsJSON))
 	r.GET("/api/data/providers_description.json", gatewayctx.AdaptGinHandler(commonProviderDescriptionsJSON))
 	r.GET("/api/v1/data/providers_description.json", gatewayctx.AdaptGinHandler(commonProviderDescriptionsJSON))
+
+	// Parser run_stats.json static endpoints
+	r.GET("/data/run_stats.json", gatewayctx.AdaptGinHandler(commonRunStatsJSON))
+	r.GET("/api/data/run_stats.json", gatewayctx.AdaptGinHandler(commonRunStatsJSON))
+	r.GET("/api/v1/data/run_stats.json", gatewayctx.AdaptGinHandler(commonRunStatsJSON))
 }
 
 func ExecutableCommonRoutes() []gatewayctx.RouteDef {
@@ -275,6 +280,24 @@ func ExecutableCommonRoutes() []gatewayctx.RouteDef {
 			Handler:    commonProviderDescriptionsJSON,
 			Middleware: []string{middlewareRequestLogger, middlewareCORS, middlewareSecurity},
 		},
+		{
+			Method:     http.MethodGet,
+			Path:       "/data/run_stats.json",
+			Handler:    commonRunStatsJSON,
+			Middleware: []string{middlewareRequestLogger, middlewareCORS, middlewareSecurity},
+		},
+		{
+			Method:     http.MethodGet,
+			Path:       "/api/data/run_stats.json",
+			Handler:    commonRunStatsJSON,
+			Middleware: []string{middlewareRequestLogger, middlewareCORS, middlewareSecurity},
+		},
+		{
+			Method:     http.MethodGet,
+			Path:       "/api/v1/data/run_stats.json",
+			Handler:    commonRunStatsJSON,
+			Middleware: []string{middlewareRequestLogger, middlewareCORS, middlewareSecurity},
+		},
 	}
 }
 
@@ -419,5 +442,31 @@ func commonProviderDescriptionsJSON(c gatewayctx.GatewayContext) {
 		}
 	}
 	c.WriteJSON(http.StatusNotFound, map[string]any{"error": "providers_description.json not found"})
+}
+
+func commonRunStatsJSON(c gatewayctx.GatewayContext) {
+	paths := []string{
+		"/app/data/parser/run_stats.json",
+		"/app/data/run_stats.json",
+		"./data/run_stats.json",
+		"../data/run_stats.json",
+		"/data/run_stats.json",
+		"/srv/parser-data/data/run_stats.json",
+		"/root/bestai_prices_parser/public/data/run_stats.json",
+		"/home/cucum/dev/bestai_prices_parser/public/data/run_stats.json",
+	}
+	if envPath := os.Getenv("RUN_STATS_PATH"); envPath != "" {
+		paths = append([]string{envPath}, paths...)
+	}
+	for _, p := range paths {
+		if _, err := os.Stat(p); err == nil {
+			c.SetHeader("Cache-Control", "public, max-age=60")
+			c.SetHeader("Access-Control-Allow-Origin", "*")
+			if err := c.ServeFile(p); err == nil {
+				return
+			}
+		}
+	}
+	c.WriteJSON(http.StatusNotFound, map[string]any{"error": "run_stats.json not found"})
 }
 

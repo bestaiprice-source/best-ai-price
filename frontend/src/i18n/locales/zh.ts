@@ -506,6 +506,7 @@ export default {
     providers: '供应商',
     vendors: '更便宜替代方案',
     providerHealth: '供应商健康',
+    parserStats: '爬虫统计',
     alerts: '告警',
     support: '支持',
     billing: '账单历史',
@@ -2244,6 +2245,12 @@ export default {
     vendors: {
       title: '比价与利润率',
       description: '比较上游供应商价格，发现更便宜的替代渠道并监控毛利率'
+    },
+
+    // Parser Stats
+    parserStats: {
+      title: '爬虫与数据统计',
+      description: '监控爬虫任务状态、模型与供应商同步指标及 run_stats.json 差异'
     },
 
     // Accounts Management

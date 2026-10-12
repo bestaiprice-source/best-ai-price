@@ -387,6 +387,17 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/admin/parser-stats',
+    name: 'AdminParserStats',
+    component: () => import('@/views/admin/ParserStatsView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Parser Stats',
+      titleKey: 'admin.parserStats.title'
+    }
+  },
+  {
     path: '/admin/alerts',
     name: 'AdminAlerts',
     component: () => import('@/views/admin/AlertsView.vue'),

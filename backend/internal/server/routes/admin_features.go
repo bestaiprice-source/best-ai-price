@@ -94,6 +94,13 @@ func executableAdminFeatureRoutes(h *handler.Handlers) []gatewayctx.RouteDef {
 		)
 	}
 
+	if h.Admin.RunStats != nil {
+		out = append(out,
+			gatewayctx.RouteDef{Method: http.MethodGet, Path: "/api/v1/admin/parser/run-stats", Handler: h.Admin.RunStats.GetRunStatsGateway, Middleware: mw},
+			gatewayctx.RouteDef{Method: http.MethodGet, Path: "/api/v1/admin/data/run_stats.json", Handler: h.Admin.RunStats.GetRunStatsRawGateway, Middleware: mw},
+		)
+	}
+
 	return out
 }
 
@@ -167,5 +174,9 @@ func registerAdminFeatureRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		admin.GET("/data/auth_providers.json", h.Admin.AuthProviders.GetAuthProviders)
 		admin.POST("/data/auth_providers.json", h.Admin.AuthProviders.SaveAuthProviders)
 		admin.PUT("/data/auth_providers.json", h.Admin.AuthProviders.SaveAuthProviders)
+	}
+	if h.Admin.RunStats != nil {
+		admin.GET("/parser/run-stats", h.Admin.RunStats.GetRunStats)
+		admin.GET("/data/run_stats.json", h.Admin.RunStats.GetRunStatsRaw)
 	}
 }

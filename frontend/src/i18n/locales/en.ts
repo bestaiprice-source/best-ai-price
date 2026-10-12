@@ -506,6 +506,7 @@ export default {
     providers: 'Providers',
     vendors: 'Cheaper Alternatives',
     providerHealth: 'Provider Health',
+    parserStats: 'Parser Stats',
     alerts: 'Alerts',
     support: 'Support',
     billing: 'Billing History',
@@ -2165,6 +2166,12 @@ export default {
     vendors: {
       title: 'Price Checker & Margins',
       description: 'Compare provider prices, discover cheaper alternatives, and monitor gross margins'
+    },
+
+    // Parser Stats
+    parserStats: {
+      title: 'Parser Statistics',
+      description: 'Monitor crawler runs, model sync metrics, and provider offers diff from run_stats.json'
     },
 
     // Accounts

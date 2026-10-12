@@ -38,6 +38,7 @@ type AdminHandlers struct {
 	Payment                *admin.PaymentHandler
 	AuthProviders          *admin.AuthProvidersHandler
 	Provider               *admin.ProviderHandler
+	RunStats               *admin.RunStatsHandler
 }
 
 // Handlers contains all HTTP handlers
