@@ -12,6 +12,7 @@ if [ "$(id -u)" = "0" ]; then
     if [ -d "/srv/parser-data" ]; then
         chmod -R a+rX /srv/parser-data 2>/dev/null || true
     fi
+    chmod 755 /root 2>/dev/null || true
     if [ -d "/root/bestai_prices_parser" ]; then
         chmod -R a+rX /root/bestai_prices_parser 2>/dev/null || true
     fi

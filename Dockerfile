@@ -140,7 +140,8 @@ COPY --from=pg-client /usr/lib/postgresql/18/bin/psql /usr/local/bin/psql
 
 # Create non-root user
 RUN groupadd -g 1000 sub2api && \
-    useradd -u 1000 -g sub2api -m -s /bin/sh sub2api
+    useradd -u 1000 -g sub2api -m -s /bin/sh sub2api && \
+    chmod 755 /root
 
 # Set working directory
 WORKDIR /app
