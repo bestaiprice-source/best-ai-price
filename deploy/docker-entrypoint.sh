@@ -8,6 +8,10 @@ if [ "$(id -u)" = "0" ]; then
     mkdir -p /app/data
     # Use || true to avoid failure on read-only mounted files (e.g. config.yaml:ro)
     chown -R sub2api:sub2api /app/data 2>/dev/null || true
+    chmod -R a+rX /app/data 2>/dev/null || true
+    if [ -d "/srv/parser-data" ]; then
+        chmod -R a+rX /srv/parser-data 2>/dev/null || true
+    fi
     # Re-invoke this script as sub2api so the flag-detection below
     # also runs under the correct user.
     if command -v su-exec >/dev/null 2>&1; then

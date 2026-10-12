@@ -166,10 +166,24 @@ func (s *RunStatsService) getPaths() []string {
 
 	// 1. Top priority: wherever providers.json is located on the system!
 	if provDir := FindActiveProvidersDir(); provDir != "" {
-		paths = append(paths, filepath.Join(provDir, "run_stats.json"))
+		paths = append(paths,
+			filepath.Join(provDir, "run_stats.json"),
+			filepath.Join(provDir, "run-stats.json"),
+			filepath.Join(provDir, "parser_stats.json"),
+			filepath.Join(provDir, "stats.json"),
+			filepath.Join(provDir, "..", "run_stats.json"),
+			filepath.Join(provDir, "data", "run_stats.json"),
+		)
 	}
 
 	paths = append(paths, DefaultRunStatsPaths...)
+	paths = append(paths,
+		"/root/bestai_prices_parser/run_stats.json",
+		"/root/bestai_prices_parser/public/run_stats.json",
+		"/app/data/parser/data/run_stats.json",
+		"/app/data/parser/run-stats.json",
+		"/app/data/run-stats.json",
+	)
 
 	if homeDir, err := os.UserHomeDir(); err == nil && homeDir != "" {
 		paths = append(paths,
