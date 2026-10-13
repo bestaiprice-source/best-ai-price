@@ -121,7 +121,7 @@ func (hc *YunwuHealthController) ReconcileHealth(ctx context.Context, nodes []he
 				"pool",
 				"Yunwu Channel Pool",
 				systemState,
-				fmt.Sprintf("Общая деградация пула: %d/%d узлов здоровы (%s)", healthyCount, totalCount, systemState),
+				fmt.Sprintf("Overall pool degradation: %d/%d nodes healthy (%s)", healthyCount, totalCount, systemState),
 			)
 		}
 	}

@@ -120,13 +120,14 @@ func lastSignatureKey(eventType TelegramEventType, entityID string) string {
 }
 
 // notificationSignature returns a stable fingerprint of a notification body with
-// the volatile "Время:" timestamp line removed, so an unchanged alert compares
+// the volatile "Time:" / "Время:" timestamp line removed, so an unchanged alert compares
 // equal across invocations while any change to its meaningful content (state,
 // reason, counters, prices) produces a different fingerprint.
 func notificationSignature(msg string) string {
 	var b strings.Builder
 	for _, line := range strings.Split(msg, "\n") {
-		if strings.Contains(line, "Время:</b>") {
+		if strings.Contains(line, "Time:</b>") || strings.Contains(line, "Время:</b>") ||
+			strings.Contains(line, "Time:") || strings.Contains(line, "Время:") {
 			continue
 		}
 		b.WriteString(line)
@@ -834,7 +835,7 @@ func (n *TelegramNotifier) CheckAndNotifyErrorSpike(ctx context.Context, scope s
 
 	total := c429 + c5xx
 	if total >= DefaultErrorSpikeThreshold {
-		reason := fmt.Sprintf("Обнаружен резкий всплеск: %d ошибок за последние %d минут", total, DefaultErrorSpikeWindowMins)
+		reason := fmt.Sprintf("Rapid error spike detected: %d errors in the last %d minutes", total, DefaultErrorSpikeWindowMins)
 		return n.NotifyErrorSpike(ctx, scope, c429, c5xx, DefaultErrorSpikeWindowMins, reason)
 	}
 	return false, nil
@@ -938,14 +939,14 @@ func formatAlertMessage(provider, accountName, nodeID string, balance, threshold
 		accountName = nodeID
 	}
 	return fmt.Sprintf(
-		"⚠️ <b>Низкий баланс провайдера: %s</b>\n\n"+
-			"• <b>Провайдер:</b> %s\n"+
-			"• <b>Аккаунт:</b> %s\n"+
+		"⚠️ <b>Low Provider Balance: %s</b>\n\n"+
+			"• <b>Provider:</b> %s\n"+
+			"• <b>Account:</b> %s\n"+
 			"• <b>Node ID:</b> <code>%s</code>\n"+
-			"• <b>Текущий баланс:</b> $%.2f\n"+
-			"• <b>Порог алерта:</b> $%.2f\n"+
-			"• <b>Статус:</b> Требуется пополнение\n"+
-			"• <b>Время:</b> %s",
+			"• <b>Current Balance:</b> $%.2f\n"+
+			"• <b>Alert Threshold:</b> $%.2f\n"+
+			"• <b>Status:</b> Recharge required\n"+
+			"• <b>Time:</b> %s",
 		html.EscapeString(provider),
 		html.EscapeString(provider),
 		html.EscapeString(accountName),
@@ -958,13 +959,13 @@ func formatAlertMessage(provider, accountName, nodeID string, balance, threshold
 
 func formatProviderDownDegradedMessage(provider, nodeID, accountName, status, reason string) string {
 	return fmt.Sprintf(
-		"🔴 <b>[ALARM] Провайдер недоступен / деградирован</b>\n\n"+
-			"• <b>Провайдер:</b> %s\n"+
-			"• <b>Аккаунт:</b> %s\n"+
+		"🔴 <b>[ALARM] Provider Down / Degraded</b>\n\n"+
+			"• <b>Provider:</b> %s\n"+
+			"• <b>Account:</b> %s\n"+
 			"• <b>Node ID:</b> <code>%s</code>\n"+
-			"• <b>Статус:</b> %s\n"+
-			"• <b>Причина:</b> %s\n"+
-			"• <b>Время:</b> %s",
+			"• <b>Status:</b> %s\n"+
+			"• <b>Reason:</b> %s\n"+
+			"• <b>Time:</b> %s",
 		html.EscapeString(provider),
 		html.EscapeString(accountName),
 		html.EscapeString(nodeID),
@@ -976,14 +977,14 @@ func formatProviderDownDegradedMessage(provider, nodeID, accountName, status, re
 
 func formatUpstreamKeyInvalidMessage(provider, nodeID, accountName, keyMasked, reason string) string {
 	return fmt.Sprintf(
-		"🚫 <b>[ALARM] Upstream API-ключ недействителен / отключен</b>\n\n"+
-			"• <b>Провайдер:</b> %s\n"+
-			"• <b>Аккаунт:</b> %s\n"+
+		"🚫 <b>[ALARM] Upstream API Key Invalid / Disabled</b>\n\n"+
+			"• <b>Provider:</b> %s\n"+
+			"• <b>Account:</b> %s\n"+
 			"• <b>Node ID:</b> <code>%s</code>\n"+
-			"• <b>Ключ:</b> <code>%s</code>\n"+
-			"• <b>Причина:</b> %s\n"+
-			"• <b>Действие:</b> Требуется замена или повторная активация ключа\n"+
-			"• <b>Время:</b> %s",
+			"• <b>Key:</b> <code>%s</code>\n"+
+			"• <b>Reason:</b> %s\n"+
+			"• <b>Action:</b> Key replacement or reactivation required\n"+
+			"• <b>Time:</b> %s",
 		html.EscapeString(provider),
 		html.EscapeString(accountName),
 		html.EscapeString(nodeID),
@@ -995,13 +996,13 @@ func formatUpstreamKeyInvalidMessage(provider, nodeID, accountName, keyMasked, r
 
 func formatBothProvidersUnavailableMessage(modelID, primaryProvider, backupProvider, reason string) string {
 	return fmt.Sprintf(
-		"🚨 <b>[КРИТИЧЕСКИЙ СБОЙ] Оба поставщика модели недоступны</b>\n\n"+
-			"• <b>Модель:</b> <code>%s</code>\n"+
-			"• <b>Основной поставщик:</b> %s (недоступен)\n"+
-			"• <b>Резервный поставщик:</b> %s (недоступен)\n"+
-			"• <b>Причина:</b> %s\n"+
-			"• <b>Статус:</b> Запросы к модели отклоняются\n"+
-			"• <b>Время:</b> %s",
+		"🚨 <b>[CRITICAL FAILURE] Both Model Providers Unavailable</b>\n\n"+
+			"• <b>Model:</b> <code>%s</code>\n"+
+			"• <b>Primary Provider:</b> %s (unavailable)\n"+
+			"• <b>Backup Provider:</b> %s (unavailable)\n"+
+			"• <b>Reason:</b> %s\n"+
+			"• <b>Status:</b> Requests to model are rejected\n"+
+			"• <b>Time:</b> %s",
 		html.EscapeString(modelID),
 		html.EscapeString(primaryProvider),
 		html.EscapeString(backupProvider),
@@ -1012,14 +1013,14 @@ func formatBothProvidersUnavailableMessage(modelID, primaryProvider, backupProvi
 
 func formatFailoverRateExceededMessage(modelID string, failoverRate, thresholdRate float64, totalRequests, failoverCount int64) string {
 	return fmt.Sprintf(
-		"⚠️ <b>[ПРЕДУПРЕЖДЕНИЕ] Высокий Failover Rate по модели</b>\n\n"+
-			"• <b>Модель:</b> <code>%s</code>\n"+
+		"⚠️ <b>[WARNING] High Model Failover Rate</b>\n\n"+
+			"• <b>Model:</b> <code>%s</code>\n"+
 			"• <b>Failover Rate:</b> %.1f%%\n"+
-			"• <b>Порог алерта:</b> %.1f%%\n"+
-			"• <b>Всего запросов (окно):</b> %d\n"+
-			"• <b>Переключений на резерв:</b> %d\n"+
-			"• <b>Действие:</b> Проверьте стабильность основного поставщика\n"+
-			"• <b>Время:</b> %s",
+			"• <b>Alert Threshold:</b> %.1f%%\n"+
+			"• <b>Total Requests (Window):</b> %d\n"+
+			"• <b>Failover Switches:</b> %d\n"+
+			"• <b>Action:</b> Check primary provider stability\n"+
+			"• <b>Time:</b> %s",
 		html.EscapeString(modelID),
 		failoverRate,
 		thresholdRate,
@@ -1031,13 +1032,13 @@ func formatFailoverRateExceededMessage(modelID string, failoverRate, thresholdRa
 
 func formatErrorSpikeMessage(scope string, count429, count5xx int64, windowMinutes int, reason string) string {
 	return fmt.Sprintf(
-		"📈 <b>[ВСПЛЕСК ОШИБОК] Резкий рост 429 / 5xx</b>\n\n"+
-			"• <b>Область / Контекст:</b> %s\n"+
-			"• <b>Ошибок 429 (Rate Limit):</b> %d\n"+
-			"• <b>Ошибок 5xx (Server Error):</b> %d\n"+
-			"• <b>Окно наблюдения:</b> %d мин.\n"+
-			"• <b>Причина / Детали:</b> %s\n"+
-			"• <b>Время:</b> %s",
+		"📈 <b>[ERROR SPIKE] Rapid Growth of 429 / 5xx Errors</b>\n\n"+
+			"• <b>Scope / Context:</b> %s\n"+
+			"• <b>429 Errors (Rate Limit):</b> %d\n"+
+			"• <b>5xx Errors (Server Error):</b> %d\n"+
+			"• <b>Observation Window:</b> %d min.\n"+
+			"• <b>Reason / Details:</b> %s\n"+
+			"• <b>Time:</b> %s",
 		html.EscapeString(scope),
 		count429,
 		count5xx,
@@ -1050,17 +1051,17 @@ func formatErrorSpikeMessage(scope string, count429, count5xx int64, windowMinut
 func formatCheaperProviderFoundMessage(family, modelName, currentProvider string, currentPrice float64, candidateProvider, candidateDomain string, candidatePrice, savingsPercent float64, providerCardURL string) string {
 	cardLink := ""
 	if strings.TrimSpace(providerCardURL) != "" {
-		cardLink = fmt.Sprintf("\n• <b>Карточка на BestAIPrice:</b> <a href=\"%s\">Открыть</a>", html.EscapeString(providerCardURL))
+		cardLink = fmt.Sprintf("\n• <b>BestAIPrice Card:</b> <a href=\"%s\">Open</a>", html.EscapeString(providerCardURL))
 	}
 	return fmt.Sprintf(
-		"💡 <b>[ОПТИМИЗАЦИЯ ЗАТРАТ] Найден более выгодный поставщик</b>\n\n"+
-			"• <b>Семейство:</b> %s\n"+
-			"• <b>Модель:</b> <code>%s</code>\n"+
-			"• <b>Текущий провайдер:</b> %s ($%.4f/1M)\n"+
-			"• <b>Кандидат:</b> %s (%s)\n"+
-			"• <b>Цена кандидата:</b> $%.4f/1M\n"+
-			"• <b>Экономия:</b> -%.1f%%%s\n"+
-			"• <b>Время:</b> %s",
+		"💡 <b>[COST OPTIMIZATION] More Cost-Effective Provider Found</b>\n\n"+
+			"• <b>Family:</b> %s\n"+
+			"• <b>Model:</b> <code>%s</code>\n"+
+			"• <b>Current Provider:</b> %s ($%.4f/1M)\n"+
+			"• <b>Candidate:</b> %s (%s)\n"+
+			"• <b>Candidate Price:</b> $%.4f/1M\n"+
+			"• <b>Savings:</b> -%.1f%%%s\n"+
+			"• <b>Time:</b> %s",
 		html.EscapeString(family),
 		html.EscapeString(modelName),
 		html.EscapeString(currentProvider),
@@ -1080,14 +1081,14 @@ func formatPriceChangedSignificantlyMessage(provider, modelName string, oldInput
 		sign = ""
 	}
 	return fmt.Sprintf(
-		"📊 <b>[ИЗМЕНЕНИЕ ЦЕН] Значительное изменение цены поставщика</b>\n\n"+
-			"• <b>Провайдер:</b> %s\n"+
-			"• <b>Модель:</b> <code>%s</code>\n"+
+		"📊 <b>[PRICE CHANGE] Significant Provider Price Change</b>\n\n"+
+			"• <b>Provider:</b> %s\n"+
+			"• <b>Model:</b> <code>%s</code>\n"+
 			"• <b>Input Price:</b> $%.4f → $%.4f\n"+
 			"• <b>Output Price:</b> $%.4f → $%.4f\n"+
-			"• <b>Изменение:</b> %s%.1f%% (порог: %.1f%%)\n"+
-			"• <b>Внимание:</b> Требуется пересчёт розничных цен (retail pricing)\n"+
-			"• <b>Время:</b> %s",
+			"• <b>Change:</b> %s%.1f%% (threshold: %.1f%%)\n"+
+			"• <b>Attention:</b> Retail pricing recalculation required\n"+
+			"• <b>Time:</b> %s",
 		html.EscapeString(provider),
 		html.EscapeString(modelName),
 		oldInput, newInput,
@@ -1097,3 +1098,4 @@ func formatPriceChangedSignificantlyMessage(provider, modelName string, oldInput
 		time.Now().UTC().Format("2006-01-02 15:04:05 UTC"),
 	)
 }
+

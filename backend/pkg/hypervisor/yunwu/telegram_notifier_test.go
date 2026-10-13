@@ -438,7 +438,7 @@ func TestTelegramNotifier_ProviderDownDegraded(t *testing.T) {
 
 	mu.Lock()
 	require.Len(t, sentMessages, 1)
-	assert.Contains(t, sentMessages[0].Text, "Провайдер недоступен / деградирован")
+	assert.Contains(t, sentMessages[0].Text, "Provider Down / Degraded")
 	assert.Contains(t, sentMessages[0].Text, "openlux")
 	assert.Contains(t, sentMessages[0].Text, "node-501")
 	assert.Contains(t, sentMessages[0].Text, "degraded")
@@ -487,7 +487,7 @@ func TestTelegramNotifier_UpstreamKeyInvalid(t *testing.T) {
 
 	mu.Lock()
 	require.Len(t, sentMessages, 1)
-	assert.Contains(t, sentMessages[0].Text, "Upstream API-ключ недействителен / отключен")
+	assert.Contains(t, sentMessages[0].Text, "Upstream API Key Invalid / Disabled")
 	assert.Contains(t, sentMessages[0].Text, "portdan")
 	assert.Contains(t, sentMessages[0].Text, "sk-12...9999")
 	mu.Unlock()
@@ -531,7 +531,7 @@ func TestTelegramNotifier_BothProvidersUnavailable(t *testing.T) {
 
 	mu.Lock()
 	require.Len(t, sentMessages, 1)
-	assert.Contains(t, sentMessages[0].Text, "Оба поставщика модели недоступны")
+	assert.Contains(t, sentMessages[0].Text, "Both Model Providers Unavailable")
 	assert.Contains(t, sentMessages[0].Text, "claude-3-7-sonnet")
 	assert.Contains(t, sentMessages[0].Text, "openlux")
 	assert.Contains(t, sentMessages[0].Text, "portdan")
@@ -591,7 +591,7 @@ func TestTelegramNotifier_FailoverRateExceeded(t *testing.T) {
 
 	mu.Lock()
 	require.Len(t, sentMessages, 1)
-	assert.Contains(t, sentMessages[0].Text, "Высокий Failover Rate по модели")
+	assert.Contains(t, sentMessages[0].Text, "High Model Failover Rate")
 	assert.Contains(t, sentMessages[0].Text, "gpt-4o")
 	assert.Contains(t, sentMessages[0].Text, "30.0%")
 	mu.Unlock()
@@ -648,7 +648,7 @@ func TestTelegramNotifier_ErrorSpike429_5xx(t *testing.T) {
 
 	mu.Lock()
 	require.Len(t, sentMessages, 1)
-	assert.Contains(t, sentMessages[0].Text, "Резкий рост 429 / 5xx")
+	assert.Contains(t, sentMessages[0].Text, "Rapid Growth of 429 / 5xx Errors")
 	assert.Contains(t, sentMessages[0].Text, "openlux")
 	assert.Contains(t, sentMessages[0].Text, "10")
 	assert.Contains(t, sentMessages[0].Text, "6")
@@ -701,7 +701,7 @@ func TestTelegramNotifier_CheaperProviderFound(t *testing.T) {
 
 	mu.Lock()
 	require.Len(t, sentMessages, 1)
-	assert.Contains(t, sentMessages[0].Text, "Найден более выгодный поставщик")
+	assert.Contains(t, sentMessages[0].Text, "More Cost-Effective Provider Found")
 	assert.Contains(t, sentMessages[0].Text, "claude-3-5-sonnet")
 	assert.Contains(t, sentMessages[0].Text, "top-api")
 	assert.Contains(t, sentMessages[0].Text, "-26.7%")
@@ -763,11 +763,11 @@ func TestTelegramNotifier_PriceChangedSignificantly(t *testing.T) {
 
 	mu.Lock()
 	require.Len(t, sentMessages, 1)
-	assert.Contains(t, sentMessages[0].Text, "Значительное изменение цены поставщика")
+	assert.Contains(t, sentMessages[0].Text, "Significant Provider Price Change")
 	assert.Contains(t, sentMessages[0].Text, "openlux")
 	assert.Contains(t, sentMessages[0].Text, "gpt-4o")
 	assert.Contains(t, sentMessages[0].Text, "+28.0%")
-	assert.Contains(t, sentMessages[0].Text, "Требуется пересчёт розничных цен")
+	assert.Contains(t, sentMessages[0].Text, "Retail pricing recalculation required")
 	mu.Unlock()
 
 	// Cooldown suppresses
@@ -873,12 +873,17 @@ func TestTelegramNotifier_ContentDeduplication(t *testing.T) {
 
 func TestNotificationSignature_IgnoresTimestamp(t *testing.T) {
 	// Two bodies differing only in the timestamp line share a fingerprint.
-	m1 := "body line\n• <b>Время:</b> 2020-01-01 00:00:00 UTC"
-	m2 := "body line\n• <b>Время:</b> 2031-12-31 23:59:59 UTC"
+	m1 := "body line\n• <b>Time:</b> 2020-01-01 00:00:00 UTC"
+	m2 := "body line\n• <b>Time:</b> 2031-12-31 23:59:59 UTC"
 	assert.Equal(t, notificationSignature(m1), notificationSignature(m2))
 
+	// Russian backward-compatibility
+	mRu1 := "body line\n• <b>Время:</b> 2020-01-01 00:00:00 UTC"
+	mRu2 := "body line\n• <b>Время:</b> 2031-12-31 23:59:59 UTC"
+	assert.Equal(t, notificationSignature(mRu1), notificationSignature(mRu2))
+
 	// A meaningful change produces a different fingerprint.
-	m3 := "other body line\n• <b>Время:</b> 2020-01-01 00:00:00 UTC"
+	m3 := "other body line\n• <b>Time:</b> 2020-01-01 00:00:00 UTC"
 	assert.NotEqual(t, notificationSignature(m1), notificationSignature(m3))
 }
 
@@ -964,4 +969,21 @@ func TestTelegramNotifier_EdgeCasesAndCoverage(t *testing.T) {
 	assert.Equal(t, "***", maskKey(""))
 	assert.Equal(t, "***", maskKey("short"))
 	assert.Equal(t, "sk-1...8901", maskKey("sk-12345678901"))
+
+	// 9. markAlerted
+	alerted, err := activeNotifier.markAlerted(ctx, "node-alerted-1")
+	assert.NoError(t, err)
+	assert.True(t, alerted)
+
+	// 10. sw SetNotifier, SetBot & engine Notifier, StatsWorker
+	sw := NewStatsWorker(nil, activeCfg)
+	sw.SetNotifier(activeNotifier)
+	sw.SetBot(nil)
+	assert.Equal(t, activeNotifier, sw.Notifier())
+
+	yh := &YunwuHypervisor{sw: sw}
+	assert.Equal(t, activeNotifier, yh.Notifier())
+	assert.Equal(t, sw, yh.StatsWorker())
+	assert.Nil(t, (*YunwuHypervisor)(nil).StatsWorker())
 }
+

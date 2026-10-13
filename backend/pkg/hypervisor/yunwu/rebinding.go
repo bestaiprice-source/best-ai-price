@@ -126,7 +126,7 @@ func (rm *YunwuRebindingManager) HandleYunwuFailure(
 			failedNodeID,
 			accName,
 			"cooldown",
-			fmt.Sprintf("Сбой запроса (10m cooldown): %v", errReason),
+			fmt.Sprintf("Request failed (10m cooldown): %v", errReason),
 		)
 	}
 
@@ -167,7 +167,7 @@ func (rm *YunwuRebindingManager) HandleYunwuFailure(
 				"active_request",
 				prov,
 				"backup_candidates",
-				"Все резервные узлы пула исчерпаны при попытке переключения",
+				"All backup pool nodes exhausted during failover attempt",
 			)
 		}
 		return nil, ErrYunwuRebindingExhausted

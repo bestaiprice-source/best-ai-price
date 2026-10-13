@@ -352,7 +352,7 @@ func (w *StatsWorker) SyncNodeStats(ctx context.Context, node *health.ExecutionN
 				node.NodeID,
 				node.AccountName,
 				masked,
-				"Баланс-синк отклонен: недействительный или отключенный API-ключ (401 Unauthorized)",
+				"Balance sync rejected: invalid or disabled API key (401 Unauthorized)",
 			)
 		}
 	}

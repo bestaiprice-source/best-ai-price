@@ -588,7 +588,7 @@ func (s *CheaperProviderService) CheckOpportunities(ctx context.Context) ([]mode
 			}
 
 			if len(grp.models) > 8 {
-				modelLines = append(modelLines, fmt.Sprintf("• <i>... и ещё %d моделей</i>", len(grp.models)-8))
+				modelLines = append(modelLines, fmt.Sprintf("• <i>... and %d more models</i>", len(grp.models)-8))
 			}
 
 			firstOpp := grp.models[0]
@@ -603,17 +603,17 @@ func (s *CheaperProviderService) CheckOpportunities(ctx context.Context) ([]mode
 			familyNameDisplay := formatFamilyName(grp.family)
 			currentDisplay := strings.Join(currentProvidersList, ", ")
 			if currentDisplay == "" {
-				currentDisplay = "Не указан"
+				currentDisplay = "Not specified"
 			}
 
 			tgMsg := fmt.Sprintf(
-				"💡 <b>Найден более дешёвый поставщик для семейства %s!</b>\n\n"+
-					"<b>Семейство:</b> %s\n"+
-					"<b>Текущие провайдеры:</b> %s (ср. цена: %s / 1M)\n"+
-					"<b>Лучший кандидат:</b> %s (%s) (ср. цена: %s / 1M)\n"+
-					"<b>Экономия по средней цене семейства:</b> 🟢 <b>-%.1f%%</b>\n\n"+
-					"<b>Модели (%d):</b>\n%s\n\n"+
-					"<b>Карточка поставщика:</b> <a href=\"%s\">%s</a>",
+				"💡 <b>Found cheaper provider for family %s!</b>\n\n"+
+					"<b>Family:</b> %s\n"+
+					"<b>Current providers:</b> %s (avg price: %s / 1M)\n"+
+					"<b>Best candidate:</b> %s (%s) (avg price: %s / 1M)\n"+
+					"<b>Family average savings:</b> 🟢 <b>-%.1f%%</b>\n\n"+
+					"<b>Models (%d):</b>\n%s\n\n"+
+					"<b>Provider card:</b> <a href=\"%s\">%s</a>",
 				familyNameDisplay,
 				familyNameDisplay,
 				currentDisplay, formatPriceUSD(grp.currentAvg),
@@ -775,13 +775,14 @@ func (s *CheaperProviderService) DismissOpportunity(ctx context.Context, opportu
 }
 
 // telegramMessageSignature returns a stable fingerprint of a Telegram message
-// body with the volatile "Время:" timestamp line removed, so an unchanged
+// body with the volatile "Time:" / "Время:" timestamp line removed, so an unchanged
 // message compares equal across scans while any change to its meaningful content
 // produces a different fingerprint.
 func telegramMessageSignature(msg string) string {
 	var b strings.Builder
 	for _, line := range strings.Split(msg, "\n") {
-		if strings.Contains(line, "Время:</b>") {
+		if strings.Contains(line, "Time:</b>") || strings.Contains(line, "Время:</b>") ||
+			strings.Contains(line, "Time:") || strings.Contains(line, "Время:") {
 			continue
 		}
 		b.WriteString(line)

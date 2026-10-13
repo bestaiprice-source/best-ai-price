@@ -318,9 +318,9 @@ func (yh *YunwuHypervisor) HandleRequest(
 
 	if len(compatibleNodes) == 0 {
 		if notifier := yh.Notifier(); notifier != nil {
-			reason := "Нет доступных узлов с ценообразованием в пуле"
+			reason := "No available nodes with pricing in the pool"
 			if familyMatchedNodes == 0 {
-				reason = "Семейство модели не поддерживается доступными узлами"
+				reason = "Model family not supported by available nodes"
 			}
 			_, _ = notifier.NotifyBothProvidersUnavailable(ctx, requestedModel, "primary", "backup", reason)
 		}
@@ -640,7 +640,7 @@ func (yh *YunwuHypervisor) HandleRequest(
 					requestedModel,
 					selectedNode.Provider,
 					"backup_pool",
-					fmt.Sprintf("Исчерпаны все попытки выполнения (%d): %v", maxRetries, execErr),
+					fmt.Sprintf("All execution attempts exhausted (%d): %v", maxRetries, execErr),
 				)
 			}
 			break
@@ -688,7 +688,7 @@ func (yh *YunwuHypervisor) HandleRequest(
 					requestedModel,
 					selectedNode.Provider,
 					"backup_candidates",
-					fmt.Sprintf("Ребиндинг не удался: %v", rebindErr),
+					fmt.Sprintf("Rebinding failed: %v", rebindErr),
 				)
 			}
 			break // No point in retrying if no alternatives

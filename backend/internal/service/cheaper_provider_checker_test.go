@@ -88,11 +88,16 @@ func TestCheaperProviderChecker_FetchAndCompare(t *testing.T) {
 
 func TestCheaperProviderChecker_TelegramSignatureStore(t *testing.T) {
 	// Pure helper: identical content (modulo the timestamp) => identical signature.
-	msg := "💡 header\n• <b>Модель:</b> claude-3-7-sonnet\n• <b>Время:</b> 2020-01-01 00:00:00 UTC"
-	sameContent := "💡 header\n• <b>Модель:</b> claude-3-7-sonnet\n• <b>Время:</b> 2031-12-31 23:59:59 UTC"
-	changed := "💡 header\n• <b>Модель:</b> claude-3-5-sonnet\n• <b>Время:</b> 2020-01-01 00:00:00 UTC"
+	msg := "💡 header\n• <b>Model:</b> claude-3-7-sonnet\n• <b>Time:</b> 2020-01-01 00:00:00 UTC"
+	sameContent := "💡 header\n• <b>Model:</b> claude-3-7-sonnet\n• <b>Time:</b> 2031-12-31 23:59:59 UTC"
+	changed := "💡 header\n• <b>Model:</b> claude-3-5-sonnet\n• <b>Time:</b> 2020-01-01 00:00:00 UTC"
 	assert.Equal(t, telegramMessageSignature(msg), telegramMessageSignature(sameContent))
 	assert.NotEqual(t, telegramMessageSignature(msg), telegramMessageSignature(changed))
+
+	// Russian backward-compatibility check
+	msgRu := "💡 header\n• <b>Модель:</b> claude-3-7-sonnet\n• <b>Время:</b> 2020-01-01 00:00:00 UTC"
+	sameContentRu := "💡 header\n• <b>Модель:</b> claude-3-7-sonnet\n• <b>Время:</b> 2031-12-31 23:59:59 UTC"
+	assert.Equal(t, telegramMessageSignature(msgRu), telegramMessageSignature(sameContentRu))
 
 	// DB-backed store: miss -> record -> hit.
 	db, mock, err := sqlmock.New()
