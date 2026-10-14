@@ -1,7 +1,7 @@
 <template>
   <AppLayout>
     <TablePageLayout>
-      <template #filters>
+      <template v-if="isAdmin" #filters>
         <div class="flex flex-wrap items-center gap-3">
           <SearchInput
             v-model="filterSearch"
@@ -34,6 +34,7 @@
       <template #actions>
         <div class="flex justify-end gap-3">
         <button
+          v-if="isAdmin"
           @click="loadApiKeys"
           :disabled="loading"
           class="btn btn-secondary"
@@ -43,15 +44,10 @@
         </button>
         <button
           @click="handleCreateKeyClick"
-          :disabled="creatingQuickKey"
           class="btn btn-primary"
           data-tour="keys-create-btn"
         >
-          <Icon
-            :name="creatingQuickKey ? 'refresh' : 'plus'"
-            size="md"
-            :class="[creatingQuickKey ? 'animate-spin' : '', 'mr-2']"
-          />
+          <Icon name="plus" size="md" class="mr-2" />
           {{ t('keys.createKey') }}
         </button>
       </div>
@@ -347,9 +343,9 @@
                 <Icon name="terminal" size="sm" />
                 <span class="text-xs">{{ t('keys.useKey') }}</span>
               </button>
-              <!-- Import to CC Switch Button -->
+              <!-- Import to CC Switch Button (admin only) -->
               <button
-                v-if="!publicSettings?.hide_ccs_import_button"
+                v-if="isAdmin && !publicSettings?.hide_ccs_import_button"
                 :disabled="isStoredKeyHash(row.key)"
                 @click="importToCcswitch(row)"
                 class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-900/20 dark:hover:text-blue-400"
@@ -453,6 +449,7 @@
           />
         </div>
 
+        <template v-if="isAdmin">
         <div>
           <label class="input-label">{{ t('keys.groupLabel') }}</label>
           <div v-if="formData.group_ids.length > 0" class="mb-2 flex flex-wrap gap-1.5">
@@ -929,6 +926,7 @@
             </div>
           </div>
         </div>
+        </template>
       </form>
       <template #footer>
         <div class="flex justify-end gap-3">
@@ -1202,22 +1200,28 @@ const onboardingStore = useOnboardingStore()
 const { copyToClipboard: clipboardCopy } = useClipboard()
 
 const columns = computed<Column[]>(() => {
-  const cols: Column[] = [
+  if (isAdmin.value) {
+    return [
+      { key: 'name', label: t('common.name'), sortable: true },
+      { key: 'owner', label: 'Owner', sortable: false },
+      { key: 'key', label: t('keys.apiKey'), sortable: false },
+      { key: 'group', label: t('keys.group'), sortable: false },
+      { key: 'usage', label: t('keys.usage'), sortable: false },
+      { key: 'rate_limit', label: t('keys.rateLimitColumn'), sortable: false },
+      { key: 'expires_at', label: t('keys.expiresAt'), sortable: true },
+      { key: 'status', label: t('common.status'), sortable: true },
+      { key: 'last_used_at', label: t('keys.lastUsedAt'), sortable: true },
+      { key: 'created_at', label: t('keys.created'), sortable: true },
+      { key: 'actions', label: t('common.actions'), sortable: false }
+    ]
+  }
+  // Regular users: minimal table — name, key, usage, actions only.
+  return [
     { key: 'name', label: t('common.name'), sortable: true },
     { key: 'key', label: t('keys.apiKey'), sortable: false },
-    { key: 'group', label: t('keys.group'), sortable: false },
     { key: 'usage', label: t('keys.usage'), sortable: false },
-    { key: 'rate_limit', label: t('keys.rateLimitColumn'), sortable: false },
-    { key: 'expires_at', label: t('keys.expiresAt'), sortable: true },
-    { key: 'status', label: t('common.status'), sortable: true },
-    { key: 'last_used_at', label: t('keys.lastUsedAt'), sortable: true },
-    { key: 'created_at', label: t('keys.created'), sortable: true },
     { key: 'actions', label: t('common.actions'), sortable: false }
   ]
-  if (isAdmin.value) {
-    cols.splice(1, 0, { key: 'owner', label: 'Owner', sortable: false })
-  }
-  return cols
 })
 
 const apiKeys = ref<ApiKey[]>([])
@@ -1639,6 +1643,11 @@ const confirmDelete = (key: ApiKey) => {
 }
 
 const handleSubmit = async () => {
+  if (!isAdmin.value) {
+    await submitUserKey()
+    return
+  }
+
   if (formData.value.group_ids.length === 0) {
     appStore.showError(t('keys.groupRequired'))
     return
@@ -1746,54 +1755,70 @@ const handleSubmit = async () => {
   }
 }
 
-const creatingQuickKey = ref(false)
-
 const handleCreateKeyClick = async () => {
-  if (isAdmin.value) {
-    showCreateModal.value = true
-    return
+  if (!isAdmin.value && (!groups.value || groups.value.length === 0)) {
+    await loadGroups()
   }
-  await createQuickYunwuKey()
+  showCreateModal.value = true
 }
 
-const createQuickYunwuKey = async () => {
-  if (creatingQuickKey.value) return
-  creatingQuickKey.value = true
+// Default group used for regular-user key creation: the yunwu group when present.
+const defaultUserGroupId = computed<number | null>(() => {
+  const yunwuGroup =
+    groups.value.find((g) => g.name.toLowerCase() === 'yunwu') ||
+    groups.value.find((g) => g.name.toLowerCase().includes('yunwu')) ||
+    groups.value[0]
+  return yunwuGroup ? yunwuGroup.id : null
+})
+
+// Minimal flow for regular users: create with just a name (default group, no
+// quota / rate-limit / expiration), or rename an existing key. Every advanced
+// field is admin-only and never sent from the user view.
+const submitUserKey = async () => {
+  const name = formData.value.name.trim()
+  if (!name) {
+    appStore.showError(t('keys.namePlaceholder'))
+    return
+  }
+  submitting.value = true
   try {
-    if (!groups.value || groups.value.length === 0) {
-      await loadGroups()
+    if (showEditModal.value && selectedKey.value) {
+      await keysAPI.update(selectedKey.value.id, {
+        name,
+        // The backend overwrites the IP lists unconditionally on update
+        // (internal/service/api_key_service.go), so echo the existing values
+        // back to avoid silently clearing restrictions the user already had.
+        ip_whitelist: selectedKey.value.ip_whitelist || [],
+        ip_blacklist: selectedKey.value.ip_blacklist || []
+      })
+      appStore.showSuccess(t('keys.keyUpdatedSuccess'))
+    } else {
+      const gid = defaultUserGroupId.value
+      const newKey = await keysAPI.create(
+        name,
+        gid,
+        gid ? [gid] : [],
+        [],
+        undefined,
+        [],
+        [],
+        0,
+        undefined,
+        { rate_limit_5h: 0, rate_limit_1d: 0, rate_limit_7d: 0 }
+      )
+      createdKey.value = newKey.key
+      appStore.showSuccess(t('keys.keyCreatedSuccess'))
+      if (onboardingStore.isCurrentStep('[data-tour="key-form-submit"]')) {
+        onboardingStore.nextStep(500)
+      }
     }
-
-    const yunwuGroup =
-      groups.value.find((g) => g.name.toLowerCase() === 'yunwu') ||
-      groups.value.find((g) => g.name.toLowerCase().includes('yunwu')) ||
-      groups.value[0]
-
-    const targetGroupId = yunwuGroup ? yunwuGroup.id : null
-    const targetGroupIds = targetGroupId ? [targetGroupId] : []
-    const keyName = t('keys.namePlaceholder') || 'My API Key'
-
-    const newKey = await keysAPI.create(
-      keyName,
-      targetGroupId,
-      targetGroupIds,
-      [],
-      undefined,
-      [],
-      [],
-      0,
-      undefined,
-      { rate_limit_5h: 0, rate_limit_1d: 0, rate_limit_7d: 0 }
-    )
-
-    createdKey.value = newKey.key
-    appStore.showSuccess(t('keys.keyCreatedSuccess'))
+    closeModals()
     await loadApiKeys()
   } catch (error: any) {
     const errorMsg = error.response?.data?.detail || error.message || t('keys.failedToSave')
     appStore.showError(errorMsg)
   } finally {
-    creatingQuickKey.value = false
+    submitting.value = false
   }
 }
 
