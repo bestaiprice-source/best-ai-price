@@ -543,6 +543,7 @@ func TestAPIContracts(t *testing.T) {
 					"purchase_subscription_url": "",
 					"min_claude_code_version": "",
 					"max_claude_code_version": "",
+					"model_markups": null,
 					"allow_ungrouped_key_scheduling": false,
 					"auto_delete_401_accounts": false,
 					"auto_delete_429_accounts": false,

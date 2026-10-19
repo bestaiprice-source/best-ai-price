@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -16,8 +17,9 @@ import (
 )
 
 const (
-	DefaultYunwuPricingURL = "https://api.openlux.ai/api/pricing"
-	oneAPIBasePricePer1k   = 0.002 // Standard One-API / New-API base price per 1000 tokens ($2/1M tokens)
+	DefaultYunwuPricingURL   = "https://api.openlux.ai/api/pricing"
+	DefaultPortdanPricingURL = "https://bestaiprice.com/gateway/data/providers.json"
+	oneAPIBasePricePer1k     = 0.002 // Standard One-API / New-API base price per 1000 tokens ($2/1M tokens)
 )
 
 // DefaultPricingEndpoints lists the public pricing endpoints across unofficial New-API providers (OpenLux, Top-API, Yuanqiaoyun, X-LLM)
@@ -34,6 +36,7 @@ var DefaultProviderPricingURLs = map[string]string{
 	"api-top":     "https://api-top.com/api/pricing",
 	"yuanqiaoyun": "https://yuanqiaoyun.com/api/pricing",
 	"x-llm":       "https://x-llm.net/api/pricing",
+	"portdan":     DefaultPortdanPricingURL,
 }
 
 // CanonicalPricingProvider normalizes provider names for pricing lookup
@@ -110,6 +113,9 @@ type YunwuPricingRawItem struct {
 	CompletionRatio float64 `json:"completion_ratio"`
 	CacheRatio      float64 `json:"cache_ratio"`
 	Available       bool    `json:"available"`
+	// FixedPriceUnit carries the native billing unit for a fixed per-unit price
+	// (e.g. "request" or "second"); populated from BestAIPrice native_price_unit.
+	FixedPriceUnit string `json:"-"`
 }
 
 type YunwuPricingResponse struct {
@@ -174,6 +180,9 @@ func NewYunwuPricingService() *YunwuPricingService {
 		providerURLs[k] = v
 	}
 	providerURLs["openlux"] = url
+	if portdanURL := strings.TrimSpace(os.Getenv("PORTDAN_PRICING_URL")); portdanURL != "" {
+		providerURLs["portdan"] = portdanURL
+	}
 
 	return &YunwuPricingService{
 		pricingURL:      url,
@@ -212,12 +221,47 @@ func NewYunwuPricingServiceWithClient(pricingURL string, client *http.Client) *Y
 	}
 }
 
+// SetProviderPricingURL sets or overrides the pricing endpoint URL for a provider.
+func (s *YunwuPricingService) SetProviderPricingURL(provider string, endpoint string) {
+	if s == nil {
+		return
+	}
+	prov := CanonicalPricingProvider(provider)
+	endpoint = strings.TrimSpace(endpoint)
+	if endpoint == "" {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.providerURLs == nil {
+		s.providerURLs = make(map[string]string)
+	}
+	s.providerURLs[prov] = endpoint
+	if prov == "openlux" {
+		s.pricingURL = endpoint
+	}
+}
+
 // GetKnownModelNames returns all model names known across configured providers.
 func (s *YunwuPricingService) GetKnownModelNames(ctx context.Context) []string {
 	if s == nil {
 		return nil
 	}
-	_, _ = s.FetchPricing(ctx)
+	// Warm every configured provider so the union of known models (including
+	// image/video models priced only by a non-default provider) is enumerated.
+	s.mu.RLock()
+	providers := make([]string, 0, len(s.providerURLs))
+	for p := range s.providerURLs {
+		providers = append(providers, p)
+	}
+	s.mu.RUnlock()
+	if len(providers) == 0 {
+		_, _ = s.FetchPricing(ctx)
+	} else {
+		for _, p := range providers {
+			_, _ = s.FetchPricingForProvider(ctx, p)
+		}
+	}
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	seen := make(map[string]bool)
@@ -292,18 +336,137 @@ func (s *YunwuPricingService) FetchPricingForProvider(ctx context.Context, provi
 			return nil, fmt.Errorf("pricing endpoint for %s (%s) returned HTTP %d", prov, endpoint, resp.StatusCode)
 		}
 
-		var payload YunwuPricingResponse
-		if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
-			return nil, fmt.Errorf("failed to decode pricing response from %s (%s): %w", prov, endpoint, err)
+		bodyBytes, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read pricing response from %s (%s): %w", prov, endpoint, err)
 		}
 
-		pricingMap := make(map[string]*YunwuPricingRawItem, len(payload.Data))
-		for i := range payload.Data {
-			item := payload.Data[i]
-			key := strings.ToLower(strings.TrimSpace(item.ModelName))
-			if key != "" {
-				pricingMap[key] = &item
+		pricingMap := make(map[string]*YunwuPricingRawItem)
+
+		// 1. Try One-API standard format: {"data": [...]}
+		var payload YunwuPricingResponse
+		if err := json.Unmarshal(bodyBytes, &payload); err == nil && len(payload.Data) > 0 {
+			for i := range payload.Data {
+				item := payload.Data[i]
+				key := strings.ToLower(strings.TrimSpace(item.ModelName))
+				if key != "" {
+					pricingMap[key] = &item
+				}
 			}
+		} else {
+			// 2. Try BestAIPrice format: [{"provider_domain": "...", "model_name": "...", "input_price_usd_per_1m": ...}]
+			var providersList []struct {
+				ProviderDomain      string   `json:"provider_domain"`
+				ProviderName        string   `json:"provider_name"`
+				ModelName           string   `json:"model_name"`
+				CanonicalModelID    string   `json:"canonical_model_id"`
+				InputPriceUSDPer1M  *float64 `json:"input_price_usd_per_1m"`
+				OutputPriceUSDPer1M *float64 `json:"output_price_usd_per_1m"`
+				NativePriceUSD      *float64 `json:"native_price_usd"`
+				NativePriceUnit     *string  `json:"native_price_unit"`
+				Available           bool     `json:"available"`
+			}
+			if err := json.Unmarshal(bodyBytes, &providersList); err == nil && len(providersList) > 0 && (providersList[0].ProviderDomain != "" || providersList[0].ProviderName != "" || providersList[0].ModelName != "") {
+				basePerToken := oneAPIBasePricePer1k / 1000.0 // 2e-6
+				for _, item := range providersList {
+					pDomain := strings.ToLower(strings.TrimSpace(item.ProviderDomain))
+					pName := strings.ToLower(strings.TrimSpace(item.ProviderName))
+					if prov == "portdan" && !(strings.Contains(pDomain, "portdan") || strings.Contains(pName, "portdan")) {
+						continue
+					}
+					var inPrice, outPrice float64
+					if item.InputPriceUSDPer1M != nil {
+						inPrice = *item.InputPriceUSDPer1M / 1_000_000.0
+					}
+					if item.OutputPriceUSDPer1M != nil {
+						outPrice = *item.OutputPriceUSDPer1M / 1_000_000.0
+					}
+					modelRatio := inPrice / basePerToken
+					compRatio := 1.0
+					if inPrice > 0 && outPrice > 0 {
+						compRatio = outPrice / inPrice
+					}
+					rawItem := &YunwuPricingRawItem{
+						ModelName:       item.ModelName,
+						ModelRatio:      modelRatio,
+						CompletionRatio: compRatio,
+						Available:       true,
+					}
+					if inPrice == 0 && outPrice == 0 && item.NativePriceUSD != nil {
+						rawItem.ModelPrice = *item.NativePriceUSD
+						if item.NativePriceUnit != nil && strings.TrimSpace(*item.NativePriceUnit) != "" {
+							rawItem.FixedPriceUnit = strings.ToLower(strings.TrimSpace(*item.NativePriceUnit))
+						}
+					}
+					key := strings.ToLower(strings.TrimSpace(item.ModelName))
+					if key != "" {
+						pricingMap[key] = rawItem
+					}
+					if item.CanonicalModelID != "" {
+						parts := strings.Split(item.CanonicalModelID, "/")
+						slug := strings.ToLower(strings.TrimSpace(parts[len(parts)-1]))
+						if slug != "" {
+							pricingMap[slug] = rawItem
+						}
+					}
+				}
+			} else {
+				// 3. Try sub2api channel format: [{"platforms": [{"supported_models": [...]}]}]
+				var channelList []struct {
+					Platforms []struct {
+						SupportedModels []struct {
+							Name    string `json:"name"`
+							Pricing *struct {
+								InputPrice      *float64 `json:"input_price"`
+								OutputPrice     *float64 `json:"output_price"`
+								PerRequestPrice *float64 `json:"per_request_price"`
+							} `json:"pricing"`
+						} `json:"supported_models"`
+					} `json:"platforms"`
+				}
+				if err := json.Unmarshal(bodyBytes, &channelList); err == nil && len(channelList) > 0 {
+					basePerToken := oneAPIBasePricePer1k / 1000.0 // 2e-6
+					for _, ch := range channelList {
+						for _, pl := range ch.Platforms {
+							for _, sm := range pl.SupportedModels {
+								if sm.Pricing == nil {
+									continue
+								}
+								inPrice := 0.0
+								outPrice := 0.0
+								if sm.Pricing.InputPrice != nil {
+									inPrice = *sm.Pricing.InputPrice
+								}
+								if sm.Pricing.OutputPrice != nil {
+									outPrice = *sm.Pricing.OutputPrice
+								}
+								modelRatio := inPrice / basePerToken
+								compRatio := 1.0
+								if inPrice > 0 && outPrice > 0 {
+									compRatio = outPrice / inPrice
+								}
+								rawItem := &YunwuPricingRawItem{
+									ModelName:       sm.Name,
+									ModelRatio:      modelRatio,
+									CompletionRatio: compRatio,
+									Available:       true,
+								}
+								if inPrice == 0 && outPrice == 0 && sm.Pricing.PerRequestPrice != nil {
+									rawItem.ModelPrice = *sm.Pricing.PerRequestPrice
+								}
+								key := strings.ToLower(strings.TrimSpace(sm.Name))
+								if key != "" {
+									pricingMap[key] = rawItem
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+
+		if len(pricingMap) == 0 {
+			return nil, fmt.Errorf("failed to decode pricing response from %s (%s)", prov, endpoint)
 		}
 
 		s.mu.Lock()
@@ -447,8 +610,9 @@ func (s *YunwuPricingService) GetModelPricingForProvider(ctx context.Context, pr
 	pricing := &ModelPricing{}
 
 	if item.ModelPrice > 0 {
-		// Fixed price per request (e.g. image generation, video generation)
+		// Fixed price per unit (e.g. image generation, video generation)
 		pricing.FixedPricePerRequest = item.ModelPrice
+		pricing.FixedPriceUnit = item.FixedPriceUnit
 		return pricing, true
 	}
 
@@ -557,6 +721,7 @@ func (s *YunwuPricingService) GetModelPricingMaxAcrossProviders(ctx context.Cont
 					CacheReadPricePerToken:     pr.CacheReadPricePerToken,
 					CacheCreationPricePerToken: pr.CacheCreationPricePerToken,
 					FixedPricePerRequest:       pr.FixedPricePerRequest,
+					FixedPriceUnit:             pr.FixedPriceUnit,
 					ImageOutputPricePerToken:   pr.ImageOutputPricePerToken,
 				}
 				found = true
@@ -575,6 +740,7 @@ func (s *YunwuPricingService) GetModelPricingMaxAcrossProviders(ctx context.Cont
 				}
 				if pr.FixedPricePerRequest > maxPricing.FixedPricePerRequest {
 					maxPricing.FixedPricePerRequest = pr.FixedPricePerRequest
+					maxPricing.FixedPriceUnit = pr.FixedPriceUnit
 				}
 				if pr.ImageOutputPricePerToken > maxPricing.ImageOutputPricePerToken {
 					maxPricing.ImageOutputPricePerToken = pr.ImageOutputPricePerToken

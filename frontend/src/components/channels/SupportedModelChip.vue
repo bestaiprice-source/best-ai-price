@@ -152,6 +152,13 @@
                 </div>
               </div>
             </div>
+
+            <div
+              class="mt-2.5 border-t pt-1.5 text-center text-[10px] text-gray-400 dark:text-gray-500"
+              :class="[popoverBorderClass]"
+            >
+              {{ t(prefixKey('baseRateHint')) }}
+            </div>
           </div>
         </div>
       </div>

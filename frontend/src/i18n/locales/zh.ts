@@ -489,7 +489,8 @@ export default {
       perRequestPrice: '每次请求',
       unitPerMillion: '每 100 万',
       unitPerRequest: '每次请求',
-      intervals: '阶梯计费'
+      intervals: '阶梯计费',
+      baseRateHint: '基准费率（实际扣费乘以此分组倍率）'
     }
   },
   nav: {

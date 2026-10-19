@@ -53,6 +53,7 @@ type ModelPricing struct {
 	CacheCreation1hPrice           float64 // 1小时缓存创建每token价格 (USD)
 	ImageOutputPricePerToken       float64 // 图片输出 token 价格 (USD)
 	FixedPricePerRequest           float64 // 固定单次请求费用 (USD，若 >0 则按次收费)
+	FixedPriceUnit                 string  // 固定费用的计费单位 ("request"/"second"/…)，仅用于目录展示
 	SupportsCacheBreakdown         bool    // 是否支持详细的缓存分类
 	LongContextInputThreshold      int     // 超过阈值后按整次会话提升输入价格
 	LongContextInputMultiplier     float64 // 长上下文整次会话输入倍率
@@ -423,6 +424,11 @@ func (s *BillingService) GetModelPricingWithContext(ctx context.Context, model s
 	}
 
 	// 3. 使用硬编码回退价格
+	if s.fallbackPrices != nil {
+		if p, ok := s.fallbackPrices[model]; ok && p != nil {
+			return s.applyModelSpecificPricingPolicy(model, p), nil
+		}
+	}
 	fallback := s.getFallbackPricing(model)
 	if fallback != nil {
 		return s.applyModelSpecificPricingPolicy(model, fallback), nil
@@ -814,6 +820,11 @@ func (s *BillingService) CalculateSoraImageCost(imageSize string, imageCount int
 				unitPrice = *groupConfig.ImagePrice360
 			}
 		}
+	}
+	// Never sell an image at $0: fall back to a conservative default image price
+	// when the group has no Sora image price configured.
+	if unitPrice <= 0 {
+		unitPrice = s.getDefaultImagePrice("", "")
 	}
 
 	totalCost := unitPrice * float64(imageCount)

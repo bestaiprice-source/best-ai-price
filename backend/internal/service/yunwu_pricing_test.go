@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -439,6 +440,57 @@ func TestYunwuPricingService_ProviderIsolation(t *testing.T) {
 	require.Equal(t, "x-llm", CanonicalPricingProvider("xllm"))
 	require.Equal(t, "portdan", CanonicalPricingProvider("portdan.com"))
 }
+
+func TestYunwuPricingService_FetchPricingForProvider_PortdanAndMultiFormat(t *testing.T) {
+	// Mock BestAIPrice format for Portdan
+	bestAIPriceJSON := `[
+		{
+			"provider_domain": "portdan.com",
+			"provider_name": "Portdan AI",
+			"model_name": "claude-3-7-sonnet",
+			"canonical_model_id": "anthropic/claude-3-7-sonnet",
+			"input_price_usd_per_1m": 3.0,
+			"output_price_usd_per_1m": 15.0,
+			"available": true
+		},
+		{
+			"provider_domain": "other.com",
+			"provider_name": "Other AI",
+			"model_name": "other-model",
+			"canonical_model_id": "other/other-model",
+			"input_price_usd_per_1m": 5.0,
+			"output_price_usd_per_1m": 25.0,
+			"available": true
+		}
+	]`
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(bestAIPriceJSON))
+	}))
+	defer ts.Close()
+
+	svc := NewYunwuPricingServiceWithClient(ts.URL, ts.Client())
+	svc.SetProviderPricingURL("portdan", ts.URL)
+
+	ctx := context.Background()
+	prices, err := svc.FetchPricingForProvider(ctx, "portdan")
+	require.NoError(t, err)
+	require.NotEmpty(t, prices)
+
+	// claude-3-7-sonnet should be parsed
+	item, ok := prices["claude-3-7-sonnet"]
+	require.True(t, ok)
+	require.NotNil(t, item)
+	// Base token = 2e-6. 3.0 / 1M = 3e-6 per token. ModelRatio = 3e-6 / 2e-6 = 1.5
+	assert.InDelta(t, 1.5, item.ModelRatio, 1e-4)
+	assert.InDelta(t, 5.0, item.CompletionRatio, 1e-4)
+
+	// other-model should be filtered out because provider is not portdan
+	_, hasOther := prices["other-model"]
+	assert.False(t, hasOther)
+}
+
 
 
 

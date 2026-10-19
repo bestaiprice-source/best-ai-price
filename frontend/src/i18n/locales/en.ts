@@ -489,7 +489,8 @@ export default {
       perRequestPrice: 'Per request',
       unitPerMillion: 'per 1M',
       unitPerRequest: 'per request',
-      intervals: 'Tiered pricing'
+      intervals: 'Tiered pricing',
+      baseRateHint: 'Base rate before group multiplier'
     }
   },
   nav: {

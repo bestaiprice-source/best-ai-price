@@ -527,5 +527,70 @@ func TestVerifyCatalogMatchesBillingExact(t *testing.T) {
 	assert.Equal(t, costSonnet.ActualCost, costSonnetSnapshot.ActualCost)
 }
 
+// A model that is "available" (listed by a schedulable account) but has no
+// price from any connected upstream-yunwu provider must remain unpriced (null)
+// and unavailable. Falling back to LiteLLM / static tables here would advertise
+// a price the yunwu billing path never charges (it fails safe instead), i.e.
+// catalog/billing divergence.
+func TestGetPublicModelsPricing_AvailableButUnpricedStaysNull(t *testing.T) {
+	billingSvc := &BillingService{
+		fallbackPrices: map[string]*ModelPricing{
+			// A static fallback exists for this model, but it must NOT leak into
+			// the catalog because it is not an upstream-yunwu price.
+			"custom-unpriced-model": {InputPricePerToken: 3e-6, OutputPricePerToken: 15e-6},
+		},
+	}
+	repo := &mockAccountRepoForPricing{
+		schedulable: []Account{
+			{
+				Platform: "custom",
+				Extra: map[string]any{
+					AccountExtraFetchedModelsKey: []any{"custom-unpriced-model"},
+				},
+			},
+		},
+	}
+	svc := &GatewayService{
+		accountRepo:    repo,
+		billingService: billingSvc,
+	}
 
+	items := svc.GetPublicModelsPricing(context.Background())
+	var found bool
+	for _, it := range items {
+		if strings.Contains(it.CanonicalModelID, "custom-unpriced-model") {
+			found = true
+			assert.Nil(t, it.InputPricePer1M, "unpriced-upstream model must expose no input price")
+			assert.Nil(t, it.OutputPricePer1M, "unpriced-upstream model must expose no output price")
+			assert.Nil(t, it.NativePriceUSD)
+			assert.False(t, it.Available)
+			assert.Equal(t, "unavailable", it.Status)
+		}
+	}
+	assert.True(t, found)
+}
 
+// A fixed per-unit price must preserve its native billing unit (e.g. "second"
+// for video) instead of always being labelled "request".
+func TestGetPublicModelsPricing_FixedPriceUnit(t *testing.T) {
+	raw := map[string]*YunwuPricingRawItem{
+		"video-model": {ModelPrice: 0.10, FixedPriceUnit: "second", Available: true},
+	}
+	billingSvc := helperNewBillingWithYunwuPricing(raw)
+	svc := &GatewayService{billingService: billingSvc}
+
+	items := svc.GetPublicModelsPricing(context.Background())
+	var found bool
+	for _, it := range items {
+		if strings.HasSuffix(it.CanonicalModelID, "video-model") {
+			found = true
+			require.NotNil(t, it.NativePriceUSD)
+			require.NotNil(t, it.NativePriceUnit)
+			// Base default multiplier 1.10 -> $0.10 * 1.10 = $0.11
+			assert.InDelta(t, 0.11, *it.NativePriceUSD, 1e-3)
+			assert.Equal(t, "second", *it.NativePriceUnit)
+			assert.Nil(t, it.InputPricePer1M)
+		}
+	}
+	assert.True(t, found)
+}

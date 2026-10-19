@@ -207,13 +207,18 @@ func WithYunwuModelRouting(ctx context.Context, group *Group, model string) cont
 // Unofficial-provider media request (image / video / audio) that has no token
 // usage to bill against.
 type RecordYunwuMediaUsageInput struct {
-	APIKey               *APIKey
-	User                 *User
-	AccountID            string
-	Subscription         *UserSubscription
-	Model                string
-	MediaKind            string
-	Units                int64
+	APIKey       *APIKey
+	User         *User
+	AccountID    string
+	Subscription *UserSubscription
+	Model        string
+	MediaKind    string
+	Units        int64
+	// UnitPriceUSD is the per-unit upstream price resolved from the same
+	// max-across-providers basis the public catalog publishes. When > 0 it is
+	// authoritative and the charged amount is UnitPriceUSD × Units × multiplier,
+	// guaranteeing the advertised image/video price equals the charged price.
+	UnitPriceUSD         float64
 	UpstreamCostMicroUSD int64
 	UserAgent            string
 	IPAddress            string
@@ -243,7 +248,7 @@ func recordYunwuMediaUsage(ctx context.Context, deps *billingDeps, billRepo Usag
 	if in == nil || deps == nil || in.APIKey == nil || in.User == nil {
 		return nil
 	}
-	if in.UpstreamCostMicroUSD <= 0 || deps.accountRepo == nil {
+	if deps.accountRepo == nil {
 		return nil
 	}
 	id, err := strconv.ParseInt(strings.TrimSpace(in.AccountID), 10, 64)
@@ -259,7 +264,15 @@ func recordYunwuMediaUsage(ctx context.Context, deps *billingDeps, billRepo Usag
 	if multiplier <= 0 {
 		multiplier = 1.0
 	}
-	total := float64(in.UpstreamCostMicroUSD) / 1_000_000.0
+	// Prefer the per-unit upstream price resolved from the same max-across-
+	// providers retail basis the catalog publishes, so the advertised price and
+	// the charged price are identical. Fall back to the engine-provided cost
+	// (node-configured media price / global default) only when the model has no
+	// upstream fixed price.
+	total, ok := yunwuMediaTotal(in.UnitPriceUSD, in.Units, in.UpstreamCostMicroUSD)
+	if !ok {
+		return nil
+	}
 	cost := &CostBreakdown{
 		InputCost:  total,
 		TotalCost:  total,
@@ -334,6 +347,39 @@ func yunwuMediaMultiplier(group *Group, cfg *config.Config) float64 {
 	return 1.10
 }
 
+// resolveYunwuMediaUnitPrice resolves the per-unit upstream price for a media
+// (image/video/audio) model from the same max-across-providers basis the public
+// catalog publishes, so that the advertised and the charged price are identical.
+// Returns 0 when the model has no fixed upstream price.
+func resolveYunwuMediaUnitPrice(ctx context.Context, bs *BillingService, model string) float64 {
+	if bs == nil || strings.TrimSpace(model) == "" {
+		return 0
+	}
+	if p, err := bs.GetYunwuMaxModelPricing(ctx, model); err == nil && p != nil && p.FixedPricePerRequest > 0 {
+		return p.FixedPricePerRequest
+	}
+	return 0
+}
+
+// yunwuMediaTotal computes the total upstream cost of a per-unit media request.
+// The per-unit upstream price (same retail basis the catalog publishes) is
+// authoritative; the engine-provided micro-USD cost (node-configured media
+// price / global default) is only a fallback for models without an upstream
+// fixed price. ok=false means there is nothing to bill.
+func yunwuMediaTotal(unitPriceUSD float64, units int64, upstreamCostMicroUSD int64) (float64, bool) {
+	if units <= 0 {
+		units = 1
+	}
+	switch {
+	case unitPriceUSD > 0:
+		return unitPriceUSD * float64(units), true
+	case upstreamCostMicroUSD > 0:
+		return float64(upstreamCostMicroUSD) / 1_000_000.0, true
+	default:
+		return 0, false
+	}
+}
+
 // RecordYunwuMediaUsage bills a flat-rate / per-unit Unofficial-provider media
 // request (Anthropic-protocol gateway handler).
 func (s *GatewayService) RecordYunwuMediaUsage(ctx context.Context, in *RecordYunwuMediaUsageInput) error {
@@ -345,9 +391,16 @@ func (s *GatewayService) RecordYunwuMediaUsage(ctx context.Context, in *RecordYu
 		group = in.APIKey.Group
 	}
 	multiplier := yunwuMediaMultiplier(group, s.cfg)
+	// Mirror the text billing path: a per-user group rate override must shape the
+	// media multiplier too, otherwise the catalog (which applies it) and the
+	// charge would diverge.
+	if in.User != nil && in.APIKey != nil && in.APIKey.GroupID != nil {
+		multiplier = s.getUserGroupRateMultiplier(ctx, in.User.ID, *in.APIKey.GroupID, multiplier)
+	}
 	if s.settingService != nil {
 		multiplier = s.settingService.ApplyModelMarkup(ctx, in.Model, multiplier)
 	}
+	in.UnitPriceUSD = resolveYunwuMediaUnitPrice(ctx, s.billingService, in.Model)
 	return recordYunwuMediaUsage(ctx, s.billingDeps(), s.usageBillingRepo, s.usageLogRepo, in, multiplier)
 }
 
@@ -362,8 +415,19 @@ func (s *OpenAIGatewayService) RecordYunwuMediaUsage(ctx context.Context, in *Re
 		group = in.APIKey.Group
 	}
 	multiplier := yunwuMediaMultiplier(group, s.cfg)
+	// Mirror the text billing path: a per-user group rate override must shape the
+	// media multiplier too, otherwise the catalog (which applies it) and the
+	// charge would diverge.
+	if in.User != nil && in.APIKey != nil && in.APIKey.GroupID != nil {
+		resolver := s.userGroupRateResolver
+		if resolver == nil {
+			resolver = newUserGroupRateResolver(nil, nil, resolveUserGroupRateCacheTTL(s.cfg), nil, "service.openai_gateway")
+		}
+		multiplier = resolver.Resolve(ctx, in.User.ID, *in.APIKey.GroupID, multiplier)
+	}
 	if s.billingService != nil {
 		multiplier = s.billingService.ApplyModelMarkup(ctx, in.Model, multiplier)
 	}
+	in.UnitPriceUSD = resolveYunwuMediaUnitPrice(ctx, s.billingService, in.Model)
 	return recordYunwuMediaUsage(ctx, s.billingDeps(), s.usageBillingRepo, s.usageLogRepo, in, multiplier)
 }

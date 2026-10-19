@@ -357,6 +357,10 @@ func (s *GatewayService) GetPublicModelsPricing(ctx context.Context) []PublicMod
 			} else if p, err := s.billingService.GetYunwuOnlyModelPricing(ctx, slug); err == nil && p != nil {
 				pricing = p
 			}
+			// NOTE: no fallback to LiteLLM / static price tables here. The catalog
+			// must publish ONLY the upstream-yunwu retail basis, otherwise an
+			// "available but unpriced upstream" model would advertise a price that
+			// the yunwu billing path never charges (it fails safe instead).
 		}
 
 		// §7: per-model markup overrides the global multiplier for this model.
@@ -367,8 +371,13 @@ func (s *GatewayService) GetPublicModelsPricing(ctx context.Context) []PublicMod
 
 		if pricing != nil {
 			if pricing.FixedPricePerRequest > 0 {
-				fixed := roundFloat(pricing.FixedPricePerRequest*multiplier, 4)
-				unit := "request"
+				// 6 decimals: per-unit media prices can be tiny (e.g. $0.0016),
+				// so 4-decimal rounding would visibly diverge from the charged amount.
+				fixed := roundFloat(pricing.FixedPricePerRequest*multiplier, 6)
+				unit := strings.TrimSpace(pricing.FixedPriceUnit)
+				if unit == "" {
+					unit = "request"
+				}
 				item.NativePriceUSD = &fixed
 				item.NativePriceUnit = &unit
 			} else if pricing.InputPricePerToken > 0 || pricing.OutputPricePerToken > 0 {
@@ -378,11 +387,6 @@ func (s *GatewayService) GetPublicModelsPricing(ctx context.Context) []PublicMod
 				item.InputPrice = &in1m
 				item.OutputPricePer1M = &out1m
 				item.OutputPrice = &out1m
-			} else if pricing.ImageOutputPricePerToken > 0 {
-				native := roundFloat(pricing.ImageOutputPricePerToken*multiplier, 4)
-				unit := "image"
-				item.NativePriceUSD = &native
-				item.NativePriceUnit = &unit
 			}
 		}
 

@@ -131,8 +131,8 @@
                 <thead>
                   <tr>
                     <th>Model</th>
-                    <th>Current Route & Price</th>
-                    <th>Candidate Price</th>
+                    <th title="Combined benchmark price: 1M Input + 1M Output tokens">Current Route & Price (1M In+Out)</th>
+                    <th title="Combined benchmark price: 1M Input + 1M Output tokens">Candidate Price (1M In+Out)</th>
                     <th>Savings</th>
                     <th>Status</th>
                   </tr>

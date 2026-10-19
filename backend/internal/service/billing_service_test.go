@@ -485,6 +485,17 @@ func TestCalculateSoraImageCost_ZeroCount(t *testing.T) {
 	require.Equal(t, 0.0, cost.TotalCost)
 }
 
+// A missing/zero group Sora image price must not sell the image for $0.
+func TestCalculateSoraImageCost_NoGroupPriceIsNotFree(t *testing.T) {
+	svc := newTestBillingService()
+	cost := svc.CalculateSoraImageCost("360", 2, nil, 1.0)
+	require.Greater(t, cost.TotalCost, 0.0, "sora image must never be billed at $0")
+
+	zero := 0.0
+	costZeros := svc.CalculateSoraImageCost("540", 1, &SoraPriceConfig{ImagePrice540: &zero}, 1.0)
+	require.Greater(t, costZeros.TotalCost, 0.0, "zero group price must fall back to a default")
+}
+
 func TestCalculateSoraVideoCost_NilConfig(t *testing.T) {
 	svc := newTestBillingService()
 	cost := svc.CalculateSoraVideoCost("sora-video", nil, 1.0)
@@ -797,4 +808,3 @@ func TestBillingService_CalculateFailSafeCost(t *testing.T) {
 	require.NotNil(t, zeroCost)
 	require.Equal(t, 0.0, zeroCost.ActualCost)
 }
-
