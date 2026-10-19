@@ -106,6 +106,52 @@ func YunwuPrimaryPricingFromContext(ctx context.Context) bool {
 	return v
 }
 
+type yunwuProviderScopeKey struct{}
+
+// ContextWithYunwuProviders restricts unofficial-provider pricing resolution to
+// the given providers — the ones we actually hold schedulable accounts for. With
+// this scope the "primary" (published AND charged) provider is the cheapest
+// provider WE can actually serve from, never a cheaper aggregator we have no
+// account on. Catalog and billing must set the same scope for parity.
+func ContextWithYunwuProviders(ctx context.Context, providers []string) context.Context {
+	if ctx == nil || len(providers) == 0 {
+		return ctx
+	}
+	return context.WithValue(ctx, yunwuProviderScopeKey{}, providers)
+}
+
+// YunwuProvidersFromContext returns the provider scope, if one is set.
+func YunwuProvidersFromContext(ctx context.Context) ([]string, bool) {
+	if ctx == nil {
+		return nil, false
+	}
+	v, ok := ctx.Value(yunwuProviderScopeKey{}).([]string)
+	if !ok || len(v) == 0 {
+		return nil, false
+	}
+	return v, true
+}
+
+// filterProvidersToScope keeps only the providers present in the (optional)
+// context scope, canonicalized for comparison.
+func filterProvidersToScope(ctx context.Context, providers []string) []string {
+	scope, ok := YunwuProvidersFromContext(ctx)
+	if !ok {
+		return providers
+	}
+	allowed := make(map[string]bool, len(scope))
+	for _, p := range scope {
+		allowed[CanonicalPricingProvider(p)] = true
+	}
+	out := make([]string, 0, len(providers))
+	for _, p := range providers {
+		if allowed[CanonicalPricingProvider(p)] {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
 // YunwuPricingRawItem matches the JSON structure returned by api.openlux.ai/api/pricing
 type YunwuPricingRawItem struct {
 	ModelName       string  `json:"model_name"`
@@ -733,7 +779,7 @@ func (s *YunwuPricingService) GetModelPricingPrimaryAcrossProviders(ctx context.
 	var bestFixed *ModelPricing
 	bestFixedCost := math.MaxFloat64
 
-	for _, p := range s.allProviderNames() {
+	for _, p := range filterProvidersToScope(ctx, s.allProviderNames()) {
 		pr, ok := s.GetModelPricingForProvider(ctx, p, modelName)
 		if !ok || pr == nil {
 			continue

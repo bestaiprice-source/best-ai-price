@@ -257,6 +257,13 @@ func (s *GatewayService) GetPublicModelsPricing(ctx context.Context) []PublicMod
 		yunwuMultiplier = 1.0
 	}
 
+	// Restrict the retail basis to the providers we actually hold schedulable
+	// accounts for, so the published "primary" price is one we can serve from
+	// (parity with the billing path, which sets the same scope).
+	if s != nil {
+		ctx = withYunwuProviderScope(ctx, s.accountRepo)
+	}
+
 	if s != nil && s.accountRepo != nil {
 		if models := s.GetAvailableModels(ctx, nil, ""); len(models) > 0 {
 			for _, m := range models {

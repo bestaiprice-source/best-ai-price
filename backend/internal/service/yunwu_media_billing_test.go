@@ -207,3 +207,73 @@ func TestComputeYunwuMargin(t *testing.T) {
 	assert.False(t, computeYunwuMargin(pricier, fixedPrimary, 1.10).Unprofitable)
 	assert.False(t, computeYunwuMargin(fixedPrimary, pricier, 1.10).Unprofitable)
 }
+
+// Provider scope: the retail "primary" provider must be the cheapest provider
+// WE hold accounts for, never a cheaper configured aggregator we cannot serve from.
+func TestYunwuPrimaryRespectsProviderScope(t *testing.T) {
+	yw := NewYunwuPricingService()
+	yw.providerURLs = map[string]string{"openlux": "m1", "x-llm": "m2"}
+	yw.providerPricing = map[string]map[string]*YunwuPricingRawItem{
+		"openlux": {"claude-sonnet-5": {ModelRatio: 1.5, CompletionRatio: 5.0, Available: true}},
+		"x-llm":   {"claude-sonnet-5": {ModelRatio: 2.0, CompletionRatio: 5.0, Available: true}},
+	}
+	yw.providerUpdated = map[string]time.Time{"openlux": time.Now(), "x-llm": time.Now()}
+	billingSvc := NewBillingService(nil, nil, yw)
+	ctx := context.Background()
+
+	// Unrestricted: cheapest = openlux (1.5).
+	p, err := billingSvc.GetYunwuPrimaryModelPricing(ctx, "claude-sonnet-5")
+	require.NoError(t, err)
+	require.NotNil(t, p)
+	assert.InDelta(t, 1.5*2e-6, p.InputPricePerToken, 1e-12)
+
+	// Scoped to x-llm only: primary must be x-llm's (2.0) even though openlux is
+	// cheaper but we hold no account there.
+	scoped := ContextWithYunwuProviders(ctx, []string{"x-llm"})
+	p, err = billingSvc.GetYunwuPrimaryModelPricing(scoped, "claude-sonnet-5")
+	require.NoError(t, err)
+	require.NotNil(t, p)
+	assert.InDelta(t, 2.0*2e-6, p.InputPricePerToken, 1e-12)
+
+	// Provider canonicalization ("X-LLM" == "x-llm").
+	scopedCase := ContextWithYunwuProviders(ctx, []string{"X-LLM"})
+	p, _ = billingSvc.GetYunwuPrimaryModelPricing(scopedCase, "claude-sonnet-5")
+	require.NotNil(t, p)
+	assert.InDelta(t, 2.0*2e-6, p.InputPricePerToken, 1e-12)
+}
+
+// End-to-end: with a schedulable yunwu account on a pricier provider, the catalog
+// publishes THAT provider's price (the one we can serve), not the cheapest
+// configured aggregator.
+func TestCatalogUsesAccountScopedPrimary(t *testing.T) {
+	resetYunwuProviderScopeCache()
+	t.Cleanup(resetYunwuProviderScopeCache)
+
+	yw := NewYunwuPricingService()
+	yw.providerURLs = map[string]string{"openlux": "m1", "portdan": "m2"}
+	yw.providerPricing = map[string]map[string]*YunwuPricingRawItem{
+		"openlux": {"claude-sonnet-5": {ModelRatio: 1.0, CompletionRatio: 5.0, Available: true}},
+		"portdan": {"claude-sonnet-5": {ModelRatio: 2.0, CompletionRatio: 5.0, Available: true}},
+	}
+	yw.providerUpdated = map[string]time.Time{"openlux": time.Now(), "portdan": time.Now()}
+	billingSvc := NewBillingService(nil, nil, yw)
+
+	repo := &mockAccountRepoForPricing{
+		schedulable: []Account{
+			{Platform: PlatformYunwu, Extra: map[string]any{"provider": "portdan"}},
+		},
+	}
+	svc := &GatewayService{billingService: billingSvc, accountRepo: repo}
+
+	items := svc.GetPublicModelsPricing(context.Background())
+	var found bool
+	for _, it := range items {
+		if it.CanonicalModelID == "anthropic/claude-sonnet-5" {
+			found = true
+			require.NotNil(t, it.InputPricePer1M)
+			// portdan (2.0) is the cheapest we can serve from -> 2.0 * 2e-6 * 1e6 * 1.10 = $4.4
+			assert.InDelta(t, 4.4, *it.InputPricePer1M, 1e-4)
+		}
+	}
+	require.True(t, found, "claude-sonnet-5 must be listed")
+}

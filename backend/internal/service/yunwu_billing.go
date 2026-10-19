@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
@@ -27,6 +28,83 @@ type RecordYunwuUsageInput struct {
 	UserAgent        string
 	IPAddress        string
 	APIKeyService    APIKeyQuotaUpdater
+}
+
+// yunwuProviderScopeTTL bounds how long the account-derived provider scope is
+// cached, so the retail-price basis does not require a DB query per request.
+const yunwuProviderScopeTTL = 60 * time.Second
+
+var (
+	yunwuScopeMu        sync.RWMutex
+	yunwuScopeAt        time.Time
+	yunwuScopeProviders []string
+)
+
+// yunwuProviderScope returns the unofficial providers we actually hold
+// schedulable accounts for (cached briefly). With this scope the retail
+// "primary" provider is the cheapest provider WE can serve from. Returns nil when
+// no accounts are found, which leaves the resolver unrestricted (identical for
+// catalog and billing, so parity holds).
+func yunwuProviderScope(ctx context.Context, repo AccountRepository) []string {
+	if repo == nil {
+		return nil
+	}
+	yunwuScopeMu.RLock()
+	if time.Since(yunwuScopeAt) < yunwuProviderScopeTTL {
+		p := yunwuScopeProviders
+		yunwuScopeMu.RUnlock()
+		return p
+	}
+	yunwuScopeMu.RUnlock()
+
+	providers := computeYunwuProviderScope(ctx, repo)
+
+	yunwuScopeMu.Lock()
+	yunwuScopeProviders = providers
+	yunwuScopeAt = time.Now()
+	yunwuScopeMu.Unlock()
+	return providers
+}
+
+func computeYunwuProviderScope(ctx context.Context, repo AccountRepository) []string {
+	accounts, err := repo.ListSchedulable(ctx)
+	if err != nil {
+		return nil
+	}
+	seen := make(map[string]bool)
+	var out []string
+	for _, acc := range accounts {
+		if !strings.EqualFold(acc.Platform, PlatformYunwu) {
+			continue
+		}
+		prov := yunwu.ParseNodeProvider(acc.Extra)
+		if prov == "" {
+			continue
+		}
+		if !seen[prov] {
+			seen[prov] = true
+			out = append(out, prov)
+		}
+	}
+	return out
+}
+
+// withYunwuProviderScope attaches the account-derived provider scope to ctx when
+// available, so both catalog and billing resolve the same primary provider.
+func withYunwuProviderScope(ctx context.Context, repo AccountRepository) context.Context {
+	if provs := yunwuProviderScope(ctx, repo); len(provs) > 0 {
+		return ContextWithYunwuProviders(ctx, provs)
+	}
+	return ctx
+}
+
+// resetYunwuProviderScopeCache clears the cached provider scope. Billing uses a
+// short TTL; tests call this to avoid cross-test pollution.
+func resetYunwuProviderScopeCache() {
+	yunwuScopeMu.Lock()
+	yunwuScopeAt = time.Time{}
+	yunwuScopeProviders = nil
+	yunwuScopeMu.Unlock()
 }
 
 // recordYunwuAccount loads the yunwu account that served a request, used as the
@@ -63,6 +141,7 @@ func (s *GatewayService) RecordYunwuUsage(ctx context.Context, input *RecordYunw
 	}
 	// Match catalog retail pricing (max across active providers).
 	billingCtx := ContextWithYunwuPrimaryPricing(ctx)
+	billingCtx = withYunwuProviderScope(billingCtx, s.accountRepo)
 	return s.RecordUsage(billingCtx, &RecordUsageInput{
 		Result:           input.Result,
 		APIKey:           input.APIKey,
@@ -114,6 +193,7 @@ func (s *OpenAIGatewayService) RecordYunwuUsage(ctx context.Context, input *Open
 		return nil
 	}
 	billingCtx := ContextWithYunwuPrimaryPricing(ctx)
+	billingCtx = withYunwuProviderScope(billingCtx, s.accountRepo)
 	return s.RecordUsage(billingCtx, &OpenAIRecordUsageInput{
 		Result:           input.Result,
 		APIKey:           input.APIKey,
@@ -403,6 +483,7 @@ func (s *GatewayService) RecordYunwuMediaUsage(ctx context.Context, in *RecordYu
 	if s.settingService != nil {
 		multiplier = s.settingService.ApplyModelMarkup(ctx, in.Model, multiplier)
 	}
+	ctx = withYunwuProviderScope(ctx, s.accountRepo)
 	in.UnitPriceUSD = resolveYunwuMediaUnitPrice(ctx, s.billingService, in.Model)
 	return recordYunwuMediaUsage(ctx, s.billingDeps(), s.usageBillingRepo, s.usageLogRepo, s.billingService, in, multiplier)
 }
@@ -431,6 +512,7 @@ func (s *OpenAIGatewayService) RecordYunwuMediaUsage(ctx context.Context, in *Re
 	if s.billingService != nil {
 		multiplier = s.billingService.ApplyModelMarkup(ctx, in.Model, multiplier)
 	}
+	ctx = withYunwuProviderScope(ctx, s.accountRepo)
 	in.UnitPriceUSD = resolveYunwuMediaUnitPrice(ctx, s.billingService, in.Model)
 	return recordYunwuMediaUsage(ctx, s.billingDeps(), s.usageBillingRepo, s.usageLogRepo, s.billingService, in, multiplier)
 }
