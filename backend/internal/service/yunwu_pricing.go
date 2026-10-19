@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/yunwu"
 	"golang.org/x/sync/singleflight"
 )
 
@@ -109,38 +110,58 @@ func YunwuPrimaryPricingFromContext(ctx context.Context) bool {
 type yunwuProviderScopeKey struct{}
 
 // ContextWithYunwuProviders restricts unofficial-provider pricing resolution to
-// the given providers — the ones we actually hold schedulable accounts for. With
-// this scope the "primary" (published AND charged) provider is the cheapest
-// provider WE can actually serve from, never a cheaper aggregator we have no
-// account on. Catalog and billing must set the same scope for parity.
+// the given providers for EVERY model family (convenience wrapper around
+// ContextWithYunwuProviderScope).
 func ContextWithYunwuProviders(ctx context.Context, providers []string) context.Context {
 	if ctx == nil || len(providers) == 0 {
 		return ctx
 	}
-	return context.WithValue(ctx, yunwuProviderScopeKey{}, providers)
+	scope := make(map[string][]string, 5)
+	for _, fam := range yunwu.DefaultModelFamilies() {
+		scope[fam] = providers
+	}
+	return context.WithValue(ctx, yunwuProviderScopeKey{}, scope)
 }
 
-// YunwuProvidersFromContext returns the provider scope, if one is set.
-func YunwuProvidersFromContext(ctx context.Context) ([]string, bool) {
+// ContextWithYunwuProviderScope restricts unofficial-provider pricing resolution
+// to a per-model-family set of providers — the ones we hold schedulable accounts
+// for AND that support the family. This mirrors the engine's family routing so
+// the published/charged "primary" price is always a provider that can actually
+// serve the model. Catalog and billing must set the same scope for parity.
+func ContextWithYunwuProviderScope(ctx context.Context, scope map[string][]string) context.Context {
+	if ctx == nil || len(scope) == 0 {
+		return ctx
+	}
+	return context.WithValue(ctx, yunwuProviderScopeKey{}, scope)
+}
+
+// yunwuProviderScopeFromContext returns the per-family provider scope, if set.
+func yunwuProviderScopeFromContext(ctx context.Context) (map[string][]string, bool) {
 	if ctx == nil {
 		return nil, false
 	}
-	v, ok := ctx.Value(yunwuProviderScopeKey{}).([]string)
+	v, ok := ctx.Value(yunwuProviderScopeKey{}).(map[string][]string)
 	if !ok || len(v) == 0 {
 		return nil, false
 	}
 	return v, true
 }
 
-// filterProvidersToScope keeps only the providers present in the (optional)
-// context scope, canonicalized for comparison.
-func filterProvidersToScope(ctx context.Context, providers []string) []string {
-	scope, ok := YunwuProvidersFromContext(ctx)
+// filterProvidersToScope keeps only the providers allowed for the model's family
+// by the (optional) context scope. When a scope is present but no provider
+// supports the model's family, it returns nil — the model is then unpriced
+// (matching the engine, which would find no compatible node).
+func filterProvidersToScope(ctx context.Context, providers []string, model string) []string {
+	scope, ok := yunwuProviderScopeFromContext(ctx)
 	if !ok {
 		return providers
 	}
-	allowed := make(map[string]bool, len(scope))
-	for _, p := range scope {
+	allowedList := scope[yunwu.CanonicalFamily(yunwu.ClassifyModelFamily(model))]
+	if len(allowedList) == 0 {
+		return nil
+	}
+	allowed := make(map[string]bool, len(allowedList))
+	for _, p := range allowedList {
 		allowed[CanonicalPricingProvider(p)] = true
 	}
 	out := make([]string, 0, len(providers))
@@ -700,7 +721,10 @@ func (s *YunwuPricingService) GetModelPricing(ctx context.Context, modelName str
 	return s.GetModelPricingAcrossProviders(ctx, modelName)
 }
 
-// GetModelPricingAcrossProviders resolves model pricing across all known/configured Yunwu providers.
+// GetModelPricingAcrossProviders resolves model pricing across all known/configured
+// Yunwu providers, honoring the (optional) provider/family scope: an explicit
+// per-node provider from context is tried first (it is the actual serving node),
+// then the in-scope providers are searched in order.
 func (s *YunwuPricingService) GetModelPricingAcrossProviders(ctx context.Context, modelName string) (*ModelPricing, bool) {
 	if s == nil {
 		return nil, false
@@ -711,19 +735,10 @@ func (s *YunwuPricingService) GetModelPricingAcrossProviders(ctx context.Context
 			return p, true
 		}
 	}
-	if p, ok := s.GetModelPricingForProvider(ctx, "openlux", modelName); ok && p != nil {
-		return p, true
-	}
-	s.mu.RLock()
-	providers := make([]string, 0, len(s.providerURLs))
-	for p := range s.providerURLs {
-		if p != "openlux" && p != prov {
-			providers = append(providers, p)
+	for _, p := range filterProvidersToScope(ctx, s.allProviderNames(), modelName) {
+		if p == prov {
+			continue
 		}
-	}
-	s.mu.RUnlock()
-
-	for _, p := range providers {
 		if pr, ok := s.GetModelPricingForProvider(ctx, p, modelName); ok && pr != nil {
 			return pr, true
 		}
@@ -779,7 +794,7 @@ func (s *YunwuPricingService) GetModelPricingPrimaryAcrossProviders(ctx context.
 	var bestFixed *ModelPricing
 	bestFixedCost := math.MaxFloat64
 
-	for _, p := range filterProvidersToScope(ctx, s.allProviderNames()) {
+	for _, p := range filterProvidersToScope(ctx, s.allProviderNames(), modelName) {
 		pr, ok := s.GetModelPricingForProvider(ctx, p, modelName)
 		if !ok || pr == nil {
 			continue

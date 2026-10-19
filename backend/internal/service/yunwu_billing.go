@@ -35,65 +35,77 @@ type RecordYunwuUsageInput struct {
 const yunwuProviderScopeTTL = 60 * time.Second
 
 var (
-	yunwuScopeMu        sync.RWMutex
-	yunwuScopeAt        time.Time
-	yunwuScopeProviders []string
+	yunwuScopeMu       sync.RWMutex
+	yunwuScopeAt       time.Time
+	yunwuScopeByFamily map[string][]string
 )
 
 // yunwuProviderScope returns the unofficial providers we actually hold
-// schedulable accounts for (cached briefly). With this scope the retail
-// "primary" provider is the cheapest provider WE can serve from. Returns nil when
-// no accounts are found, which leaves the resolver unrestricted (identical for
-// catalog and billing, so parity holds).
-func yunwuProviderScope(ctx context.Context, repo AccountRepository) []string {
+// schedulable accounts for, keyed by the model family each account supports
+// (cached briefly). With this scope the retail "primary" provider is the cheapest
+// provider WE can serve the model from. Returns nil when no accounts are found,
+// which leaves the resolver unrestricted (identical for catalog and billing, so
+// parity holds).
+func yunwuProviderScope(ctx context.Context, repo AccountRepository) map[string][]string {
 	if repo == nil {
 		return nil
 	}
 	yunwuScopeMu.RLock()
 	if time.Since(yunwuScopeAt) < yunwuProviderScopeTTL {
-		p := yunwuScopeProviders
+		s := yunwuScopeByFamily
 		yunwuScopeMu.RUnlock()
-		return p
+		return s
 	}
 	yunwuScopeMu.RUnlock()
 
-	providers := computeYunwuProviderScope(ctx, repo)
+	scope := computeYunwuProviderScope(ctx, repo)
 
 	yunwuScopeMu.Lock()
-	yunwuScopeProviders = providers
+	yunwuScopeByFamily = scope
 	yunwuScopeAt = time.Now()
 	yunwuScopeMu.Unlock()
-	return providers
+	return scope
 }
 
-func computeYunwuProviderScope(ctx context.Context, repo AccountRepository) []string {
+func computeYunwuProviderScope(ctx context.Context, repo AccountRepository) map[string][]string {
 	accounts, err := repo.ListSchedulable(ctx)
 	if err != nil {
 		return nil
 	}
-	seen := make(map[string]bool)
-	var out []string
+	scope := make(map[string][]string)
+	seen := make(map[string]map[string]bool)
+	add := func(family, provider string) {
+		if family == "" || provider == "" {
+			return
+		}
+		if seen[family] == nil {
+			seen[family] = make(map[string]bool)
+		}
+		if seen[family][provider] {
+			return
+		}
+		seen[family][provider] = true
+		scope[family] = append(scope[family], provider)
+	}
 	for _, acc := range accounts {
 		if !strings.EqualFold(acc.Platform, PlatformYunwu) {
 			continue
 		}
-		prov := yunwu.ParseNodeProvider(acc.Extra)
-		if prov == "" {
-			continue
-		}
-		if !seen[prov] {
-			seen[prov] = true
-			out = append(out, prov)
+		provider := yunwu.ParseNodeProvider(acc.Extra)
+		// A node only prices models of the families it advertises.
+		for _, fam := range yunwu.ParseNodeModelFamilies(acc.Extra) {
+			add(yunwu.CanonicalFamily(fam), provider)
 		}
 	}
-	return out
+	return scope
 }
 
-// withYunwuProviderScope attaches the account-derived provider scope to ctx when
-// available, so both catalog and billing resolve the same primary provider.
+// withYunwuProviderScope attaches the account-derived, family-aware provider scope
+// to ctx when available, so both catalog and billing resolve the same primary
+// provider.
 func withYunwuProviderScope(ctx context.Context, repo AccountRepository) context.Context {
-	if provs := yunwuProviderScope(ctx, repo); len(provs) > 0 {
-		return ContextWithYunwuProviders(ctx, provs)
+	if scope := yunwuProviderScope(ctx, repo); len(scope) > 0 {
+		return ContextWithYunwuProviderScope(ctx, scope)
 	}
 	return ctx
 }
@@ -103,7 +115,7 @@ func withYunwuProviderScope(ctx context.Context, repo AccountRepository) context
 func resetYunwuProviderScopeCache() {
 	yunwuScopeMu.Lock()
 	yunwuScopeAt = time.Time{}
-	yunwuScopeProviders = nil
+	yunwuScopeByFamily = nil
 	yunwuScopeMu.Unlock()
 }
 

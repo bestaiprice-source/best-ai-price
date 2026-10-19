@@ -277,3 +277,63 @@ func TestCatalogUsesAccountScopedPrimary(t *testing.T) {
 	}
 	require.True(t, found, "claude-sonnet-5 must be listed")
 }
+
+// The price scope must respect each account's supported model families: a model
+// whose family no account can serve must be unpriced, never priced from a
+// provider that cannot serve it.
+func TestProviderScopeIsFamilyAware(t *testing.T) {
+	resetYunwuProviderScopeCache()
+	t.Cleanup(resetYunwuProviderScopeCache)
+
+	yw := NewYunwuPricingService()
+	yw.providerURLs = map[string]string{"openlux": "m1", "portdan": "m2"}
+	yw.providerPricing = map[string]map[string]*YunwuPricingRawItem{
+		"openlux": {
+			"claude-sonnet-5": {ModelRatio: 1.0, CompletionRatio: 5.0, Available: true},
+			"gpt-5.4":         {ModelRatio: 1.0, CompletionRatio: 5.0, Available: true},
+		},
+		"portdan": {
+			"claude-sonnet-5": {ModelRatio: 2.0, CompletionRatio: 5.0, Available: true},
+			"gpt-5.4":         {ModelRatio: 2.0, CompletionRatio: 5.0, Available: true},
+		},
+	}
+	yw.providerUpdated = map[string]time.Time{"openlux": time.Now(), "portdan": time.Now()}
+	billingSvc := NewBillingService(nil, nil, yw)
+
+	// Only a portdan account, and it supports ONLY the gpt family.
+	repo := &mockAccountRepoForPricing{
+		schedulable: []Account{
+			{Platform: PlatformYunwu, Extra: map[string]any{
+				"provider":                 "portdan",
+				"supported_model_families": []any{"gpt"},
+			}},
+		},
+	}
+	svc := &GatewayService{billingService: billingSvc, accountRepo: repo}
+
+	ctx := context.Background()
+	byID := map[string]PublicModelPricingItem{}
+	for _, it := range svc.GetPublicModelsPricing(ctx) {
+		byID[it.CanonicalModelID] = it
+	}
+
+	// gpt model -> served by portdan -> 2.0 * 2e-6 * 1e6 * 1.10 = $4.4/1M
+	gpt, ok := byID["openai/gpt-5.4"]
+	require.True(t, ok)
+	require.NotNil(t, gpt.InputPricePer1M)
+	assert.InDelta(t, 4.4, *gpt.InputPricePer1M, 1e-4)
+
+	// claude model -> no account supports the claude family -> unpriced
+	claude, ok := byID["anthropic/claude-sonnet-5"]
+	if ok {
+		assert.Nil(t, claude.InputPricePer1M, "claude must be unpriced when no account supports the claude family")
+	}
+
+	// Direct resolution mirrors it.
+	scoped := withYunwuProviderScope(context.Background(), repo)
+	_, err := billingSvc.GetYunwuPrimaryModelPricing(scoped, "claude-sonnet-5")
+	require.Error(t, err, "claude has no family-compatible provider in scope")
+	p, err := billingSvc.GetYunwuPrimaryModelPricing(scoped, "gpt-5.4")
+	require.NoError(t, err)
+	require.NotNil(t, p)
+}
