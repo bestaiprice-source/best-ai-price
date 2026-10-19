@@ -594,3 +594,38 @@ func TestGetPublicModelsPricing_FixedPriceUnit(t *testing.T) {
 	}
 	assert.True(t, found)
 }
+
+// A schedulable yunwu account must make the core families (claude/gpt/gemini)
+// available, not just the moonshot/zhipu/deepseek/qwen vendors — a yunwu provider
+// serves all of them.
+func TestGetPublicModelsPricing_YunwuAccountMarksCoreFamiliesAvailable(t *testing.T) {
+	resetYunwuProviderScopeCache()
+	t.Cleanup(resetYunwuProviderScopeCache)
+
+	yw := NewYunwuPricingService()
+	yw.providerURLs = map[string]string{"openlux": "m1"}
+	yw.providerPricing = map[string]map[string]*YunwuPricingRawItem{
+		"openlux": {
+			"claude-sonnet-5":  {ModelRatio: 1.5, CompletionRatio: 5.0, Available: true},
+			"gpt-5.4":          {ModelRatio: 1.0, CompletionRatio: 5.0, Available: true},
+			"gemini-2.5-flash": {ModelRatio: 0.15, CompletionRatio: 8.0, Available: true},
+		},
+	}
+	yw.providerUpdated = map[string]time.Time{"openlux": time.Now()}
+	billingSvc := NewBillingService(nil, nil, yw)
+	repo := &mockAccountRepoForPricing{schedulable: []Account{
+		{Platform: PlatformYunwu, Extra: map[string]any{"provider": "openlux"}},
+	}}
+	svc := &GatewayService{billingService: billingSvc, accountRepo: repo}
+
+	byID := map[string]PublicModelPricingItem{}
+	for _, it := range svc.GetPublicModelsPricing(context.Background()) {
+		byID[it.CanonicalModelID] = it
+	}
+	for _, id := range []string{"anthropic/claude-sonnet-5", "openai/gpt-5.4", "google/gemini-2.5-flash"} {
+		it, ok := byID[id]
+		require.True(t, ok, "%s must be listed", id)
+		require.NotNilf(t, it.InputPricePer1M, "%s must be priced", id)
+		assert.Truef(t, it.Available, "%s must be available via the yunwu pool", id)
+	}
+}

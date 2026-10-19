@@ -335,19 +335,29 @@ func (s *GatewayService) GetPublicModelsPricing(ctx context.Context) []PublicMod
 		}
 
 		// Resolve available status
+		//
+		// A schedulable unofficial (yunwu) account can serve ANY model family
+		// (claude/gpt/gemini/kimi/other), so it must make those vendors available
+		// too — otherwise only the moonshot/zhipu/deepseek/qwen/minimax/xai vendors
+		// would be treated as available while claude/gpt/gemini were wrongly
+		// marked unavailable even though a yunwu provider prices them.
+		yunwuPool := schedulablePlatforms["yunwu"] || schedulablePlatforms["openlux"] || schedulablePlatforms["kiro"]
 		isAvailable := false
 		if availableSet[cid] || availableSet[slug] || availableSet[strings.ToLower(rawModelWithoutVersion(slug))] {
 			isAvailable = true
 		} else if hasAnySchedulableAccounts && len(availableSet) == 0 {
 			switch vendor {
 			case "anthropic":
-				isAvailable = schedulablePlatforms["anthropic"] || schedulablePlatforms["claude"]
+				isAvailable = yunwuPool || schedulablePlatforms["anthropic"] || schedulablePlatforms["claude"]
 			case "openai":
-				isAvailable = schedulablePlatforms["openai"] || schedulablePlatforms["codex"]
+				isAvailable = yunwuPool || schedulablePlatforms["openai"] || schedulablePlatforms["codex"]
 			case "google":
-				isAvailable = schedulablePlatforms["gemini"] || schedulablePlatforms["google"]
+				isAvailable = yunwuPool || schedulablePlatforms["gemini"] || schedulablePlatforms["google"]
 			case "moonshot", "zhipu", "deepseek", "qwen", "minimax", "xai":
-				isAvailable = schedulablePlatforms["yunwu"] || schedulablePlatforms["openlux"] || schedulablePlatforms["kiro"]
+				isAvailable = yunwuPool
+			default:
+				// Unknown vendor: a yunwu pool can still serve it.
+				isAvailable = yunwuPool
 			}
 		}
 
