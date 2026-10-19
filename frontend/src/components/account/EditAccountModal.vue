@@ -2279,7 +2279,7 @@ const syncFormFromAccount = (newAccount: Account | null) => {
     yunwuBalance.value = typeof extra?.balance_usd === 'number' ? extra.balance_usd : 0
     const families = extra?.supported_model_families
     if (Array.isArray(families) && families.length > 0) {
-      yunwuSupportedFamilies.value = (families as string[]).filter(f => f !== 'other')
+      yunwuSupportedFamilies.value = families as string[]
     } else {
       yunwuSupportedFamilies.value = ['claude', 'gpt', 'gemini', 'kimi', 'other']
     }
@@ -3427,7 +3427,7 @@ const handleSubmit = async () => {
         newExtra.min_balance_usd = Number(yunwuMinBalance.value)
       }
       newExtra.supported_model_families = yunwuSupportedFamilies.value.length > 0
-        ? yunwuSupportedFamilies.value.filter(f => f !== 'other')
+        ? [...yunwuSupportedFamilies.value]
         : ['claude', 'gpt', 'gemini', 'kimi', 'other']
       updatePayload.extra = applyIgnorePauseSchedulingErrorsUpdate(newExtra)
     }
