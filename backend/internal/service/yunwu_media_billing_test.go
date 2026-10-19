@@ -55,7 +55,8 @@ func TestYunwuMediaUnitPriceMatchesCatalog(t *testing.T) {
 
 	ctx := context.Background()
 
-	// Catalog publishes max(0.33, 0.40) * 1.10 markup = 0.44 native per request.
+	// Catalog publishes the PRIMARY (cheapest) provider price * 1.10 markup:
+	// min(0.33, 0.40) = 0.33 -> $0.363 native per request.
 	svc := &GatewayService{billingService: billingSvc}
 	items := svc.GetPublicModelsPricing(ctx)
 	var found bool
@@ -67,7 +68,7 @@ func TestYunwuMediaUnitPriceMatchesCatalog(t *testing.T) {
 			require.NotNil(t, it.NativePriceUnit)
 			catalogPrice = *it.NativePriceUSD
 			assert.Equal(t, "request", *it.NativePriceUnit)
-			assert.InDelta(t, 0.44, catalogPrice, 1e-3)
+			assert.InDelta(t, 0.363, catalogPrice, 1e-3)
 		}
 	}
 	require.True(t, found, "image model must appear in the public catalog")
@@ -123,8 +124,8 @@ func TestVerifyCatalogMatchesBillingAllPricingTypes(t *testing.T) {
 	for _, item := range items {
 		if item.InputPricePer1M != nil {
 			tokenChecked++
-			// The gateway billing path sets ContextWithYunwuMaxPricing; replicate it.
-			billedCtx := ContextWithYunwuMaxPricing(ctx)
+			// The gateway billing path sets ContextWithYunwuPrimaryPricing; replicate it.
+			billedCtx := ContextWithYunwuPrimaryPricing(ctx)
 			cost, err := billingSvc.CalculateCostWithContext(billedCtx, item.CanonicalModelID,
 				UsageTokens{InputTokens: 10_000, OutputTokens: 10_000}, multiplier, "")
 			require.NoError(t, err, "billing must succeed for %s", item.CanonicalModelID)
@@ -150,15 +151,59 @@ func TestVerifyCatalogMatchesBillingAllPricingTypes(t *testing.T) {
 	assert.GreaterOrEqual(t, tokenChecked, 2, "expected token-priced models to be verified")
 	assert.GreaterOrEqual(t, mediaChecked, 2, "expected media-priced models to be verified")
 
-	// Sanity: the max-across-providers basis really wins (x-llm's pricier token model).
+	// Sanity: the PRIMARY (cheapest) provider basis wins (openlux's cheaper token
+	// model), not the most expensive one.
 	var sonnetFound bool
 	for _, it := range items {
 		if it.CanonicalModelID == "anthropic/claude-sonnet-5" {
 			sonnetFound = true
 			require.NotNil(t, it.InputPricePer1M)
-			// max(1.5, 2.0) * 2e-6 * 1e6 * 1.25 = $5.0/1M
-			assert.InDelta(t, 5.0, *it.InputPricePer1M, 1e-4)
+			// min(openlux 1.5, x-llm 2.0) * 2e-6 * 1e6 * 1.25 = $3.75/1M
+			assert.InDelta(t, 3.75, *it.InputPricePer1M, 1e-4)
 		}
 	}
 	require.True(t, sonnetFound, "claude-sonnet-5 must be listed")
+}
+
+// The loss guard must flag a request only when the SERVING provider costs more
+// than the charged retail price (primary provider price × markup).
+func TestComputeYunwuMargin(t *testing.T) {
+	// Primary provider is cheaper;
+	//   charged (per 1M) = 2e-6 * 1e6 * 1.10 = $2.2 (input)
+	primary := &ModelPricing{InputPricePerToken: 2e-6, OutputPricePerToken: 10e-6}
+
+	// Serving on the primary provider itself -> profit, no alert.
+	m := computeYunwuMargin(primary, primary, 1.10)
+	assert.False(t, m.Unprofitable)
+
+	// Serving on a cheaper backup -> still profit.
+	cheaper := &ModelPricing{InputPricePerToken: 1e-6, OutputPricePerToken: 5e-6}
+	assert.False(t, computeYunwuMargin(cheaper, primary, 1.10).Unprofitable)
+
+	// Serving on a more expensive provider: input 4e-6 > charged 2.2/1M.
+	pricier := &ModelPricing{InputPricePerToken: 4e-6, OutputPricePerToken: 10e-6}
+	m = computeYunwuMargin(pricier, primary, 1.10)
+	require.True(t, m.Unprofitable)
+	assert.Equal(t, "input", m.Leg)
+	assert.InDelta(t, 2.2, m.ChargedUSD, 1e-6)
+	assert.InDelta(t, 4.0, m.CostUSD, 1e-6)
+
+	// Output leg loss.
+	pricierOut := &ModelPricing{InputPricePerToken: 2e-6, OutputPricePerToken: 20e-6}
+	m = computeYunwuMargin(pricierOut, primary, 1.10)
+	require.True(t, m.Unprofitable)
+	assert.Equal(t, "output", m.Leg)
+
+	// Fixed / per-request basis.
+	fixedPrimary := &ModelPricing{FixedPricePerRequest: 0.20}
+	m = computeYunwuMargin(&ModelPricing{FixedPricePerRequest: 0.40}, fixedPrimary, 1.10)
+	require.True(t, m.Unprofitable)
+	assert.Equal(t, "request", m.Leg)
+	assert.InDelta(t, 0.22, m.ChargedUSD, 1e-9)
+	assert.InDelta(t, 0.40, m.CostUSD, 1e-9)
+	assert.False(t, computeYunwuMargin(fixedPrimary, fixedPrimary, 1.10).Unprofitable)
+
+	// Mixed pricing kinds cannot be compared -> never flagged.
+	assert.False(t, computeYunwuMargin(pricier, fixedPrimary, 1.10).Unprofitable)
+	assert.False(t, computeYunwuMargin(fixedPrimary, pricier, 1.10).Unprofitable)
 }

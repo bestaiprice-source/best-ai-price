@@ -36,6 +36,7 @@ const (
 	EventErrorSpike                TelegramEventType = "error_spike_429_5xx"
 	EventCheaperProviderFound      TelegramEventType = "cheaper_provider_found"
 	EventPriceChangedSignificantly TelegramEventType = "price_changed_significantly"
+	EventUnprofitableRequest       TelegramEventType = "unprofitable_request"
 )
 
 const (
@@ -47,6 +48,10 @@ const (
 	DefaultCooldownErrorSpike                = 15 * time.Minute
 	DefaultCooldownCheaperProviderFound      = 24 * time.Hour
 	DefaultCooldownPriceChangedSignificantly = 24 * time.Hour
+	// DefaultCooldownUnprofitableRequest bounds how often the same provider+model
+	// loss alert is repeated. Content deduplication additionally suppresses an
+	// unchanged message, so this only gates genuine repeats.
+	DefaultCooldownUnprofitableRequest = 1 * time.Hour
 
 	DefaultFailoverThresholdRate = 0.20 // 20%
 	DefaultFailoverMinRequests   = 5
@@ -595,6 +600,20 @@ func (n *TelegramNotifier) NotifyPriceChangedSignificantly(
 	})
 }
 
+// 9. NotifyUnprofitableRequest dispatches an alert when the provider that actually
+// served a request is more expensive than the price we charged (the primary
+// provider's price × markup), i.e. a loss-making request.
+func (n *TelegramNotifier) NotifyUnprofitableRequest(
+	ctx context.Context,
+	provider, modelName, leg string,
+	chargedUSD, costUSD float64,
+) (bool, error) {
+	entityID := fmt.Sprintf("%s:%s", provider, modelName)
+	return n.CheckCooldownAndNotify(ctx, EventUnprofitableRequest, entityID, DefaultCooldownUnprofitableRequest, func() string {
+		return formatUnprofitableRequestMessage(provider, modelName, leg, chargedUSD, costUSD)
+	})
+}
+
 // Backward-compatible CheckAndNotify used by StatsWorker and manual balance sync.
 func (n *TelegramNotifier) CheckAndNotify(ctx context.Context, nodeID, accountName, provider string, availableUSD float64) (bool, error) {
 	if strings.TrimSpace(nodeID) == "" {
@@ -1099,3 +1118,25 @@ func formatPriceChangedSignificantlyMessage(provider, modelName string, oldInput
 	)
 }
 
+func formatUnprofitableRequestMessage(provider, modelName, leg string, chargedUSD, costUSD float64) string {
+	return fmt.Sprintf(
+		"🚨 <b>[LOSS] Unprofitable Request — sold below route cost</b>\n\n"+
+			"• <b>Serving provider:</b> %s\n"+
+			"• <b>Model:</b> <code>%s</code>\n"+
+			"• <b>Billing basis:</b> %s\n"+
+			"• <b>Charged (primary × markup):</b> $%.6f per unit\n"+
+			"• <b>Route cost:</b> $%.6f per unit\n"+
+			"• <b>Loss:</b> $%.6f per unit\n"+
+			"• <b>Cause:</b> the request was served by a more expensive provider than the\n"+
+			"  primary (cheapest) provider whose price is published/charged. Consider\n"+
+			"  restricting the primary to providers with active accounts or raising the markup.\n"+
+			"• <b>Time:</b> %s",
+		html.EscapeString(provider),
+		html.EscapeString(modelName),
+		html.EscapeString(leg),
+		chargedUSD,
+		costUSD,
+		costUSD-chargedUSD,
+		time.Now().UTC().Format("2006-01-02 15:04:05 UTC"),
+	)
+}

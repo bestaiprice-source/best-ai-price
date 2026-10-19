@@ -344,13 +344,14 @@ func (s *GatewayService) GetPublicModelsPricing(ctx context.Context) []PublicMod
 			}
 		}
 
-		// Resolve pricing strictly from upstream Yunwu providers using highest cost route:
-		// retail = max(primary_cost, backup_cost) * (1 + markup)
+		// Retail price = the PRIMARY provider's price (cheapest provider for the
+		// model) × markup. Used for the catalog AND billing, so the advertised
+		// price is what is charged even on a Backup-provider failover.
 		var pricing *ModelPricing
 		if s != nil && s.billingService != nil {
-			if p, err := s.billingService.GetYunwuMaxModelPricing(ctx, cid); err == nil && p != nil {
+			if p, err := s.billingService.GetYunwuPrimaryModelPricing(ctx, cid); err == nil && p != nil {
 				pricing = p
-			} else if p, err := s.billingService.GetYunwuMaxModelPricing(ctx, slug); err == nil && p != nil {
+			} else if p, err := s.billingService.GetYunwuPrimaryModelPricing(ctx, slug); err == nil && p != nil {
 				pricing = p
 			} else if p, err := s.billingService.GetYunwuOnlyModelPricing(ctx, cid); err == nil && p != nil {
 				pricing = p

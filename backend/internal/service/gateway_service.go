@@ -8274,6 +8274,13 @@ func (s *GatewayService) RecordUsage(ctx context.Context, input *RecordUsageInpu
 		}
 	}
 
+	// Loss-making request guard: the provider that actually served the request may
+	// be more expensive than the primary (cheapest) provider whose price we
+	// publish and charge.
+	if account != nil && YunwuPrimaryPricingFromContext(ctx) {
+		alertIfUnprofitableYunwuRequest(ctx, s.billingService, yunwu.ParseNodeProvider(account.Extra), billingModel, multiplier)
+	}
+
 	// 判断计费方式：订阅模式 vs 余额模式
 	isSubscriptionBilling := subscription != nil && apiKey.Group != nil && apiKey.Group.IsSubscriptionType()
 	billingType := BillingTypeBalance
@@ -8476,6 +8483,13 @@ func (s *GatewayService) RecordUsageWithLongContext(ctx context.Context, input *
 			).Error("gateway.calculate_cost_failed_using_failsafe_pricing")
 			cost = s.billingService.CalculateFailSafeCost(billingModel, tokens, multiplier)
 		}
+	}
+
+	// Loss-making request guard: the provider that actually served the request may
+	// be more expensive than the primary (cheapest) provider whose price we
+	// publish and charge.
+	if account != nil && YunwuPrimaryPricingFromContext(ctx) {
+		alertIfUnprofitableYunwuRequest(ctx, s.billingService, yunwu.ParseNodeProvider(account.Extra), billingModel, multiplier)
 	}
 
 	// 判断计费方式：订阅模式 vs 余额模式

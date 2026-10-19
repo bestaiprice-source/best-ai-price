@@ -33,6 +33,8 @@ import (
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 	"go.uber.org/zap"
+
+	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/yunwu"
 )
 
 const openAISchedulerDirectFallbackTimeout = 3 * time.Second
@@ -5936,7 +5938,9 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		cost = s.billingService.CalculateImageCost(billingModel, result.ImageSize, result.ImageCount, groupConfig, multiplier)
 	} else {
 		var err error
-		cost, err = s.billingService.CalculateCostWithServiceTier(billingModel, tokens, multiplier, serviceTier)
+		// Use the request context so the yunwu retail basis (primary-provider
+		// pricing) is honored — CalculateCostWithServiceTier drops the context.
+		cost, err = s.billingService.CalculateCostWithContext(ctx, billingModel, tokens, multiplier, serviceTier)
 		if err != nil {
 			logger.L().With(
 				zap.String("component", "service.openai_gateway"),
@@ -5945,6 +5949,13 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 			).Error("openai.calculate_cost_failed_using_failsafe_pricing")
 			cost = s.billingService.CalculateFailSafeCost(billingModel, tokens, multiplier)
 		}
+	}
+
+	// Loss-making request guard: the provider that actually served the request may
+	// be more expensive than the primary (cheapest) provider whose price we
+	// publish and charge.
+	if account != nil && YunwuPrimaryPricingFromContext(ctx) {
+		alertIfUnprofitableYunwuRequest(ctx, s.billingService, yunwu.ParseNodeProvider(account.Extra), billingModel, multiplier)
 	}
 
 	// Determine billing type

@@ -263,13 +263,13 @@ func (h *ProviderHandler) buildModelRoute(
 	}
 	item.Status = routeStatus(primary, backup)
 
-	// Retail price: the same max(primary,backup) table the gateway bills from,
+	// Retail price: the same primary-provider table the gateway bills from,
 	// scaled by the effective rate multiplier.
 	if h.yunwuPricing != nil {
-		if maxPricing, ok := h.yunwuPricing.GetModelPricingMaxAcrossProviders(ctx, model); ok && maxPricing != nil {
+		if primaryPricing, ok := h.yunwuPricing.GetModelPricingPrimaryAcrossProviders(ctx, model); ok && primaryPricing != nil {
 			mult := h.routeMultiplier(groups, pool, groupID)
-			in := maxPricing.InputPricePerToken * 1_000_000 * mult
-			out := maxPricing.OutputPricePerToken * 1_000_000 * mult
+			in := primaryPricing.InputPricePerToken * 1_000_000 * mult
+			out := primaryPricing.OutputPricePerToken * 1_000_000 * mult
 			item.RetailInputPer1M = &in
 			item.RetailOutputPer1M = &out
 		}

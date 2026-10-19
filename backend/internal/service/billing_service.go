@@ -377,12 +377,13 @@ func (s *BillingService) GetModelPricingWithContext(ctx context.Context, model s
 
 	// 1. 优先从 Yunwu / OpenLux 实时动态价格获取
 	if s.yunwuPricing != nil {
-		if YunwuMaxPricingFromContext(ctx) {
-			// Billing path for Unofficial providers: use the highest cost tier
-			// across all active routes (max(primary,backup)) so the charged price
-			// exactly matches the published retail catalog price.
-			if maxPricing, ok := s.yunwuPricing.GetModelPricingMaxAcrossProviders(ctx, model); ok && maxPricing != nil {
-				return s.applyModelSpecificPricingPolicy(model, maxPricing), nil
+		if YunwuPrimaryPricingFromContext(ctx) {
+			// Billing path for Unofficial providers: use the PRIMARY provider's
+			// price (cheapest provider for the model) so the charged price is
+			// always the published retail price, even when the request was served
+			// by a Backup provider.
+			if primaryPricing, ok := s.yunwuPricing.GetModelPricingPrimaryAcrossProviders(ctx, model); ok && primaryPricing != nil {
+				return s.applyModelSpecificPricingPolicy(model, primaryPricing), nil
 			}
 		}
 		if ywPricing, ok := s.yunwuPricing.GetModelPricingAcrossProviders(ctx, model); ok && ywPricing != nil {
@@ -456,18 +457,18 @@ func (s *BillingService) GetYunwuOnlyModelPricing(ctx context.Context, model str
 	return nil, fmt.Errorf("yunwu pricing not found for model: %s", model)
 }
 
-// GetYunwuMaxModelPricing retrieves the maximum model pricing across all available upstream providers,
-// ensuring published retail price covers the cost of both Primary and Backup routes:
-// retail = max(primary_cost, backup_cost) * (1 + markup).
-func (s *BillingService) GetYunwuMaxModelPricing(ctx context.Context, model string) (*ModelPricing, error) {
+// GetYunwuPrimaryModelPricing retrieves the pricing of the PRIMARY provider for a
+// model (the cheapest configured unofficial provider), so the published and
+// charged retail price is always primary_cost * (1 + markup).
+func (s *BillingService) GetYunwuPrimaryModelPricing(ctx context.Context, model string) (*ModelPricing, error) {
 	if s == nil || s.yunwuPricing == nil {
 		return nil, errors.New("yunwu pricing service not configured")
 	}
 	model = strings.ToLower(strings.TrimSpace(model))
-	if ywPricing, ok := s.yunwuPricing.GetModelPricingMaxAcrossProviders(ctx, model); ok && ywPricing != nil {
+	if ywPricing, ok := s.yunwuPricing.GetModelPricingPrimaryAcrossProviders(ctx, model); ok && ywPricing != nil {
 		return s.applyModelSpecificPricingPolicy(model, ywPricing), nil
 	}
-	return nil, fmt.Errorf("yunwu max pricing not found for model: %s", model)
+	return nil, fmt.Errorf("yunwu primary pricing not found for model: %s", model)
 }
 
 // GetYunwuKnownModelNames returns all model names known from Yunwu pricing service.

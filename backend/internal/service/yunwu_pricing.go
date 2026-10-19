@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"net/http"
 	"os"
 	"regexp"
@@ -79,28 +80,29 @@ func PricingProviderFromContext(ctx context.Context) string {
 	return ""
 }
 
-type yunwuMaxPricingKey struct{}
+type yunwuPrimaryPricingKey struct{}
 
-// ContextWithYunwuMaxPricing marks the context so that Yunwu pricing resolution
-// uses the highest cost tier across all active providers — i.e. the exact same
-// retail basis published in the BestAIPrice catalog
-// (retail = max(primary_cost, backup_cost) * (1 + markup)). Billing for a
-// completed Unofficial-provider request uses this so the charged price never
-// diverges from the advertised catalog price.
-func ContextWithYunwuMaxPricing(ctx context.Context) context.Context {
+// ContextWithYunwuPrimaryPricing marks the context so that Yunwu pricing
+// resolution uses the PRIMARY provider's price — the cheapest provider for the
+// model among the configured unofficial providers (matching the engine's
+// default "cheapest = Primary" route). The catalog and the billing for a
+// completed Unofficial-provider request both use this basis, so the advertised
+// and charged price are the primary provider's price × markup, even when the
+// request itself was served by a Backup provider.
+func ContextWithYunwuPrimaryPricing(ctx context.Context) context.Context {
 	if ctx == nil {
 		return ctx
 	}
-	return context.WithValue(ctx, yunwuMaxPricingKey{}, true)
+	return context.WithValue(ctx, yunwuPrimaryPricingKey{}, true)
 }
 
-// YunwuMaxPricingFromContext reports whether max-across-providers retail pricing
+// YunwuPrimaryPricingFromContext reports whether primary-provider retail pricing
 // is required for this context.
-func YunwuMaxPricingFromContext(ctx context.Context) bool {
+func YunwuPrimaryPricingFromContext(ctx context.Context) bool {
 	if ctx == nil {
 		return false
 	}
-	v, _ := ctx.Value(yunwuMaxPricingKey{}).(bool)
+	v, _ := ctx.Value(yunwuPrimaryPricingKey{}).(bool)
 	return v
 }
 
@@ -124,10 +126,10 @@ type YunwuPricingResponse struct {
 
 // YunwuPricingService fetches and resolves real-time pricing strictly isolated per provider
 type YunwuPricingService struct {
-	pricingURL      string
-	providerURLs    map[string]string
-	httpClient      *http.Client
-	sf              singleflight.Group
+	pricingURL   string
+	providerURLs map[string]string
+	httpClient   *http.Client
+	sf           singleflight.Group
 
 	mu              sync.RWMutex
 	providerPricing map[string]map[string]*YunwuPricingRawItem
@@ -185,8 +187,8 @@ func NewYunwuPricingService() *YunwuPricingService {
 	}
 
 	return &YunwuPricingService{
-		pricingURL:      url,
-		providerURLs:    providerURLs,
+		pricingURL:   url,
+		providerURLs: providerURLs,
 		httpClient: &http.Client{
 			Timeout: 10 * time.Second,
 		},
@@ -683,72 +685,90 @@ func (s *YunwuPricingService) GetModelPricingAcrossProviders(ctx context.Context
 	return nil, false
 }
 
-// GetModelPricingMaxAcrossProviders resolves the highest cost tier among all active routes
-// for a model to guarantee retail pricing covers both Primary and Backup costs:
-// retail = max(primary_cost, backup_cost) * (1 + markup).
-func (s *YunwuPricingService) GetModelPricingMaxAcrossProviders(ctx context.Context, modelName string) (*ModelPricing, bool) {
+// allProviderNames returns every configured unofficial provider (defaults incl.
+// openlux plus any dynamically discovered/overridden ones), de-duplicated.
+func (s *YunwuPricingService) allProviderNames() []string {
 	if s == nil {
-		return nil, false
+		return nil
 	}
 	s.mu.RLock()
-	allProviders := make([]string, 0, len(s.providerURLs)+len(s.providerPricing)+1)
+	defer s.mu.RUnlock()
+	all := make([]string, 0, len(s.providerURLs)+len(s.providerPricing)+1)
 	seen := make(map[string]bool)
-	allProviders = append(allProviders, "openlux")
+	all = append(all, "openlux")
 	seen["openlux"] = true
 	for p := range s.providerURLs {
 		if !seen[p] {
 			seen[p] = true
-			allProviders = append(allProviders, p)
+			all = append(all, p)
 		}
 	}
 	for p := range s.providerPricing {
 		if !seen[p] {
 			seen[p] = true
-			allProviders = append(allProviders, p)
+			all = append(all, p)
 		}
 	}
-	s.mu.RUnlock()
-
-	var maxPricing *ModelPricing
-	found := false
-
-	for _, p := range allProviders {
-		if pr, ok := s.GetModelPricingForProvider(ctx, p, modelName); ok && pr != nil {
-			if !found {
-				maxPricing = &ModelPricing{
-					InputPricePerToken:         pr.InputPricePerToken,
-					OutputPricePerToken:        pr.OutputPricePerToken,
-					CacheReadPricePerToken:     pr.CacheReadPricePerToken,
-					CacheCreationPricePerToken: pr.CacheCreationPricePerToken,
-					FixedPricePerRequest:       pr.FixedPricePerRequest,
-					FixedPriceUnit:             pr.FixedPriceUnit,
-					ImageOutputPricePerToken:   pr.ImageOutputPricePerToken,
-				}
-				found = true
-			} else {
-				if pr.InputPricePerToken > maxPricing.InputPricePerToken {
-					maxPricing.InputPricePerToken = pr.InputPricePerToken
-				}
-				if pr.OutputPricePerToken > maxPricing.OutputPricePerToken {
-					maxPricing.OutputPricePerToken = pr.OutputPricePerToken
-				}
-				if pr.CacheReadPricePerToken > maxPricing.CacheReadPricePerToken {
-					maxPricing.CacheReadPricePerToken = pr.CacheReadPricePerToken
-				}
-				if pr.CacheCreationPricePerToken > maxPricing.CacheCreationPricePerToken {
-					maxPricing.CacheCreationPricePerToken = pr.CacheCreationPricePerToken
-				}
-				if pr.FixedPricePerRequest > maxPricing.FixedPricePerRequest {
-					maxPricing.FixedPricePerRequest = pr.FixedPricePerRequest
-					maxPricing.FixedPriceUnit = pr.FixedPriceUnit
-				}
-				if pr.ImageOutputPricePerToken > maxPricing.ImageOutputPricePerToken {
-					maxPricing.ImageOutputPricePerToken = pr.ImageOutputPricePerToken
-				}
-			}
-		}
-	}
-
-	return maxPricing, found
+	return all
 }
 
+// GetModelPricingPrimaryAcrossProviders resolves the pricing of the PRIMARY
+// provider for a model — the cheapest provider among the configured unofficial
+// providers, matching the engine's default "cheapest = Primary" route and the
+// deterministic Primary/Backup selection (`sortNodesByPrice` / `pricePrimaryBackup`).
+// The published and charged price is always the primary provider's price ×
+// markup, even when a request is served by a Backup provider ("цена приводится
+// к цене основного провайдера").
+//
+// Token-priced providers are ranked by input+output cost per token; fixed
+// (per-request) providers by their fixed price. Token providers win over fixed
+// ones when a model is priced both ways.
+func (s *YunwuPricingService) GetModelPricingPrimaryAcrossProviders(ctx context.Context, modelName string) (*ModelPricing, bool) {
+	if s == nil {
+		return nil, false
+	}
+
+	var bestToken *ModelPricing
+	bestTokenCost := math.MaxFloat64
+	var bestFixed *ModelPricing
+	bestFixedCost := math.MaxFloat64
+
+	for _, p := range s.allProviderNames() {
+		pr, ok := s.GetModelPricingForProvider(ctx, p, modelName)
+		if !ok || pr == nil {
+			continue
+		}
+		if pr.InputPricePerToken > 0 || pr.OutputPricePerToken > 0 {
+			cost := pr.InputPricePerToken + pr.OutputPricePerToken
+			if cost > 0 && cost < bestTokenCost {
+				bestTokenCost = cost
+				bestToken = pr
+			}
+			continue
+		}
+		if pr.FixedPricePerRequest > 0 && pr.FixedPricePerRequest < bestFixedCost {
+			bestFixedCost = pr.FixedPricePerRequest
+			bestFixed = pr
+		}
+	}
+
+	if bestToken != nil {
+		return cloneModelPricing(bestToken), true
+	}
+	if bestFixed != nil {
+		return cloneModelPricing(bestFixed), true
+	}
+	return nil, false
+}
+
+func cloneModelPricing(pr *ModelPricing) *ModelPricing {
+	return &ModelPricing{
+		InputPricePerToken:         pr.InputPricePerToken,
+		OutputPricePerToken:        pr.OutputPricePerToken,
+		CacheReadPricePerToken:     pr.CacheReadPricePerToken,
+		CacheCreationPricePerToken: pr.CacheCreationPricePerToken,
+		FixedPricePerRequest:       pr.FixedPricePerRequest,
+		FixedPriceUnit:             pr.FixedPriceUnit,
+		ImageOutputPricePerToken:   pr.ImageOutputPricePerToken,
+	}
+}

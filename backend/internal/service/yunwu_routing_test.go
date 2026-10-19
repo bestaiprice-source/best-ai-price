@@ -46,11 +46,11 @@ func TestWithYunwuModelRouting(t *testing.T) {
 	}
 }
 
-func TestContextWithYunwuMaxPricing(t *testing.T) {
-	if YunwuMaxPricingFromContext(context.Background()) {
+func TestContextWithYunwuPrimaryPricing(t *testing.T) {
+	if YunwuPrimaryPricingFromContext(context.Background()) {
 		t.Fatal("expected false for plain context")
 	}
-	if !YunwuMaxPricingFromContext(ContextWithYunwuMaxPricing(context.Background())) {
-		t.Fatal("expected true after ContextWithYunwuMaxPricing")
+	if !YunwuPrimaryPricingFromContext(ContextWithYunwuPrimaryPricing(context.Background())) {
+		t.Fatal("expected true after ContextWithYunwuPrimaryPricing")
 	}
 }

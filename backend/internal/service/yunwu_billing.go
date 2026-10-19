@@ -62,7 +62,7 @@ func (s *GatewayService) RecordYunwuUsage(ctx context.Context, input *RecordYunw
 		return nil
 	}
 	// Match catalog retail pricing (max across active providers).
-	billingCtx := ContextWithYunwuMaxPricing(ctx)
+	billingCtx := ContextWithYunwuPrimaryPricing(ctx)
 	return s.RecordUsage(billingCtx, &RecordUsageInput{
 		Result:           input.Result,
 		APIKey:           input.APIKey,
@@ -113,7 +113,7 @@ func (s *OpenAIGatewayService) RecordYunwuUsage(ctx context.Context, input *Open
 		)
 		return nil
 	}
-	billingCtx := ContextWithYunwuMaxPricing(ctx)
+	billingCtx := ContextWithYunwuPrimaryPricing(ctx)
 	return s.RecordUsage(billingCtx, &OpenAIRecordUsageInput{
 		Result:           input.Result,
 		APIKey:           input.APIKey,
@@ -244,7 +244,7 @@ func normalizeYunwuMediaKind(kind string) string {
 // recordYunwuMediaUsage writes a usage log and deducts the end-user balance for
 // a flat-rate / per-unit Unofficial-provider request. It reuses the shared
 // billing path (applyUsageBilling) so dedup/atomicity match token billing.
-func recordYunwuMediaUsage(ctx context.Context, deps *billingDeps, billRepo UsageBillingRepository, logRepo UsageLogRepository, in *RecordYunwuMediaUsageInput, multiplier float64) error {
+func recordYunwuMediaUsage(ctx context.Context, deps *billingDeps, billRepo UsageBillingRepository, logRepo UsageLogRepository, bs *BillingService, in *RecordYunwuMediaUsageInput, multiplier float64) error {
 	if in == nil || deps == nil || in.APIKey == nil || in.User == nil {
 		return nil
 	}
@@ -264,8 +264,11 @@ func recordYunwuMediaUsage(ctx context.Context, deps *billingDeps, billRepo Usag
 	if multiplier <= 0 {
 		multiplier = 1.0
 	}
-	// Prefer the per-unit upstream price resolved from the same max-across-
-	// providers retail basis the catalog publishes, so the advertised price and
+	// Loss-making request guard (media): the serving provider may cost more than
+	// the charged per-unit retail price.
+	alertIfUnprofitableYunwuRequest(ctx, bs, yunwu.ParseNodeProvider(account.Extra), in.Model, multiplier)
+	// Prefer the per-unit upstream price resolved from the same primary-provider
+	// retail basis the catalog publishes, so the advertised price and
 	// the charged price are identical. Fall back to the engine-provided cost
 	// (node-configured media price / global default) only when the model has no
 	// upstream fixed price.
@@ -348,14 +351,14 @@ func yunwuMediaMultiplier(group *Group, cfg *config.Config) float64 {
 }
 
 // resolveYunwuMediaUnitPrice resolves the per-unit upstream price for a media
-// (image/video/audio) model from the same max-across-providers basis the public
+// (image/video/audio) model from the same primary-provider basis the public
 // catalog publishes, so that the advertised and the charged price are identical.
 // Returns 0 when the model has no fixed upstream price.
 func resolveYunwuMediaUnitPrice(ctx context.Context, bs *BillingService, model string) float64 {
 	if bs == nil || strings.TrimSpace(model) == "" {
 		return 0
 	}
-	if p, err := bs.GetYunwuMaxModelPricing(ctx, model); err == nil && p != nil && p.FixedPricePerRequest > 0 {
+	if p, err := bs.GetYunwuPrimaryModelPricing(ctx, model); err == nil && p != nil && p.FixedPricePerRequest > 0 {
 		return p.FixedPricePerRequest
 	}
 	return 0
@@ -401,7 +404,7 @@ func (s *GatewayService) RecordYunwuMediaUsage(ctx context.Context, in *RecordYu
 		multiplier = s.settingService.ApplyModelMarkup(ctx, in.Model, multiplier)
 	}
 	in.UnitPriceUSD = resolveYunwuMediaUnitPrice(ctx, s.billingService, in.Model)
-	return recordYunwuMediaUsage(ctx, s.billingDeps(), s.usageBillingRepo, s.usageLogRepo, in, multiplier)
+	return recordYunwuMediaUsage(ctx, s.billingDeps(), s.usageBillingRepo, s.usageLogRepo, s.billingService, in, multiplier)
 }
 
 // RecordYunwuMediaUsage bills a flat-rate / per-unit Unofficial-provider media
@@ -429,5 +432,79 @@ func (s *OpenAIGatewayService) RecordYunwuMediaUsage(ctx context.Context, in *Re
 		multiplier = s.billingService.ApplyModelMarkup(ctx, in.Model, multiplier)
 	}
 	in.UnitPriceUSD = resolveYunwuMediaUnitPrice(ctx, s.billingService, in.Model)
-	return recordYunwuMediaUsage(ctx, s.billingDeps(), s.usageBillingRepo, s.usageLogRepo, in, multiplier)
+	return recordYunwuMediaUsage(ctx, s.billingDeps(), s.usageBillingRepo, s.usageLogRepo, s.billingService, in, multiplier)
+}
+
+// yunwuMargin describes whether a completed request was sold below the cost of
+// the route that actually served it, and by how much (per unit).
+type yunwuMargin struct {
+	Unprofitable bool
+	Leg          string  // "input" | "output" | "request"
+	ChargedUSD   float64 // charged retail price per unit (primary price × markup)
+	CostUSD      float64 // serving provider cost per unit
+}
+
+// computeYunwuMargin compares the serving provider's cost against the charged
+// retail price (primary provider price × markup). A request is unprofitable when
+// the serving route costs more than we charge. Token prices are compared per 1M
+// tokens; fixed (per-request) prices per request. Mismatched pricing kinds are
+// never flagged (they cannot be compared reliably).
+func computeYunwuMargin(serving, primary *ModelPricing, multiplier float64) yunwuMargin {
+	if serving == nil || primary == nil {
+		return yunwuMargin{}
+	}
+	if multiplier <= 0 {
+		multiplier = 1.0
+	}
+	if primary.FixedPricePerRequest > 0 || serving.FixedPricePerRequest > 0 {
+		if primary.FixedPricePerRequest <= 0 || serving.FixedPricePerRequest <= 0 {
+			return yunwuMargin{} // mixed pricing kinds
+		}
+		charged := primary.FixedPricePerRequest * multiplier
+		cost := serving.FixedPricePerRequest
+		if cost > charged {
+			return yunwuMargin{Unprofitable: true, Leg: "request", ChargedUSD: charged, CostUSD: cost}
+		}
+		return yunwuMargin{}
+	}
+	inCharged := primary.InputPricePerToken * 1_000_000 * multiplier
+	inCost := serving.InputPricePerToken * 1_000_000
+	outCharged := primary.OutputPricePerToken * 1_000_000 * multiplier
+	outCost := serving.OutputPricePerToken * 1_000_000
+	if inCost > 0 && inCost > inCharged {
+		return yunwuMargin{Unprofitable: true, Leg: "input", ChargedUSD: inCharged, CostUSD: inCost}
+	}
+	if outCost > 0 && outCost > outCharged {
+		return yunwuMargin{Unprofitable: true, Leg: "output", ChargedUSD: outCharged, CostUSD: outCost}
+	}
+	return yunwuMargin{}
+}
+
+// alertIfUnprofitableYunwuRequest emits a Telegram alert when the provider that
+// served a request is more expensive than the charged price (primary × markup) —
+// i.e. a loss-making request. Deduplicated/rate-limited by the notifier.
+func alertIfUnprofitableYunwuRequest(ctx context.Context, bs *BillingService, provider, model string, multiplier float64) {
+	if bs == nil || bs.yunwuPricing == nil || strings.TrimSpace(provider) == "" || strings.TrimSpace(model) == "" {
+		return
+	}
+	serving, ok := bs.yunwuPricing.GetModelPricingForProvider(ctx, provider, model)
+	if !ok || serving == nil {
+		return
+	}
+	primary, err := bs.GetYunwuPrimaryModelPricing(ctx, model)
+	if err != nil || primary == nil {
+		return
+	}
+	margin := computeYunwuMargin(serving, primary, multiplier)
+	if !margin.Unprofitable {
+		return
+	}
+	slog.Warn("[YunwuBilling] unprofitable request: served by a provider more expensive than the charged price",
+		"provider", provider, "model", model, "leg", margin.Leg,
+		"charged_usd", margin.ChargedUSD, "cost_usd", margin.CostUSD)
+	if notifier := yunwu.GetDefaultNotifier(); notifier != nil {
+		if _, err := notifier.NotifyUnprofitableRequest(ctx, provider, model, margin.Leg, margin.ChargedUSD, margin.CostUSD); err != nil {
+			slog.Warn("[YunwuBilling] failed to send unprofitable-request alert", "error", err)
+		}
+	}
 }
