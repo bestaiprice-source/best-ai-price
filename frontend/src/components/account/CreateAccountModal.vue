@@ -3383,7 +3383,7 @@ const yunwuCustomProvider = ref('')
 const yunwuProtocol = ref('openai')
 const yunwuInitialBalance = ref<number | null>(0)
 const yunwuMinBalance = ref<number | null>(20)
-const yunwuSupportedFamilies = ref<string[]>(['claude', 'gpt', 'gemini', 'kimi'])
+const yunwuSupportedFamilies = ref<string[]>(['claude', 'gpt', 'gemini', 'kimi', 'other'])
 interface YunwuMappingRow {
   canonical: string
   upstream: string
@@ -3415,7 +3415,8 @@ const availableModelFamilies = [
   { id: 'claude', name: 'Claude', desc: 'claude-3-5-sonnet, claude-3-7-sonnet, opus...' },
   { id: 'gpt', name: 'GPT', desc: 'gpt-4o, o1, o3, chatgpt...' },
   { id: 'gemini', name: 'Gemini', desc: 'gemini-1.5, gemini-2.5, live, imagen...' },
-  { id: 'kimi', name: 'Kimi', desc: 'kimi-latest, kimi-k1.5, kimi-k2.6, moonshot...' }
+  { id: 'kimi', name: 'Kimi', desc: 'kimi-latest, kimi-k1.5, kimi-k2.6, moonshot...' },
+  { id: 'other', name: 'Other', desc: 'deepseek, qwen, llama, mistral, grok...' }
 ]
 const antigravityModelRestrictionMode = ref<'whitelist' | 'mapping'>('whitelist')
 const antigravityWhitelistModels = ref<string[]>([])
@@ -4188,7 +4189,7 @@ const resetForm = () => {
   yunwuProtocol.value = 'openai'
   yunwuInitialBalance.value = 0
   yunwuMinBalance.value = 20
-  yunwuSupportedFamilies.value = ['claude', 'gpt', 'gemini', 'kimi']
+  yunwuSupportedFamilies.value = ['claude', 'gpt', 'gemini', 'kimi', 'other']
   yunwuModelMappings.value = []
   tempUnschedEnabled.value = false
   tempUnschedRules.value = []
@@ -4370,7 +4371,7 @@ const handleSubmit = async () => {
       yunwu_protocol: yunwuProtocol.value || 'openai',
       supported_model_families: yunwuSupportedFamilies.value.length > 0
         ? yunwuSupportedFamilies.value
-        : ['claude', 'gpt', 'gemini', 'kimi'],
+        : ['claude', 'gpt', 'gemini', 'kimi', 'other'],
       min_balance_usd: Number(yunwuMinBalance.value) || 20,
       balance_usd: Number(yunwuInitialBalance.value) || 0,
       initial_deposit_usd: Number(yunwuInitialBalance.value) || 0,

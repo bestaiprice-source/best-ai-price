@@ -81,7 +81,11 @@ func CanonicalFamily(family string) string {
 		return FamilyGemini
 	case "kimi", "moonshot":
 		return FamilyKimi
-	case "other", "others", "misc":
+	case "other", "others", "misc",
+		// Vendor names that classify as the "other" family (see ClassifyModelFamily).
+		"deepseek", "qwen", "llama", "mistral", "codestral", "grok", "xai",
+		"minimax", "zhipu", "glm", "chatglm", "meta", "bytedance", "doubao",
+		"seedance", "kuaishou", "kling":
 		return FamilyOther
 	default:
 		return f
@@ -412,4 +416,3 @@ func ResolveUpstreamModelID(provider string, requestedModel string, accountModel
 
 	return stripped
 }
-

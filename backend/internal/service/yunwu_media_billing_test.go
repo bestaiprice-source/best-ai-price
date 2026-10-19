@@ -337,3 +337,29 @@ func TestProviderScopeIsFamilyAware(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, p)
 }
+
+// A vendor family alias (e.g. "deepseek") must canonicalize to the "other" family
+// so accounts configured with it price the corresponding models.
+func TestProviderScopeMapsVendorFamilyAliases(t *testing.T) {
+	resetYunwuProviderScopeCache()
+	t.Cleanup(resetYunwuProviderScopeCache)
+
+	yw := NewYunwuPricingService()
+	yw.providerURLs = map[string]string{"openlux": "m1"}
+	yw.providerPricing = map[string]map[string]*YunwuPricingRawItem{
+		"openlux": {"deepseek-v3": {ModelRatio: 1.0, CompletionRatio: 4.0, Available: true}},
+	}
+	yw.providerUpdated = map[string]time.Time{"openlux": time.Now()}
+	billingSvc := NewBillingService(nil, nil, yw)
+
+	repo := &mockAccountRepoForPricing{schedulable: []Account{
+		{Platform: PlatformYunwu, Extra: map[string]any{
+			"provider":                 "openlux",
+			"supported_model_families": []any{"deepseek"},
+		}},
+	}}
+	ctx := withYunwuProviderScope(context.Background(), repo)
+	p, err := billingSvc.GetYunwuPrimaryModelPricing(ctx, "deepseek/deepseek-v3")
+	require.NoError(t, err, "\"deepseek\" alias must map to the other family")
+	require.NotNil(t, p)
+}

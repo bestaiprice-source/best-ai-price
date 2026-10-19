@@ -1996,7 +1996,7 @@ const yunwuCustomProvider = ref('')
 const yunwuProtocol = ref('openai')
 const yunwuMinBalance = ref<number | null>(20)
 const yunwuBalance = ref<number | null>(0)
-const yunwuSupportedFamilies = ref<string[]>(['claude', 'gpt', 'gemini', 'kimi'])
+const yunwuSupportedFamilies = ref<string[]>(['claude', 'gpt', 'gemini', 'kimi', 'other'])
 
 const YUNWU_PROVIDER_DEFAULTS: Record<string, string> = {
   openlux: 'https://api.openlux.ai/v1',
@@ -2019,7 +2019,8 @@ const availableModelFamilies = [
   { id: 'claude', name: 'Claude', desc: 'claude-3-5-sonnet, claude-3-7-sonnet, opus...' },
   { id: 'gpt', name: 'GPT', desc: 'gpt-4o, o1, o3, chatgpt...' },
   { id: 'gemini', name: 'Gemini', desc: 'gemini-1.5, gemini-2.5, live, imagen...' },
-  { id: 'kimi', name: 'Kimi', desc: 'kimi-latest, kimi-k1.5, kimi-k2.6, moonshot...' }
+  { id: 'kimi', name: 'Kimi', desc: 'kimi-latest, kimi-k1.5, kimi-k2.6, moonshot...' },
+  { id: 'other', name: 'Other', desc: 'deepseek, qwen, llama, mistral, grok...' }
 ]
 const antigravityModelRestrictionMode = ref<'whitelist' | 'mapping'>('whitelist')
 const antigravityWhitelistModels = ref<string[]>([])
@@ -2280,7 +2281,7 @@ const syncFormFromAccount = (newAccount: Account | null) => {
     if (Array.isArray(families) && families.length > 0) {
       yunwuSupportedFamilies.value = (families as string[]).filter(f => f !== 'other')
     } else {
-      yunwuSupportedFamilies.value = ['claude', 'gpt', 'gemini', 'kimi']
+      yunwuSupportedFamilies.value = ['claude', 'gpt', 'gemini', 'kimi', 'other']
     }
   } else {
     yunwuProvider.value = 'openlux'
@@ -2288,7 +2289,7 @@ const syncFormFromAccount = (newAccount: Account | null) => {
     yunwuProtocol.value = 'openai'
     yunwuMinBalance.value = 20
     yunwuBalance.value = 0
-    yunwuSupportedFamilies.value = ['claude', 'gpt', 'gemini', 'kimi']
+    yunwuSupportedFamilies.value = ['claude', 'gpt', 'gemini', 'kimi', 'other']
   }
 
   // Load OpenAI passthrough toggle (OpenAI OAuth/API Key)
@@ -3427,7 +3428,7 @@ const handleSubmit = async () => {
       }
       newExtra.supported_model_families = yunwuSupportedFamilies.value.length > 0
         ? yunwuSupportedFamilies.value.filter(f => f !== 'other')
-        : ['claude', 'gpt', 'gemini', 'kimi']
+        : ['claude', 'gpt', 'gemini', 'kimi', 'other']
       updatePayload.extra = applyIgnorePauseSchedulingErrorsUpdate(newExtra)
     }
 
