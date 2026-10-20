@@ -706,6 +706,24 @@ router.beforeEach(async (to, _from, next) => {
     document.title = resolveDocumentTitle(to.meta.title, appStore.siteName, to.meta.titleKey as string)
   }
 
+  // ----- Entry point ---------------------------------------------------------
+  // "/" (and the legacy "/home" landing) is not a page any more: a signed-in
+  // user goes straight to their workspace — admins to the admin dashboard,
+  // everyone else to API-key creation — and anonymous visitors are handed to
+  // the login flow.
+  if (to.path === '/' || to.path === '/home') {
+    if (authStore.isAuthenticated) {
+      next(authStore.isAdmin ? '/admin/dashboard' : '/keys')
+      return
+    }
+    if (typeof window !== 'undefined') {
+      window.location.href = '/login'
+      return
+    }
+    next('/login')
+    return
+  }
+
   // Check if route requires authentication
   const requiresAuth = to.meta.requiresAuth !== false // Default to true
   const requiresAdmin = to.meta.requiresAdmin === true

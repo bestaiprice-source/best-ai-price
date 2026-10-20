@@ -458,6 +458,22 @@
           />
         </div>
 
+        <!-- Batch creation: how many keys to mint at once (a random suffix is
+             appended to the name when more than one is requested). -->
+        <div v-if="!showEditModal">
+          <label class="input-label">{{ t('keys.newQuantity') }}</label>
+          <input
+            v-model.number="formData.quantity"
+            type="number"
+            min="1"
+            max="99"
+            step="1"
+            class="input"
+            data-tour="key-form-quantity"
+          />
+          <p class="input-hint">{{ t('keys.newQuantityHint') }}</p>
+        </div>
+
         <template v-if="isAdmin">
         <div>
           <label class="input-label">{{ t('keys.groupLabel') }}</label>
@@ -495,13 +511,15 @@
             </label>
           </div>
         </div>
+        </template>
 
+        <!-- Model allowlist: which models this key may call (empty = all). -->
         <div class="space-y-3">
           <div class="flex items-center justify-between">
             <div>
-              <label class="input-label mb-0">{{ t('admin.accounts.modelRestriction') }}</label>
+              <label class="input-label mb-0">{{ t('keys.modelAllowlist') }}</label>
               <p class="mt-1 text-xs text-gray-500">
-                {{ t('admin.accounts.selectAllowedModels') }}
+                {{ t('keys.modelAllowlistHint') }}
               </p>
             </div>
             <button
@@ -535,7 +553,8 @@
           </div>
         </div>
 
-        <!-- Custom Key Section (only for create) -->
+        <!-- Custom Key Section (only for create, admin only) -->
+        <template v-if="isAdmin">
         <div v-if="!showEditModal" class="space-y-3">
           <div class="flex items-center justify-between">
             <label class="input-label mb-0">{{ t('keys.customKeyLabel') }}</label>
@@ -567,8 +586,9 @@
             <p v-else class="input-hint">{{ t('keys.customKeyHint') }}</p>
           </div>
         </div>
+        </template>
 
-        <div v-if="showEditModal">
+        <div v-if="showEditModal && isAdmin">
           <label class="input-label">{{ t('keys.statusLabel') }}</label>
           <Select
             v-model="formData.status"
@@ -623,29 +643,32 @@
           </div>
         </div>
 
-        <!-- Quota Limit Section -->
+        <!-- Quota Settings: unlimited (default) or a hard USD cap. -->
         <div class="space-y-3">
-          <label class="input-label">{{ t('keys.quotaLimit') }}</label>
-          <!-- Switch commented out - always show input, 0 = unlimited
           <div class="flex items-center justify-between">
-            <label class="input-label mb-0">{{ t('keys.quotaLimit') }}</label>
-            <button
-              type="button"
-              @click="formData.enable_quota = !formData.enable_quota"
-              :class="[
-                'relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none',
-                formData.enable_quota ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dark-600'
-              ]"
-            >
-              <span
+            <div>
+              <label class="input-label mb-0">{{ t('keys.quotaLimit') }}</label>
+              <p class="mt-1 text-xs text-gray-500">{{ t('keys.quotaSettingsHint') }}</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-gray-500">{{ t('keys.unlimitedQuota') }}</span>
+              <button
+                type="button"
+                @click="formData.unlimited_quota = !formData.unlimited_quota"
                 :class="[
-                  'pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
-                  formData.enable_quota ? 'translate-x-4' : 'translate-x-0'
+                  'relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none',
+                  formData.unlimited_quota ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dark-600'
                 ]"
-              />
-            </button>
+              >
+                <span
+                  :class="[
+                    'pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
+                    formData.unlimited_quota ? 'translate-x-4' : 'translate-x-0'
+                  ]"
+                />
+              </button>
+            </div>
           </div>
-          -->
 
           <div class="space-y-4">
             <div>
@@ -657,10 +680,14 @@
                   step="0.01"
                   min="0"
                   class="input pl-7"
+                  :class="{ 'opacity-50': formData.unlimited_quota }"
+                  :disabled="formData.unlimited_quota"
                   :placeholder="t('keys.quotaAmountPlaceholder')"
                 />
               </div>
-              <p class="input-hint">{{ t('keys.quotaAmountHint') }}</p>
+              <p class="input-hint">
+                {{ formData.unlimited_quota ? t('keys.unlimitedQuotaHint') : t('keys.quotaAmountHint') }}
+              </p>
             </div>
 
             <!-- Quota used display (only in edit mode) -->
@@ -867,9 +894,13 @@
         <div class="space-y-3">
           <div class="flex items-center justify-between">
             <label class="input-label mb-0">{{ t('keys.expiration') }}</label>
-            <button
-              type="button"
-              @click="formData.enable_expiration = !formData.enable_expiration"
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-gray-500">
+                {{ formData.enable_expiration ? t('keys.expiresIn') : t('keys.neverExpires') }}
+              </span>
+              <button
+                type="button"
+                @click="formData.enable_expiration = !formData.enable_expiration"
               :class="[
                 'relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none',
                 formData.enable_expiration ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dark-600'
@@ -882,6 +913,7 @@
                 ]"
               />
             </button>
+            </div>
           </div>
 
           <div v-if="formData.enable_expiration" class="space-y-4 pt-2">
@@ -935,7 +967,6 @@
             </div>
           </div>
         </div>
-        </template>
       </form>
       <template #footer>
         <div class="flex justify-end gap-3">
@@ -982,24 +1013,51 @@
     </BaseDialog>
 
     <BaseDialog
-      :show="createdKey !== null"
+      :show="createdKeys.length > 0"
       :title="t('keys.keyCreatedTitle')"
       width="normal"
       @close="closeCreatedKeyDialog"
     >
       <p class="text-sm text-gray-600 dark:text-dark-300">{{ t('keys.keyCreatedWarning') }}</p>
-      <div class="mt-4 flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 dark:border-amber-700 dark:bg-amber-900/20">
-        <code class="min-w-0 flex-1 break-all text-sm text-gray-900 dark:text-white">{{ createdKey }}</code>
-        <button
-          type="button"
-          class="btn btn-secondary shrink-0"
-          @click="copyCreatedKey"
+      <div class="mt-4 space-y-2">
+        <div
+          v-for="(key, index) in createdKeys"
+          :key="index"
+          class="flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 dark:border-amber-700 dark:bg-amber-900/20"
         >
-          <Icon name="clipboard" size="sm" class="mr-1" />
-          {{ t('keys.copyKey') }}
-        </button>
+          <code class="min-w-0 flex-1 break-all text-sm text-gray-900 dark:text-white">
+            {{ revealedCreated[index] ? key : maskKey(key) }}
+          </code>
+          <button
+            type="button"
+            class="shrink-0 text-gray-500 hover:text-gray-700 dark:hover:text-gray-200"
+            :title="revealedCreated[index] ? t('keys.hideKey') : t('keys.revealKey')"
+            @click="toggleCreatedReveal(index)"
+          >
+            <Icon :name="revealedCreated[index] ? 'eyeOff' : 'eye'" size="sm" />
+          </button>
+          <button
+            type="button"
+            class="btn btn-secondary shrink-0"
+            @click="copyCreatedKey(key)"
+          >
+            <Icon name="clipboard" size="sm" class="mr-1" />
+            {{ t('keys.copyKey') }}
+          </button>
+        </div>
       </div>
+
+      <QuickStart
+        v-if="createdKeys.length > 0"
+        :api-key="createdKeys[0]"
+        :more-keys="createdKeys.length - 1"
+        class="mt-6 border-t border-gray-100 pt-4 dark:border-dark-700"
+      />
       <template #footer>
+        <button v-if="createdKeys.length > 1" type="button" class="btn btn-secondary" @click="copyAllCreatedKeys">
+          <Icon name="clipboard" size="sm" class="mr-1" />
+          {{ t('keys.copyAllKeys') }}
+        </button>
         <button type="button" class="btn btn-primary" @click="closeCreatedKeyDialog">
           {{ t('common.close') }}
         </button>
@@ -1180,6 +1238,7 @@ import { adminAPI } from '@/api/admin'
 import { useAuthStore } from '@/stores/auth'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import TablePageLayout from '@/components/layout/TablePageLayout.vue'
+import QuickStart from '@/components/keys/QuickStart.vue'
 	import DataTable from '@/components/common/DataTable.vue'
 	import Pagination from '@/components/common/Pagination.vue'
 	import BaseDialog from '@/components/common/BaseDialog.vue'
@@ -1264,7 +1323,9 @@ const showResetQuotaDialog = ref(false)
 const showResetRateLimitDialog = ref(false)
 const showUseKeyModal = ref(false)
 const showCcsClientSelect = ref(false)
-const createdKey = ref<string | null>(null)
+const createdKeys = ref<string[]>([])
+// Whether each freshly created key is revealed in the "API Key Created" dialog.
+const revealedCreated = ref<Record<number, boolean>>({})
 const pendingCcsRow = ref<ApiKey | null>(null)
 const selectedKey = ref<ApiKey | null>(null)
 const copiedKeyId = ref<number | null>(null)
@@ -1311,9 +1372,12 @@ const formData = ref({
   enable_ip_restriction: false,
   ip_whitelist: '',
   ip_blacklist: '',
-  // Quota settings (empty = unlimited)
+  // Quota settings: unlimited by default, or a hard USD cap.
   enable_quota: false,
+  unlimited_quota: true,
   quota: null as number | null,
+  // How many keys to mint on create (batch); >1 appends a random name suffix.
+  quantity: 1,
   // Rate limit settings
   enable_rate_limit: false,
   rate_limit_5h: null as number | null,
@@ -1509,14 +1573,26 @@ const copyToClipboard = async (text: string, keyId: number) => {
   }
 }
 
-const copyCreatedKey = async () => {
-  if (createdKey.value) {
-    await clipboardCopy(createdKey.value, t('keys.copied'))
+const copyCreatedKey = async (key: string) => {
+  if (key) {
+    await clipboardCopy(key, t('keys.copied'))
+  }
+}
+
+const copyAllCreatedKeys = async () => {
+  if (createdKeys.value.length > 0) {
+    await clipboardCopy(createdKeys.value.join('\n'), t('keys.copied'))
   }
 }
 
 const closeCreatedKeyDialog = () => {
-  createdKey.value = null
+  createdKeys.value = []
+  revealedCreated.value = {}
+}
+
+/** Show/hide one freshly created key in the "API Key Created" dialog. */
+const toggleCreatedReveal = (index: number) => {
+  revealedCreated.value = { ...revealedCreated.value, [index]: !revealedCreated.value[index] }
 }
 
 const isAbortError = (error: unknown) => {
@@ -1640,6 +1716,8 @@ const editKey = (key: ApiKey) => {
     ip_whitelist: (key.ip_whitelist || []).join('\n'),
     ip_blacklist: (key.ip_blacklist || []).join('\n'),
     enable_quota: key.quota > 0,
+    unlimited_quota: !(key.quota > 0),
+    quantity: 1,
     quota: key.quota > 0 ? key.quota : null,
     enable_rate_limit: (key.rate_limit_5h > 0) || (key.rate_limit_1d > 0) || (key.rate_limit_7d > 0),
     rate_limit_5h: key.rate_limit_5h || null,
@@ -1727,8 +1805,11 @@ const handleSubmit = async () => {
   const ipWhitelist = formData.value.enable_ip_restriction ? parseIPList(formData.value.ip_whitelist) : []
   const ipBlacklist = formData.value.enable_ip_restriction ? parseIPList(formData.value.ip_blacklist) : []
 
-  // Calculate quota value (null/empty/0 = unlimited, stored as 0)
-  const quota = formData.value.quota && formData.value.quota > 0 ? formData.value.quota : 0
+  // Calculate quota value: the "unlimited" switch wins, otherwise a positive
+  // amount is a hard cap (both stored as 0 = unlimited).
+  const quota = formData.value.unlimited_quota
+    ? 0
+    : (formData.value.quota && formData.value.quota > 0 ? formData.value.quota : 0)
   const allowedModels = formData.value.enable_model_restriction
     ? Array.from(new Set(formData.value.allowed_models.map(model => model.trim()).filter(Boolean)))
     : []
@@ -1793,7 +1874,7 @@ const handleSubmit = async () => {
         rateLimitData,
         formData.value.user_id ?? undefined
       )
-      createdKey.value = newKey.key
+      createdKeys.value = [newKey.key]
       appStore.showSuccess(t('keys.keyCreatedSuccess'))
       // Only advance tour if active, on submit step, and creation succeeded
       if (onboardingStore.isCurrentStep('[data-tour="key-form-submit"]')) {
@@ -1815,8 +1896,16 @@ const handleCreateKeyClick = async () => {
   if (!isAdmin.value && (!groups.value || groups.value.length === 0)) {
     await loadGroups()
   }
+  if (!showEditModal.value) {
+    // Regular users do not pick a group: bind the default (yunwu) group up front
+    // so the model allowlist can resolve the group's platforms.
+    formData.value.group_ids = isAdmin.value ? [] : (defaultUserGroupId.value ? [defaultUserGroupId.value] : [])
+  }
   showCreateModal.value = true
 }
+
+/** Short random suffix appended to each name when minting keys in batches. */
+const randomSuffix = (): string => Math.random().toString(36).slice(2, 6)
 
 // Default group used for regular-user key creation: the yunwu group when present.
 const defaultUserGroupId = computed<number | null>(() => {
@@ -1827,42 +1916,71 @@ const defaultUserGroupId = computed<number | null>(() => {
   return yunwuGroup ? yunwuGroup.id : null
 })
 
-// Minimal flow for regular users: create with just a name (default group, no
-// quota / rate-limit / expiration), or rename an existing key. Every advanced
-// field is admin-only and never sent from the user view.
+// Key management for regular users: label, expiration, batch quantity, quota
+// (unlimited or a USD cap), model allowlist and IP allowlist. Admin-only fields
+// (owner, groups, custom key, rate limits, status) are never sent from here.
 const submitUserKey = async () => {
   const name = formData.value.name.trim()
   if (!name) {
     appStore.showError(t('keys.namePlaceholder'))
     return
   }
+
+  const parseList = (text: string): string[] =>
+    text.split('\n').map((value) => value.trim()).filter((value) => value.length > 0)
+  const ipWhitelist = formData.value.enable_ip_restriction ? parseList(formData.value.ip_whitelist) : []
+  const ipBlacklist = formData.value.enable_ip_restriction ? parseList(formData.value.ip_blacklist) : []
+  const allowedModels = formData.value.enable_model_restriction
+    ? Array.from(new Set(formData.value.allowed_models.map((model) => model.trim()).filter(Boolean)))
+    : []
+  const quota = formData.value.unlimited_quota
+    ? 0
+    : (formData.value.quota && formData.value.quota > 0 ? formData.value.quota : 0)
+  let expiresInDays: number | undefined
+  if (formData.value.enable_expiration && formData.value.expiration_date) {
+    const diffDays = Math.ceil((new Date(formData.value.expiration_date).getTime() - Date.now()) / 86400000)
+    expiresInDays = diffDays > 0 ? diffDays : 1
+  }
+
   submitting.value = true
   try {
     if (showEditModal.value && selectedKey.value) {
       await keysAPI.update(selectedKey.value.id, {
         name,
+        allowed_models: allowedModels,
         // The backend overwrites the IP lists unconditionally on update
         // (internal/service/api_key_service.go), so echo the existing values
-        // back to avoid silently clearing restrictions the user already had.
-        ip_whitelist: selectedKey.value.ip_whitelist || [],
-        ip_blacklist: selectedKey.value.ip_blacklist || []
+        // back when the IP section was left untouched.
+        ip_whitelist: formData.value.enable_ip_restriction ? ipWhitelist : (selectedKey.value.ip_whitelist || []),
+        ip_blacklist: formData.value.enable_ip_restriction ? ipBlacklist : (selectedKey.value.ip_blacklist || []),
+        quota,
+        expires_at: formData.value.enable_expiration && formData.value.expiration_date
+          ? new Date(formData.value.expiration_date).toISOString()
+          : ''
       })
       appStore.showSuccess(t('keys.keyUpdatedSuccess'))
     } else {
       const gid = defaultUserGroupId.value
-      const newKey = await keysAPI.create(
-        name,
-        gid,
-        gid ? [gid] : [],
-        [],
-        undefined,
-        [],
-        [],
-        0,
-        undefined,
-        { rate_limit_5h: 0, rate_limit_1d: 0, rate_limit_7d: 0 }
-      )
-      createdKey.value = newKey.key
+      // Batch creation: 1..99 keys, each name gets a random suffix when >1.
+      const quantity = Math.min(Math.max(Math.trunc(Number(formData.value.quantity)) || 1, 1), 99)
+      const created: string[] = []
+      for (let index = 0; index < quantity; index += 1) {
+        const keyName = quantity > 1 ? `${name}-${randomSuffix()}` : name
+        const newKey = await keysAPI.create(
+          keyName,
+          gid,
+          gid ? [gid] : [],
+          allowedModels,
+          undefined,
+          ipWhitelist,
+          ipBlacklist,
+          quota,
+          expiresInDays,
+          { rate_limit_5h: 0, rate_limit_1d: 0, rate_limit_7d: 0 }
+        )
+        created.push(newKey.key)
+      }
+      createdKeys.value = created
       appStore.showSuccess(t('keys.keyCreatedSuccess'))
       if (onboardingStore.isCurrentStep('[data-tour="key-form-submit"]')) {
         onboardingStore.nextStep(500)
@@ -1916,6 +2034,8 @@ const closeModals = () => {
     ip_whitelist: '',
     ip_blacklist: '',
     enable_quota: false,
+    unlimited_quota: true,
+    quantity: 1,
     quota: null,
     enable_rate_limit: false,
     rate_limit_5h: null,

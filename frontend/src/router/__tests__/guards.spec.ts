@@ -65,6 +65,13 @@ function simulateGuard(
   const requiresAuth = toMeta.requiresAuth !== false
   const requiresAdmin = toMeta.requiresAdmin === true
 
+  // Entry point ("/" and the legacy "/home" landing): signed-in users go
+  // straight to their workspace, anonymous visitors to the login flow.
+  if (toPath === '/' || toPath === '/home') {
+    if (!authState.isAuthenticated) return '/login'
+    return authState.isAdmin ? '/admin/dashboard' : '/keys'
+  }
+
   // 不需要认证的路由
   if (!requiresAuth) {
     if (
@@ -153,9 +160,14 @@ describe('路由守卫逻辑', () => {
       expect(redirect).toBeNull()
     })
 
-    it('访问 /home 公开页面允许通过', () => {
+    it('访问 /home 入口页重定向到 /login', () => {
       const redirect = simulateGuard('/home', { requiresAuth: false }, authState)
-      expect(redirect).toBeNull()
+      expect(redirect).toBe('/login')
+    })
+
+    it('访问 / 入口页重定向到 /login', () => {
+      const redirect = simulateGuard('/', { requiresAuth: false }, authState)
+      expect(redirect).toBe('/login')
     })
   })
 
@@ -172,6 +184,16 @@ describe('路由守卫逻辑', () => {
     it('访问 /login 重定向到 /dashboard', () => {
       const redirect = simulateGuard('/login', { requiresAuth: false }, authState)
       expect(redirect).toBe('/dashboard')
+    })
+
+    it('访问入口页 / 重定向到 /keys', () => {
+      const redirect = simulateGuard('/', { requiresAuth: false }, authState)
+      expect(redirect).toBe('/keys')
+    })
+
+    it('访问入口页 /home 重定向到 /keys', () => {
+      const redirect = simulateGuard('/home', { requiresAuth: false }, authState)
+      expect(redirect).toBe('/keys')
     })
 
     it('访问 /register 重定向到 /dashboard', () => {
@@ -204,6 +226,16 @@ describe('路由守卫逻辑', () => {
       isSimpleMode: false,
       backendModeEnabled: false,
     }
+
+    it('访问入口页 / 重定向到 /admin/dashboard', () => {
+      const redirect = simulateGuard('/', { requiresAuth: false }, authState)
+      expect(redirect).toBe('/admin/dashboard')
+    })
+
+    it('访问入口页 /home 重定向到 /admin/dashboard', () => {
+      const redirect = simulateGuard('/home', { requiresAuth: false }, authState)
+      expect(redirect).toBe('/admin/dashboard')
+    })
 
     it('访问 /login 重定向到 /admin/dashboard', () => {
       const redirect = simulateGuard('/login', { requiresAuth: false }, authState)

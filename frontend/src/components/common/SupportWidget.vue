@@ -4,7 +4,7 @@
     <button
       type="button"
       class="fixed bottom-5 right-5 z-40 inline-flex h-12 w-12 items-center justify-center rounded-full bg-primary-600 text-white shadow-lg transition-transform hover:scale-105"
-      :title="t('support.title')"
+      :title="t('support.consultantTitle')"
       @click="open = !open"
     >
       <Icon :name="open ? 'x' : 'chat'" size="md" />
@@ -13,38 +13,28 @@
     <!-- Panel -->
     <div
       v-if="open"
-      class="fixed bottom-20 right-5 z-40 w-[360px] max-w-[calc(100vw-2.5rem)] overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl dark:border-dark-700 dark:bg-dark-800"
+      class="fixed bottom-20 right-5 z-40 w-[380px] max-w-[calc(100vw-2.5rem)] overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl dark:border-dark-700 dark:bg-dark-800"
     >
       <div class="flex items-center justify-between border-b border-gray-100 px-4 py-3 dark:border-dark-700">
-        <h3 class="text-sm font-semibold text-gray-900 dark:text-white">{{ t('support.title') }}</h3>
+        <h3 class="text-sm font-semibold text-gray-900 dark:text-white">{{ t('support.consultantTitle') }}</h3>
         <button class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200" @click="open = false">
           <Icon name="x" size="sm" />
         </button>
       </div>
 
-      <div class="max-h-[60vh] overflow-y-auto p-4">
-        <!-- FAQ -->
-        <p class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">{{ t('support.faq') }}</p>
-        <div class="mt-2 divide-y divide-gray-100 dark:divide-dark-700">
-          <div v-for="(faq, i) in faqs" :key="i" class="py-2">
-            <button class="flex w-full items-center justify-between text-left text-sm font-medium text-gray-800 dark:text-gray-200" @click="toggleFaq(i)">
-              <span>{{ faq.q }}</span>
-              <span class="text-gray-400">{{ expanded === i ? '−' : '+' }}</span>
-            </button>
-            <p v-if="expanded === i" class="mt-1 text-xs leading-relaxed text-gray-500 dark:text-gray-400">{{ faq.a }}</p>
-          </div>
-        </div>
+      <div class="max-h-[65vh] overflow-y-auto p-4">
+        <p class="text-xs leading-relaxed text-gray-500 dark:text-gray-400">{{ t('support.consultantIntro') }}</p>
 
-        <!-- Contact -->
-        <div v-if="contactHref" class="mt-4 rounded-xl bg-gray-50 p-3 dark:bg-dark-900">
-          <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('support.contactHint') }}</p>
-          <a :href="contactHref" target="_blank" rel="noopener noreferrer" class="mt-1 inline-block text-sm font-medium text-primary-600 hover:underline">
-            {{ contactText }}
-          </a>
-        </div>
+        <!-- Message -->
+        <textarea
+          v-model="message"
+          rows="4"
+          class="input mt-3 w-full resize-none text-sm"
+          :placeholder="t('support.messagePlaceholder')"
+        ></textarea>
 
-        <!-- Dispute context -->
-        <div class="mt-4 rounded-xl border border-gray-100 p-3 dark:border-dark-700">
+        <!-- Optional request reference (attached to the message automatically) -->
+        <div class="mt-3 rounded-xl border border-gray-100 p-3 dark:border-dark-700">
           <p class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">{{ t('support.dispute') }}</p>
           <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t('support.disputeHint') }}</p>
           <div class="mt-2 grid grid-cols-2 gap-2">
@@ -58,18 +48,30 @@
               v-model="modelName"
               type="text"
               class="input w-full text-xs"
-              placeholder="Model (optional, e.g. gpt-4o)"
+              :placeholder="t('support.modelPlaceholder')"
             />
           </div>
-          <pre class="mt-2 overflow-x-auto rounded-lg bg-gray-900 p-3 text-[11px] leading-relaxed text-gray-100"><code>{{ contextText }}</code></pre>
-          <button
-            class="mt-2 w-full rounded-lg bg-primary-600 px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-primary-500"
-            @click="copyContext"
-          >
-            {{ copied ? t('support.copied') : t('support.copyContext') }}
-          </button>
-          <p class="mt-1 text-[11px] text-gray-400">{{ t('support.noSecrets') }}</p>
+          <p class="mt-2 text-[11px] text-gray-400">{{ t('support.noSecrets') }}</p>
         </div>
+
+        <!-- Actions -->
+        <button
+          class="mt-3 w-full rounded-lg bg-primary-600 px-3 py-2.5 text-sm font-medium text-white transition-colors hover:bg-primary-500 disabled:cursor-not-allowed disabled:opacity-50"
+          :disabled="!message.trim()"
+          @click="sendToConsultant"
+        >
+          {{ t('support.sendToConsultant') }}
+        </button>
+        <button
+          class="mt-2 w-full rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50 dark:border-dark-600 dark:text-gray-300 dark:hover:bg-dark-700"
+          @click="copyContext"
+        >
+          {{ copied ? t('support.copied') : t('support.copyContext') }}
+        </button>
+
+        <p v-if="sentNote" class="mt-2 text-xs text-emerald-600 dark:text-emerald-400">{{ sentNote }}</p>
+        <p v-if="!contactRaw" class="mt-2 text-xs text-amber-600 dark:text-amber-400">{{ t('support.notConfigured') }}</p>
+        <p v-else class="mt-2 text-[11px] text-gray-400">{{ contactHint }}</p>
       </div>
     </div>
   </div>
@@ -89,24 +91,11 @@ const appStore = useAppStore()
 const authStore = useAuthStore()
 
 const open = ref(false)
-const expanded = ref<number | null>(0)
+const message = ref('')
 const requestId = ref('')
 const modelName = ref('')
 const copied = ref(false)
-
-function toggleFaq(i: number) {
-  expanded.value = expanded.value === i ? null : i
-}
-
-const faqs = computed(() => [
-  { q: t('support.faq_topup_q'), a: t('support.faq_topup_a') },
-  { q: t('support.faq_key_q'), a: t('support.faq_key_a') },
-  { q: t('support.faq_models_q'), a: t('support.faq_models_a') },
-  { q: t('support.faq_errors_q'), a: t('support.faq_errors_a') },
-  { q: t('support.faq_charges_q'), a: t('support.faq_charges_a') },
-  { q: t('support.faq_failover_q'), a: t('support.faq_failover_a') },
-  { q: t('support.faq_limits_q'), a: t('support.faq_limits_a') },
-])
+const sentNote = ref('')
 
 const contactRaw = computed(() => String(appStore.cachedPublicSettings?.contact_info || appStore.contactInfo || '').trim())
 const contactHref = computed(() => {
@@ -116,7 +105,7 @@ const contactHref = computed(() => {
   if (raw.includes('@') && !raw.includes(' ')) return `mailto:${raw}`
   return ''
 })
-const contactText = computed(() => contactRaw.value)
+const contactHint = computed(() => t('support.contactHint'))
 
 // Support context: only non-sensitive identifiers are ever included (§15) —
 // user id, request id, model, timestamp, page. Never keys or credentials.
@@ -132,13 +121,55 @@ const contextText = computed(() => {
   return lines.join('\n')
 })
 
-async function copyContext() {
+/** The message the consultant receives: the user's own words + the safe context. */
+function buildMessage(): string {
+  return [message.value.trim(), '', '---', contextText.value].join('\n')
+}
+
+async function copyText(text: string): Promise<boolean> {
   try {
-    await navigator.clipboard.writeText(contextText.value)
-    copied.value = true
-    setTimeout(() => (copied.value = false), 1500)
+    await navigator.clipboard.writeText(text)
+    return true
   } catch (e) {
     console.warn('Copy failed:', e)
+    return false
   }
+}
+
+async function copyContext() {
+  if (await copyText(buildMessage())) {
+    copied.value = true
+    setTimeout(() => (copied.value = false), 1500)
+  }
+}
+
+/**
+ * Hand the message to the human consultant. Email contacts get a prefilled mail
+ * (the context rides along automatically); chat/URL contacts get the message
+ * copied to the clipboard and the chat opened, since direct-chat links cannot
+ * carry a prefilled body.
+ */
+async function sendToConsultant() {
+  sentNote.value = ''
+  const text = buildMessage()
+  const href = contactHref.value
+  if (!contactRaw.value) {
+    return
+  }
+  if (href.startsWith('mailto:')) {
+    const subject = encodeURIComponent(t('support.mailSubject'))
+    window.location.href = `${href}?subject=${subject}&body=${encodeURIComponent(text)}`
+    sentNote.value = t('support.mailOpened')
+    return
+  }
+  if (href) {
+    await copyText(text)
+    window.open(href, '_blank', 'noopener,noreferrer')
+    sentNote.value = t('support.messageCopied')
+    return
+  }
+  // Bare handle (e.g. a Telegram username): copy the message and show the handle.
+  await copyText(text)
+  sentNote.value = t('support.messageCopiedContact', { contact: contactRaw.value })
 }
 </script>
