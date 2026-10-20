@@ -629,3 +629,171 @@ func TestGetPublicModelsPricing_YunwuAccountMarksCoreFamiliesAvailable(t *testin
 		assert.Truef(t, it.Available, "%s must be available via the yunwu pool", id)
 	}
 }
+
+// Verifies (1) we never price a model from a provider that does not support its
+// family, even if that provider is cheaper, and (2) the markup is applied
+// exactly once and identically in the catalog and the billing path.
+func TestFamilyScopeAndMarkupVerification(t *testing.T) {
+	resetYunwuProviderScopeCache()
+	t.Cleanup(resetYunwuProviderScopeCache)
+
+	yw := NewYunwuPricingService()
+	yw.providerURLs = map[string]string{"openlux": "m1", "portdan": "m2"}
+	yw.providerPricing = map[string]map[string]*YunwuPricingRawItem{
+		"openlux": { // cheaper, but our account only uses it for the gpt family
+			"claude-sonnet-5": {ModelRatio: 1.0, CompletionRatio: 5.0, Available: true},
+			"gpt-5.4":         {ModelRatio: 1.0, CompletionRatio: 5.0, Available: true},
+			"deepseek-v3":     {ModelRatio: 1.0, CompletionRatio: 4.0, Available: true},
+		},
+		"portdan": { // pricier, our account only uses it for the claude family
+			"claude-sonnet-5": {ModelRatio: 2.0, CompletionRatio: 5.0, Available: true},
+			"gpt-5.4":         {ModelRatio: 2.0, CompletionRatio: 5.0, Available: true},
+			"deepseek-v3":     {ModelRatio: 2.0, CompletionRatio: 4.0, Available: true},
+		},
+	}
+	yw.providerUpdated = map[string]time.Time{"openlux": time.Now(), "portdan": time.Now()}
+	billingSvc := NewBillingService(nil, nil, yw)
+
+	repo := &mockAccountRepoForPricing{schedulable: []Account{
+		{Platform: PlatformYunwu, Extra: map[string]any{"provider": "openlux", "supported_model_families": []any{"gpt"}}},
+		{Platform: PlatformYunwu, Extra: map[string]any{"provider": "portdan", "supported_model_families": []any{"claude"}}},
+	}}
+	const mult = 1.5 // +50%
+	groupRepo := &mockGroupRepoForPricing{activeGroups: []Group{{Name: "yunwu", Platform: PlatformYunwu, RateMultiplier: mult}}}
+	svc := &GatewayService{billingService: billingSvc, accountRepo: repo, groupRepo: groupRepo}
+
+	ctx := context.Background()
+	byID := map[string]PublicModelPricingItem{}
+	for _, it := range svc.GetPublicModelsPricing(ctx) {
+		byID[it.CanonicalModelID] = it
+	}
+
+	// gpt -> only openlux supports the gpt family -> its (cheaper) price
+	gpt := byID["openai/gpt-5.4"]
+	require.NotNil(t, gpt.InputPricePer1M)
+	assert.InDelta(t, 1.0*2e-6*1e6*mult, *gpt.InputPricePer1M, 1e-6, "gpt should use openlux")
+
+	// claude -> only portdan supports the claude family -> its (pricier) price,
+	// NOT the cheaper openlux one.
+	cl := byID["anthropic/claude-sonnet-5"]
+	require.NotNil(t, cl.InputPricePer1M)
+	assert.InDelta(t, 2.0*2e-6*1e6*mult, *cl.InputPricePer1M, 1e-6, "claude must use portdan, not cheaper openlux")
+
+	// deepseek -> no account supports the "other" family -> unpriced
+	ds := byID["deepseek/deepseek-v3"]
+	assert.Nil(t, ds.InputPricePer1M, "model of an unheld family must be unpriced")
+
+	// Billing parity with the identical scope + multiplier.
+	billingCtx := ContextWithYunwuPrimaryPricing(withYunwuProviderScope(ctx, repo))
+	cost, err := billingSvc.CalculateCostWithContext(billingCtx, "anthropic/claude-sonnet-5", UsageTokens{InputTokens: 10_000}, mult, "")
+	require.NoError(t, err)
+	assert.InDelta(t, *cl.InputPricePer1M, cost.InputCost/10_000*1_000_000*mult, 1e-4, "advertised == billed")
+}
+
+// Per-model markup must REPLACE the base multiplier and be resolved identically
+// by the catalog and the billing service (so advertised == charged).
+func TestPerModelMarkupOverridesAndParity(t *testing.T) {
+	resetYunwuProviderScopeCache()
+	t.Cleanup(resetYunwuProviderScopeCache)
+
+	yw := NewYunwuPricingService()
+	yw.providerURLs = map[string]string{"openlux": "m1"}
+	yw.providerPricing = map[string]map[string]*YunwuPricingRawItem{
+		"openlux": {
+			"claude-sonnet-5": {ModelRatio: 1.0, CompletionRatio: 5.0, Available: true},
+			"gpt-5.4":         {ModelRatio: 1.0, CompletionRatio: 5.0, Available: true},
+		},
+	}
+	yw.providerUpdated = map[string]time.Time{"openlux": time.Now()}
+	billingSvc := NewBillingService(nil, nil, yw)
+
+	settingSvc := NewSettingService(&settingRepoStub{values: map[string]string{
+		SettingKeyModelMarkups: `{"claude-*": 1.30}`,
+	}}, &config.Config{})
+	billingSvc.SetSettingService(settingSvc)
+
+	repo := &mockAccountRepoForPricing{schedulable: []Account{
+		{Platform: PlatformYunwu, Extra: map[string]any{"provider": "openlux"}},
+	}}
+	svc := &GatewayService{billingService: billingSvc, accountRepo: repo, settingService: settingSvc}
+
+	ctx := context.Background()
+	byID := map[string]PublicModelPricingItem{}
+	for _, it := range svc.GetPublicModelsPricing(ctx) {
+		byID[it.CanonicalModelID] = it
+	}
+
+	// claude: per-model markup 1.30 (replaces the 1.10 default) -> 1.0*2e-6*1e6*1.30 = 2.6
+	cl := byID["anthropic/claude-sonnet-5"]
+	require.NotNil(t, cl.InputPricePer1M)
+	assert.InDelta(t, 2.6, *cl.InputPricePer1M, 1e-6)
+
+	// gpt: no override -> default 1.10 -> 2.2
+	gpt := byID["openai/gpt-5.4"]
+	require.NotNil(t, gpt.InputPricePer1M)
+	assert.InDelta(t, 2.2, *gpt.InputPricePer1M, 1e-6)
+
+	// Both catalog and billing resolve the same markup for the model.
+	assert.InDelta(t, 1.30, settingSvc.ApplyModelMarkup(ctx, "anthropic/claude-sonnet-5", 1.10), 1e-9)
+	assert.InDelta(t, 1.30, billingSvc.ApplyModelMarkup(ctx, "claude-sonnet-5", 1.10), 1e-9)
+	assert.InDelta(t, 1.10, billingSvc.ApplyModelMarkup(ctx, "gpt-5.4", 1.10), 1e-9)
+}
+
+// The "primary" provider must be the CHEAPEST eligible one (same family-support
+// and account constraints), for both token (by input+output per token) and
+// fixed per-request (by fixed price) models — and that is what is charged.
+func TestPrimaryPicksCheapestProvider(t *testing.T) {
+	resetYunwuProviderScopeCache()
+	t.Cleanup(resetYunwuProviderScopeCache)
+
+	yw := NewYunwuPricingService()
+	yw.providerURLs = map[string]string{"openlux": "m1", "portdan": "m2"}
+	yw.providerPricing = map[string]map[string]*YunwuPricingRawItem{
+		"openlux": {
+			// cheaper on INPUT alone (2e-6 vs 4e-6) but pricier on the total.
+			"claude-sonnet-5": {ModelRatio: 1.0, CompletionRatio: 10.0, Available: true}, // in 2e-6 + out 20e-6 = 22e-6
+			// pricier fixed price.
+			"gemini-3-pro-image-preview": {ModelPrice: 0.40, Available: true},
+		},
+		"portdan": {
+			// cheaper on the total (4e-6 + 8e-6 = 12e-6 < 22e-6).
+			"claude-sonnet-5": {ModelRatio: 2.0, CompletionRatio: 2.0, Available: true},
+			// cheaper fixed price.
+			"gemini-3-pro-image-preview": {ModelPrice: 0.20, Available: true},
+		},
+	}
+	yw.providerUpdated = map[string]time.Time{"openlux": time.Now(), "portdan": time.Now()}
+	billingSvc := NewBillingService(nil, nil, yw)
+
+	repo := &mockAccountRepoForPricing{schedulable: []Account{
+		{Platform: PlatformYunwu, Extra: map[string]any{"provider": "openlux", "supported_model_families": []any{"claude", "gemini"}}},
+		{Platform: PlatformYunwu, Extra: map[string]any{"provider": "portdan", "supported_model_families": []any{"claude", "gemini"}}},
+	}}
+	svc := &GatewayService{billingService: billingSvc, accountRepo: repo}
+
+	ctx := context.Background()
+	byID := map[string]PublicModelPricingItem{}
+	for _, it := range svc.GetPublicModelsPricing(ctx) {
+		byID[it.CanonicalModelID] = it
+	}
+
+	// Token model: primary = portdan (cheapest by in+out), NOT openlux which is
+	// cheaper on input but pricier overall.
+	cl := byID["anthropic/claude-sonnet-5"]
+	require.NotNil(t, cl.InputPricePer1M)
+	require.NotNil(t, cl.OutputPricePer1M)
+	assert.InDelta(t, 4e-6*1e6*1.10, *cl.InputPricePer1M, 1e-6, "input must be portdan's")
+	assert.InDelta(t, 8e-6*1e6*1.10, *cl.OutputPricePer1M, 1e-6, "output must be portdan's")
+
+	// Fixed-per-request model: primary = portdan (cheapest fixed price 0.20).
+	img := byID["google/gemini-3-pro-image-preview"]
+	require.NotNil(t, img.NativePriceUSD)
+	assert.InDelta(t, 0.20*1.10, *img.NativePriceUSD, 1e-9)
+
+	// Billing uses the same cheapest provider.
+	billingCtx := ContextWithYunwuPrimaryPricing(withYunwuProviderScope(ctx, repo))
+	unit := resolveYunwuMediaUnitPrice(billingCtx, billingSvc, "google/gemini-3-pro-image-preview")
+	total, ok := yunwuMediaTotal(unit, 1, 0)
+	require.True(t, ok)
+	assert.InDelta(t, *img.NativePriceUSD, total*1.10, 1e-9)
+}
