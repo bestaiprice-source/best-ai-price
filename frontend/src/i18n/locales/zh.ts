@@ -4950,7 +4950,7 @@ export default {
         systemInactive: '未启用（用户端无法结算）',
       },
       emailTabDisabledTitle: '邮箱验证未启用',
-      emailTabDisabledHint: '请在「安全与认证」选项卡中启用邮箱验证后，再配置 SMTP 设置。',
+      emailTabDisabledHint: '邮箱验证已关闭，不会发送验证码。下方的 SMTP 设置仍用于余额和额度通知邮件——配置后即可发送。',
       registration: {
         title: '注册设置',
         description: '控制用户注册和验证',

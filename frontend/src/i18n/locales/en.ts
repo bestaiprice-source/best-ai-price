@@ -4784,7 +4784,7 @@ export default {
         systemInactive: 'Disabled (Users cannot checkout)',
       },
       emailTabDisabledTitle: 'Email Verification Not Enabled',
-      emailTabDisabledHint: 'Enable email verification in the Security tab to configure SMTP settings.',
+      emailTabDisabledHint: 'Email verification is off, so verification codes are not sent. The SMTP settings below are still used for balance and quota notifications — configure them to deliver those e-mails.',
       registration: {
         title: 'Registration Settings',
         description: 'Control user registration and verification',

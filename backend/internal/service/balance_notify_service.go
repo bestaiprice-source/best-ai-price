@@ -353,8 +353,32 @@ func filterVerifiedEmails(entries []NotifyEmailEntry) []string {
 
 // collectBalanceNotifyRecipients returns verified, non-disabled email recipients.
 // Only emails with verified=true and disabled=false are included.
+// collectBalanceNotifyRecipients returns the reminder recipients: the account
+// owner first — their own address is what a low-balance warning is for — then
+// any extra addresses the user added, which must be verified and not disabled.
 func (s *BalanceNotifyService) collectBalanceNotifyRecipients(user *User) []string {
-	return filterVerifiedEmails(user.BalanceNotifyExtraEmails)
+	if user == nil {
+		return nil
+	}
+	var recipients []string
+	seen := make(map[string]bool)
+	add := func(email string) {
+		email = strings.TrimSpace(email)
+		if email == "" {
+			return
+		}
+		lower := strings.ToLower(email)
+		if seen[lower] {
+			return
+		}
+		seen[lower] = true
+		recipients = append(recipients, email)
+	}
+	add(user.Email)
+	for _, email := range filterVerifiedEmails(user.BalanceNotifyExtraEmails) {
+		add(email)
+	}
+	return recipients
 }
 
 // sendEmails sends an email to all recipients with shared timeout and error logging.

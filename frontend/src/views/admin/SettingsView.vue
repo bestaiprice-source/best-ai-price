@@ -1911,8 +1911,9 @@
           </div>
         </div>
 
-        <!-- SMTP Settings - Only show when email verification is enabled -->
-        <div v-if="form.email_verify_enabled" class="card">
+        <!-- SMTP Settings: always visible — the same transport delivers balance and
+             quota notifications even when email verification is disabled. -->
+        <div class="card">
           <div
             class="flex items-center justify-between border-b border-gray-100 px-6 py-4 dark:border-dark-700"
           >
