@@ -36,6 +36,7 @@ type APIKey struct {
 	ID            int64      `json:"id"`
 	UserID        int64      `json:"user_id"`
 	Key           string     `json:"key"`
+	HasFullKey    bool       `json:"has_full_key"`
 	Name          string     `json:"name"`
 	GroupID       *int64     `json:"group_id"`
 	GroupIDs      []int64    `json:"group_ids,omitempty"`

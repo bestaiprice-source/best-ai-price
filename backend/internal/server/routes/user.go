@@ -27,6 +27,7 @@ func ExecutableUserRoutes(h *handler.Handlers) []gatewayctx.RouteDef {
 		out = append(out,
 			gatewayctx.RouteDef{Method: http.MethodGet, Path: "/api/v1/keys", Handler: h.APIKey.ListGateway, Middleware: []string{"request_logger", "cors", "security_headers", "client_request_id", "jwt_auth", "backend_mode_user_guard"}},
 			gatewayctx.RouteDef{Method: http.MethodGet, Path: "/api/v1/keys/:id", Handler: h.APIKey.GetByIDGateway, Middleware: []string{"request_logger", "cors", "security_headers", "client_request_id", "jwt_auth", "backend_mode_user_guard"}},
+			gatewayctx.RouteDef{Method: http.MethodGet, Path: "/api/v1/keys/:id/reveal", Handler: h.APIKey.RevealGateway, Middleware: []string{"request_logger", "cors", "security_headers", "client_request_id", "jwt_auth", "backend_mode_user_guard"}},
 			gatewayctx.RouteDef{Method: http.MethodPost, Path: "/api/v1/keys", Handler: h.APIKey.CreateGateway, Middleware: []string{"request_logger", "cors", "security_headers", "client_request_id", "jwt_auth", "backend_mode_user_guard"}},
 			gatewayctx.RouteDef{Method: http.MethodPut, Path: "/api/v1/keys/:id", Handler: h.APIKey.UpdateGateway, Middleware: []string{"request_logger", "cors", "security_headers", "client_request_id", "jwt_auth", "backend_mode_user_guard"}},
 			gatewayctx.RouteDef{Method: http.MethodDelete, Path: "/api/v1/keys/:id", Handler: h.APIKey.DeleteGateway, Middleware: []string{"request_logger", "cors", "security_headers", "client_request_id", "jwt_auth", "backend_mode_user_guard"}},
@@ -59,6 +60,7 @@ func ExecutableUserRoutes(h *handler.Handlers) []gatewayctx.RouteDef {
 			gatewayctx.RouteDef{Method: http.MethodGet, Path: "/api/v1/usage", Handler: h.Usage.ListGateway, Middleware: []string{"request_logger", "cors", "security_headers", "client_request_id", "jwt_auth", "backend_mode_user_guard"}},
 			gatewayctx.RouteDef{Method: http.MethodGet, Path: "/api/v1/usage/:id", Handler: h.Usage.GetByIDGateway, Middleware: []string{"request_logger", "cors", "security_headers", "client_request_id", "jwt_auth", "backend_mode_user_guard"}},
 			gatewayctx.RouteDef{Method: http.MethodGet, Path: "/api/v1/usage/stats", Handler: h.Usage.StatsGateway, Middleware: []string{"request_logger", "cors", "security_headers", "client_request_id", "jwt_auth", "backend_mode_user_guard"}},
+			gatewayctx.RouteDef{Method: http.MethodGet, Path: "/api/v1/usage/errors", Handler: h.Usage.ErrorsGateway, Middleware: []string{"request_logger", "cors", "security_headers", "client_request_id", "jwt_auth", "backend_mode_user_guard"}},
 			gatewayctx.RouteDef{Method: http.MethodGet, Path: "/api/v1/usage/dashboard/stats", Handler: h.Usage.DashboardStatsGateway, Middleware: []string{"request_logger", "cors", "security_headers", "client_request_id", "jwt_auth", "backend_mode_user_guard"}},
 			gatewayctx.RouteDef{Method: http.MethodGet, Path: "/api/v1/usage/dashboard/trend", Handler: h.Usage.DashboardTrendGateway, Middleware: []string{"request_logger", "cors", "security_headers", "client_request_id", "jwt_auth", "backend_mode_user_guard"}},
 			gatewayctx.RouteDef{Method: http.MethodGet, Path: "/api/v1/usage/dashboard/models", Handler: h.Usage.DashboardModelsGateway, Middleware: []string{"request_logger", "cors", "security_headers", "client_request_id", "jwt_auth", "backend_mode_user_guard"}},
@@ -114,6 +116,7 @@ func RegisterUserRoutes(
 		{
 			keys.GET("", h.APIKey.List)
 			keys.GET("/:id", h.APIKey.GetByID)
+			keys.GET("/:id/reveal", h.APIKey.Reveal)
 			keys.POST("", h.APIKey.Create)
 			keys.PUT("/:id", h.APIKey.Update)
 			keys.DELETE("/:id", h.APIKey.Delete)
@@ -132,6 +135,7 @@ func RegisterUserRoutes(
 			usage.GET("", h.Usage.List)
 			usage.GET("/:id", h.Usage.GetByID)
 			usage.GET("/stats", h.Usage.Stats)
+			usage.GET("/errors", h.Usage.Errors)
 			// User dashboard endpoints
 			usage.GET("/dashboard/stats", h.Usage.DashboardStats)
 			usage.GET("/dashboard/trend", h.Usage.DashboardTrend)

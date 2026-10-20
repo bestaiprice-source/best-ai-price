@@ -20,10 +20,13 @@ type PublicModelPricingItem struct {
 	InputPrice       *float64 `json:"input_price,omitempty"`
 	OutputPricePer1M *float64 `json:"output_price_per_1m"`
 	OutputPrice      *float64 `json:"output_price,omitempty"`
-	NativePriceUSD   *float64 `json:"native_price_usd"`
-	NativePriceUnit  *string  `json:"native_price_unit"`
-	Available        bool     `json:"available"`
-	Status           string   `json:"status,omitempty"`
+	// Cache prices (retail, per 1M tokens). Cache write = cache creation.
+	CacheReadPricePer1M  *float64 `json:"cache_read_price_per_1m,omitempty"`
+	CacheWritePricePer1M *float64 `json:"cache_write_price_per_1m,omitempty"`
+	NativePriceUSD       *float64 `json:"native_price_usd"`
+	NativePriceUnit      *string  `json:"native_price_unit"`
+	Available            bool     `json:"available"`
+	Status               string   `json:"status,omitempty"`
 }
 
 // ToCanonicalModelID normalizes any model name or slug into "vendor/model-slug" format.
@@ -405,6 +408,17 @@ func (s *GatewayService) GetPublicModelsPricing(ctx context.Context) []PublicMod
 				item.InputPrice = &in1m
 				item.OutputPricePer1M = &out1m
 				item.OutputPrice = &out1m
+				// Cache pricing is part of the published retail price: the same
+				// per-token basis × markup, so the catalog matches what billing
+				// charges for cache reads/writes.
+				if pricing.CacheReadPricePerToken > 0 {
+					cr := roundFloat(pricing.CacheReadPricePerToken*1_000_000*multiplier, 4)
+					item.CacheReadPricePer1M = &cr
+				}
+				if pricing.CacheCreationPricePerToken > 0 {
+					cw := roundFloat(pricing.CacheCreationPricePerToken*1_000_000*multiplier, 4)
+					item.CacheWritePricePer1M = &cw
+				}
 			}
 		}
 

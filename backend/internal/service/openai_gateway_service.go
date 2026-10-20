@@ -6047,6 +6047,9 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	if billingErr != nil {
 		return billingErr
 	}
+	if !isSubscriptionBilling {
+		notifyAfterUsageBilling(ctx, user, user.Balance, cost, account)
+	}
 	writeUsageLogBestEffort(ctx, s.usageLogRepo, usageLog, "service.openai_gateway")
 
 	return nil

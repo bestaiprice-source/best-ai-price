@@ -797,3 +797,45 @@ func TestPrimaryPicksCheapestProvider(t *testing.T) {
 	require.True(t, ok)
 	assert.InDelta(t, *img.NativePriceUSD, total*1.10, 1e-9)
 }
+
+// The catalog must publish cache prices on the same retail basis (primary ×
+// markup) as billing, so the advertised cache cost equals the charged one.
+func TestGetPublicModelsPricing_PublishesCachePrices(t *testing.T) {
+	// base 2e-6/token: ratio 1.5 -> $3/1M in; cache_ratio 0.1 -> $0.30/1M read.
+	raw := map[string]*YunwuPricingRawItem{
+		"claude-sonnet-5": {ModelRatio: 1.5, CompletionRatio: 5.0, CacheRatio: 0.1},
+	}
+	billingSvc := helperNewBillingWithYunwuPricing(raw)
+
+	groupRepo := &mockGroupRepoForPricing{
+		activeGroups: []Group{
+			{Name: "yunwu", Platform: PlatformYunwu, RateMultiplier: 1.10},
+		},
+	}
+	svc := &GatewayService{billingService: billingSvc, groupRepo: groupRepo}
+	ctx := ContextWithYunwuPrimaryPricing(context.Background())
+
+	var item *PublicModelPricingItem
+	for _, it := range svc.GetPublicModelsPricing(ctx) {
+		if it.CanonicalModelID == "anthropic/claude-sonnet-5" {
+			c := it
+			item = &c
+		}
+	}
+	require.NotNil(t, item)
+	require.NotNil(t, item.InputPricePer1M)
+	require.NotNil(t, item.CacheReadPricePer1M)
+	require.NotNil(t, item.CacheWritePricePer1M)
+
+	// Retail = provider cost × 1.10
+	assert.InDelta(t, 3.0*1.10, *item.InputPricePer1M, 1e-4)
+	assert.InDelta(t, 0.30*1.10, *item.CacheReadPricePer1M, 1e-4)
+	// Cache creation defaults to 1.25 × input cost.
+	assert.InDelta(t, 3.0*1.25*1.10, *item.CacheWritePricePer1M, 1e-4)
+
+	// Billing parity for the cache-read leg.
+	cost, err := billingSvc.CalculateCostWithContext(ctx, "anthropic/claude-sonnet-5",
+		UsageTokens{CacheReadTokens: 1_000_000}, 1.10, "")
+	require.NoError(t, err)
+	assert.InDelta(t, *item.CacheReadPricePer1M, cost.CacheReadCost*1.10, 1e-4)
+}

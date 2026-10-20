@@ -69,6 +69,34 @@ type OpsErrorLog struct {
 	Stream      bool    `json:"stream"`
 }
 
+// UserErrorLogItem is the end-user view of a failed request. It deliberately
+// omits internal identifiers (user email, account/group names, client IP,
+// request bodies/headers) and exposes only what the customer needs in order to
+// self-diagnose: time, model, status, error type/message, retry info.
+type UserErrorLogItem struct {
+	ID          int64     `json:"id"`
+	CreatedAt   time.Time `json:"created_at"`
+	RequestID   string    `json:"request_id"`
+	Model       string    `json:"model"`
+	Platform    string    `json:"platform"`
+	Endpoint    string    `json:"endpoint"`
+	Stream      bool      `json:"stream"`
+	StatusCode  int       `json:"status_code"`
+	Phase       string    `json:"phase"`
+	ErrorType   string    `json:"error_type"`
+	Message     string    `json:"message"`
+	IsRetryable bool      `json:"is_retryable"`
+	RetryCount  int       `json:"retry_count"`
+}
+
+// UserErrorLogList is a paginated page of the caller's own failed requests.
+type UserErrorLogList struct {
+	Items    []*UserErrorLogItem `json:"items"`
+	Total    int                 `json:"total"`
+	Page     int                 `json:"page"`
+	PageSize int                 `json:"page_size"`
+}
+
 type OpsErrorLogDetail struct {
 	OpsErrorLog
 
@@ -108,12 +136,18 @@ type OpsErrorLogFilter struct {
 
 	StatusCodes      []int
 	StatusCodesOther bool
-	Phase            string
-	Owner            string
-	Source           string
-	Resolved         *bool
-	Query            string
-	UserQuery        string // Search by user email
+	// UserID scopes the query to a single end user. Set only by the
+	// user-facing error log; admin filters leave it nil.
+	UserID *int64
+	// APIKeyID/Model narrow the user-facing error log to one key or model.
+	APIKeyID  *int64
+	Model     string
+	Phase     string
+	Owner     string
+	Source    string
+	Resolved  *bool
+	Query     string
+	UserQuery string // Search by user email
 
 	// Optional correlation keys for exact matching.
 	RequestID       string

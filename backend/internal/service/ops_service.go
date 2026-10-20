@@ -532,6 +532,72 @@ func (s *OpsService) GetErrorLogs(ctx context.Context, filter *OpsErrorLogFilter
 	return result, nil
 }
 
+// GetUserErrorLogs returns the caller's OWN failed requests, sanitized for the
+// cabinet (no internal identifiers: no emails, account/group names, IPs or
+// request bodies). The user scope is always enforced here; callers cannot widen
+// it. Unlike the admin view it does not require the global monitoring toggle —
+// customers must always be able to see why their own request failed.
+func (s *OpsService) GetUserErrorLogs(ctx context.Context, userID int64, filter *OpsErrorLogFilter) (*UserErrorLogList, error) {
+	empty := &UserErrorLogList{Items: []*UserErrorLogItem{}, Total: 0, Page: 1, PageSize: 20}
+	if s == nil || s.opsRepo == nil || userID <= 0 {
+		return empty, nil
+	}
+	if filter == nil {
+		filter = &OpsErrorLogFilter{}
+	}
+	uid := userID
+	filter.UserID = &uid
+	// Users should see business-limit failures (quota, concurrency, billing)
+	// too — they are the most actionable for them.
+	filter.View = "all"
+	// Never let a caller widen the scope to another user or an account.
+	filter.AccountID = nil
+	filter.GroupID = nil
+	filter.UserQuery = ""
+	if filter.Page <= 0 {
+		filter.Page = 1
+	}
+	if filter.PageSize <= 0 {
+		filter.PageSize = 20
+	}
+	if filter.PageSize > 100 {
+		filter.PageSize = 100
+	}
+
+	result, err := s.opsRepo.ListErrorLogs(ctx, filter)
+	if err != nil {
+		log.Printf("[Ops] GetUserErrorLogs failed: %v", err)
+		return nil, err
+	}
+	out := &UserErrorLogList{
+		Items:    make([]*UserErrorLogItem, 0, len(result.Errors)),
+		Total:    result.Total,
+		Page:     result.Page,
+		PageSize: result.PageSize,
+	}
+	for _, e := range result.Errors {
+		if e == nil {
+			continue
+		}
+		out.Items = append(out.Items, &UserErrorLogItem{
+			ID:          e.ID,
+			CreatedAt:   e.CreatedAt,
+			RequestID:   e.RequestID,
+			Model:       e.Model,
+			Platform:    e.Platform,
+			Endpoint:    e.InboundEndpoint,
+			Stream:      e.Stream,
+			StatusCode:  e.StatusCode,
+			Phase:       e.Phase,
+			ErrorType:   e.Type,
+			Message:     e.Message,
+			IsRetryable: e.IsRetryable,
+			RetryCount:  e.RetryCount,
+		})
+	}
+	return out, nil
+}
+
 func (s *OpsService) GetErrorLogByID(ctx context.Context, id int64) (*OpsErrorLogDetail, error) {
 	if err := s.RequireMonitoringEnabled(ctx); err != nil {
 		return nil, err

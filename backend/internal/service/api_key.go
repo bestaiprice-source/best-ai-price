@@ -32,6 +32,10 @@ type APIKey struct {
 	ID            int64
 	UserID        int64
 	Key           string
+	// HasFullKey reports whether the key has a recoverable (encrypted) copy
+	// stored, i.e. it can be revealed to its owner. Legacy hash-only keys are
+	// false and remain irrecoverable, but keep authenticating normally.
+	HasFullKey    bool
 	Name          string
 	GroupID       *int64
 	GroupIDs      []int64

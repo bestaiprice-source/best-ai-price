@@ -987,3 +987,52 @@ func TestTelegramNotifier_EdgeCasesAndCoverage(t *testing.T) {
 	assert.Nil(t, (*YunwuHypervisor)(nil).StatsWorker())
 }
 
+// Alert 9: a request served by a provider more expensive than the charged price
+// (primary x markup) must notify once and be suppressed by the cooldown after.
+func TestTelegramNotifier_UnprofitableRequest(t *testing.T) {
+	ctx := context.Background()
+	var sentMessages []telegramSendMessagePayload
+	var mu sync.Mutex
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		var payload telegramSendMessagePayload
+		body, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(body, &payload)
+		mu.Lock()
+		sentMessages = append(sentMessages, payload)
+		mu.Unlock()
+		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
+	}))
+	defer server.Close()
+
+	cfg := &config.HypervisorConfig{
+		TelegramBotToken:      "test-token",
+		TelegramAllowedUsers:  []string{"123456"},
+		TelegramAlertsEnabled: true,
+	}
+
+	notifier := NewTelegramNotifier(nil, cfg)
+	notifier.SetBaseURL(server.URL)
+	notifier.SetHTTPClient(server.Client())
+
+	// charged (primary x markup) $2.145/1M, actual route cost $2.50/1M.
+	notified, err := notifier.NotifyUnprofitableRequest(ctx, "x-llm", "moonshot/kimi-k2.6", "input", 2.145, 2.50)
+	require.NoError(t, err)
+	assert.True(t, notified)
+
+	mu.Lock()
+	require.Len(t, sentMessages, 1)
+	assert.Contains(t, sentMessages[0].Text, "Unprofitable Request")
+	assert.Contains(t, sentMessages[0].Text, "x-llm")
+	assert.Contains(t, sentMessages[0].Text, "moonshot/kimi-k2.6")
+	assert.Contains(t, sentMessages[0].Text, "input")
+	mu.Unlock()
+
+	// Cooldown (and unchanged content) suppresses an immediate repeat.
+	notified, err = notifier.NotifyUnprofitableRequest(ctx, "x-llm", "moonshot/kimi-k2.6", "input", 2.145, 2.50)
+	require.NoError(t, err)
+	assert.False(t, notified)
+
+	assert.Equal(t, time.Hour, DefaultCooldownUnprofitableRequest)
+}

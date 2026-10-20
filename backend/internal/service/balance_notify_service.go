@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -42,6 +43,26 @@ type BalanceNotifyService struct {
 	emailService *EmailService
 	settingRepo  SettingRepository
 	accountRepo  AccountQuotaReader
+}
+
+var (
+	defaultBalanceNotifyMu sync.RWMutex
+	defaultBalanceNotify   *BalanceNotifyService
+)
+
+// SetDefaultBalanceNotifyService installs the process-wide balance/quota
+// notifier (mirrors SetDefaultAdminAuditWriter). Called once at startup.
+func SetDefaultBalanceNotifyService(s *BalanceNotifyService) {
+	defaultBalanceNotifyMu.Lock()
+	defaultBalanceNotify = s
+	defaultBalanceNotifyMu.Unlock()
+}
+
+// GetDefaultBalanceNotifyService returns the process-wide notifier (may be nil).
+func GetDefaultBalanceNotifyService() *BalanceNotifyService {
+	defaultBalanceNotifyMu.RLock()
+	defer defaultBalanceNotifyMu.RUnlock()
+	return defaultBalanceNotify
 }
 
 // NewBalanceNotifyService creates a new BalanceNotifyService.
@@ -476,4 +497,38 @@ func (s *BalanceNotifyService) buildQuotaAlertEmailBody(accountID int64, account
 		limitStr = "无限制 / Unlimited"
 	}
 	return fmt.Sprintf(quotaAlertEmailTemplate, siteName, accountID, accountName, platform, dimLabel, used, limitStr, remaining, thresholdDisplay)
+}
+
+// notifyAfterUsageBilling fires the low-balance (user) and upstream-account
+// quota notifications after a successful deduction. It is best-effort: detached
+// from the request context, panic-safe, and never blocks or fails billing.
+// The per-user toggle (balance_notify_enabled, default TRUE) and the global
+// admin settings gate the actual delivery inside the service.
+func notifyAfterUsageBilling(ctx context.Context, user *User, oldBalance float64, cost *CostBreakdown, account *Account) {
+	svc := GetDefaultBalanceNotifyService()
+	if svc == nil {
+		return
+	}
+	amount := 0.0
+	if cost != nil {
+		amount = cost.ActualCost
+	}
+	if amount <= 0 {
+		return
+	}
+	detached, cancel := detachedBillingContext(ctx)
+	go func() {
+		defer cancel()
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Error("panic in usage notification", "recover", r)
+			}
+		}()
+		if user != nil {
+			svc.CheckBalanceAfterDeduction(detached, user, oldBalance, amount)
+		}
+		if account != nil {
+			svc.CheckAccountQuotaAfterIncrement(detached, account, amount, nil)
+		}
+	}()
 }

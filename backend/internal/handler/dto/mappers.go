@@ -76,6 +76,7 @@ func APIKeyFromService(k *service.APIKey) *APIKey {
 		ID:            k.ID,
 		UserID:        k.UserID,
 		Key:           k.Key,
+		HasFullKey:    k.HasFullKey,
 		Name:          k.Name,
 		GroupID:       k.GroupID,
 		GroupIDs:      append([]int64(nil), k.GroupIDs...),

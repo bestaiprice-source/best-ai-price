@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"fmt"
 	"strings"
 	"time"
 
@@ -993,4 +994,83 @@ func derefString(s *string) string {
 		return ""
 	}
 	return *s
+}
+
+// SetEncryptedKey persists the recoverable (AES-encrypted) copy of a key so its
+// owner can reveal it later. Authentication never reads this column, so this is
+// purely additive and cannot affect existing keys.
+func (r *apiKeyRepository) SetEncryptedKey(ctx context.Context, id int64, encrypted string) error {
+	if r.sql == nil {
+		return fmt.Errorf("api key repository: sql executor not configured")
+	}
+	if _, err := r.sql.ExecContext(ctx,
+		`UPDATE api_keys SET key_encrypted = $1, updated_at = NOW() WHERE id = $2 AND deleted_at IS NULL`,
+		encrypted, id); err != nil {
+		return fmt.Errorf("persist encrypted api key: %w", err)
+	}
+	return nil
+}
+
+// GetEncryptedKey returns the stored encrypted copy of a key, when present.
+// Legacy (hash-only) rows return found=false and no error.
+func (r *apiKeyRepository) GetEncryptedKey(ctx context.Context, id int64) (string, bool, error) {
+	if r.sql == nil {
+		return "", false, nil
+	}
+	rows, err := r.sql.QueryContext(ctx, `SELECT key_encrypted FROM api_keys WHERE id = $1 AND deleted_at IS NULL`, id)
+	if err != nil {
+		return "", false, fmt.Errorf("load encrypted api key: %w", err)
+	}
+	defer rows.Close()
+	if !rows.Next() {
+		return "", false, rows.Err()
+	}
+	var ciphertext sql.NullString
+	if err := rows.Scan(&ciphertext); err != nil {
+		return "", false, err
+	}
+	if !ciphertext.Valid || ciphertext.String == "" {
+		return "", false, nil
+	}
+	return ciphertext.String, true, nil
+}
+
+// MarkKeysWithSecret sets HasFullKey on the given keys that have a stored
+// encrypted copy. Resolved in a single query (no N+1).
+func (r *apiKeyRepository) MarkKeysWithSecret(ctx context.Context, keys []*service.APIKey) error {
+	if r.sql == nil || len(keys) == 0 {
+		return nil
+	}
+	placeholders := make([]string, 0, len(keys))
+	args := make([]any, 0, len(keys))
+	byID := make(map[int64]*service.APIKey, len(keys))
+	for _, k := range keys {
+		if k == nil || k.ID == 0 {
+			continue
+		}
+		placeholders = append(placeholders, fmt.Sprintf("$%d", len(args)+1))
+		args = append(args, k.ID)
+		byID[k.ID] = k
+	}
+	if len(args) == 0 {
+		return nil
+	}
+	query := fmt.Sprintf(
+		`SELECT id FROM api_keys WHERE deleted_at IS NULL AND key_encrypted IS NOT NULL AND key_encrypted <> '' AND id IN (%s)`,
+		strings.Join(placeholders, ", "))
+	rows, err := r.sql.QueryContext(ctx, query, args...)
+	if err != nil {
+		return fmt.Errorf("resolve recoverable api keys: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return err
+		}
+		if k, ok := byID[id]; ok {
+			k.HasFullKey = true
+		}
+	}
+	return rows.Err()
 }

@@ -166,6 +166,36 @@ func (h *APIKeyHandler) GetByIDGateway(c gatewayctx.GatewayContext) {
 	response.SuccessContext(apiKeyGatewayResponder{ctx: c}, dto.APIKeyFromService(key))
 }
 
+// Reveal handles revealing the full value of a key to its owner.
+// GET /api/v1/keys/:id/reveal
+// Legacy (hash-only) keys return API_KEY_NOT_RECOVERABLE.
+func (h *APIKeyHandler) Reveal(c *gin.Context) {
+	h.RevealGateway(gatewayctx.FromGin(c))
+}
+
+func (h *APIKeyHandler) RevealGateway(c gatewayctx.GatewayContext) {
+	subject, ok := middleware2.GetAuthSubjectFromGatewayContext(c)
+	if !ok {
+		response.ErrorContext(apiKeyGatewayResponder{ctx: c}, http.StatusUnauthorized, "User not authenticated")
+		return
+	}
+
+	keyID, err := strconv.ParseInt(c.PathParam("id"), 10, 64)
+	if err != nil {
+		response.ErrorContext(apiKeyGatewayResponder{ctx: c}, http.StatusBadRequest, "Invalid key ID")
+		return
+	}
+
+	// The JWT-authenticated user route only ever reveals the caller's own key;
+	// ownership is enforced inside the service.
+	plaintext, err := h.apiKeyService.RevealKey(c.Request().Context(), keyID, subject.UserID, false)
+	if err != nil {
+		response.ErrorFromContext(apiKeyGatewayResponder{ctx: c}, err)
+		return
+	}
+	response.SuccessContext(apiKeyGatewayResponder{ctx: c}, gin.H{"key": plaintext})
+}
+
 // Create handles creating a new API key
 // POST /api/v1/api-keys
 func (h *APIKeyHandler) Create(c *gin.Context) {

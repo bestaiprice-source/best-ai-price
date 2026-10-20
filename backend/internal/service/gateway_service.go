@@ -8379,6 +8379,9 @@ func (s *GatewayService) RecordUsage(ctx context.Context, input *RecordUsageInpu
 	if billingErr != nil {
 		return billingErr
 	}
+	if !isSubscriptionBilling {
+		notifyAfterUsageBilling(ctx, user, user.Balance, cost, account)
+	}
 	writeUsageLogBestEffort(ctx, s.usageLogRepo, usageLog, "service.gateway")
 
 	return nil
@@ -8584,6 +8587,9 @@ func (s *GatewayService) RecordUsageWithLongContext(ctx context.Context, input *
 
 	if billingErr != nil {
 		return billingErr
+	}
+	if !isSubscriptionBilling {
+		notifyAfterUsageBilling(ctx, user, user.Balance, cost, account)
 	}
 	writeUsageLogBestEffort(ctx, s.usageLogRepo, usageLog, "service.gateway")
 

@@ -22,6 +22,9 @@ import (
 type UsageHandler struct {
 	usageService  *service.UsageService
 	apiKeyService *service.APIKeyService
+	// opsService backs the user-facing error log (the caller's own failed
+	// requests). Optional: when nil the endpoint returns an empty page.
+	opsService *service.OpsService
 }
 
 type usageGatewayResponder struct {
@@ -43,11 +46,99 @@ func (g usageGatewayResponder) WriteJSON(status int, payload any) {
 }
 
 // NewUsageHandler creates a new UsageHandler
-func NewUsageHandler(usageService *service.UsageService, apiKeyService *service.APIKeyService) *UsageHandler {
+func NewUsageHandler(usageService *service.UsageService, apiKeyService *service.APIKeyService, opsService *service.OpsService) *UsageHandler {
 	return &UsageHandler{
 		usageService:  usageService,
 		apiKeyService: apiKeyService,
+		opsService:    opsService,
 	}
+}
+
+// SetOpsService wires the optional error-log dependency after construction
+// (the ops service is built later in the DI graph than the usage handler).
+func (h *UsageHandler) SetOpsService(ops *service.OpsService) {
+	if h != nil {
+		h.opsService = ops
+	}
+}
+
+// Errors returns the caller's OWN failed requests (sanitized: no internal
+// identifiers), with the upstream-facing diagnostics the user needs.
+// GET /api/v1/usage/errors
+func (h *UsageHandler) Errors(c *gin.Context) {
+	h.ErrorsGateway(gatewayctx.FromGin(c))
+}
+
+func (h *UsageHandler) ErrorsGateway(c gatewayctx.GatewayContext) {
+	subject, ok := middleware2.GetAuthSubjectFromGatewayContext(c)
+	if !ok {
+		response.ErrorContext(usageGatewayResponder{ctx: c}, http.StatusUnauthorized, "User not authenticated")
+		return
+	}
+
+	page, pageSize := response.ParsePaginationValues(c)
+	filter := &service.OpsErrorLogFilter{Page: page, PageSize: pageSize, View: "all"}
+
+	// api_key_id must belong to the caller (same guard as the request log).
+	if apiKeyIDStr := strings.TrimSpace(c.QueryValue("api_key_id")); apiKeyIDStr != "" {
+		id, err := strconv.ParseInt(apiKeyIDStr, 10, 64)
+		if err != nil {
+			response.ErrorContext(usageGatewayResponder{ctx: c}, http.StatusBadRequest, "Invalid api_key_id")
+			return
+		}
+		if h.apiKeyService != nil {
+			apiKey, err := h.apiKeyService.GetByID(c.Request().Context(), id)
+			if err != nil {
+				response.ErrorFromContext(usageGatewayResponder{ctx: c}, err)
+				return
+			}
+			if apiKey.UserID != subject.UserID {
+				response.ErrorContext(usageGatewayResponder{ctx: c}, http.StatusForbidden, "Not authorized to access this API key's usage records")
+				return
+			}
+		}
+		filter.APIKeyID = &id
+	}
+	if model := strings.TrimSpace(c.QueryValue("model")); model != "" {
+		filter.Model = model
+	}
+	if rid := strings.TrimSpace(c.QueryValue("request_id")); rid != "" {
+		filter.RequestID = rid
+	}
+	if q := strings.TrimSpace(c.QueryValue("search")); q != "" {
+		filter.Query = q
+	}
+	// Date range: same half-open [start, end) semantics as the request log.
+	userTZ := c.QueryValue("timezone")
+	if startDateStr := strings.TrimSpace(c.QueryValue("start_date")); startDateStr != "" {
+		t, err := timezone.ParseInUserLocation("2006-01-02", startDateStr, userTZ)
+		if err != nil {
+			response.ErrorContext(usageGatewayResponder{ctx: c}, http.StatusBadRequest, "Invalid start_date format, use YYYY-MM-DD")
+			return
+		}
+		filter.StartTime = &t
+	}
+	if endDateStr := strings.TrimSpace(c.QueryValue("end_date")); endDateStr != "" {
+		t, err := timezone.ParseInUserLocation("2006-01-02", endDateStr, userTZ)
+		if err != nil {
+			response.ErrorContext(usageGatewayResponder{ctx: c}, http.StatusBadRequest, "Invalid end_date format, use YYYY-MM-DD")
+			return
+		}
+		t = t.AddDate(0, 0, 1)
+		filter.EndTime = &t
+	}
+
+	if h.opsService == nil {
+		response.PaginatedContext(usageGatewayResponder{ctx: c}, []*service.UserErrorLogItem{}, 0, page, pageSize)
+		return
+	}
+
+	result, err := h.opsService.GetUserErrorLogs(c.Request().Context(), subject.UserID, filter)
+	if err != nil {
+		response.ErrorFromContext(usageGatewayResponder{ctx: c}, err)
+		return
+	}
+	response.PaginatedContext(usageGatewayResponder{ctx: c}, result.Items, int64(result.Total), page, pageSize)
 }
 
 // List handles listing usage records with pagination
@@ -66,12 +157,12 @@ func (h *UsageHandler) ListGateway(c gatewayctx.GatewayContext) {
 	page, pageSize := response.ParsePaginationValues(c)
 
 	var apiKeyID int64
-		if apiKeyIDStr := c.QueryValue("api_key_id"); apiKeyIDStr != "" {
-			id, err := strconv.ParseInt(apiKeyIDStr, 10, 64)
-			if err != nil {
-				response.ErrorContext(usageGatewayResponder{ctx: c}, http.StatusBadRequest, "Invalid api_key_id")
-				return
-			}
+	if apiKeyIDStr := c.QueryValue("api_key_id"); apiKeyIDStr != "" {
+		id, err := strconv.ParseInt(apiKeyIDStr, 10, 64)
+		if err != nil {
+			response.ErrorContext(usageGatewayResponder{ctx: c}, http.StatusBadRequest, "Invalid api_key_id")
+			return
+		}
 
 		// [Security Fix] Verify API Key ownership to prevent horizontal privilege escalation
 		apiKey, err := h.apiKeyService.GetByID(c.Request().Context(), id)
@@ -251,19 +342,19 @@ func (h *UsageHandler) StatsGateway(c gatewayctx.GatewayContext) {
 		var err error
 		startTime, err = timezone.ParseInUserLocation("2006-01-02", startDateStr, userTZ)
 		if err != nil {
-				response.ErrorContext(usageGatewayResponder{ctx: c}, http.StatusBadRequest, "Invalid start_date format, use YYYY-MM-DD")
-				return
-			}
-			endTime, err = timezone.ParseInUserLocation("2006-01-02", endDateStr, userTZ)
-			if err != nil {
-				response.ErrorContext(usageGatewayResponder{ctx: c}, http.StatusBadRequest, "Invalid end_date format, use YYYY-MM-DD")
-				return
-			}
+			response.ErrorContext(usageGatewayResponder{ctx: c}, http.StatusBadRequest, "Invalid start_date format, use YYYY-MM-DD")
+			return
+		}
+		endTime, err = timezone.ParseInUserLocation("2006-01-02", endDateStr, userTZ)
+		if err != nil {
+			response.ErrorContext(usageGatewayResponder{ctx: c}, http.StatusBadRequest, "Invalid end_date format, use YYYY-MM-DD")
+			return
+		}
 		// 与 SQL 条件 created_at < end 对齐，使用次日 00:00 作为上边界（DST-safe）。
 		endTime = endTime.AddDate(0, 0, 1)
 	} else {
 		// 使用 period 参数
-			period := defaultQueryValue(c, "period", "today")
+		period := defaultQueryValue(c, "period", "today")
 		switch period {
 		case "today":
 			startTime = timezone.StartOfDayInUserLocation(now, userTZ)
