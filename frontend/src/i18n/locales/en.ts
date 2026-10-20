@@ -470,6 +470,28 @@ export default {
       details: 'Details'
     }
   },
+  modelsCatalog: {
+    title: 'Models & Pricing',
+    description: 'Every model you can call with one key, at the price we actually charge.',
+    searchPlaceholder: 'Search models…',
+    viewCatalog: 'Catalog',
+    viewNames: 'All models',
+    allVendors: 'All providers',
+    typeAll: 'All',
+    typeText: 'Text',
+    typeImage: 'Image',
+    typeVideo: 'Video',
+    typeAudio: 'Audio',
+    typeEmbedding: 'Embedding',
+    modelsCount: '{count} models',
+    unpricedNote: '{count} without a published price',
+    noResults: 'No models match your filters.',
+    noPrice: 'no price',
+    input: 'in',
+    output: 'out',
+    available: 'Available',
+    unavailable: 'Unavailable'
+  },
   availableChannels: {
     columns: {
       name: 'Channel',
@@ -507,6 +529,7 @@ export default {
     dashboard: 'Dashboard',
     announcements: 'Announcements',
     apiKeys: 'API Keys',
+    models: 'Models & Pricing',
     usage: 'Usage',
     redeem: 'Redeem',
     profile: 'Profile',

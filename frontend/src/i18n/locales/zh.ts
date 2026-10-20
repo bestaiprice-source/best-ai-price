@@ -470,6 +470,28 @@ export default {
       details: '详情'
     }
   },
+  modelsCatalog: {
+    title: '模型与价格',
+    description: '一个密钥即可调用全部模型，价格即实际扣费价格。',
+    searchPlaceholder: '搜索模型…',
+    viewCatalog: '目录',
+    viewNames: '全部模型',
+    allVendors: '全部供应商',
+    typeAll: '全部',
+    typeText: '文本',
+    typeImage: '图像',
+    typeVideo: '视频',
+    typeAudio: '音频',
+    typeEmbedding: '向量',
+    modelsCount: '{count} 个模型',
+    unpricedNote: '{count} 个暂无公开价格',
+    noResults: '没有符合条件的模型。',
+    noPrice: '暂无价格',
+    input: '输入',
+    output: '输出',
+    available: '可用',
+    unavailable: '不可用'
+  },
   availableChannels: {
     columns: {
       name: '渠道',
@@ -507,6 +529,7 @@ export default {
     dashboard: '仪表盘',
     announcements: '公告',
     apiKeys: 'API 密钥',
+    models: '模型与价格',
     usage: '使用记录',
     redeem: '兑换',
     profile: '个人资料',

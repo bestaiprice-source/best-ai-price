@@ -196,6 +196,18 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/models',
+    name: 'UserModelsCatalog',
+    component: () => import('@/views/user/ModelsCatalogView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      title: 'Models & Pricing',
+      titleKey: 'modelsCatalog.title',
+      descriptionKey: 'modelsCatalog.description'
+    }
+  },
+  {
     path: '/available-channels',
     name: 'UserAvailableChannels',
     component: () => import('@/views/user/AvailableChannelsView.vue'),
