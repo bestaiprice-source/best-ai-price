@@ -54,10 +54,16 @@ type ModelPricing struct {
 	ImageOutputPricePerToken       float64 // 图片输出 token 价格 (USD)
 	FixedPricePerRequest           float64 // 固定单次请求费用 (USD，若 >0 则按次收费)
 	FixedPriceUnit                 string  // 固定费用的计费单位 ("request"/"second"/…)，仅用于目录展示
-	SupportsCacheBreakdown         bool    // 是否支持详细的缓存分类
-	LongContextInputThreshold      int     // 超过阈值后按整次会话提升输入价格
-	LongContextInputMultiplier     float64 // 长上下文整次会话输入倍率
-	LongContextOutputMultiplier    float64 // 长上下文整次会话输出倍率
+	// OfficialInputPricePerToken / OfficialOutputPricePerToken are the upstream
+	// vendor LIST prices (before any group discount). They are publish-only: the
+	// catalog uses them to show a "discount vs official" reference. Billing never
+	// reads them.
+	OfficialInputPricePerToken  float64
+	OfficialOutputPricePerToken float64
+	SupportsCacheBreakdown      bool    // 是否支持详细的缓存分类
+	LongContextInputThreshold   int     // 超过阈值后按整次会话提升输入价格
+	LongContextInputMultiplier  float64 // 长上下文整次会话输入倍率
+	LongContextOutputMultiplier float64 // 长上下文整次会话输出倍率
 }
 
 const (

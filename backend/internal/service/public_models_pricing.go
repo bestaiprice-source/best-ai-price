@@ -23,10 +23,15 @@ type PublicModelPricingItem struct {
 	// Cache prices (retail, per 1M tokens). Cache write = cache creation.
 	CacheReadPricePer1M  *float64 `json:"cache_read_price_per_1m,omitempty"`
 	CacheWritePricePer1M *float64 `json:"cache_write_price_per_1m,omitempty"`
-	NativePriceUSD       *float64 `json:"native_price_usd"`
-	NativePriceUnit      *string  `json:"native_price_unit"`
-	Available            bool     `json:"available"`
-	Status               string   `json:"status,omitempty"`
+	// Official vendor list prices (per 1M tokens) and how far below them we sell.
+	// Publish-only: the gateway never charges these.
+	OfficialInputPricePer1M  *float64 `json:"official_input_price_per_1m,omitempty"`
+	OfficialOutputPricePer1M *float64 `json:"official_output_price_per_1m,omitempty"`
+	DiscountPercent          *int     `json:"discount_percent,omitempty"`
+	NativePriceUSD           *float64 `json:"native_price_usd"`
+	NativePriceUnit          *string  `json:"native_price_unit"`
+	Available                bool     `json:"available"`
+	Status                   string   `json:"status,omitempty"`
 }
 
 // ToCanonicalModelID normalizes any model name or slug into "vendor/model-slug" format.
@@ -419,6 +424,26 @@ func (s *GatewayService) GetPublicModelsPricing(ctx context.Context) []PublicMod
 					cw := roundFloat(pricing.CacheCreationPricePerToken*1_000_000*multiplier, 4)
 					item.CacheWritePricePer1M = &cw
 				}
+				// How far below the vendor list price we sell, on the same paying
+				// basis as the advertised price (markup included).
+				best := 0
+				if pricing.OfficialInputPricePerToken > 0 {
+					officialIn := roundFloat(pricing.OfficialInputPricePerToken*1_000_000, 4)
+					item.OfficialInputPricePer1M = &officialIn
+					if d := discountPercent(pricing.OfficialInputPricePerToken, pricing.InputPricePerToken*multiplier); d > best {
+						best = d
+					}
+				}
+				if pricing.OfficialOutputPricePerToken > 0 {
+					officialOut := roundFloat(pricing.OfficialOutputPricePerToken*1_000_000, 4)
+					item.OfficialOutputPricePer1M = &officialOut
+					if d := discountPercent(pricing.OfficialOutputPricePerToken, pricing.OutputPricePerToken*multiplier); d > best {
+						best = d
+					}
+				}
+				if best > 0 {
+					item.DiscountPercent = &best
+				}
 			}
 		}
 
@@ -444,6 +469,23 @@ func (s *GatewayService) GetPublicModelsPricing(ctx context.Context) []PublicMod
 func roundFloat(val float64, precision int) float64 {
 	ratio := math.Pow(10, float64(precision))
 	return math.Round(val*ratio) / ratio
+}
+
+// discountPercent reports how far below the vendor list price a rate is, as a
+// whole percent. Returns 0 when there is no discount (or the inputs cannot be
+// compared), so the catalog only ever shows a positive saving.
+func discountPercent(officialPerToken, chargedPerToken float64) int {
+	if officialPerToken <= 0 || chargedPerToken <= 0 || chargedPerToken >= officialPerToken {
+		return 0
+	}
+	pct := int(math.Round((1 - chargedPerToken/officialPerToken) * 100))
+	if pct < 1 {
+		return 0
+	}
+	if pct > 99 {
+		pct = 99
+	}
+	return pct
 }
 
 func rawModelWithoutVersion(slug string) string {

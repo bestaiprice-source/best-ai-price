@@ -1285,6 +1285,9 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeyDefaultSubscriptions:             "[]",
 		SettingKeySMTPPort:                         "587",
 		SettingKeySMTPUseTLS:                       "false",
+		// Balance reminder: email the user when the balance drops below $3.
+		SettingKeyBalanceLowNotifyEnabled:   "true",
+		SettingKeyBalanceLowNotifyThreshold: strconv.FormatFloat(DefaultBalanceLowNotifyThresholdUSD, 'f', 2, 64),
 		// Model fallback defaults
 		SettingKeyEnableModelFallback:      "false",
 		SettingKeyFallbackModelAnthropic:   "claude-3-5-sonnet-20241022",

@@ -188,8 +188,12 @@ type YunwuPricingRawItem struct {
 	// resolved at parse time from the provider's group_ratio map. 0 means "no
 	// group information" and is treated as 1.0.
 	GroupRatio float64 `json:"-"`
-	CacheRatio float64 `json:"cache_ratio"`
-	Available  bool    `json:"available"`
+	// Official vendor list prices (per 1M tokens), when the source publishes
+	// them (BestAIPrice catalog records). Publish-only: never used for billing.
+	OfficialInputPriceUSDPer1M  float64 `json:"-"`
+	OfficialOutputPriceUSDPer1M float64 `json:"-"`
+	CacheRatio                  float64 `json:"cache_ratio"`
+	Available                   bool    `json:"available"`
 	// FixedPriceUnit carries the native billing unit for a fixed per-unit price
 	// (e.g. "request" or "second"); populated from BestAIPrice native_price_unit.
 	FixedPriceUnit string `json:"-"`
@@ -466,9 +470,13 @@ func (s *YunwuPricingService) FetchPricingForProvider(ctx context.Context, provi
 				CanonicalModelID    string   `json:"canonical_model_id"`
 				InputPriceUSDPer1M  *float64 `json:"input_price_usd_per_1m"`
 				OutputPriceUSDPer1M *float64 `json:"output_price_usd_per_1m"`
-				NativePriceUSD      *float64 `json:"native_price_usd"`
-				NativePriceUnit     *string  `json:"native_price_unit"`
-				Available           bool     `json:"available"`
+				// Vendor list prices published by the catalog, used to compute the
+				// "discount vs official" shown next to our retail price.
+				OfficialInputPriceUSDPer1M  *float64 `json:"official_input_price_usd_per_1m"`
+				OfficialOutputPriceUSDPer1M *float64 `json:"official_output_price_usd_per_1m"`
+				NativePriceUSD              *float64 `json:"native_price_usd"`
+				NativePriceUnit             *string  `json:"native_price_unit"`
+				Available                   bool     `json:"available"`
 			}
 			if err := json.Unmarshal(bodyBytes, &providersList); err == nil && len(providersList) > 0 && (providersList[0].ProviderDomain != "" || providersList[0].ProviderName != "" || providersList[0].ModelName != "") {
 				basePerToken := oneAPIBasePricePer1k / 1000.0 // 2e-6
@@ -495,6 +503,12 @@ func (s *YunwuPricingService) FetchPricingForProvider(ctx context.Context, provi
 						ModelRatio:      modelRatio,
 						CompletionRatio: compRatio,
 						Available:       true,
+					}
+					if item.OfficialInputPriceUSDPer1M != nil {
+						rawItem.OfficialInputPriceUSDPer1M = *item.OfficialInputPriceUSDPer1M
+					}
+					if item.OfficialOutputPriceUSDPer1M != nil {
+						rawItem.OfficialOutputPriceUSDPer1M = *item.OfficialOutputPriceUSDPer1M
 					}
 					if inPrice == 0 && outPrice == 0 && item.NativePriceUSD != nil {
 						rawItem.ModelPrice = *item.NativePriceUSD
@@ -754,6 +768,16 @@ func (s *YunwuPricingService) GetModelPricingForProvider(ctx context.Context, pr
 	pricing.OutputPricePerToken = outputPerToken
 	pricing.CacheReadPricePerToken = cacheReadPerToken
 	pricing.CacheCreationPricePerToken = cacheCreationPerToken
+	// Official (list) prices: the same base rate WITHOUT the group discount. Used
+	// by the catalog only, to show how far below the vendor price we sell.
+	pricing.OfficialInputPricePerToken = item.ModelRatio * basePerToken
+	pricing.OfficialOutputPricePerToken = item.ModelRatio * compRatio * basePerToken
+	if item.OfficialInputPriceUSDPer1M > 0 {
+		pricing.OfficialInputPricePerToken = item.OfficialInputPriceUSDPer1M / 1_000_000
+	}
+	if item.OfficialOutputPriceUSDPer1M > 0 {
+		pricing.OfficialOutputPricePerToken = item.OfficialOutputPriceUSDPer1M / 1_000_000
+	}
 
 	return pricing, true
 }
@@ -875,5 +899,9 @@ func cloneModelPricing(pr *ModelPricing) *ModelPricing {
 		FixedPricePerRequest:       pr.FixedPricePerRequest,
 		FixedPriceUnit:             pr.FixedPriceUnit,
 		ImageOutputPricePerToken:   pr.ImageOutputPricePerToken,
+		// Publish-only: the catalog needs the official list price of the provider
+		// it chose as primary.
+		OfficialInputPricePerToken:  pr.OfficialInputPricePerToken,
+		OfficialOutputPricePerToken: pr.OfficialOutputPricePerToken,
 	}
 }

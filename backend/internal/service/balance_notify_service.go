@@ -265,16 +265,29 @@ func (s *BalanceNotifyService) asyncSendQuotaAlert(adminEmails []string, account
 	}()
 }
 
+// DefaultBalanceLowNotifyThresholdUSD is the built-in balance reminder: when a
+// user's balance first drops below this amount we email them. It applies when no
+// threshold is configured, and the feature is ON unless explicitly disabled.
+const DefaultBalanceLowNotifyThresholdUSD = 3.0
+
 // getBalanceNotifyConfig reads global balance notification settings.
 func (s *BalanceNotifyService) getBalanceNotifyConfig(ctx context.Context) (enabled bool, threshold float64, rechargeURL string) {
 	keys := []string{SettingKeyBalanceLowNotifyEnabled, SettingKeyBalanceLowNotifyThreshold, SettingKeyBalanceLowNotifyRechargeURL}
 	settings, err := s.settingRepo.GetMultiple(ctx, keys)
 	if err != nil {
-		return false, 0, ""
+		// Fail safe: keep the built-in reminder alive rather than silently
+		// dropping it, so a user is never left without a warning.
+		return true, DefaultBalanceLowNotifyThresholdUSD, ""
 	}
-	enabled = settings[SettingKeyBalanceLowNotifyEnabled] == "true"
-	if v := settings[SettingKeyBalanceLowNotifyThreshold]; v != "" {
-		if f, err := strconv.ParseFloat(v, 64); err == nil {
+	// Opt-out: enabled unless the operator explicitly turned it off.
+	if raw, ok := settings[SettingKeyBalanceLowNotifyEnabled]; !ok {
+		enabled = true
+	} else {
+		enabled = strings.ToLower(strings.TrimSpace(raw)) != "false"
+	}
+	threshold = DefaultBalanceLowNotifyThresholdUSD
+	if v := strings.TrimSpace(settings[SettingKeyBalanceLowNotifyThreshold]); v != "" {
+		if f, err := strconv.ParseFloat(v, 64); err == nil && f > 0 {
 			threshold = f
 		}
 	}

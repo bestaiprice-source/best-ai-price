@@ -839,3 +839,42 @@ func TestGetPublicModelsPricing_PublishesCachePrices(t *testing.T) {
 	require.NoError(t, err)
 	assert.InDelta(t, *item.CacheReadPricePer1M, cost.CacheReadCost*1.10, 1e-4)
 }
+
+// The catalog publishes a "discount vs official" reference computed on the same
+// paying basis as the advertised price (markup included).
+func TestGetPublicModelsPricing_PublishesDiscountVsOfficial(t *testing.T) {
+	// model_ratio 1.5 -> official $3/1M; group_ratio 0.1 -> cost $0.30/1M
+	raw := map[string]*YunwuPricingRawItem{
+		"claude-sonnet-5": {ModelRatio: 1.5, CompletionRatio: 5.0, GroupRatio: 0.1},
+	}
+	billingSvc := helperNewBillingWithYunwuPricing(raw)
+	groupRepo := &mockGroupRepoForPricing{
+		activeGroups: []Group{{Name: "yunwu", Platform: PlatformYunwu, RateMultiplier: 1.10}},
+	}
+	svc := &GatewayService{billingService: billingSvc, groupRepo: groupRepo}
+
+	var item *PublicModelPricingItem
+	for _, it := range svc.GetPublicModelsPricing(context.Background()) {
+		if it.CanonicalModelID == "anthropic/claude-sonnet-5" {
+			c := it
+			item = &c
+		}
+	}
+	require.NotNil(t, item)
+	require.NotNil(t, item.InputPricePer1M)
+	require.NotNil(t, item.OfficialInputPricePer1M)
+	require.NotNil(t, item.DiscountPercent)
+
+	assert.InDelta(t, 3.0, *item.OfficialInputPricePer1M, 1e-4, "official list price")
+	assert.InDelta(t, 0.30*1.10, *item.InputPricePer1M, 1e-4, "retail = cost x markup")
+	// 1 - (0.33 / 3.0) = 89%
+	assert.Equal(t, 89, *item.DiscountPercent)
+}
+
+func TestDiscountPercent(t *testing.T) {
+	assert.Equal(t, 0, discountPercent(0, 1), "unknown official price -> no badge")
+	assert.Equal(t, 0, discountPercent(1, 1), "no discount -> no badge")
+	assert.Equal(t, 0, discountPercent(1, 2), "selling above official never yields a badge")
+	assert.Equal(t, 90, discountPercent(1e-6, 1e-7))
+	assert.Equal(t, 1, discountPercent(1, 0.99))
+}
