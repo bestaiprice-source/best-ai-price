@@ -180,8 +180,16 @@ type YunwuPricingRawItem struct {
 	ModelRatio      float64 `json:"model_ratio"`
 	ModelPrice      float64 `json:"model_price"`
 	CompletionRatio float64 `json:"completion_ratio"`
-	CacheRatio      float64 `json:"cache_ratio"`
-	Available       bool    `json:"available"`
+	// EnableGroups lists the billing groups the model is available for; the
+	// provider's top-level group_ratio maps a group to its discount multiplier.
+	// The effective price is model_ratio × group_ratio.
+	EnableGroups []string `json:"enable_groups"`
+	// GroupRatio is the applied discount multiplier (cheapest enabled group),
+	// resolved at parse time from the provider's group_ratio map. 0 means "no
+	// group information" and is treated as 1.0.
+	GroupRatio float64 `json:"-"`
+	CacheRatio float64 `json:"cache_ratio"`
+	Available  bool    `json:"available"`
 	// FixedPriceUnit carries the native billing unit for a fixed per-unit price
 	// (e.g. "request" or "second"); populated from BestAIPrice native_price_unit.
 	FixedPriceUnit string `json:"-"`
@@ -189,6 +197,26 @@ type YunwuPricingRawItem struct {
 
 type YunwuPricingResponse struct {
 	Data []YunwuPricingRawItem `json:"data"`
+}
+
+// effectiveGroupRatio resolves the discount multiplier for a model from the
+// provider's top-level group_ratio map: the cheapest ratio among the groups the
+// model is enabled for (mirrors how the BestAIPrice catalog prices an offer).
+// Returns 1.0 (no discount) when no group information is available.
+func effectiveGroupRatio(enabled []string, groupRatios map[string]float64) float64 {
+	if len(groupRatios) == 0 {
+		return 1.0
+	}
+	best := 0.0
+	for _, g := range enabled {
+		if r, ok := groupRatios[g]; ok && r > 0 && (best == 0 || r < best) {
+			best = r
+		}
+	}
+	if best <= 0 {
+		return 1.0
+	}
+	return best
 }
 
 // YunwuPricingService fetches and resolves real-time pricing strictly isolated per provider
@@ -412,15 +440,22 @@ func (s *YunwuPricingService) FetchPricingForProvider(ctx context.Context, provi
 
 		pricingMap := make(map[string]*YunwuPricingRawItem)
 
-		// 1. Try One-API standard format: {"data": [...]}
-		var payload YunwuPricingResponse
+		// 1. Try One-API standard format: {"data": [...], "group_ratio": {...}}
+		var payload struct {
+			Data       []YunwuPricingRawItem `json:"data"`
+			GroupRatio map[string]float64    `json:"group_ratio"`
+		}
 		if err := json.Unmarshal(bodyBytes, &payload); err == nil && len(payload.Data) > 0 {
 			for i := range payload.Data {
 				item := payload.Data[i]
 				key := strings.ToLower(strings.TrimSpace(item.ModelName))
-				if key != "" {
-					pricingMap[key] = &item
+				if key == "" {
+					continue
 				}
+				// One-API reports the OFFICIAL ratio; the real price is
+				// ratio × group_ratio of the group the model is enabled for.
+				item.GroupRatio = effectiveGroupRatio(item.EnableGroups, payload.GroupRatio)
+				pricingMap[key] = &item
 			}
 		} else {
 			// 2. Try BestAIPrice format: [{"provider_domain": "...", "model_name": "...", "input_price_usd_per_1m": ...}]
@@ -679,8 +714,13 @@ func (s *YunwuPricingService) GetModelPricingForProvider(ctx context.Context, pr
 	pricing := &ModelPricing{}
 
 	if item.ModelPrice > 0 {
-		// Fixed price per unit (e.g. image generation, video generation)
-		pricing.FixedPricePerRequest = item.ModelPrice
+		// Fixed price per unit (e.g. image generation, video generation);
+		// the provider's group discount applies to fixed prices as well.
+		groupRatio := item.GroupRatio
+		if groupRatio <= 0 {
+			groupRatio = 1.0
+		}
+		pricing.FixedPricePerRequest = item.ModelPrice * groupRatio
 		pricing.FixedPriceUnit = item.FixedPriceUnit
 		return pricing, true
 	}
@@ -688,17 +728,21 @@ func (s *YunwuPricingService) GetModelPricingForProvider(ctx context.Context, pr
 	// Token-based pricing:
 	// Base price in One API standard is $0.002 per 1,000 tokens ($0.000002 / token)
 	basePerToken := oneAPIBasePricePer1k / 1000.0 // 2e-6
-	inputPerToken := item.ModelRatio * basePerToken
+	groupRatio := item.GroupRatio
+	if groupRatio <= 0 {
+		groupRatio = 1.0
+	}
+	inputPerToken := item.ModelRatio * basePerToken * groupRatio
 
 	compRatio := item.CompletionRatio
 	if compRatio <= 0 {
 		compRatio = 1.0
 	}
-	outputPerToken := item.ModelRatio * compRatio * basePerToken
+	outputPerToken := item.ModelRatio * compRatio * basePerToken * groupRatio
 
 	cacheReadPerToken := 0.0
 	if item.CacheRatio > 0 {
-		cacheReadPerToken = item.ModelRatio * item.CacheRatio * basePerToken
+		cacheReadPerToken = item.ModelRatio * item.CacheRatio * basePerToken * groupRatio
 	} else {
 		// Default cache read cost is 50% of input cost
 		cacheReadPerToken = inputPerToken * 0.5

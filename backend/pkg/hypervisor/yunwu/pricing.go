@@ -37,6 +37,27 @@ type ProviderModelPrice struct {
 	Available        bool    `json:"available"`
 }
 
+// effectiveGroupRatio resolves the discount multiplier for a model from a
+// One-API provider's top-level group_ratio map: the cheapest ratio among the
+// groups the model is enabled for. Returns 1.0 (no discount) when no group
+// information is available. Keeps routing prices consistent with the gateway's
+// catalog/billing resolution.
+func effectiveGroupRatio(enabled []string, groupRatios map[string]float64) float64 {
+	if len(groupRatios) == 0 {
+		return 1.0
+	}
+	best := 0.0
+	for _, g := range enabled {
+		if r, ok := groupRatios[g]; ok && r > 0 && (best == 0 || r < best) {
+			best = r
+		}
+	}
+	if best <= 0 {
+		return 1.0
+	}
+	return best
+}
+
 // PriceResolver defines the interface for resolving model pricing on an execution node
 type PriceResolver interface {
 	ResolveNodePrice(ctx context.Context, node *health.ExecutionNode, model string) (float64, float64, bool)
@@ -224,16 +245,18 @@ func (ppm *ProviderPriceManager) fetchProviderPrices(ctx context.Context, endpoi
 			return nil, err
 		}
 
-		// 1. Try One-API / New-API format: {"data": [...]}
+		// 1. Try One-API / New-API format: {"data": [...], "group_ratio": {...}}
 		var payload struct {
 			Data []struct {
-				ModelName       string  `json:"model_name"`
-				QuotaType       int     `json:"quota_type"`
-				ModelRatio      float64 `json:"model_ratio"`
-				ModelPrice      float64 `json:"model_price"`
-				CompletionRatio float64 `json:"completion_ratio"`
-				Available       bool    `json:"available"`
+				ModelName       string   `json:"model_name"`
+				QuotaType       int      `json:"quota_type"`
+				ModelRatio      float64  `json:"model_ratio"`
+				ModelPrice      float64  `json:"model_price"`
+				CompletionRatio float64  `json:"completion_ratio"`
+				EnableGroups    []string `json:"enable_groups"`
+				Available       bool     `json:"available"`
 			} `json:"data"`
+			GroupRatio map[string]float64 `json:"group_ratio"`
 		}
 
 		if err := json.Unmarshal(bodyBytes, &payload); err == nil && len(payload.Data) > 0 {
@@ -244,18 +267,22 @@ func (ppm *ProviderPriceManager) fetchProviderPrices(ctx context.Context, endpoi
 					continue
 				}
 
+				// The provider reports the OFFICIAL ratio in model_ratio; the
+				// real price is ratio × group_ratio of the enabled group.
+				groupRatio := effectiveGroupRatio(item.EnableGroups, payload.GroupRatio)
+
 				var inputPrice, outputPrice float64
 				if item.ModelPrice > 0 {
-					inputPrice = item.ModelPrice
-					outputPrice = item.ModelPrice
+					inputPrice = item.ModelPrice * groupRatio
+					outputPrice = item.ModelPrice * groupRatio
 				} else {
 					baseRatePer1k := 0.002
-					inputPrice = item.ModelRatio * baseRatePer1k
+					inputPrice = item.ModelRatio * baseRatePer1k * groupRatio
 					compRatio := item.CompletionRatio
 					if compRatio <= 0 {
 						compRatio = 1.0
 					}
-					outputPrice = item.ModelRatio * compRatio * baseRatePer1k
+					outputPrice = item.ModelRatio * compRatio * baseRatePer1k * groupRatio
 				}
 
 				if inputPrice < 0 || math.IsNaN(inputPrice) || math.IsInf(inputPrice, 0) {

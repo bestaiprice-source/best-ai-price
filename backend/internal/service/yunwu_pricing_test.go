@@ -491,6 +491,50 @@ func TestYunwuPricingService_FetchPricingForProvider_PortdanAndMultiFormat(t *te
 	assert.False(t, hasOther)
 }
 
+func TestEffectiveGroupRatio(t *testing.T) {
+	gr := map[string]float64{"a": 0.5, "b": 0.25, "c": 1.0}
+	assert.InDelta(t, 0.25, effectiveGroupRatio([]string{"a", "b"}, gr), 1e-9)
+	assert.InDelta(t, 0.5, effectiveGroupRatio([]string{"a", "unknown"}, gr), 1e-9)
+	assert.InDelta(t, 1.0, effectiveGroupRatio(nil, gr), 1e-9, "no enabled groups -> no discount")
+	assert.InDelta(t, 1.0, effectiveGroupRatio([]string{"a"}, nil), 1e-9, "no group_ratio map -> no discount")
+	assert.InDelta(t, 1.0, effectiveGroupRatio([]string{"unknown"}, gr), 1e-9, "unknown group -> no discount")
+}
 
+func TestYunwuPricingService_AppliesGroupRatio(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"data": []map[string]interface{}{
+				{"model_name": "claude-sonnet-5", "model_ratio": 1.0, "completion_ratio": 5.0,
+					"enable_groups": []string{"Kiro-Claude-1", "Claude-Code-1"}},
+				{"model_name": "no-groups-model", "model_ratio": 2.0, "completion_ratio": 1.0},
+			},
+			"group_ratio": map[string]float64{
+				"Kiro-Claude-1": 0.08824,
+				"Claude-Code-1": 0.17647,
+				"default":       1.0,
+			},
+		})
+	}))
+	defer ts.Close()
 
+	svc := NewYunwuPricingServiceWithClient(ts.URL, ts.Client())
+	ctx := context.Background()
+	raw, err := svc.FetchPricingForProvider(ctx, "openlux")
+	require.NoError(t, err)
+	require.NotNil(t, raw["claude-sonnet-5"])
+	assert.InDelta(t, 0.08824, raw["claude-sonnet-5"].GroupRatio, 1e-6)
 
+	// Effective = model_ratio(1.0) x base(2e-6) x cheapest enabled group(0.08824)
+	p, ok := svc.GetModelPricingForProvider(ctx, "openlux", "claude-sonnet-5")
+	require.True(t, ok)
+	require.NotNil(t, p)
+	assert.InDelta(t, 0.17648, p.InputPricePerToken*1e6, 1e-4)
+	assert.InDelta(t, 0.8824, p.OutputPricePerToken*1e6, 1e-4)
+
+	// Without enable_groups the ratio must NOT be discounted.
+	p2, ok := svc.GetModelPricingForProvider(ctx, "openlux", "no-groups-model")
+	require.True(t, ok)
+	require.NotNil(t, p2)
+	assert.InDelta(t, 4.0, p2.InputPricePerToken*1e6, 1e-4)
+}
