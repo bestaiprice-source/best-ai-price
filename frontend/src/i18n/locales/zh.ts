@@ -484,7 +484,6 @@ export default {
     typeAudio: '音频',
     typeEmbedding: '向量',
     modelsCount: '{count} 个模型',
-    unpricedNote: '{count} 个暂无公开价格',
     noResults: '没有符合条件的模型。',
     noPrice: '暂无价格',
     input: '输入',

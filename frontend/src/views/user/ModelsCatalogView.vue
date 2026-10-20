@@ -74,9 +74,8 @@
         </div>
       </div>
 
-      <div class="mt-4 flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+      <div class="mt-4 text-xs text-gray-500 dark:text-gray-400">
         <span>{{ t('modelsCatalog.modelsCount', { count: filtered.length }) }}</span>
-        <span v-if="pricedCount !== filtered.length">{{ t('modelsCatalog.unpricedNote', { count: filtered.length - pricedCount }) }}</span>
       </div>
 
       <!-- Loading -->
@@ -221,9 +220,21 @@ function typeOf(model: PublicModelPricing): 'text' | 'image' | 'video' | 'audio'
 
 const isAvailable = (model: PublicModelPricing) => model.available !== false && model.status !== 'unavailable'
 
+/** A model is listed only when we can show what it costs — token or per-unit price. */
+function hasPrice(model: PublicModelPricing): boolean {
+  return (
+    model.input_price_per_1m != null ||
+    model.output_price_per_1m != null ||
+    model.native_price_usd != null
+  )
+}
+
+/** Models without any published price are hidden from the whole page. */
+const pricedModels = computed(() => models.value.filter(hasPrice))
+
 const filtered = computed(() => {
   const q = search.value.trim().toLowerCase()
-  return models.value.filter((model) => {
+  return pricedModels.value.filter((model) => {
     if (activeType.value !== 'all' && typeOf(model) !== activeType.value) return false
     if (activeVendor.value && vendorOf(model) !== activeVendor.value) return false
     if (!q) return true
@@ -231,13 +242,9 @@ const filtered = computed(() => {
   })
 })
 
-const pricedCount = computed(
-  () => filtered.value.filter((m) => m.input_price_per_1m != null || m.output_price_per_1m != null || m.native_price_usd != null).length
-)
-
 const vendors = computed(() => {
   const counted = new Map<string, number>()
-  for (const model of models.value) {
+  for (const model of pricedModels.value) {
     const vendor = vendorOf(model)
     counted.set(vendor, (counted.get(vendor) || 0) + 1)
   }
@@ -246,7 +253,7 @@ const vendors = computed(() => {
 
 const vendorCounts = computed(() => {
   const counted: Record<string, number> = {}
-  for (const model of models.value) {
+  for (const model of pricedModels.value) {
     const vendor = vendorOf(model)
     counted[vendor] = (counted[vendor] || 0) + 1
   }

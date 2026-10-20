@@ -34,6 +34,12 @@ vi.mock('@/api/publicModels', () => ({
       native_price_usd: 0.0312,
       native_price_unit: 'request',
       available: false
+    },
+    // No published price at all: must never be listed.
+    {
+      canonical_model_id: 'deepseek/deepseek-v9-unpriced',
+      model_id: 'deepseek-v9-unpriced',
+      available: true
     }
   ])
 }))
@@ -62,6 +68,8 @@ describe('ModelsCatalogView', () => {
     const cards = cardsOf(wrapper)
 
     expect(cards.length).toBe(3)
+    // A model without any published price is hidden entirely.
+    expect(wrapper.text()).not.toContain('deepseek-v9-unpriced')
     expect(wrapper.text()).toContain('claude-sonnet-5')
     expect(wrapper.text()).toContain('$0.1941/1M')
     expect(wrapper.text()).toContain('-90%')

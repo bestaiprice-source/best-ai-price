@@ -484,7 +484,6 @@ export default {
     typeAudio: 'Audio',
     typeEmbedding: 'Embedding',
     modelsCount: '{count} models',
-    unpricedNote: '{count} without a published price',
     noResults: 'No models match your filters.',
     noPrice: 'no price',
     input: 'in',
