@@ -68,7 +68,7 @@
             <div>
               <p class="font-medium text-gray-900 dark:text-white">{{ t('docs.quickStart.step3Title') }}</p>
               <p class="text-sm text-gray-500 dark:text-gray-400">{{ t('docs.quickStart.step3Body') }}</p>
-              <router-link to="/available-channels" class="mt-1 inline-block text-sm font-medium text-primary-600 hover:underline">{{ t('docs.quickStart.step3Cta') }}</router-link>
+              <router-link v-if="catalogEnabled" to="/available-channels" class="mt-1 inline-block text-sm font-medium text-primary-600 hover:underline">{{ t('docs.quickStart.step3Cta') }}</router-link>
             </div>
           </li>
         </ol>
@@ -163,7 +163,7 @@
             {{ t('docs.copyCurl') }}
           </button>
         </div>
-        <router-link to="/available-channels" class="mt-3 inline-block text-sm font-medium text-primary-600 hover:underline">{{ t('docs.models.openCatalog') }}</router-link>
+        <router-link v-if="catalogEnabled" to="/available-channels" class="mt-3 inline-block text-sm font-medium text-primary-600 hover:underline">{{ t('docs.models.openCatalog') }}</router-link>
       </section>
 
       <!-- Integrations -->
@@ -273,6 +273,12 @@ const copied = ref('')
 const expandedFaq = ref<number | null>(0)
 const disputeRequestId = ref('')
 const disputeModelName = ref('')
+
+// The model catalog view only exists when the operator enabled it; Docs must not
+// link to a disabled/dead route.
+const catalogEnabled = computed(
+  () => !!appStore.cachedPublicSettings?.available_channels_enabled,
+)
 
 function toggleFaq(idx: number) {
   expandedFaq.value = expandedFaq.value === idx ? null : idx

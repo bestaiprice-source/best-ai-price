@@ -64,7 +64,7 @@
         </div>
 
         <div class="p-3">
-          <div v-if="!model.pricing" class="text-gray-500 dark:text-gray-400">
+          <div v-if="!pricing" class="text-gray-500 dark:text-gray-400">
             {{ noPricingLabel }}
           </div>
 
@@ -74,35 +74,35 @@
               <span>{{ billingModeLabel }}</span>
             </div>
 
-            <template v-if="model.pricing.billing_mode === BILLING_MODE_TOKEN">
+            <template v-if="pricing.billing_mode === BILLING_MODE_TOKEN">
               <PricingRow
                 :label="t(prefixKey('inputPrice'))"
-                :value="model.pricing.input_price"
+                :value="pricing.input_price"
                 :unit="t(prefixKey('unitPerMillion'))"
                 :scale="perMillionScale"
               />
               <PricingRow
                 :label="t(prefixKey('outputPrice'))"
-                :value="model.pricing.output_price"
+                :value="pricing.output_price"
                 :unit="t(prefixKey('unitPerMillion'))"
                 :scale="perMillionScale"
               />
               <PricingRow
                 :label="t(prefixKey('cacheWritePrice'))"
-                :value="model.pricing.cache_write_price"
+                :value="pricing.cache_write_price"
                 :unit="t(prefixKey('unitPerMillion'))"
                 :scale="perMillionScale"
               />
               <PricingRow
                 :label="t(prefixKey('cacheReadPrice'))"
-                :value="model.pricing.cache_read_price"
+                :value="pricing.cache_read_price"
                 :unit="t(prefixKey('unitPerMillion'))"
                 :scale="perMillionScale"
               />
               <PricingRow
-                v-if="model.pricing.image_output_price != null && model.pricing.image_output_price > 0"
+                v-if="pricing.image_output_price != null && pricing.image_output_price > 0"
                 :label="t(prefixKey('imageOutputPrice'))"
-                :value="model.pricing.image_output_price"
+                :value="pricing.image_output_price"
                 :unit="t(prefixKey('unitPerMillion'))"
                 :scale="perMillionScale"
               />
@@ -110,28 +110,28 @@
 
             <PricingRow
               v-if="
-                model.pricing.billing_mode === BILLING_MODE_PER_REQUEST &&
-                model.pricing.per_request_price != null
+                pricing.billing_mode === BILLING_MODE_PER_REQUEST &&
+                pricing.per_request_price != null
               "
               :label="t(prefixKey('perRequestPrice'))"
-              :value="model.pricing.per_request_price"
+              :value="pricing.per_request_price"
               :unit="t(prefixKey('unitPerRequest'))"
               :scale="1"
             />
 
             <PricingRow
               v-if="
-                model.pricing.billing_mode === BILLING_MODE_IMAGE &&
-                model.pricing.image_output_price != null
+                pricing.billing_mode === BILLING_MODE_IMAGE &&
+                pricing.image_output_price != null
               "
               :label="t(prefixKey('imageOutputPrice'))"
-              :value="model.pricing.image_output_price"
+              :value="pricing.image_output_price"
               :unit="t(prefixKey('unitPerRequest'))"
               :scale="1"
             />
 
             <div
-              v-if="model.pricing.intervals && model.pricing.intervals.length > 0"
+              v-if="pricing.intervals && pricing.intervals.length > 0"
               class="mt-2 border-t pt-2"
               :class="[popoverBorderClass]"
             >
@@ -140,7 +140,7 @@
               </div>
               <div class="space-y-1">
                 <div
-                  v-for="(iv, idx) in model.pricing.intervals"
+                  v-for="(iv, idx) in pricing.intervals"
                   :key="idx"
                   class="flex justify-between text-[11px]"
                 >
@@ -148,7 +148,7 @@
                     <template v-if="iv.tier_label">{{ iv.tier_label }}</template>
                     <template v-else>{{ formatRange(iv.min_tokens, iv.max_tokens) }}</template>
                   </span>
-                  <span>{{ formatInterval(iv, model.pricing.billing_mode) }}</span>
+                  <span>{{ formatInterval(iv, pricing.billing_mode) }}</span>
                 </div>
               </div>
             </div>
@@ -179,7 +179,7 @@ import {
 } from '@/constants/channel'
 // 复用 api/channels.ts 的用户侧最小形态 DTO。
 // admin 侧 ChannelModelPricing 字段更多，但结构上是用户 DTO 的超集，admin 视图传入可直接通过结构化子类型检查。
-import type { UserPricingInterval, UserSupportedModel } from '@/api/channels'
+import type { UserPricingInterval, UserSupportedModel, UserSupportedModelPricing } from '@/api/channels'
 import PlatformIcon from '@/components/common/PlatformIcon.vue'
 import type { GroupPlatform } from '@/types'
 import { platformBadgeClass, platformBorderClass, platformBadgeLightClass } from '@/utils/platformColors'
@@ -201,15 +201,25 @@ const props = withDefaults(
      * status dot + label; omitted when unknown so we never show a guessed state.
      */
     modelStatus?: 'available' | 'degraded' | 'unavailable' | ''
+    /**
+     * Retail (selling) price from the public catalog. When provided it takes
+     * precedence over the channel-configured pricing, so the cabinet always
+     * shows the price the gateway actually charges.
+     */
+    pricingOverride?: UserSupportedModelPricing | null
   }>(),
   {
     pricingKeyPrefix: 'availableChannels.pricing',
     noPricingLabel: '',
     showPlatform: true,
     platformHint: '',
-    modelStatus: ''
+    modelStatus: '',
+    pricingOverride: null
   }
 )
+
+/** Effective pricing: the real retail price when known, else the channel config. */
+const pricing = computed(() => props.pricingOverride ?? props.model.pricing)
 
 const statusLabel = computed(() => {
   switch (props.modelStatus) {
@@ -273,7 +283,7 @@ function prefixKey(k: string): string {
 }
 
 const billingModeLabel = computed(() => {
-  const mode = props.model.pricing?.billing_mode
+  const mode = pricing.value?.billing_mode
   switch (mode) {
     case BILLING_MODE_TOKEN:
       return t(prefixKey('billingModeToken'))

@@ -134,6 +134,7 @@
                 :show-platform="false"
                 :platform-hint="section.platform"
                 :model-status="statusFor(m.name)"
+                :pricing-override="retailFor(m.name)"
               />
               <span v-if="section.supported_models.length === 0" class="text-xs text-gray-400">
                 {{ noModelsLabel }}
@@ -152,7 +153,7 @@ import Icon from '@/components/icons/Icon.vue'
 import PlatformIcon from '@/components/common/PlatformIcon.vue'
 import GroupBadge from '@/components/common/GroupBadge.vue'
 import SupportedModelChip from './SupportedModelChip.vue'
-import type { UserAvailableChannel, UserAvailableGroup, UserChannelPlatformSection } from '@/api/channels'
+import type { UserAvailableChannel, UserAvailableGroup, UserChannelPlatformSection, UserSupportedModelPricing } from '@/api/channels'
 import type { GroupPlatform, SubscriptionType } from '@/types'
 import { platformBadgeClass } from '@/utils/platformColors'
 
@@ -178,6 +179,12 @@ const props = defineProps<{
    * Empty when unknown — the chip then omits the status indicator.
    */
   modelStatus?: Record<string, 'available' | 'degraded' | 'unavailable'>
+  /**
+   * Retail (selling) pricing from the public catalog, keyed like modelStatus.
+   * This is the price the gateway actually charges for each model, so the
+   * cabinet never advertises a price that differs from the billed one.
+   */
+  modelRetail?: Record<string, UserSupportedModelPricing>
 }>()
 
 // Suppress unused warning — props is accessed via template automatically but
@@ -192,6 +199,16 @@ function statusFor(name: string): 'available' | 'degraded' | 'unavailable' | '' 
   const slash = key.lastIndexOf('/')
   if (slash >= 0 && map[key.slice(slash + 1)]) return map[key.slice(slash + 1)]
   return ''
+}
+
+function retailFor(name: string): UserSupportedModelPricing | null {
+  const map = props.modelRetail
+  if (!map || !name) return null
+  const key = name.toLowerCase().trim()
+  if (map[key]) return map[key]
+  const slash = key.lastIndexOf('/')
+  if (slash >= 0 && map[key.slice(slash + 1)]) return map[key.slice(slash + 1)]
+  return null
 }
 
 const { t } = useI18n()

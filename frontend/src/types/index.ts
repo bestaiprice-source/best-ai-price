@@ -462,6 +462,9 @@ export interface ApiKey {
   id: number
   user_id: number
   key: string
+  // True when the key has a recoverable (encrypted) copy stored and can be
+  // revealed to its owner. Legacy hash-only keys report false.
+  has_full_key?: boolean
   name: string
   group_id: number | null
   group_ids?: number[]

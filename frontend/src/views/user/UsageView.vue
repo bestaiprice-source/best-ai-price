@@ -149,7 +149,23 @@
       </template>
 
       <template #table>
-        <DataTable :columns="columns" :data="usageLogs" :loading="loading">
+        <div class="mb-3 flex items-center gap-2">
+          <button
+            v-for="tab in usageTabs"
+            :key="tab.key"
+            class="rounded-lg px-3 py-1.5 text-sm font-medium transition-colors"
+            :class="
+              activeUsageTab === tab.key
+                ? 'bg-primary-600 text-white'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-dark-700 dark:text-gray-300 dark:hover:bg-dark-600'
+            "
+            @click="switchUsageTab(tab.key)"
+          >
+            {{ tab.label }}
+          </button>
+        </div>
+
+        <DataTable v-if="activeUsageTab === 'requests'" :columns="columns" :data="usageLogs" :loading="loading">
           <template #cell-api_key="{ row }">
             <span class="text-sm text-gray-900 dark:text-white">{{
               row.api_key?.name || '-'
@@ -332,14 +348,64 @@
             <EmptyState :message="t('usage.noRecords')" />
           </template>
         </DataTable>
+
+        <DataTable v-else :columns="errorColumns" :data="errorLogs" :loading="errorLoading">
+          <template #cell-model="{ value }">
+            <span class="font-medium text-gray-900 dark:text-white">{{ value || '-' }}</span>
+          </template>
+
+          <template #cell-status_code="{ row }">
+            <span class="font-mono text-xs font-semibold" :class="errorStatusClass(row.status_code)">
+              {{ row.status_code || '-' }}
+            </span>
+          </template>
+
+          <template #cell-message="{ row }">
+            <span
+              class="block max-w-[360px] truncate text-xs text-gray-600 dark:text-gray-300"
+              :title="row.message"
+            >{{ row.message || '-' }}</span>
+          </template>
+
+          <template #cell-retry="{ row }">
+            <span
+              class="text-xs"
+              :class="row.is_retryable ? 'text-amber-600 dark:text-amber-400' : 'text-gray-400 dark:text-gray-500'"
+            >
+              {{ row.is_retryable ? t('usage.retryable') : t('usage.notRetryable') }}
+              <template v-if="row.retry_count > 0"> · {{ row.retry_count }}</template>
+            </span>
+          </template>
+
+          <template #cell-request_id="{ row }">
+            <button
+              v-if="row.request_id"
+              class="group inline-flex max-w-[200px] items-center gap-1 truncate font-mono text-xs text-gray-500 hover:text-primary-600 dark:text-gray-400"
+              :title="t('usage.copyRequestId')"
+              @click="copyRequestId(row.request_id)"
+            >
+              <span class="truncate">{{ row.request_id }}</span>
+              <span class="flex-shrink-0 opacity-0 transition-opacity group-hover:opacity-100">
+                {{ copiedRequestId === row.request_id ? '✓' : '⧉' }}
+              </span>
+            </button>
+            <span v-else class="text-gray-400">—</span>
+          </template>
+
+          <template #empty>
+            <div class="py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+              {{ t('usage.noErrors') }}
+            </div>
+          </template>
+        </DataTable>
       </template>
 
       <template #pagination>
         <Pagination
-          v-if="pagination.total > 0"
-          :page="pagination.page"
-          :total="pagination.total"
-          :page-size="pagination.page_size"
+          v-if="activePagination.total > 0"
+          :page="activePagination.page"
+          :total="activePagination.total"
+          :page-size="activePagination.page_size"
           @update:page="handlePageChange"
           @update:pageSize="handlePageSizeChange"
         />
@@ -509,6 +575,7 @@ import Select from '@/components/common/Select.vue'
 import DateRangePicker from '@/components/common/DateRangePicker.vue'
 import Icon from '@/components/icons/Icon.vue'
 import type { UsageLog, ApiKey, UsageQueryParams, UsageStatsResponse } from '@/types'
+import type { UsageErrorItem } from '@/api/usage'
 import type { Column } from '@/components/common/types'
 import { formatDateTime, formatReasoningEffort } from '@/utils/format'
 import { getPersistedPageSize } from '@/composables/usePersistedPageSize'
@@ -561,6 +628,83 @@ const columns = computed<Column[]>(() => [
   { key: 'created_at', label: t('usage.time'), sortable: true },
   { key: 'user_agent', label: t('usage.userAgent'), sortable: false }
 ])
+
+// ---- Errors tab -----------------------------------------------------------
+// The request log only lists completed calls; this tab surfaces the caller's
+// FAILED requests (status, error type/message, retry info) from the same
+// operations data the admin sees, sanitized to the caller's own rows.
+type UsageTab = 'requests' | 'errors'
+const activeUsageTab = ref<UsageTab>('requests')
+const usageTabs = computed(() => [
+  { key: 'requests' as UsageTab, label: t('usage.tabRequests') },
+  { key: 'errors' as UsageTab, label: t('usage.tabErrors') }
+])
+
+const errorLogs = ref<UsageErrorItem[]>([])
+const errorLoading = ref(false)
+const errorPagination = reactive({ page: 1, page_size: 20, total: 0, pages: 1 })
+let errorAbortController: AbortController | null = null
+
+const errorColumns = computed<Column[]>(() => [
+  { key: 'created_at', label: t('usage.time'), sortable: false },
+  { key: 'model', label: t('usage.model'), sortable: false },
+  { key: 'status_code', label: t('usage.status'), sortable: false },
+  { key: 'error_type', label: t('usage.errorType'), sortable: false },
+  { key: 'message', label: t('usage.errorMessage'), sortable: false },
+  { key: 'endpoint', label: t('usage.endpoint'), sortable: false },
+  { key: 'retry', label: t('usage.retry'), sortable: false },
+  { key: 'request_id', label: t('usage.requestId'), sortable: false }
+])
+
+const errorStatusClass = (code: number): string => {
+  if (code >= 500) return 'text-red-600 dark:text-red-400'
+  if (code === 429) return 'text-amber-600 dark:text-amber-400'
+  if (code >= 400) return 'text-orange-600 dark:text-orange-400'
+  return 'text-gray-600 dark:text-gray-300'
+}
+
+const activePagination = computed(() =>
+  activeUsageTab.value === 'errors' ? errorPagination : pagination
+)
+
+const loadUsageErrors = async () => {
+  errorAbortController?.abort()
+  const controller = new AbortController()
+  errorAbortController = controller
+  errorLoading.value = true
+  try {
+    const response = await usageAPI.listErrors(
+      {
+        page: errorPagination.page,
+        page_size: errorPagination.page_size,
+        api_key_id: filters.value.api_key_id,
+        start_date: filters.value.start_date,
+        end_date: filters.value.end_date
+      },
+      { signal: controller.signal }
+    )
+    if (controller.signal.aborted) return
+    errorLogs.value = response.items
+    errorPagination.total = response.total
+    errorPagination.pages = response.pages ?? 1
+  } catch (error) {
+    if (controller.signal.aborted) return
+    const abortError = error as { name?: string; code?: string }
+    if (abortError?.name === 'AbortError' || abortError?.code === 'ERR_CANCELED') return
+    appStore.showError(t('usage.failedToLoad'))
+  } finally {
+    if (errorAbortController === controller) {
+      errorLoading.value = false
+    }
+  }
+}
+
+const switchUsageTab = (tab: UsageTab) => {
+  activeUsageTab.value = tab
+  if (tab === 'errors') {
+    void loadUsageErrors()
+  }
+}
 
 const usageLogs = ref<UsageLog[]>([])
 const apiKeys = ref<ApiKey[]>([])
@@ -765,11 +909,22 @@ const resetFilters = () => {
 }
 
 const handlePageChange = (page: number) => {
+  if (activeUsageTab.value === 'errors') {
+    errorPagination.page = page
+    void loadUsageErrors()
+    return
+  }
   pagination.page = page
   loadUsageLogs()
 }
 
 const handlePageSizeChange = (pageSize: number) => {
+  if (activeUsageTab.value === 'errors') {
+    errorPagination.page_size = pageSize
+    errorPagination.page = 1
+    void loadUsageErrors()
+    return
+  }
   pagination.page_size = pageSize
   pagination.page = 1
   loadUsageLogs()

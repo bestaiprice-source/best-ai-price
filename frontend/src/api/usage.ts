@@ -257,6 +257,51 @@ export async function getDashboardApiKeysUsage(
   return data
 }
 
+export interface UsageErrorItem {
+  id: number
+  created_at: string
+  request_id: string
+  model: string
+  platform: string
+  endpoint: string
+  stream: boolean
+  status_code: number
+  phase: string
+  error_type: string
+  message: string
+  is_retryable: boolean
+  retry_count: number
+}
+
+export interface UsageErrorQuery {
+  page?: number
+  page_size?: number
+  api_key_id?: number
+  model?: string
+  start_date?: string
+  end_date?: string
+  request_id?: string
+  search?: string
+}
+
+/**
+ * List the caller's OWN failed requests (`GET /usage/errors`).
+ *
+ * Unlike the request log this is an error-only feed: it carries the HTTP status,
+ * the error type/message and whether the gateway retried, so a user can tell
+ * what broke without opening a support ticket.
+ */
+export async function listErrors(
+  params?: UsageErrorQuery,
+  options?: { signal?: AbortSignal }
+): Promise<PaginatedResponse<UsageErrorItem>> {
+  const { data } = await apiClient.get<PaginatedResponse<UsageErrorItem>>('/usage/errors', {
+    params,
+    signal: options?.signal
+  })
+  return data
+}
+
 export const usageAPI = {
   list,
   query,
@@ -264,6 +309,8 @@ export const usageAPI = {
   getStatsByDateRange,
   getByDateRange,
   getById,
+  // Errors
+  listErrors,
   // Dashboard
   getDashboardStats,
   getDashboardTrend,

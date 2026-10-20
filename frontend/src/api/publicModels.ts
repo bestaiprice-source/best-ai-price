@@ -12,6 +12,11 @@ export interface PublicModelPricing {
   model_id?: string
   available?: boolean
   status?: string
+  /** Retail (charged) prices, USD per 1M tokens — already include the markup. */
+  input_price_per_1m?: number | null
+  output_price_per_1m?: number | null
+  cache_read_price_per_1m?: number | null
+  cache_write_price_per_1m?: number | null
 }
 
 export async function getPublicModels(): Promise<PublicModelPricing[]> {

@@ -164,6 +164,17 @@ export async function removeAdmin(id: number): Promise<void> {
   await apiClient.delete(`/admin/api-keys/${id}`)
 }
 
+/**
+ * Reveal the full value of an API key (owner only).
+ *
+ * Legacy hash-only keys reject with API_KEY_NOT_RECOVERABLE — callers should
+ * only offer this when the key reports has_full_key.
+ */
+export async function reveal(id: number): Promise<string> {
+  const { data } = await apiClient.get<{ key: string }>(`/keys/${id}/reveal`)
+  return data.key
+}
+
 export const keysAPI = {
   list,
   getById,
@@ -173,7 +184,8 @@ export const keysAPI = {
   toggleStatus,
   listAdmin,
   updateAdmin,
-  removeAdmin
+  removeAdmin,
+  reveal
 }
 
 export default keysAPI

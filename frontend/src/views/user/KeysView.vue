@@ -58,27 +58,36 @@
           <template #cell-key="{ value, row }">
             <div class="flex items-center gap-2">
               <code class="code text-xs">
-                {{ maskKey(value) }}
+                {{ displayKey(row, value) }}
               </code>
-              <button
-                v-if="!isStoredKeyHash(value)"
-                @click="copyToClipboard(value, row.id)"
-                class="rounded-lg p-1 transition-colors hover:bg-gray-100 dark:hover:bg-dark-700"
-                :class="
-                  copiedKeyId === row.id
-                    ? 'text-green-500'
-                    : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
-                "
-                :title="copiedKeyId === row.id ? t('keys.copied') : t('keys.copyToClipboard')"
-              >
-                <Icon
-                  v-if="copiedKeyId === row.id"
-                  name="check"
-                  size="sm"
-                  :stroke-width="2"
-                />
-                <Icon v-else name="clipboard" size="sm" />
-              </button>
+              <template v-if="isRevealable(row)">
+                <button
+                  :disabled="revealingKeyId === row.id"
+                  @click="toggleReveal(row)"
+                  class="rounded-lg p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-dark-700 dark:hover:text-gray-300"
+                  :title="revealedKeys[row.id] ? t('keys.hideKey') : t('keys.revealKey')"
+                >
+                  <Icon :name="revealedKeys[row.id] ? 'eyeOff' : 'eye'" size="sm" />
+                </button>
+                <button
+                  @click="copyFullKey(row)"
+                  class="rounded-lg p-1 transition-colors hover:bg-gray-100 dark:hover:bg-dark-700"
+                  :class="
+                    copiedKeyId === row.id
+                      ? 'text-green-500'
+                      : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
+                  "
+                  :title="copiedKeyId === row.id ? t('keys.copied') : t('keys.copyToClipboard')"
+                >
+                  <Icon
+                    v-if="copiedKeyId === row.id"
+                    name="check"
+                    size="sm"
+                    :stroke-width="2"
+                  />
+                  <Icon v-else name="clipboard" size="sm" />
+                </button>
+              </template>
               <span
                 v-else
                 class="text-xs text-gray-400 dark:text-dark-500"
@@ -334,11 +343,11 @@
             <div class="flex items-center gap-1">
               <!-- Use Key Button -->
               <button
-                :disabled="isStoredKeyHash(row.key)"
+                :disabled="!isRevealable(row)"
                 @click="openUseKeyModal(row)"
                 class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-green-50 hover:text-green-600 dark:hover:bg-green-900/20 dark:hover:text-green-400"
-                :class="{ 'cursor-not-allowed opacity-40 hover:bg-transparent hover:text-gray-500': isStoredKeyHash(row.key) }"
-                :title="isStoredKeyHash(row.key) ? t('keys.keyNotRecoverable') : undefined"
+                :class="{ 'cursor-not-allowed opacity-40 hover:bg-transparent hover:text-gray-500': !isRevealable(row) }"
+                :title="!isRevealable(row) ? t('keys.keyNotRecoverable') : undefined"
               >
                 <Icon name="terminal" size="sm" />
                 <span class="text-xs">{{ t('keys.useKey') }}</span>
@@ -346,11 +355,11 @@
               <!-- Import to CC Switch Button (admin only) -->
               <button
                 v-if="isAdmin && !publicSettings?.hide_ccs_import_button"
-                :disabled="isStoredKeyHash(row.key)"
+                :disabled="!isRevealable(row)"
                 @click="importToCcswitch(row)"
                 class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-900/20 dark:hover:text-blue-400"
-                :class="{ 'cursor-not-allowed opacity-40 hover:bg-transparent hover:text-gray-500': isStoredKeyHash(row.key) }"
-                :title="isStoredKeyHash(row.key) ? t('keys.keyNotRecoverable') : undefined"
+                :class="{ 'cursor-not-allowed opacity-40 hover:bg-transparent hover:text-gray-500': !isRevealable(row) }"
+                :title="!isRevealable(row) ? t('keys.keyNotRecoverable') : undefined"
               >
                 <Icon name="upload" size="sm" />
                 <span class="text-xs">{{ t('keys.importToCcSwitch') }}</span>
@@ -1444,7 +1453,51 @@ const maskKey = (key: string): string => {
   return `${key.slice(0, 8)}...${key.slice(-4)}`
 }
 
-const isStoredKeyHash = (key: string): boolean => key.startsWith('sha256:')
+// --- Recoverable (revealable) keys -----------------------------------------
+// The full value is fetched on demand (encrypted at rest on the server) and
+// cached for the session. Keys created before recoverable storage was enabled
+// report has_full_key=false and stay irrecoverable.
+const revealedKeys = ref<Record<number, string>>({})
+const revealingKeyId = ref<number | null>(null)
+
+const isRevealable = (row: ApiKey): boolean => !!row.has_full_key
+
+/** Reveal a key's full value (cached). Returns null when not recoverable. */
+const revealKey = async (row: ApiKey): Promise<string | null> => {
+  const cached = revealedKeys.value[row.id]
+  if (cached) return cached
+  if (revealingKeyId.value === row.id) return null
+  revealingKeyId.value = row.id
+  try {
+    const value = await keysAPI.reveal(row.id)
+    revealedKeys.value = { ...revealedKeys.value, [row.id]: value }
+    return value
+  } catch (error) {
+    console.error('Failed to reveal API key:', error)
+    appStore.showError(t('keys.revealFailed'))
+    return null
+  } finally {
+    revealingKeyId.value = null
+  }
+}
+
+const displayKey = (row: ApiKey, stored: string): string =>
+  revealedKeys.value[row.id] || maskKey(stored)
+
+const toggleReveal = async (row: ApiKey) => {
+  if (revealedKeys.value[row.id]) {
+    const next = { ...revealedKeys.value }
+    delete next[row.id]
+    revealedKeys.value = next
+    return
+  }
+  await revealKey(row)
+}
+
+const copyFullKey = async (row: ApiKey) => {
+  const value = await revealKey(row)
+  if (value) await copyToClipboard(value, row.id)
+}
 
 const copyToClipboard = async (text: string, keyId: number) => {
   const success = await clipboardCopy(text, t('keys.copied'))
@@ -1544,8 +1597,11 @@ const loadPublicSettings = async () => {
   }
 }
 
-const openUseKeyModal = (key: ApiKey) => {
-  selectedKey.value = key
+const openUseKeyModal = async (key: ApiKey) => {
+  // The snippet builder needs the real value, so reveal it first.
+  const value = await revealKey(key)
+  if (!value) return
+  selectedKey.value = { ...key, key: value }
   showUseKeyModal.value = true
 }
 
@@ -1934,18 +1990,22 @@ const resetRateLimitUsage = async () => {
   }
 }
 
-const importToCcswitch = (row: ApiKey) => {
-  const platform = row.group?.platform || 'anthropic'
+const importToCcswitch = async (row: ApiKey) => {
+  // Import needs the real key value — hash-only keys cannot be imported.
+  const value = await revealKey(row)
+  if (!value) return
+  const fullRow: ApiKey = { ...row, key: value }
+  const platform = fullRow.group?.platform || 'anthropic'
 
   // For antigravity platform, show client selection dialog
   if (platform === 'antigravity') {
-    pendingCcsRow.value = row
+    pendingCcsRow.value = fullRow
     showCcsClientSelect.value = true
     return
   }
 
   // For other platforms, execute directly
-  executeCcsImport(row, platform === 'gemini' ? 'gemini' : 'claude')
+  executeCcsImport(fullRow, platform === 'gemini' ? 'gemini' : 'claude')
 }
 
 const executeCcsImport = (row: ApiKey, clientType: 'claude' | 'gemini') => {

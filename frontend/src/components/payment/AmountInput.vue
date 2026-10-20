@@ -18,7 +18,7 @@
           ]"
           @click="selectAmount(amt)"
         >
-          {{ amt }}
+          ${{ amt }}
         </button>
       </div>
     </div>

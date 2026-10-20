@@ -43,6 +43,7 @@
           :no-models-label="t('availableChannels.noModels')"
           :empty-label="t('availableChannels.empty')"
           :model-status="modelStatus"
+          :model-retail="modelRetail"
         />
       </template>
     </TablePageLayout>
@@ -56,11 +57,12 @@ import AppLayout from '@/components/layout/AppLayout.vue'
 import TablePageLayout from '@/components/layout/TablePageLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
 import AvailableChannelsTable from '@/components/channels/AvailableChannelsTable.vue'
-import userChannelsAPI, { type UserAvailableChannel } from '@/api/channels'
+import userChannelsAPI, { type UserAvailableChannel, type UserSupportedModelPricing } from '@/api/channels'
 import userGroupsAPI from '@/api/groups'
 import { useAppStore } from '@/stores/app'
 import { extractApiErrorMessage } from '@/utils/apiError'
 import { getPublicModels } from '@/api/publicModels'
+import { BILLING_MODE_TOKEN } from '@/constants/channel'
 
 const { t } = useI18n()
 const appStore = useAppStore()
@@ -72,6 +74,10 @@ const searchQuery = ref('')
 // §11.3 model availability from the public catalog (shared feed with the
 // gateway), keyed by lowercased model name so the chip can show a status dot.
 const modelStatus = ref<Record<string, 'available' | 'degraded' | 'unavailable'>>({})
+// Retail (charged) pricing per model, keyed like modelStatus. Sourced from the
+// same public catalog the gateway bills from, so the cabinet advertises the
+// exact price a request will cost.
+const modelRetail = ref<Record<string, UserSupportedModelPricing>>({})
 
 const columnLabels = computed(() => ({
   name: t('availableChannels.columns.name'),
@@ -135,18 +141,38 @@ async function loadModelStatus() {
   try {
     const models = await getPublicModels()
     const map: Record<string, 'available' | 'degraded' | 'unavailable'> = {}
+    const retail: Record<string, UserSupportedModelPricing> = {}
     for (const m of models) {
       const status: 'available' | 'degraded' | 'unavailable' =
         m.status === 'degraded' ? 'degraded' : m.available === false || m.status === 'unavailable' ? 'unavailable' : 'available'
+      // Retail pricing: the price the gateway charges (markup included).
+      const pricing: UserSupportedModelPricing | null =
+        m.input_price_per_1m != null || m.output_price_per_1m != null
+          ? {
+              billing_mode: BILLING_MODE_TOKEN,
+              input_price: m.input_price_per_1m ?? null,
+              output_price: m.output_price_per_1m ?? null,
+              cache_write_price: m.cache_write_price_per_1m ?? null,
+              cache_read_price: m.cache_read_price_per_1m ?? null,
+              image_output_price: null,
+              per_request_price: null,
+              intervals: [],
+            }
+          : null
       for (const raw of [m.canonical_model_id, m.model_id]) {
         if (!raw) continue
         const key = raw.toLowerCase().trim()
         map[key] = status
+        if (pricing) retail[key] = pricing
         const slash = key.lastIndexOf('/')
-        if (slash >= 0) map[key.slice(slash + 1)] = status
+        if (slash >= 0) {
+          map[key.slice(slash + 1)] = status
+          if (pricing) retail[key.slice(slash + 1)] = pricing
+        }
       }
     }
     modelStatus.value = map
+    modelRetail.value = retail
   } catch (err) {
     console.warn('Failed to load public model status:', err)
   }

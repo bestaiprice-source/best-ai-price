@@ -236,6 +236,11 @@ const routes: RouteRecordRaw[] = [
     redirect: '/purchase'
   },
   {
+    // Legacy alias documented in older docs/emails — must not 404.
+    path: '/recharge',
+    redirect: '/purchase'
+  },
+  {
     path: '/purchase',
     name: 'PurchaseSubscription',
     component: () => import('@/views/user/PurchaseRouteView.vue'),
