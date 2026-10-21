@@ -65,6 +65,7 @@ type Handlers struct {
 	ProviderComment    *ProviderCommentHandler
 	ProviderPopularity *ProviderPopularityHandler
 	Forum              *ForumHandler
+	Support            *SupportHandler
 }
 
 // BuildInfo contains build-time information

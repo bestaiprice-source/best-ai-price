@@ -316,3 +316,66 @@ func TestTelegramBot_RecipientPersistence(t *testing.T) {
 	assert.Equal(t, "tester_new", bot.Recipients()[0].Username)
 }
 
+func TestTelegramBot_SupportReplyRouting(t *testing.T) {
+	var sent []telegramSendMessagePayload
+	var mu sync.Mutex
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/bottest-bot-token/sendMessage" {
+			var p telegramSendMessagePayload
+			body, _ := io.ReadAll(r.Body)
+			_ = json.Unmarshal(body, &p)
+			mu.Lock()
+			sent = append(sent, p)
+			mu.Unlock()
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
+	}))
+	defer server.Close()
+
+	bot := NewTelegramBot(nil, &config.HypervisorConfig{
+		TelegramBotToken:      "test-bot-token",
+		TelegramAllowedUsers:  []string{"@admin"},
+		TelegramAlertsEnabled: true,
+	}, nil)
+	bot.SetBaseURL(server.URL)
+	t.Cleanup(func() { SetSupportReplyHandler(nil) })
+
+	var gotChat, gotReplyTo int64
+	var gotText string
+	SetSupportReplyHandler(func(_ context.Context, chatID, replyTo int64, text string) (bool, error) {
+		gotChat, gotReplyTo, gotText = chatID, replyTo, text
+		return replyTo == 500, nil
+	})
+
+	reply := func(from string, replyTo int64) *tgMessage {
+		return &tgMessage{
+			MessageID:      20,
+			From:           &tgUser{ID: 9, UserName: from},
+			Chat:           tgChat{ID: 9},
+			Text:           "  hello user  ",
+			ReplyToMessage: &tgMessage{MessageID: replyTo},
+		}
+	}
+
+	// Reply to a support message: routed and confirmed.
+	bot.handleMessage(context.Background(), reply("admin", 500))
+	assert.Equal(t, int64(9), gotChat)
+	assert.Equal(t, int64(500), gotReplyTo)
+	assert.Equal(t, "hello user", gotText)
+	mu.Lock()
+	require.Len(t, sent, 1)
+	assert.Contains(t, sent[0].Text, "✅")
+	mu.Unlock()
+
+	// Reply to an ordinary alert (not a support message): ignored silently.
+	bot.handleMessage(context.Background(), reply("admin", 501))
+	mu.Lock()
+	assert.Len(t, sent, 1)
+	mu.Unlock()
+
+	// Unauthorized user: never reaches the handler.
+	gotText = ""
+	bot.handleMessage(context.Background(), reply("stranger", 500))
+	assert.Empty(t, gotText)
+}

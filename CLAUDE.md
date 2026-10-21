@@ -209,6 +209,7 @@ Welcome to **sub2api** and the **AI Session Hypervisor (ASH / Yunwu Engine)** re
         - The bot operates purely for administrative alerting; all interactive commands (`/start`, `/balance`, `/status`, `/help`) and conversational text have been removed.
         - Authorized administrators message the bot once (e.g. `/start`) to quietly register their `chat_id` into active alert recipients without conversational replies.
         - Unauthorized users attempting to message the bot are silently ignored.
+        - **Admin replies to support requests** are the one exception to the no-conversation rule: a Telegram *Reply* to a forwarded support message is routed through the installed `SupportReplyFunc` (see §15) and the bot posts a short ✅/⚠️ delivery confirmation. Replies to ordinary alerts are ignored.
       - **Targeted User Whitelist & Active Recipient Management**:
         - Strict whitelist configured in Admin Settings -> Telegram (`telegram_allowed_users`).
         - Supports numeric Telegram User IDs (`123456789`), usernames (`@admin` or `admin`, case-insensitive), or wildcard `*`.
@@ -408,12 +409,18 @@ In-product documentation page at `/docs` (`frontend/src/views/user/DocsView.vue`
 - **Models**: `GET /v1/models` with a copy-cURL button and a link to the catalog.
 - **Integrations & agents**: Claude Code (`ANTHROPIC_BASE_URL` + `ANTHROPIC_AUTH_TOKEN`), Codex / OpenAI SDK (`OPENAI_BASE_URL` + `OPENAI_API_KEY`), Gemini CLI/SDK, Cursor, OpenClaw, n8n (OpenAI node base URL), LangChain — all expressed as "custom base URL + API key" for OpenAI-compatible clients, each with a copyable config block.
 
-### Support Widget → Consultant (§15)
+### Support Widget → Two-Way Consultant Chat (§15)
 - `frontend/src/components/common/SupportWidget.vue` — floating support widget mounted in `AppLayout.vue` (so it appears in the cabinet and on `/docs`). The FAQ accordion was **replaced by a human consultant** panel (`support.consultant*` i18n keys):
   - an intro line + a free-form message box, and an optional Request ID / model pair;
-  - **Send to consultant**: the user's text is sent together with an automatically attached, secret-free support context (`user_id`, `request_id`, `model`, `page`, `timestamp` — §15, never API keys or credentials). Delivery adapts to the configured `contact_info`: an email contact opens a prefilled `mailto:` (subject/body ready to send), a URL/chat contact copies the message to the clipboard and opens the chat (direct-chat links cannot carry a prefilled body), and a bare handle (e.g. a Telegram username) just copies the message with a hint where to send it; when nothing is configured the panel says so;
+  - **Signed-in users talk to the consultant over an in-app chat** (see the backend below): the thread (`You` / `Consultant` bubbles) is rendered inside the panel, the floating button carries an unread badge (`support.newReply`) and the widget polls the thread — every 10s while the panel is open, every 60s while closed, and only when the tab is visible. Opening the panel with unread replies marks them read. Guests, and an unreachable Telegram bot, fall back to the contact-based flow: the user's text is sent together with an automatically attached, secret-free support context (`user_id`, `request_id`, `model`, `page`, `timestamp` — §15, never API keys or credentials). Delivery adapts to the configured `contact_info`: an email contact opens a prefilled `mailto:` (subject/body ready to send), a URL/chat contact copies the message to the clipboard and opens the chat (direct-chat links cannot carry a prefilled body), and a bare handle (e.g. a Telegram username) just copies the message with a hint where to send it; when nothing is configured the panel says so. A stored-but-undelivered message reports `support.deliveryFallback` and still runs the fallback instead of losing the text;
   - a **disputed-charge** block that still copies the same sanitized context on its own.
   - The FAQ answers live on in the in-product Docs (§13) rather than in the widget.
+- **Backend two-way chat** (`internal/service/support_service.go`, `internal/handler/support_handler.go`, `internal/server/routes/support.go`, migration `151_add_support_messages.sql`):
+  - `support_messages` stores both directions (`direction` = `user` | `admin`) with `request_id`, `model`, `page`, `created_at` and `read_at`; `support_telegram_links` maps every delivered Telegram message (`chat_id`, `tg_message_id`) back to the `support_messages` row so a reply can be routed to its owner. Additive only — no existing table is touched.
+  - `SupportService.SendUserMessage` trims/truncates input (2000 runes body, 128 request_id/model, 255 page), rate-limits to 5 user messages per minute per user (429 `ErrSupportRateLimited`), stores the message FIRST and only then forwards it; Telegram delivery carries identifiers only (`user_id`, `email`, `request_id`, `model`, `page` — never API keys) and the row is kept when delivery fails so the widget's fallback flow never loses the text.
+  - **Admin replies arrive over Telegram, not HTTP**: `SettingService.SendTelegramNotificationDetailed` (the counters-preserving variant of `SendTelegramNotification`) returns the `(chat_id, message_id)` of every delivered copy; `TelegramBot.handleMessage` sees `reply_to_message`, calls the process-wide handler installed by `SupportService.InstallTelegramReplyHandler` (`yunwu.SetSupportReplyHandler`, same pattern as the notifier defaults) and answers the admin in chat with a delivery confirmation. A reply to an ordinary alert is ignored silently; an unauthorized user never reaches the handler.
+  - Endpoints (user JWT): `POST /api/v1/support/messages` (send), `GET /api/v1/support/messages` (own thread + `unread` count), `POST /api/v1/support/messages/read`. Registered in BOTH route tables (`routes/support.go` gin group + `ExecutableSupportRoutes` for the gatewayctx runtime). Frontend client: `frontend/src/api/support.ts`.
+  - There is currently **no admin panel screen** for support threads — the admin answers from the Telegram chat (the message carries the user id / email / Request ID).
 - The user-facing Usage log (`UsageView.vue`) now shows a **copyable Request ID** column (`usage.requestId` / `usage.copyRequestId`), which is the identifier the admin uses to trace the upstream cost and billing record (`usage_logs.request_id`).
 
 ### Administrative Panel Coverage (§16)
@@ -582,6 +589,8 @@ sub2api/
 - `provider_comments`: User provider feedback, sentiment (`positive` / `negative` / `neutral`), nested parent/child replies, and reaction counters (`like_count`, `dislike_count`, `reply_count`).
 - `provider_comment_votes`: 1:1 user reactions per comment (`like` / `dislike`), removable via vote cancellation (`vote_type: none`).
 - `provider_popularity`: AI provider popularity click counters (`click_count`, `last_clicked_at`), protected by anti-abuse cooldown and rate limiters.
+- `support_messages`: Two-way support chat (§15) — the user's messages and the admin's Telegram replies (`direction` `user` / `admin`, `body`, `request_id`, `model`, `page`, `created_at`, `read_at`).
+- `support_telegram_links`: Maps each delivered Telegram message (`chat_id`, `tg_message_id`) to its `support_message_id` so a Telegram *Reply* can be attributed to the right user.
 
 ---
 
@@ -650,6 +659,12 @@ sub2api/
   - Reverse Proxy Prefix Support: When deployed behind a subpath (such as `/gateway` in front of Next.js root), `getPublicAppBaseUrl()` in frontend dynamically identifies the subpath prefix so checkout `origin` and `return_url` lead back to `/gateway/payment/result`. `CanonicalizeReturnURL` validates and accepts canonical return paths ending in `/payment/result` (including reverse proxy prefixes). In the backend (`payment_order.go` & `nowpayments.go`), auto-derived `notifyURL` and `ipn_callback_url` preserve this subpath prefix (e.g. `https://domain.com/gateway/api/v1/payment/webhook/nowpayments`), avoiding 404s from reverse proxies routing `/` to other services.
   - Order query: maps `finished`, `confirmed`, and `sending` to `ProviderStatusPaid` (prioritizes successful payments in invoice transaction lists).
   - Security & Webhooks: Alphabetical key sorting with `json.Number` preservation and unescaped HTML characters (`SetEscapeHTML(false)`) to guarantee HMAC-SHA512 verification fidelity.
+
+### Support Chat APIs (`/api/v1/support/*`, user JWT)
+- `POST /api/v1/support/messages`: Stores the user's message and forwards it to the admin Telegram bot. Body `{ message, request_id?, model?, page? }`; returns the stored `message` and `delivered` (false when Telegram is unconfigured/unreachable — the message is kept anyway). `400` on an empty message, `429` when the 5-per-minute rate limit is hit.
+- `GET /api/v1/support/messages`: The caller's own thread (oldest first, capped at 200) plus the `unread` count of admin replies.
+- `POST /api/v1/support/messages/read`: Marks the caller's unread admin replies as read.
+- Admin replies are NOT an HTTP endpoint: they are written by the Telegram bot reply hook (`yunwu.SetSupportReplyHandler` → `SupportService.HandleTelegramReply`), which resolves the replied-to Telegram message through `support_telegram_links`.
 
 ### Forum APIs (`/api/v1/forum/*` & `/api/v1/admin/forum/*`)
 - `GET /api/v1/forum/topics`: Paginated list of forum topics with sort options (`latest`, `top_liked`, `most_comments`), keyword `search`, and `user_vote` for authenticated viewers.

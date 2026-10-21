@@ -121,6 +121,7 @@ func registerRoutes(
 	routes.RegisterProviderCommentRoutes(v1, h, jwtAuth, adminAuth)
 	routes.RegisterProviderPopularityRoutes(v1, h)
 	routes.RegisterForumRoutes(v1, h, jwtAuth, adminAuth)
+	routes.RegisterSupportRoutes(v1, h, jwtAuth)
 	routes.RegisterGatewayRoutes(r, h, apiKeyAuth, apiKeyService, subscriptionService, opsService, settingService, cfg)
 	if h != nil && h.Gateway != nil {
 		r.GET("/models", h.Gateway.PublicModelsPricing)

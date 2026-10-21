@@ -5,9 +5,14 @@
       type="button"
       class="fixed bottom-5 right-5 z-40 inline-flex h-12 w-12 items-center justify-center rounded-full bg-primary-600 text-white shadow-lg transition-transform hover:scale-105"
       :title="t('support.consultantTitle')"
-      @click="open = !open"
+      @click="toggleOpen"
     >
       <Icon :name="open ? 'x' : 'chat'" size="md" />
+      <span
+        v-if="unread > 0 && !open"
+        class="absolute -right-1 -top-1 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 px-1 text-[11px] font-semibold text-white"
+        :title="t('support.newReply')"
+      >{{ unread }}</span>
     </button>
 
     <!-- Panel -->
@@ -24,6 +29,26 @@
 
       <div class="max-h-[65vh] overflow-y-auto p-4">
         <p class="text-xs leading-relaxed text-gray-500 dark:text-gray-400">{{ t('support.consultantIntro') }}</p>
+
+        <!-- Conversation: the user's messages and the consultant's Telegram replies -->
+        <div v-if="thread.length" ref="threadEl" class="mt-3 max-h-56 space-y-2 overflow-y-auto rounded-xl bg-gray-50 p-2 dark:bg-dark-900">
+          <div
+            v-for="m in thread"
+            :key="m.id"
+            class="flex flex-col"
+            :class="m.direction === 'user' ? 'items-end' : 'items-start'"
+          >
+            <span class="mb-0.5 text-[10px] uppercase tracking-wide text-gray-400">
+              {{ m.direction === 'user' ? t('support.youLabel') : t('support.consultantLabel') }}
+            </span>
+            <div
+              class="max-w-[85%] whitespace-pre-wrap break-words rounded-xl px-3 py-1.5 text-xs"
+              :class="m.direction === 'user'
+                ? 'bg-primary-600 text-white'
+                : 'bg-white text-gray-800 shadow-sm dark:bg-dark-700 dark:text-gray-100'"
+            >{{ m.body }}</div>
+          </div>
+        </div>
 
         <!-- Message -->
         <textarea
@@ -57,10 +82,10 @@
         <!-- Actions -->
         <button
           class="mt-3 w-full rounded-lg bg-primary-600 px-3 py-2.5 text-sm font-medium text-white transition-colors hover:bg-primary-500 disabled:cursor-not-allowed disabled:opacity-50"
-          :disabled="!message.trim()"
+          :disabled="!message.trim() || sending"
           @click="sendToConsultant"
         >
-          {{ t('support.sendToConsultant') }}
+          {{ sending ? t('support.sending') : t('support.sendToConsultant') }}
         </button>
         <button
           class="mt-2 w-full rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50 dark:border-dark-600 dark:text-gray-300 dark:hover:bg-dark-700"
@@ -70,20 +95,27 @@
         </button>
 
         <p v-if="sentNote" class="mt-2 text-xs text-emerald-600 dark:text-emerald-400">{{ sentNote }}</p>
-        <p v-if="!contactRaw" class="mt-2 text-xs text-amber-600 dark:text-amber-400">{{ t('support.notConfigured') }}</p>
-        <p v-else class="mt-2 text-[11px] text-gray-400">{{ contactHint }}</p>
+        <p v-if="errorNote" class="mt-2 text-xs text-red-600 dark:text-red-400">{{ errorNote }}</p>
+        <p v-if="!contactRaw && !chatEnabled" class="mt-2 text-xs text-amber-600 dark:text-amber-400">{{ t('support.notConfigured') }}</p>
+        <p v-else-if="contactRaw" class="mt-2 text-[11px] text-gray-400">{{ contactHint }}</p>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, nextTick, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import Icon from '@/components/icons/Icon.vue'
 import { useAppStore } from '@/stores'
 import { useAuthStore } from '@/stores/auth'
+import {
+  getSupportThread,
+  markSupportRead,
+  sendSupportMessage,
+  type SupportMessage,
+} from '@/api/support'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -96,6 +128,67 @@ const requestId = ref('')
 const modelName = ref('')
 const copied = ref(false)
 const sentNote = ref('')
+const errorNote = ref('')
+const sending = ref(false)
+const thread = ref<SupportMessage[]>([])
+const unread = ref(0)
+const threadEl = ref<HTMLElement | null>(null)
+
+// Signed-in users talk to the consultant through the in-app chat (forwarded to
+// the admin Telegram bot); guests keep the mail / copy fallback below.
+const chatEnabled = computed(() => authStore.isAuthenticated)
+
+const POLL_OPEN_MS = 10_000
+const POLL_CLOSED_MS = 60_000
+let pollTimer: ReturnType<typeof setTimeout> | null = null
+
+async function refreshThread() {
+  if (!chatEnabled.value) return
+  try {
+    const res = await getSupportThread()
+    thread.value = res.items
+    unread.value = res.unread
+    if (open.value && res.unread > 0) {
+      await markSupportRead().catch(() => undefined)
+      unread.value = 0
+    }
+    await nextTick()
+    if (threadEl.value) threadEl.value.scrollTop = threadEl.value.scrollHeight
+  } catch (e) {
+    console.warn('Support thread refresh failed:', e)
+  }
+}
+
+function schedulePoll() {
+  if (pollTimer) clearTimeout(pollTimer)
+  pollTimer = setTimeout(async () => {
+    if (document.visibilityState === 'visible') await refreshThread()
+    schedulePoll()
+  }, open.value ? POLL_OPEN_MS : POLL_CLOSED_MS)
+}
+
+function toggleOpen() {
+  open.value = !open.value
+}
+
+watch(open, (isOpen) => {
+  if (isOpen) void refreshThread()
+  schedulePoll()
+})
+watch(chatEnabled, (enabled) => {
+  if (enabled) void refreshThread()
+  else {
+    thread.value = []
+    unread.value = 0
+  }
+})
+onMounted(() => {
+  void refreshThread()
+  schedulePoll()
+})
+onBeforeUnmount(() => {
+  if (pollTimer) clearTimeout(pollTimer)
+})
 
 const contactRaw = computed(() => String(appStore.cachedPublicSettings?.contact_info || appStore.contactInfo || '').trim())
 const contactHref = computed(() => {
@@ -151,7 +244,37 @@ async function copyContext() {
  */
 async function sendToConsultant() {
   sentNote.value = ''
+  errorNote.value = ''
+  // Built before the input is cleared so the fallback flow can still use it.
   const text = buildMessage()
+
+  if (chatEnabled.value) {
+    sending.value = true
+    try {
+      const res = await sendSupportMessage({
+        message: message.value.trim(),
+        request_id: requestId.value.trim(),
+        model: modelName.value.trim(),
+        page: route.fullPath,
+      })
+      message.value = ''
+      await refreshThread()
+      if (res.delivered) {
+        sentNote.value = t('support.sentToTelegram')
+        return
+      }
+      // Stored but Telegram is unreachable: fall through to the mail/copy flow.
+      errorNote.value = t('support.deliveryFallback')
+    } catch (e: unknown) {
+      const status = (e as { status?: number; response?: { status?: number } })?.status
+        ?? (e as { response?: { status?: number } })?.response?.status
+      errorNote.value = status === 429 ? t('support.rateLimited') : t('support.sendFailed')
+      return
+    } finally {
+      sending.value = false
+    }
+  }
+
   const href = contactHref.value
   if (!contactRaw.value) {
     return

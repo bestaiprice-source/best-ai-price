@@ -305,6 +305,9 @@ type tgMessage struct {
 	From      *tgUser `json:"from"`
 	Chat      tgChat  `json:"chat"`
 	Text      string  `json:"text"`
+	// ReplyToMessage is set when the sender used Telegram's "Reply" on a message
+	// (this is how an admin answers a forwarded support request).
+	ReplyToMessage *tgMessage `json:"reply_to_message,omitempty"`
 }
 
 type tgUser struct {
@@ -430,4 +433,70 @@ func (b *TelegramBot) handleMessage(ctx context.Context, msg *tgMessage) {
 
 	// User is authorized: register as active recipient for low balance alerts
 	b.RegisterRecipient(ctx, chatID, from.UserName, from.FirstName)
+
+	// A reply to a forwarded support message is routed to the support service.
+	if msg.ReplyToMessage != nil && strings.TrimSpace(msg.Text) != "" {
+		b.handleSupportReply(ctx, chatID, msg)
+	}
+}
+
+// SupportReplyFunc delivers an admin's Telegram reply to the user whose support
+// message was forwarded as replyToMessageID. handled=false means the replied-to
+// message is not a support message (e.g. a regular alert) and must be ignored.
+type SupportReplyFunc func(ctx context.Context, chatID, replyToMessageID int64, text string) (handled bool, err error)
+
+var (
+	supportReplyMu      sync.RWMutex
+	supportReplyHandler SupportReplyFunc
+)
+
+// SetSupportReplyHandler installs the process-wide support reply handler
+// (mirrors SetDefaultNotifier: no constructor wiring needed).
+func SetSupportReplyHandler(fn SupportReplyFunc) {
+	supportReplyMu.Lock()
+	defer supportReplyMu.Unlock()
+	supportReplyHandler = fn
+}
+
+func (b *TelegramBot) handleSupportReply(ctx context.Context, chatID int64, msg *tgMessage) {
+	supportReplyMu.RLock()
+	fn := supportReplyHandler
+	supportReplyMu.RUnlock()
+	if fn == nil {
+		return
+	}
+	handled, err := fn(ctx, chatID, msg.ReplyToMessage.MessageID, strings.TrimSpace(msg.Text))
+	switch {
+	case err != nil:
+		slog.Warn("[TelegramBot] support reply failed", "chat_id", chatID, "error", err)
+		b.sendText(ctx, chatID, "⚠️ Не удалось доставить ответ пользователю.", msg.MessageID)
+	case handled:
+		b.sendText(ctx, chatID, "✅ Ответ доставлен пользователю.", msg.MessageID)
+	}
+}
+
+// sendText posts a short plain-text confirmation (used only for support replies).
+func (b *TelegramBot) sendText(ctx context.Context, chatID int64, text string, replyTo int64) {
+	b.mu.RLock()
+	token, client, baseURL := b.botToken, b.httpClient, b.baseURL
+	b.mu.RUnlock()
+	if strings.TrimSpace(token) == "" || client == nil {
+		return
+	}
+	payload := map[string]any{"chat_id": chatID, "text": text}
+	if replyTo != 0 {
+		payload["reply_to_message_id"] = replyTo
+	}
+	body, _ := json.Marshal(payload)
+	endpoint := fmt.Sprintf("%s/bot%s/sendMessage", strings.TrimRight(baseURL, "/"), token)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
+	if err != nil {
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := client.Do(req)
+	if err != nil {
+		return
+	}
+	resp.Body.Close()
 }

@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"math"
 	"net/http"
@@ -3380,6 +3381,20 @@ func (s *SettingService) TestTelegramNotification(ctx context.Context) (int, err
 
 // SendTelegramNotification sends an HTML formatted notification message to authorized Telegram recipients and channel.
 func (s *SettingService) SendTelegramNotification(ctx context.Context, msg string) (int, error) {
+	sent, err := s.SendTelegramNotificationDetailed(ctx, msg)
+	return len(sent), err
+}
+
+// TelegramSentMessage identifies one delivered Telegram message so a later
+// reply to it can be traced back to its origin (support threads).
+type TelegramSentMessage struct {
+	ChatID    int64
+	MessageID int64
+}
+
+// SendTelegramNotificationDetailed is SendTelegramNotification that also returns
+// the (chat, message id) of every delivered copy.
+func (s *SettingService) SendTelegramNotificationDetailed(ctx context.Context, msg string) ([]TelegramSentMessage, error) {
 	keys := []string{
 		SettingKeyTelegramBotToken,
 		SettingKeyTelegramChatID,
@@ -3388,12 +3403,12 @@ func (s *SettingService) SendTelegramNotification(ctx context.Context, msg strin
 	}
 	values, err := s.settingRepo.GetMultiple(ctx, keys)
 	if err != nil {
-		return 0, fmt.Errorf("get telegram settings: %w", err)
+		return nil, fmt.Errorf("get telegram settings: %w", err)
 	}
 
 	token := strings.TrimSpace(values[SettingKeyTelegramBotToken])
 	if token == "" {
-		return 0, fmt.Errorf("telegram bot token is not configured")
+		return nil, fmt.Errorf("telegram bot token is not configured")
 	}
 
 	var allowedUsers []string
@@ -3422,10 +3437,10 @@ func (s *SettingService) SendTelegramNotification(ctx context.Context, msg strin
 	}
 
 	if len(targetMap) == 0 {
-		return 0, fmt.Errorf("no recipients available to receive telegram alert")
+		return nil, fmt.Errorf("no recipients available to receive telegram alert")
 	}
 
-	sentCount := 0
+	var sent []TelegramSentMessage
 	var lastErr error
 	client := &http.Client{Timeout: 10 * time.Second}
 	for chatID := range targetMap {
@@ -3447,16 +3462,24 @@ func (s *SettingService) SendTelegramNotification(ctx context.Context, msg strin
 			lastErr = err
 			continue
 		}
+		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 		resp.Body.Close()
 		if resp.StatusCode == http.StatusOK {
-			sentCount++
+			var parsed struct {
+				Result struct {
+					MessageID int64 `json:"message_id"`
+				} `json:"result"`
+			}
+			_ = json.Unmarshal(respBody, &parsed)
+			numericChat, _ := strconv.ParseInt(chatID, 10, 64)
+			sent = append(sent, TelegramSentMessage{ChatID: numericChat, MessageID: parsed.Result.MessageID})
 		} else {
 			lastErr = fmt.Errorf("telegram returned HTTP %d", resp.StatusCode)
 		}
 	}
 
-	if sentCount == 0 && lastErr != nil {
-		return 0, lastErr
+	if len(sent) == 0 && lastErr != nil {
+		return nil, lastErr
 	}
-	return sentCount, nil
+	return sent, nil
 }
