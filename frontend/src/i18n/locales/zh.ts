@@ -810,6 +810,7 @@ export default {
     keyCreatedTitle: '保存您的 API 密钥',
     keyCreatedWarning: '完整 API 密钥仅会显示这一次。请立即复制并安全保存。',
     keyNotRecoverable: '无法恢复完整密钥。请创建替换密钥以获取新值。',
+    keyNotRecoverableShort: '不可恢复',
     revealKey: '显示完整密钥',
     hideKey: '隐藏完整密钥',
     revealFailed: '显示密钥失败，请重试。',
@@ -830,6 +831,8 @@ export default {
     today: '今日',
     total: '近30天',
     quota: '额度',
+    limit: '限额',
+    unlimited: '无限制',
     lastUsedAt: '上次使用时间',
     useKey: '使用密钥',
     useKeyModal: {

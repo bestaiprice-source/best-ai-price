@@ -65,7 +65,8 @@
     class="table-wrapper hidden md:block"
     :class="{
       'actions-expanded': actionsExpanded,
-      'is-scrollable': isScrollable
+      'is-scrollable': isScrollable,
+      'no-scroll': !scrollable
     }"
   >
     <table class="min-w-full divide-y divide-gray-200 dark:divide-dark-700">
@@ -148,19 +149,19 @@
           </td>
         </tr>
 
-        <!-- Data rows (virtual scroll) -->
+        <!-- Data rows (virtual scroll, or plain rows when scroll is disabled) -->
         <template v-else>
-          <tr v-if="virtualPaddingTop > 0" aria-hidden="true">
+          <tr v-if="scrollable && virtualPaddingTop > 0" aria-hidden="true">
             <td :colspan="columns.length"
                 :style="{ height: virtualPaddingTop + 'px', padding: 0, border: 'none' }">
             </td>
           </tr>
           <tr
-            v-for="virtualRow in virtualItems"
-            :key="resolveRowKey(sortedData[virtualRow.index], virtualRow.index)"
-            :data-row-id="resolveRowKey(sortedData[virtualRow.index], virtualRow.index)"
-            :data-index="virtualRow.index"
-            :ref="measureElement"
+            v-for="row in renderedRows"
+            :key="resolveRowKey(sortedData[row.index], row.index)"
+            :data-row-id="resolveRowKey(sortedData[row.index], row.index)"
+            :data-index="row.index"
+            :ref="scrollable ? measureElement : undefined"
             class="hover:bg-gray-50 dark:hover:bg-dark-800"
           >
             <td
@@ -174,16 +175,16 @@
               ]"
             >
               <slot :name="`cell-${column.key}`"
-                    :row="sortedData[virtualRow.index]"
-                    :value="sortedData[virtualRow.index][column.key]"
+                    :row="sortedData[row.index]"
+                    :value="sortedData[row.index][column.key]"
                     :expanded="actionsExpanded">
                 {{ column.formatter
-                   ? column.formatter(sortedData[virtualRow.index][column.key], sortedData[virtualRow.index])
-                   : sortedData[virtualRow.index][column.key] }}
+                   ? column.formatter(sortedData[row.index][column.key], sortedData[row.index])
+                   : sortedData[row.index][column.key] }}
               </slot>
             </td>
           </tr>
-          <tr v-if="virtualPaddingBottom > 0" aria-hidden="true">
+          <tr v-if="scrollable && virtualPaddingBottom > 0" aria-hidden="true">
             <td :colspan="columns.length"
                 :style="{ height: virtualPaddingBottom + 'px', padding: 0, border: 'none' }">
             </td>
@@ -324,6 +325,12 @@ interface Props {
   estimateRowHeight?: number
   /** Number of rows to render beyond the visible area (default 5) */
   overscan?: number
+  /**
+   * When false the table is rendered as plain rows inside a non-scrolling
+   * wrapper, so the PAGE scrolls instead of the table (pair with
+   * `<TablePageLayout page-scroll>`). Virtual scrolling is bypassed.
+   */
+  scrollable?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -332,7 +339,8 @@ const props = withDefaults(defineProps<Props>(), {
   stickyActionsColumn: true,
   expandableActions: true,
   defaultSortOrder: 'asc',
-  serverSideSort: false
+  serverSideSort: false,
+  scrollable: true
 })
 
 const sortKey = ref<string>('')
@@ -534,6 +542,18 @@ const rowVirtualizer = useVirtualizer(computed(() => ({
 
 const virtualItems = computed(() => rowVirtualizer.value.getVirtualItems())
 
+/**
+ * Rows to render. With virtual scrolling (the default) only the visible window
+ * is rendered; with `scrollable=false` the table is not a scroll container, so
+ * every row is rendered and the page scrolls instead.
+ */
+const renderedRows = computed<{ index: number }[]>(() => {
+  if (!props.scrollable) {
+    return (sortedData.value ?? []).map((_, index) => ({ index }))
+  }
+  return virtualItems.value.map((item) => ({ index: item.index }))
+})
+
 const virtualPaddingTop = computed(() => {
   const items = virtualItems.value
   return items.length > 0 ? items[0].start : 0
@@ -666,6 +686,22 @@ defineExpose({
   flex: 1;
   min-height: 0;
   isolation: isolate;
+}
+
+/* No-scroll mode (`:scrollable="false"`): the wrapper is not a scroll container,
+   so the table grows with its content and the page scrolls instead. Sticky
+   headers/columns are switched off — they would otherwise stick to the viewport
+   and slide under the app header. */
+.table-wrapper.no-scroll {
+  overflow: visible;
+  min-height: auto;
+  flex: none;
+}
+
+.table-wrapper.no-scroll .table-header,
+.table-wrapper.no-scroll .sticky-header-cell,
+.table-wrapper.no-scroll .sticky-col {
+  position: static;
 }
 
 /* 表头容器，确保在滚动时覆盖表体内容 */

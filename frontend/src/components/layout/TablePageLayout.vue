@@ -1,5 +1,5 @@
 <template>
-  <div class="table-page-layout" :class="{ 'mobile-mode': isMobile }">
+  <div class="table-page-layout" :class="{ 'mobile-mode': isMobile, 'page-scroll': pageScroll }">
     <!-- 固定区域：操作按钮 -->
     <div v-if="$slots.actions" class="layout-section-fixed">
       <slot name="actions" />
@@ -26,6 +26,18 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
+
+withDefaults(
+  defineProps<{
+    /**
+     * When true the table grows with its content and the PAGE scrolls instead of
+     * the table card: no inner vertical scrollbar and no horizontal scrollbar.
+     * Pair it with `<DataTable :scrollable="false">`.
+     */
+    pageScroll?: boolean
+  }>(),
+  { pageScroll: false }
+)
 
 const isMobile = ref(false)
 
@@ -108,5 +120,38 @@ onUnmounted(() => {
   @apply flex-none;
   display: table;
   min-width: 100%;
+}
+
+/* Page-scroll mode: the page scrolls as a whole — the table card grows with its
+   content and never gets an inner scrollbar of its own. Tighter cell padding and
+   a table that fits the container keep it free of a horizontal scrollbar too. */
+.table-page-layout.page-scroll {
+  height: auto;
+  min-height: calc(100vh - 64px - 4rem);
+}
+
+.table-page-layout.page-scroll .layout-section-scrollable {
+  @apply flex-none min-h-fit;
+}
+
+.table-page-layout.page-scroll .table-scroll-container {
+  @apply h-auto overflow-visible;
+}
+
+.table-page-layout.page-scroll .table-scroll-container :deep(.table-wrapper) {
+  /* The columns fit the card at desktop widths, so no scrollbar appears; on a
+     narrow viewport the table scrolls inside its own card instead of spilling
+     into (and scrolling) the whole page. */
+  overflow-x: auto;
+}
+
+.table-page-layout.page-scroll .table-scroll-container :deep(table) {
+  /* Never wider than the card: the columns must fit instead of overflowing. */
+  min-width: 100%;
+}
+
+.table-page-layout.page-scroll .table-scroll-container :deep(th),
+.table-page-layout.page-scroll .table-scroll-container :deep(td) {
+  @apply px-2;
 }
 </style>

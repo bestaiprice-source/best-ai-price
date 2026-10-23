@@ -1,6 +1,6 @@
 <template>
   <AppLayout>
-    <TablePageLayout>
+    <TablePageLayout page-scroll>
       <template v-if="isAdmin" #filters>
         <div class="flex flex-wrap items-center gap-3">
           <SearchInput
@@ -54,10 +54,13 @@
       </template>
 
       <template #table>
-        <DataTable :columns="columns" :data="apiKeys" :loading="loading">
+        <DataTable :columns="columns" :data="apiKeys" :loading="loading" :scrollable="false">
           <template #cell-key="{ value, row }">
-            <div class="flex items-center gap-2">
-              <code class="code text-xs">
+            <div class="flex items-center gap-1">
+              <code
+                class="code inline-block max-w-[110px] truncate text-xs"
+                :title="revealedKeys[row.id] || undefined"
+              >
                 {{ displayKey(row, value) }}
               </code>
               <template v-if="isRevealable(row)">
@@ -90,124 +93,118 @@
               </template>
               <span
                 v-else
-                class="text-xs text-gray-400 dark:text-dark-500"
+                class="whitespace-nowrap text-xs text-gray-400 dark:text-dark-500"
                 :title="t('keys.keyNotRecoverable')"
               >
-                {{ t('keys.keyNotRecoverable') }}
+                {{ t('keys.keyNotRecoverableShort') }}
               </span>
             </div>
           </template>
 
           <template #cell-owner="{ row }">
-            <div v-if="isAdmin" class="flex flex-col text-sm">
-              <span class="font-medium text-gray-900 dark:text-white">{{ row.user?.username || row.user?.email || 'N/A' }}</span>
-              <span class="text-xs text-gray-500">ID: {{ row.user_id }}</span>
+            <div v-if="isAdmin" class="flex flex-col leading-4">
+              <span class="max-w-[76px] truncate text-xs font-medium text-gray-900 dark:text-white">
+                {{ row.user?.username || row.user?.email || 'N/A' }}
+              </span>
+              <span class="text-[10px] text-gray-500">ID: {{ row.user_id }}</span>
             </div>
           </template>
 
           <template #cell-name="{ value, row }">
             <div class="flex items-center gap-1.5">
-              <span class="font-medium text-gray-900 dark:text-white">{{ value }}</span>
+              <span
+                class="max-w-[140px] whitespace-normal break-words font-medium text-gray-900 dark:text-white"
+                :title="value"
+              >{{ value }}</span>
               <Icon
                 v-if="row.ip_whitelist?.length > 0 || row.ip_blacklist?.length > 0"
                 name="shield"
                 size="sm"
-                class="text-blue-500"
+                class="shrink-0 text-blue-500"
                 :title="t('keys.ipRestrictionEnabled')"
               />
             </div>
           </template>
 
+          <!-- The whole cell is the group picker: clicking it opens the group
+               dropdown. No "Edit" label / chevron — the column has to stay narrow. -->
           <template #cell-group="{ row }">
-            <div class="relative">
-              <button
-                :ref="(el) => setGroupButtonRef(row.id, el)"
-                @click="editKey(row)"
-                class="-mx-2 -my-1 flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1 transition-all duration-200 hover:bg-gray-100 dark:hover:bg-dark-700"
-                :title="t('common.edit')"
-              >
-                <div v-if="(row.groups && row.groups.length > 0) || row.group" class="flex flex-wrap items-center gap-1.5">
-                  <GroupBadge
-                    v-for="group in ((row.groups && row.groups.length > 0) ? row.groups.slice(0, 2) : (row.group ? [row.group] : []))"
-                    :key="group.id"
-                    :name="group.name"
-                    :platform="group.platform"
-                    :subscription-type="group.subscription_type"
-                    :rate-multiplier="group.rate_multiplier"
-                    :user-rate-multiplier="userGroupRates[group.id]"
-                  />
-                  <span
-                    v-if="row.groups && row.groups.length > 2"
-                    class="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-500 dark:bg-dark-700 dark:text-gray-300"
-                  >
-                    +{{ row.groups.length - 2 }}
-                  </span>
-                </div>
-                <span v-else class="text-sm text-gray-400 dark:text-dark-500">{{
-                  t('keys.noGroup')
-                }}</span>
-                <span class="text-xs text-gray-500 dark:text-gray-400">{{ t('common.edit') }}</span>
-                <svg
-                  class="h-3.5 w-3.5 text-gray-400 opacity-60 transition-opacity group-hover/dropdown:opacity-100"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                  stroke-width="2"
+            <button
+              :ref="(el) => setGroupButtonRef(row.id, el)"
+              @click="editKey(row)"
+              class="group/dropdown -mx-2 -my-1 flex cursor-pointer items-center gap-1 rounded-lg px-2 py-1 transition-all duration-200 hover:bg-gray-100 dark:hover:bg-dark-700"
+              :title="t('keys.clickToChangeGroup')"
+            >
+              <div v-if="(row.groups && row.groups.length > 0) || row.group" class="flex items-center gap-1">
+                <GroupBadge
+                  v-for="group in ((row.groups && row.groups.length > 0) ? row.groups.slice(0, 1) : (row.group ? [row.group] : []))"
+                  :key="group.id"
+                  :name="group.name"
+                  :platform="group.platform"
+                  :subscription-type="group.subscription_type"
+                  :rate-multiplier="group.rate_multiplier"
+                  :user-rate-multiplier="userGroupRates[group.id]"
+                />
+                <span
+                  v-if="row.groups && row.groups.length > 1"
+                  class="rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-500 dark:bg-dark-700 dark:text-gray-300"
                 >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    d="M8.25 15L12 18.75 15.75 15m-7.5-6L12 5.25 15.75 9"
-                  />
-                </svg>
-              </button>
-            </div>
+                  +{{ row.groups.length - 1 }}
+                </span>
+              </div>
+              <span v-else class="text-sm text-gray-400 dark:text-dark-500">{{
+                t('keys.noGroup')
+              }}</span>
+            </button>
           </template>
 
+          <!-- Spending cap of the key (OpenLux "Limit"): the cap plus how much of
+               it is already consumed. Unlimited keys show a dash. -->
+          <template #cell-limit="{ row }">
+            <div v-if="row.quota > 0" class="w-[58px]">
+              <div class="text-xs leading-4 tabular-nums">
+                <div :class="[
+                  'font-medium',
+                  row.quota_used >= row.quota ? 'text-red-500' :
+                  row.quota_used >= row.quota * 0.8 ? 'text-yellow-600' :
+                  'text-gray-900 dark:text-white'
+                ]">
+                  ${{ row.quota_used?.toFixed(2) || '0.00' }}
+                </div>
+                <div class="text-gray-400 dark:text-dark-500">${{ row.quota?.toFixed(2) }}</div>
+              </div>
+              <div class="mt-1 h-1 w-full overflow-hidden rounded-full bg-gray-200 dark:bg-dark-600">
+                <div
+                  :class="[
+                    'h-full rounded-full transition-all',
+                    row.quota_used >= row.quota ? 'bg-red-500' :
+                    row.quota_used >= row.quota * 0.8 ? 'bg-yellow-500' :
+                    'bg-primary-500'
+                  ]"
+                  :style="{ width: Math.min((row.quota_used / row.quota) * 100, 100) + '%' }"
+                />
+              </div>
+            </div>
+            <span v-else class="text-xs text-gray-400 dark:text-dark-500">{{ t('keys.unlimited') }}</span>
+          </template>
+
+          <!-- Spend. Label above value keeps the column narrow (the whole table
+               has to fit the card without a horizontal scrollbar). -->
           <template #cell-usage="{ row }">
-            <div class="text-sm">
-              <div class="flex items-center gap-1.5">
-                <span class="text-gray-500 dark:text-gray-400">{{ t('keys.today') }}:</span>
-                <span class="font-medium text-gray-900 dark:text-white">
-                  ${{ (usageStats[row.id]?.today_actual_cost ?? 0).toFixed(4) }}
-                </span>
+            <div class="text-xs leading-4 tabular-nums">
+              <div class="text-gray-400 dark:text-dark-500">{{ t('keys.today') }}</div>
+              <div class="font-medium text-gray-900 dark:text-white">
+                ${{ (usageStats[row.id]?.today_actual_cost ?? 0).toFixed(4) }}
               </div>
-              <div class="mt-0.5 flex items-center gap-1.5">
-                <span class="text-gray-500 dark:text-gray-400">{{ t('keys.total') }}:</span>
-                <span class="font-medium text-gray-900 dark:text-white">
-                  ${{ (usageStats[row.id]?.total_actual_cost ?? 0).toFixed(4) }}
-                </span>
-              </div>
-              <!-- Quota progress (if quota is set) -->
-              <div v-if="row.quota > 0" class="mt-1.5">
-                <div class="flex items-center gap-1.5">
-                  <span class="text-gray-500 dark:text-gray-400">{{ t('keys.quota') }}:</span>
-                  <span :class="[
-                    'font-medium',
-                    row.quota_used >= row.quota ? 'text-red-500' :
-                    row.quota_used >= row.quota * 0.8 ? 'text-yellow-500' :
-                    'text-gray-900 dark:text-white'
-                  ]">
-                    ${{ row.quota_used?.toFixed(2) || '0.00' }} / ${{ row.quota?.toFixed(2) }}
-                  </span>
-                </div>
-                <div class="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-gray-200 dark:bg-dark-600">
-                  <div
-                    :class="[
-                      'h-full rounded-full transition-all',
-                      row.quota_used >= row.quota ? 'bg-red-500' :
-                      row.quota_used >= row.quota * 0.8 ? 'bg-yellow-500' :
-                      'bg-primary-500'
-                    ]"
-                    :style="{ width: Math.min((row.quota_used / row.quota) * 100, 100) + '%' }"
-                  />
-                </div>
+              <div class="mt-1 text-gray-400 dark:text-dark-500">{{ t('keys.total') }}</div>
+              <div class="font-medium text-gray-900 dark:text-white">
+                ${{ (usageStats[row.id]?.total_actual_cost ?? 0).toFixed(4) }}
               </div>
             </div>
           </template>
 
           <template #cell-rate_limit="{ row }">
-            <div v-if="row.rate_limit_5h > 0 || row.rate_limit_1d > 0 || row.rate_limit_7d > 0" class="space-y-1.5 min-w-[140px]">
+            <div v-if="row.rate_limit_5h > 0 || row.rate_limit_1d > 0 || row.rate_limit_7d > 0" class="w-[88px] space-y-1">
               <!-- 5h window -->
               <div v-if="row.rate_limit_5h > 0">
                 <div class="flex items-center justify-between text-xs">
@@ -306,19 +303,9 @@
             <span v-else class="text-sm text-gray-400 dark:text-dark-500">-</span>
           </template>
 
-          <template #cell-expires_at="{ value }">
-            <span v-if="value" :class="[
-              'text-sm',
-              new Date(value) < new Date() ? 'text-red-500 dark:text-red-400' : 'text-gray-500 dark:text-dark-400'
-            ]">
-              {{ formatDateTime(value) }}
-            </span>
-            <span v-else class="text-sm text-gray-400 dark:text-dark-500">{{ t('keys.noExpiration') }}</span>
-          </template>
-
           <template #cell-status="{ value }">
             <span :class="[
-              'badge',
+              'badge max-w-[92px] text-center leading-tight !whitespace-normal',
               value === 'active' ? 'badge-success' :
               value === 'quota_exhausted' ? 'badge-warning' :
               value === 'expired' ? 'badge-danger' :
@@ -328,71 +315,71 @@
             </span>
           </template>
 
-          <template #cell-last_used_at="{ value }">
-            <span v-if="value" class="text-sm text-gray-500 dark:text-dark-400">
-              {{ formatDateTime(value) }}
-            </span>
-            <span v-else class="text-sm text-gray-400 dark:text-dark-500">-</span>
-          </template>
-
+          <!-- Date above time: two short lines instead of one wide timestamp. -->
           <template #cell-created_at="{ value }">
-            <span class="text-sm text-gray-500 dark:text-dark-400">{{ formatDateTime(value) }}</span>
+            <div class="text-xs leading-4 tabular-nums text-gray-500 dark:text-dark-400">
+              <div>{{ formatDatePart(value) }}</div>
+              <div>{{ formatTimePart(value) }}</div>
+            </div>
           </template>
 
           <template #cell-actions="{ row }">
-            <div class="flex items-center gap-1">
-              <!-- Use Key Button -->
+            <div class="flex items-center">
+              <!-- Use Key -->
               <button
                 :disabled="!isRevealable(row)"
                 @click="openUseKeyModal(row)"
-                class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-green-50 hover:text-green-600 dark:hover:bg-green-900/20 dark:hover:text-green-400"
+                class="rounded-lg p-1 text-gray-500 transition-colors hover:bg-green-50 hover:text-green-600 dark:hover:bg-green-900/20 dark:hover:text-green-400"
                 :class="{ 'cursor-not-allowed opacity-40 hover:bg-transparent hover:text-gray-500': !isRevealable(row) }"
-                :title="!isRevealable(row) ? t('keys.keyNotRecoverable') : undefined"
+                :title="!isRevealable(row) ? t('keys.keyNotRecoverable') : t('keys.useKey')"
+                :aria-label="t('keys.useKey')"
               >
                 <Icon name="terminal" size="sm" />
-                <span class="text-xs">{{ t('keys.useKey') }}</span>
               </button>
-              <!-- Import to CC Switch Button (admin only) -->
+              <!-- Import to CC Switch (admin only) -->
               <button
                 v-if="isAdmin && !publicSettings?.hide_ccs_import_button"
                 :disabled="!isRevealable(row)"
                 @click="importToCcswitch(row)"
-                class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-900/20 dark:hover:text-blue-400"
+                class="rounded-lg p-1 text-gray-500 transition-colors hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-900/20 dark:hover:text-blue-400"
                 :class="{ 'cursor-not-allowed opacity-40 hover:bg-transparent hover:text-gray-500': !isRevealable(row) }"
-                :title="!isRevealable(row) ? t('keys.keyNotRecoverable') : undefined"
+                :title="!isRevealable(row) ? t('keys.keyNotRecoverable') : t('keys.importToCcSwitch')"
+                :aria-label="t('keys.importToCcSwitch')"
               >
                 <Icon name="upload" size="sm" />
-                <span class="text-xs">{{ t('keys.importToCcSwitch') }}</span>
               </button>
-              <!-- Toggle Status Button -->
+              <!-- Enable / Disable -->
               <button
                 @click="toggleKeyStatus(row)"
                 :class="[
-                  'flex flex-col items-center gap-0.5 rounded-lg p-1.5 transition-colors',
+                  'rounded-lg p-1 transition-colors',
                   row.status === 'active'
                     ? 'text-gray-500 hover:bg-yellow-50 hover:text-yellow-600 dark:hover:bg-yellow-900/20 dark:hover:text-yellow-400'
                     : 'text-gray-500 hover:bg-green-50 hover:text-green-600 dark:hover:bg-green-900/20 dark:hover:text-green-400'
                 ]"
+                :title="row.status === 'active' ? t('keys.disable') : t('keys.enable')"
+                :aria-label="row.status === 'active' ? t('keys.disable') : t('keys.enable')"
               >
                 <Icon v-if="row.status === 'active'" name="ban" size="sm" />
                 <Icon v-else name="checkCircle" size="sm" />
-                <span class="text-xs">{{ row.status === 'active' ? t('keys.disable') : t('keys.enable') }}</span>
               </button>
-              <!-- Edit Button -->
+              <!-- Edit -->
               <button
                 @click="editKey(row)"
-                class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-primary-600 dark:hover:bg-dark-700 dark:hover:text-primary-400"
+                class="rounded-lg p-1 text-gray-500 transition-colors hover:bg-gray-100 hover:text-primary-600 dark:hover:bg-dark-700 dark:hover:text-primary-400"
+                :title="t('common.edit')"
+                :aria-label="t('common.edit')"
               >
                 <Icon name="edit" size="sm" />
-                <span class="text-xs">{{ t('common.edit') }}</span>
               </button>
-              <!-- Delete Button -->
+              <!-- Delete -->
               <button
                 @click="confirmDelete(row)"
-                class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
+                class="rounded-lg p-1 text-gray-500 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
+                :title="t('common.delete')"
+                :aria-label="t('common.delete')"
               >
                 <Icon name="trash" size="sm" />
-                <span class="text-xs">{{ t('common.delete') }}</span>
               </button>
             </div>
           </template>
@@ -1263,31 +1250,40 @@ const formatDateTimeLocal = (isoDate: string): string => {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
 }
 
+// The "Created" cell renders the date and the time on two lines to keep the
+// column narrow; both parts come from the same formatted timestamp.
+const formatDatePart = (value: string): string => (formatDateTime(value) || '').split(' ')[0] || ''
+const formatTimePart = (value: string): string => (formatDateTime(value) || '').split(' ')[1] || ''
+
 const appStore = useAppStore()
 const onboardingStore = useOnboardingStore()
 const { copyToClipboard: clipboardCopy } = useClipboard()
 
+// Column set follows the OpenLux provider console: name, status, masked key
+// (with copy), limit, usage, created, actions. The admin additionally keeps the
+// owner, group and rate-limit columns.
 const columns = computed<Column[]>(() => {
   if (isAdmin.value) {
     return [
       { key: 'name', label: t('common.name'), sortable: true },
-      { key: 'owner', label: 'Owner', sortable: false },
-      { key: 'key', label: t('keys.apiKey'), sortable: false },
-      { key: 'group', label: t('keys.group'), sortable: false },
-      { key: 'usage', label: t('keys.usage'), sortable: false },
-      { key: 'rate_limit', label: t('keys.rateLimitColumn'), sortable: false },
-      { key: 'expires_at', label: t('keys.expiresAt'), sortable: true },
       { key: 'status', label: t('common.status'), sortable: true },
-      { key: 'last_used_at', label: t('keys.lastUsedAt'), sortable: true },
+      { key: 'key', label: t('keys.apiKey'), sortable: false },
+      { key: 'limit', label: t('keys.limit'), sortable: false },
+      { key: 'usage', label: t('keys.usage'), sortable: false },
+      { key: 'owner', label: 'Owner', sortable: false },
+      { key: 'group', label: t('keys.group'), sortable: false },
+      { key: 'rate_limit', label: t('keys.rateLimitColumn'), sortable: false },
       { key: 'created_at', label: t('keys.created'), sortable: true },
       { key: 'actions', label: t('common.actions'), sortable: false }
     ]
   }
-  // Regular users: minimal table — name, key, usage, actions only.
   return [
     { key: 'name', label: t('common.name'), sortable: true },
+    { key: 'status', label: t('common.status'), sortable: true },
     { key: 'key', label: t('keys.apiKey'), sortable: false },
+    { key: 'limit', label: t('keys.limit'), sortable: false },
     { key: 'usage', label: t('keys.usage'), sortable: false },
+    { key: 'created_at', label: t('keys.created'), sortable: true },
     { key: 'actions', label: t('common.actions'), sortable: false }
   ]
 })
@@ -1517,6 +1513,21 @@ const maskKey = (key: string): string => {
   return `${key.slice(0, 8)}...${key.slice(-4)}`
 }
 
+// The keys list never returns a secret: it returns the AT-REST lookup token
+// (`sha256:<first 8 characters of the key>:<hex digest>`, see
+// `hashAPIKeyForStorage` in backend/internal/repository/api_key_repo.go). The
+// retained prefix is exactly what a console mask should show — `sk-9f3a21c4…`.
+const AT_REST_KEY_PATTERN = /^sha256:([^:]*):[0-9a-f]+$/i
+
+/** `sk-9f3a21c4…` for an at-rest token; falls back to the generic mask. */
+const maskStoredKey = (stored: string): string => {
+  if (!stored) return ''
+  const match = AT_REST_KEY_PATTERN.exec(stored)
+  if (match) return `${match[1]}…`
+  // Legacy rows (pre-migration 137) may still hold the plaintext value.
+  return maskKey(stored)
+}
+
 // --- Recoverable (revealable) keys -----------------------------------------
 // The full value is fetched on demand (encrypted at rest on the server) and
 // cached for the session. Keys created before recoverable storage was enabled
@@ -1546,7 +1557,7 @@ const revealKey = async (row: ApiKey): Promise<string | null> => {
 }
 
 const displayKey = (row: ApiKey, stored: string): string =>
-  revealedKeys.value[row.id] || maskKey(stored)
+  revealedKeys.value[row.id] || maskStoredKey(stored)
 
 const toggleReveal = async (row: ApiKey) => {
   if (revealedKeys.value[row.id]) {

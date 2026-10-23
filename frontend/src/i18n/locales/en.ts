@@ -810,6 +810,7 @@ export default {
     keyCreatedTitle: 'Save your API key',
     keyCreatedWarning: 'This is the only time the full API key is shown. Copy and store it securely now.',
     keyNotRecoverable: 'Full key is not recoverable. Create a replacement key to obtain a new value.',
+    keyNotRecoverableShort: 'Not recoverable',
     revealKey: 'Reveal full key',
     hideKey: 'Hide full key',
     revealFailed: 'Failed to reveal the key. Please try again.',
@@ -830,6 +831,8 @@ export default {
     today: 'Today',
     total: 'Last 30d',
     quota: 'Quota',
+    limit: 'Limit',
+    unlimited: 'Unlimited',
     lastUsedAt: 'Last Used',
     useKey: 'Use Key',
     useKeyModal: {
