@@ -83,6 +83,62 @@
             </div>
           </div>
         </div>
+
+        <!-- Live RPM (last 5 minutes) -->
+        <div class="card p-4">
+          <div class="flex items-center gap-3">
+            <div class="rounded-lg bg-cyan-100 p-2 dark:bg-cyan-900/30">
+              <Icon name="bolt" size="md" class="text-cyan-600 dark:text-cyan-400" />
+            </div>
+            <div>
+              <p class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('usage.rpm') }}</p>
+              <p class="text-xl font-bold text-gray-900 dark:text-white">{{ rpm.toFixed(1) }}</p>
+              <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('usage.liveHint') }}</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Live TPM (last 5 minutes) -->
+        <div class="card p-4">
+          <div class="flex items-center gap-3">
+            <div class="rounded-lg bg-indigo-100 p-2 dark:bg-indigo-900/30">
+              <Icon name="cube" size="md" class="text-indigo-600 dark:text-indigo-400" />
+            </div>
+            <div>
+              <p class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('usage.tpm') }}</p>
+              <p class="text-xl font-bold text-gray-900 dark:text-white">{{ formatTokens(tpm) }}</p>
+              <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('usage.liveHint') }}</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Used quota (today) -->
+        <div class="card p-4">
+          <div class="flex items-center gap-3">
+            <div class="rounded-lg bg-teal-100 p-2 dark:bg-teal-900/30">
+              <Icon name="fire" size="md" class="text-teal-600 dark:text-teal-400" />
+            </div>
+            <div class="min-w-0 flex-1">
+              <p class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('usage.usedQuota') }}</p>
+              <p class="text-xl font-bold text-gray-900 dark:text-white">${{ usedQuotaToday.toFixed(4) }}</p>
+              <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('usage.usedQuotaHint') }}</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Estimated daily consumption -->
+        <div class="card p-4">
+          <div class="flex items-center gap-3">
+            <div class="rounded-lg bg-rose-100 p-2 dark:bg-rose-900/30">
+              <Icon name="trendingUp" size="md" class="text-rose-600 dark:text-rose-400" />
+            </div>
+            <div class="min-w-0 flex-1">
+              <p class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('usage.estimatedDaily') }}</p>
+              <p class="text-xl font-bold text-gray-900 dark:text-white">${{ estimatedDailyCost.toFixed(4) }}</p>
+              <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('usage.estimatedDailyHint') }}</p>
+            </div>
+          </div>
+        </div>
         </div>
       </template>
 
@@ -108,6 +164,40 @@
                 v-model:start-date="startDate"
                 v-model:end-date="endDate"
                 @change="onDateRangeChange"
+              />
+            </div>
+
+            <!-- Model Filter -->
+            <div class="min-w-[160px]">
+              <label class="input-label">{{ t('usage.filterModel') }}</label>
+              <input
+                v-model="modelFilter"
+                type="text"
+                class="input"
+                :placeholder="t('usage.filterAllModels')"
+                @keyup.enter="applyFilters"
+              />
+            </div>
+
+            <!-- Group Filter -->
+            <div class="min-w-[160px]">
+              <label class="input-label">{{ t('usage.filterGroup') }}</label>
+              <Select
+                v-model="groupFilter"
+                :options="groupOptions"
+                :placeholder="t('usage.filterAllGroups')"
+                @change="applyFilters"
+              />
+            </div>
+
+            <!-- Request Type Filter (stream / sync) -->
+            <div class="min-w-[140px]">
+              <label class="input-label">{{ t('usage.filterType') }}</label>
+              <Select
+                v-model="streamFilter"
+                :options="requestTypeOptions"
+                :placeholder="t('usage.filterAllTypes')"
+                @change="applyFilters"
               />
             </div>
 
@@ -349,7 +439,12 @@
           </template>
         </DataTable>
 
-        <DataTable v-else :columns="errorColumns" :data="errorLogs" :loading="errorLoading">
+        <DataTable
+          v-else-if="activeUsageTab === 'errors'"
+          :columns="errorColumns"
+          :data="errorLogs"
+          :loading="errorLoading"
+        >
           <template #cell-model="{ value }">
             <span class="font-medium text-gray-900 dark:text-white">{{ value || '-' }}</span>
           </template>
@@ -395,6 +490,52 @@
           <template #empty>
             <div class="py-8 text-center text-sm text-gray-500 dark:text-gray-400">
               {{ t('usage.noErrors') }}
+            </div>
+          </template>
+        </DataTable>
+
+        <!-- Money operations: deposits / usage / refunds / adjustments. The
+             request log and the money ledger are separate read-models, so the
+             ledger lives in its own tab rather than being mixed into the
+             paginated request rows. -->
+        <DataTable
+          v-else-if="activeUsageTab === 'operations'"
+          :columns="ledgerColumns"
+          :data="ledgerEntries"
+          :loading="ledgerLoading"
+        >
+          <template #cell-created_at="{ value }">
+            <span class="whitespace-nowrap text-sm text-gray-600 dark:text-gray-300">{{
+              formatDateTime(value)
+            }}</span>
+          </template>
+
+          <template #cell-type="{ value }">
+            <span class="inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium" :class="operationClass(value)">
+              {{ operationLabel(value) }}
+            </span>
+          </template>
+
+          <template #cell-amount_usd="{ value }">
+            <span
+              class="font-medium"
+              :class="value >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-900 dark:text-white'"
+            >
+              {{ value >= 0 ? '+' : '-' }}${{ Math.abs(value).toFixed(4) }}
+            </span>
+          </template>
+
+          <template #cell-description="{ value }">
+            <span class="text-sm text-gray-600 dark:text-gray-300">{{ value || '—' }}</span>
+          </template>
+
+          <template #cell-reference="{ value }">
+            <span class="font-mono text-xs text-gray-500 dark:text-gray-400">{{ value || '—' }}</span>
+          </template>
+
+          <template #empty>
+            <div class="py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+              {{ t('usage.noOperations') }}
             </div>
           </template>
         </DataTable>
@@ -562,10 +703,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, reactive, onMounted } from 'vue'
+import { ref, computed, reactive, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
-import { usageAPI, keysAPI } from '@/api'
+import { usageAPI, keysAPI, userGroupsAPI } from '@/api'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import TablePageLayout from '@/components/layout/TablePageLayout.vue'
 import DataTable from '@/components/common/DataTable.vue'
@@ -574,8 +715,9 @@ import EmptyState from '@/components/common/EmptyState.vue'
 import Select from '@/components/common/Select.vue'
 import DateRangePicker from '@/components/common/DateRangePicker.vue'
 import Icon from '@/components/icons/Icon.vue'
-import type { UsageLog, ApiKey, UsageQueryParams, UsageStatsResponse } from '@/types'
-import type { UsageErrorItem } from '@/api/usage'
+import type { UsageLog, ApiKey, UsageQueryParams, UsageStatsResponse, Group } from '@/types'
+import type { UsageErrorItem, UserDashboardStats } from '@/api/usage'
+import { getLedger, type LedgerEntry, type LedgerEntryType } from '@/api/billing'
 import type { Column } from '@/components/common/types'
 import { formatDateTime, formatReasoningEffort } from '@/utils/format'
 import { getPersistedPageSize } from '@/composables/usePersistedPageSize'
@@ -587,6 +729,8 @@ const { t } = useI18n()
 const appStore = useAppStore()
 
 let abortController: AbortController | null = null
+// Refreshes the RPM/TPM + today's-spend gauges while the page is open.
+let liveTimer: ReturnType<typeof setInterval> | null = null
 
 // Tooltip state
 const tooltipVisible = ref(false)
@@ -633,11 +777,12 @@ const columns = computed<Column[]>(() => [
 // The request log only lists completed calls; this tab surfaces the caller's
 // FAILED requests (status, error type/message, retry info) from the same
 // operations data the admin sees, sanitized to the caller's own rows.
-type UsageTab = 'requests' | 'errors'
+type UsageTab = 'requests' | 'errors' | 'operations'
 const activeUsageTab = ref<UsageTab>('requests')
 const usageTabs = computed(() => [
   { key: 'requests' as UsageTab, label: t('usage.tabRequests') },
-  { key: 'errors' as UsageTab, label: t('usage.tabErrors') }
+  { key: 'errors' as UsageTab, label: t('usage.tabErrors') },
+  { key: 'operations' as UsageTab, label: t('usage.tabOperations') }
 ])
 
 const errorLogs = ref<UsageErrorItem[]>([])
@@ -656,6 +801,30 @@ const errorColumns = computed<Column[]>(() => [
   { key: 'request_id', label: t('usage.requestId'), sortable: false }
 ])
 
+/** Tri-state wrappers: the Select component needs a concrete value for "all". */
+const modelFilter = computed({
+  get: () => filters.value.model ?? '',
+  set: (value: string) => {
+    filters.value.model = value.trim() === '' ? undefined : value
+  }
+})
+
+const groupFilter = computed({
+  get: () => (filters.value.group_id === undefined ? '' : String(filters.value.group_id)),
+  set: (value: string) => {
+    filters.value.group_id = value === '' ? undefined : Number(value)
+  }
+})
+
+const ledgerColumns = computed<Column[]>(() => [
+  { key: 'created_at', label: t('usage.time'), sortable: false },
+  { key: 'type', label: t('usage.operation'), sortable: false },
+  { key: 'amount_usd', label: t('usage.amount'), sortable: false },
+  { key: 'status', label: t('usage.status'), sortable: false },
+  { key: 'description', label: t('usage.description'), sortable: false },
+  { key: 'reference', label: t('usage.reference'), sortable: false }
+])
+
 const errorStatusClass = (code: number): string => {
   if (code >= 500) return 'text-red-600 dark:text-red-400'
   if (code === 429) return 'text-amber-600 dark:text-amber-400'
@@ -663,9 +832,11 @@ const errorStatusClass = (code: number): string => {
   return 'text-gray-600 dark:text-gray-300'
 }
 
-const activePagination = computed(() =>
-  activeUsageTab.value === 'errors' ? errorPagination : pagination
-)
+const activePagination = computed(() => {
+  if (activeUsageTab.value === 'errors') return errorPagination
+  if (activeUsageTab.value === 'operations') return ledgerPagination
+  return pagination
+})
 
 const loadUsageErrors = async () => {
   errorAbortController?.abort()
@@ -704,6 +875,9 @@ const switchUsageTab = (tab: UsageTab) => {
   if (tab === 'errors') {
     void loadUsageErrors()
   }
+  if (tab === 'operations') {
+    void loadLedger()
+  }
 }
 
 const usageLogs = ref<UsageLog[]>([])
@@ -737,6 +911,9 @@ const endDate = ref(formatLocalDate(now))
 
 const filters = ref<UsageQueryParams>({
   api_key_id: undefined,
+  group_id: undefined,
+  model: undefined,
+  stream: undefined,
   start_date: undefined,
   end_date: undefined
 })
@@ -744,6 +921,104 @@ const filters = ref<UsageQueryParams>({
 // Initialize filters with date range
 filters.value.start_date = startDate.value
 filters.value.end_date = endDate.value
+
+// ---- Live counters + daily projection --------------------------------------
+// `GET /usage/dashboard/stats` already computes RPM/TPM as the last-five-minute
+// averages and carries today's spend, so the top row can show what the account
+// is doing right now without a new endpoint. Refreshed on a timer so the RPM/TPM
+// gauges stay live.
+const dashboardStats = ref<UserDashboardStats | null>(null)
+const rpm = computed(() => dashboardStats.value?.rpm ?? 0)
+const tpm = computed(() => dashboardStats.value?.tpm ?? 0)
+const usedQuotaToday = computed(() => dashboardStats.value?.today_actual_cost ?? 0)
+
+/** Today's spend projected over a full day from the hours elapsed so far. */
+const estimatedDailyCost = computed(() => {
+  const spent = usedQuotaToday.value
+  if (spent <= 0) return 0
+  const now = new Date()
+  const elapsedHours = now.getHours() + now.getMinutes() / 60
+  if (elapsedHours <= 0.05) return spent
+  return (spent / elapsedHours) * 24
+})
+
+const loadDashboardStats = async () => {
+  try {
+    dashboardStats.value = await usageAPI.getDashboardStats()
+  } catch (error) {
+    console.error('Failed to load dashboard stats:', error)
+  }
+}
+
+// ---- Filter options --------------------------------------------------------
+const userGroups = ref<Group[]>([])
+
+const loadGroups = async () => {
+  try {
+    userGroups.value = await userGroupsAPI.getAvailable()
+  } catch (error) {
+    console.error('Failed to load groups:', error)
+  }
+}
+
+const groupOptions = computed(() => [
+  { value: '', label: t('usage.filterAllGroups') },
+  ...userGroups.value.map((group) => ({ value: group.id, label: group.name }))
+])
+
+const requestTypeOptions = computed(() => [
+  { value: '', label: t('usage.filterAllTypes') },
+  { value: 'true', label: t('usage.stream') },
+  { value: 'false', label: t('usage.sync') }
+])
+
+/** The `stream` filter is a tri-state: undefined = every request type. */
+const streamFilter = computed({
+  get: () => (filters.value.stream === undefined ? '' : String(filters.value.stream)),
+  set: (value: string) => {
+    filters.value.stream = value === '' ? undefined : value === 'true'
+  }
+})
+
+// ---- Operations tab (money ledger) -----------------------------------------
+// OpenLux's log screen shows consumption and top-ups in ONE list with an
+// operation badge. Here the request log and the money ledger are different
+// read-models — the ledger is `GET /payment/ledger`, already used by /billing —
+// so the ledger gets its own tab rather than being merged into paginated
+// request rows, which could not be paginated correctly.
+const ledgerEntries = ref<LedgerEntry[]>([])
+const ledgerLoading = ref(false)
+const ledgerPagination = reactive({ page: 1, page_size: 20, total: 0, pages: 1 })
+
+const loadLedger = async () => {
+  ledgerLoading.value = true
+  try {
+    const response = await getLedger({ page: ledgerPagination.page, page_size: ledgerPagination.page_size })
+    ledgerEntries.value = response.items
+    ledgerPagination.total = response.total
+    ledgerPagination.pages = Math.max(1, Math.ceil(response.total / ledgerPagination.page_size))
+  } catch (error) {
+    console.error('Failed to load the money ledger:', error)
+  } finally {
+    ledgerLoading.value = false
+  }
+}
+
+const operationLabel = (type: LedgerEntryType): string =>
+  ({
+    deposit: t('usage.operationTopUp'),
+    usage: t('usage.operationConsume'),
+    refund: t('usage.operationRefund'),
+    adjustment: t('usage.operationAdjustment')
+  })[type] ?? type
+
+const operationClass = (type: LedgerEntryType): string =>
+  ({
+    deposit: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300',
+    usage: 'bg-gray-100 text-gray-700 dark:bg-dark-700 dark:text-gray-300',
+    refund: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
+    adjustment: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300'
+  })[type] ?? 'bg-gray-100 text-gray-700 dark:bg-dark-700 dark:text-gray-300'
 
 // Handle date range change from DateRangePicker
 const onDateRangeChange = (range: {
@@ -892,6 +1167,9 @@ const applyFilters = () => {
 const resetFilters = () => {
   filters.value = {
     api_key_id: undefined,
+    group_id: undefined,
+    model: undefined,
+    stream: undefined,
     start_date: undefined,
     end_date: undefined
   }
@@ -914,6 +1192,11 @@ const handlePageChange = (page: number) => {
     void loadUsageErrors()
     return
   }
+  if (activeUsageTab.value === 'operations') {
+    ledgerPagination.page = page
+    void loadLedger()
+    return
+  }
   pagination.page = page
   loadUsageLogs()
 }
@@ -923,6 +1206,13 @@ const handlePageSizeChange = (pageSize: number) => {
     errorPagination.page_size = pageSize
     errorPagination.page = 1
     void loadUsageErrors()
+    return
+  }
+  if (activeUsageTab.value === 'operations') {
+    ledgerPagination.page_size = pageSize
+    ledgerPagination.page = 1
+    ledgerPagination.pages = Math.max(1, Math.ceil(ledgerPagination.total / pageSize))
+    void loadLedger()
     return
   }
   pagination.page_size = pageSize
@@ -1077,5 +1367,16 @@ onMounted(() => {
   loadApiKeys()
   loadUsageLogs()
   loadUsageStats()
+  loadDashboardStats()
+  loadGroups()
+  loadLedger()
+  // Keep the RPM/TPM gauges and today's spend live while the page is open.
+  liveTimer = setInterval(loadDashboardStats, 60000)
+})
+
+onUnmounted(() => {
+  if (liveTimer) clearInterval(liveTimer)
+  abortController?.abort()
+  errorAbortController?.abort()
 })
 </script>

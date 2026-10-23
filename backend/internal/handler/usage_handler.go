@@ -181,6 +181,18 @@ func (h *UsageHandler) ListGateway(c gatewayctx.GatewayContext) {
 	// Parse additional filters
 	model := c.QueryValue("model")
 
+	// Group filter: the query is already scoped to the caller's own rows, so a
+	// group id can only narrow it further.
+	var groupID int64
+	if groupIDStr := strings.TrimSpace(c.QueryValue("group_id")); groupIDStr != "" {
+		id, err := strconv.ParseInt(groupIDStr, 10, 64)
+		if err != nil {
+			response.ErrorContext(usageGatewayResponder{ctx: c}, http.StatusBadRequest, "Invalid group_id")
+			return
+		}
+		groupID = id
+	}
+
 	var requestType *int16
 	var stream *bool
 	if requestTypeStr := strings.TrimSpace(c.QueryValue("request_type")); requestTypeStr != "" {
@@ -238,6 +250,7 @@ func (h *UsageHandler) ListGateway(c gatewayctx.GatewayContext) {
 	filters := usagestats.UsageLogFilters{
 		UserID:      subject.UserID, // Always filter by current user for security
 		APIKeyID:    apiKeyID,
+		GroupID:     groupID,
 		Model:       model,
 		RequestType: requestType,
 		Stream:      stream,
