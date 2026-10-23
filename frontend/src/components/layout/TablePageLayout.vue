@@ -141,8 +141,11 @@ onUnmounted(() => {
 .table-page-layout.page-scroll .table-scroll-container :deep(.table-wrapper) {
   /* The columns fit the card at desktop widths, so no scrollbar appears; on a
      narrow viewport the table scrolls inside its own card instead of spilling
-     into (and scrolling) the whole page. */
+     into (and scrolling) the whole page. `scrollbar-gutter: auto` (the base rule
+     reserves a stable gutter) — otherwise the reserved strip leaves a dead
+     15px gap on the right that the left edge does not have. */
   overflow-x: auto;
+  scrollbar-gutter: auto;
 }
 
 .table-page-layout.page-scroll .table-scroll-container :deep(table) {
