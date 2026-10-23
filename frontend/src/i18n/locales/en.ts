@@ -496,6 +496,8 @@ export default {
     noPrice: 'no price',
     input: 'in',
     output: 'out',
+    useKey: 'Use key',
+    useKeyTitle: 'Go to API Keys to create or copy a key for this model',
     available: 'Available',
     unavailable: 'Unavailable'
   },
@@ -1044,7 +1046,19 @@ export default {
     exportExcelSuccess: 'Usage data exported successfully (Excel format)',
     exportExcelFailed: 'Failed to export usage data',
     imageUnit: ' images',
-    userAgent: 'User-Agent'
+    userAgent: 'User-Agent',
+    // Errors tab + request-id column (same strings the dashboard block uses).
+    requestId: 'Request ID',
+    copyRequestId: 'Copy request ID',
+    tabRequests: 'Requests',
+    tabErrors: 'Errors',
+    status: 'Status',
+    errorType: 'Error type',
+    errorMessage: 'Error message',
+    retry: 'Retry',
+    retryable: 'Retried',
+    notRetryable: 'No retry',
+    noErrors: 'No failed requests in this range. Everything went through.'
   },
 
   // Redeem

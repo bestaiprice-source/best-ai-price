@@ -17,7 +17,7 @@
               v-for="view in views"
               :key="view.id"
               type="button"
-              class="px-3 py-2 text-xs font-medium transition-colors"
+              class="px-3 py-2 text-sm font-medium transition-colors"
               :class="activeView === view.id
                 ? 'bg-primary-600 text-white'
                 : 'bg-white text-gray-600 hover:bg-gray-50 dark:bg-dark-800 dark:text-gray-300 dark:hover:bg-dark-700'"
@@ -34,7 +34,7 @@
         <div class="flex flex-wrap items-center gap-2">
           <button
             type="button"
-            class="rounded-full px-3 py-1 text-xs font-medium transition-colors"
+            class="rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors"
             :class="activeType === 'all' ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-dark-700 dark:text-gray-300'"
             @click="activeType = 'all'"
           >
@@ -44,7 +44,7 @@
             v-for="type in modelTypes"
             :key="type.id"
             type="button"
-            class="rounded-full px-3 py-1 text-xs font-medium transition-colors"
+            class="rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors"
             :class="activeType === type.id ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-dark-700 dark:text-gray-300'"
             @click="activeType = type.id"
           >
@@ -55,7 +55,7 @@
         <div class="flex flex-wrap items-center gap-2">
           <button
             type="button"
-            class="rounded-full px-3 py-1 text-xs font-medium transition-colors"
+            class="rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors"
             :class="activeVendor === '' ? 'bg-gray-900 text-white dark:bg-white dark:text-gray-900' : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-dark-700 dark:text-gray-300'"
             @click="activeVendor = ''"
           >
@@ -65,7 +65,7 @@
             v-for="vendor in vendors"
             :key="vendor"
             type="button"
-            class="rounded-full px-3 py-1 text-xs font-medium capitalize transition-colors"
+            class="rounded-full px-3.5 py-1.5 text-sm font-medium capitalize transition-colors"
             :class="activeVendor === vendor ? 'bg-gray-900 text-white dark:bg-white dark:text-gray-900' : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-dark-700 dark:text-gray-300'"
             @click="activeVendor = activeVendor === vendor ? '' : vendor"
           >
@@ -90,10 +90,12 @@
 
       <!-- Catalog cards -->
       <div v-else-if="activeView === 'catalog'" class="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        <div
+        <router-link
           v-for="model in filtered"
           :key="model.canonical_model_id || model.model_id"
-          class="flex flex-col justify-between rounded-xl border border-black/[0.07] bg-gradient-to-b from-white to-[#f7f7f7] p-4 shadow-[0_0_20px_rgba(0,0,0,0.04)] dark:border-dark-700 dark:from-dark-800 dark:to-dark-800"
+          to="/keys"
+          class="model-card group flex flex-col justify-between rounded-xl border border-black/[0.07] bg-gradient-to-b from-white to-[#f7f7f7] p-4 shadow-[0_0_20px_rgba(0,0,0,0.04)] transition-all hover:-translate-y-0.5 hover:border-black/20 hover:shadow-[0_8px_25px_rgba(0,0,0,0.07)] dark:border-dark-700 dark:from-dark-800 dark:to-dark-800 dark:hover:border-white/20"
+          :title="t('modelsCatalog.useKeyTitle')"
         >
           <div class="flex items-start justify-between gap-2">
             <div class="min-w-0">
@@ -131,14 +133,13 @@
               </template>
               <span v-else class="text-gray-400">{{ t('modelsCatalog.noPrice') }}</span>
             </div>
-            <span
-              v-if="model.discount_percent && model.discount_percent > 0"
-              class="shrink-0 rounded-md bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400"
-            >
-              -{{ model.discount_percent }}%
+            <!-- Every card leads to the API keys page: get a key and call this model. -->
+            <span class="inline-flex shrink-0 items-center gap-1 text-[11px] font-medium text-gray-400 transition-colors group-hover:text-[#4791ff] dark:text-dark-400">
+              {{ t('modelsCatalog.useKey') }}
+              <span aria-hidden="true">&rarr;</span>
             </span>
           </div>
-        </div>
+        </router-link>
       </div>
 
       <!-- Names, grouped by vendor -->
@@ -232,32 +233,67 @@ function hasPrice(model: PublicModelPricing): boolean {
 /** Models without any published price are hidden from the whole page. */
 const pricedModels = computed(() => models.value.filter(hasPrice))
 
-const filtered = computed(() => {
+/**
+ * Models matching the active type + search but NOT the vendor chip. The chip row
+ * is built from this so every counter follows the filter the user just applied —
+ * selecting "Video" must not keep showing the all-types counts. The vendor
+ * filter itself is excluded, otherwise picking one provider would zero out every
+ * other chip and there would be no way back.
+ */
+const facetModels = computed(() => {
   const q = search.value.trim().toLowerCase()
   return pricedModels.value.filter((model) => {
     if (activeType.value !== 'all' && typeOf(model) !== activeType.value) return false
-    if (activeVendor.value && vendorOf(model) !== activeVendor.value) return false
     if (!q) return true
     return (model.model_id || '').toLowerCase().includes(q) || (model.canonical_model_id || '').toLowerCase().includes(q)
   })
 })
 
-const vendors = computed(() => {
-  const counted = new Map<string, number>()
-  for (const model of pricedModels.value) {
-    const vendor = vendorOf(model)
-    counted.set(vendor, (counted.get(vendor) || 0) + 1)
-  }
-  return [...counted.keys()].sort()
-})
+const filtered = computed(() =>
+  activeVendor.value
+    ? facetModels.value.filter((model) => vendorOf(model) === activeVendor.value)
+    : facetModels.value
+)
 
+/** Per-vendor model counts for the CURRENT type + search. */
 const vendorCounts = computed(() => {
   const counted: Record<string, number> = {}
-  for (const model of pricedModels.value) {
+  for (const model of facetModels.value) {
     const vendor = vendorOf(model)
     counted[vendor] = (counted[vendor] || 0) + 1
   }
   return counted
+})
+
+/**
+ * Provider chips, most popular first. A vendor's popularity here is how many
+ * models it offers under the current filter — the same number the chip shows —
+ * with alphabetical tie-breaks. The `other` bucket (models carrying no vendor
+ * prefix) is not a provider, so it stays pinned at the end instead of leading
+ * the list.
+ *
+ * A provider left with no model under the current filter is not offered at all;
+ * the currently selected one stays so it can still be deselected.
+ *
+ * The click-based provider popularity (`GET /providers/popularity`, the
+ * `provider_popularity` table) is keyed by UPSTREAM provider names
+ * (openlux / portdan / …), which never match these model vendor prefixes, so it
+ * cannot order this row.
+ */
+const vendors = computed(() => {
+  const counts = vendorCounts.value
+  const visible = Object.keys(counts).filter((vendor) => (counts[vendor] ?? 0) > 0)
+  // Keep the selected chip even when the current filter leaves it with nothing,
+  // otherwise the only way back to "all providers" is the leading chip.
+  if (activeVendor.value && !visible.includes(activeVendor.value)) {
+    visible.push(activeVendor.value)
+  }
+  return visible.sort((aVendor, bVendor) => {
+    if (aVendor === 'other') return 1
+    if (bVendor === 'other') return -1
+    const diff = (counts[bVendor] ?? 0) - (counts[aVendor] ?? 0)
+    return diff !== 0 ? diff : aVendor.localeCompare(bVendor)
+  })
 })
 
 const groupedByVendor = computed(() => {

@@ -52,7 +52,13 @@ import ModelsCatalogView from '../ModelsCatalogView.vue'
 
 const mountView = async () => {
   const wrapper = mount(ModelsCatalogView, {
-    global: { stubs: { AppLayout: { template: '<div><slot /></div>' } } }
+    global: {
+      stubs: {
+        AppLayout: { template: '<div><slot /></div>' },
+        // The cards are router-links; render them as anchors carrying the target.
+        RouterLink: { props: ['to'], template: '<a :data-to="to"><slot /></a>' }
+      }
+    }
   })
   // Let the mocked catalog fetch resolve.
   await new Promise((resolve) => setTimeout(resolve, 0))
@@ -60,10 +66,10 @@ const mountView = async () => {
   return wrapper
 }
 
-const cardsOf = (wrapper: any) => wrapper.findAll('.grid > div')
+const cardsOf = (wrapper: any) => wrapper.findAll('.model-card')
 
 describe('ModelsCatalogView', () => {
-  it('renders one card per model with its retail price and discount badge', async () => {
+  it('renders one card per model with its retail price', async () => {
     const wrapper = await mountView()
     const cards = cardsOf(wrapper)
 
@@ -72,10 +78,17 @@ describe('ModelsCatalogView', () => {
     expect(wrapper.text()).not.toContain('deepseek-v9-unpriced')
     expect(wrapper.text()).toContain('claude-sonnet-5')
     expect(wrapper.text()).toContain('$0.1941/1M')
-    expect(wrapper.text()).toContain('-90%')
     // A flat-rate media model shows its per-unit price instead of token prices.
     expect(wrapper.text()).toContain('$0.0312')
     expect(wrapper.text()).toContain('request')
+  })
+
+  it('makes every card a link to the API keys page', async () => {
+    const wrapper = await mountView()
+
+    const targets = cardsOf(wrapper).map((card: any) => card.attributes('data-to'))
+    expect(targets).toEqual(['/keys', '/keys', '/keys'])
+    expect(cardsOf(wrapper)[0].text()).toContain('modelsCatalog.useKey')
   })
 
   it('groups every model under its provider in the names view', async () => {

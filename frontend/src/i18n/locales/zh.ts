@@ -496,6 +496,8 @@ export default {
     noPrice: '暂无价格',
     input: '输入',
     output: '输出',
+    useKey: '使用密钥',
+    useKeyTitle: '前往 API 密钥页面创建或复制该模型的密钥',
     available: '可用',
     unavailable: '不可用'
   },
@@ -1049,7 +1051,19 @@ export default {
     exportExcelSuccess: '使用数据导出成功（Excel格式）',
     exportExcelFailed: '使用数据导出失败',
     imageUnit: '张',
-    userAgent: 'User-Agent'
+    userAgent: 'User-Agent',
+    // 错误标签页与 Request ID 列（与 dashboard 区块相同的文案）。
+    requestId: 'Request ID',
+    copyRequestId: '复制 request ID',
+    tabRequests: '请求',
+    tabErrors: '错误',
+    status: '状态码',
+    errorType: '错误类型',
+    errorMessage: '错误信息',
+    retry: '重试',
+    retryable: '已重试',
+    notRetryable: '未重试',
+    noErrors: '该时间段内没有失败的请求。'
   },
 
   // Redeem
