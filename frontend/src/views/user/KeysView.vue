@@ -323,8 +323,12 @@
             </div>
           </template>
 
+          <template #header-actions>
+            <span class="block text-right">{{ t('common.actions') }}</span>
+          </template>
+
           <template #cell-actions="{ row }">
-            <div class="flex items-center">
+            <div class="flex items-center justify-end">
               <!-- Use Key -->
               <button
                 :disabled="!isRevealable(row)"
@@ -1261,30 +1265,33 @@ const { copyToClipboard: clipboardCopy } = useClipboard()
 
 // Column set follows the OpenLux provider console: name, status, masked key
 // (with copy), limit, usage, created, actions. The admin additionally keeps the
-// owner, group and rate-limit columns.
+// owner, group and rate-limit columns. Each column carries an explicit width so
+// the browser distributes the card's spare width deliberately (wide name/key,
+// narrow status/limit/usage/created/actions) instead of stretching every column
+// equally.
 const columns = computed<Column[]>(() => {
   if (isAdmin.value) {
     return [
-      { key: 'name', label: t('common.name'), sortable: true },
-      { key: 'status', label: t('common.status'), sortable: true },
-      { key: 'key', label: t('keys.apiKey'), sortable: false },
-      { key: 'limit', label: t('keys.limit'), sortable: false },
-      { key: 'usage', label: t('keys.usage'), sortable: false },
-      { key: 'owner', label: 'Owner', sortable: false },
-      { key: 'group', label: t('keys.group'), sortable: false },
-      { key: 'rate_limit', label: t('keys.rateLimitColumn'), sortable: false },
-      { key: 'created_at', label: t('keys.created'), sortable: true },
-      { key: 'actions', label: t('common.actions'), sortable: false }
+      { key: 'name', label: t('common.name'), sortable: true, class: 'w-[17%]' },
+      { key: 'status', label: t('common.status'), sortable: true, class: 'w-[8%]' },
+      { key: 'key', label: t('keys.apiKey'), sortable: false, class: 'w-[13%]' },
+      { key: 'limit', label: t('keys.limit'), sortable: false, class: 'w-[9%]' },
+      { key: 'usage', label: t('keys.usage'), sortable: false, class: 'w-[9%]' },
+      { key: 'owner', label: 'Owner', sortable: false, class: 'w-[8%]' },
+      { key: 'group', label: t('keys.group'), sortable: false, class: 'w-[10%]' },
+      { key: 'rate_limit', label: t('keys.rateLimitColumn'), sortable: false, class: 'w-[9%]' },
+      { key: 'created_at', label: t('keys.created'), sortable: true, class: 'w-[9%]' },
+      { key: 'actions', label: t('common.actions'), sortable: false, class: 'w-[8%] text-right' }
     ]
   }
   return [
-    { key: 'name', label: t('common.name'), sortable: true },
-    { key: 'status', label: t('common.status'), sortable: true },
-    { key: 'key', label: t('keys.apiKey'), sortable: false },
-    { key: 'limit', label: t('keys.limit'), sortable: false },
-    { key: 'usage', label: t('keys.usage'), sortable: false },
-    { key: 'created_at', label: t('keys.created'), sortable: true },
-    { key: 'actions', label: t('common.actions'), sortable: false }
+    { key: 'name', label: t('common.name'), sortable: true, class: 'w-[24%]' },
+    { key: 'status', label: t('common.status'), sortable: true, class: 'w-[10%]' },
+    { key: 'key', label: t('keys.apiKey'), sortable: false, class: 'w-[20%]' },
+    { key: 'limit', label: t('keys.limit'), sortable: false, class: 'w-[10%]' },
+    { key: 'usage', label: t('keys.usage'), sortable: false, class: 'w-[11%]' },
+    { key: 'created_at', label: t('keys.created'), sortable: true, class: 'w-[13%]' },
+    { key: 'actions', label: t('common.actions'), sortable: false, class: 'w-[12%] text-right' }
   ]
 })
 
