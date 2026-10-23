@@ -113,7 +113,7 @@
           <template #cell-name="{ value, row }">
             <div class="flex items-center gap-1.5">
               <span
-                class="max-w-[140px] whitespace-normal break-words font-medium text-gray-900 dark:text-white"
+                class="min-w-0 whitespace-normal break-words font-medium text-gray-900 dark:text-white"
                 :title="value"
               >{{ value }}</span>
               <Icon
@@ -1265,33 +1265,65 @@ const { copyToClipboard: clipboardCopy } = useClipboard()
 
 // Column set follows the OpenLux provider console: name, status, masked key
 // (with copy), limit, usage, created, actions. The admin additionally keeps the
-// owner, group and rate-limit columns. Each column carries an explicit width so
-// the browser distributes the card's spare width deliberately (wide name/key,
-// narrow status/limit/usage/created/actions) instead of stretching every column
-// equally.
+// owner, group and rate-limit columns.
+//
+// Width rule: each column gets "what its content needs + an equal share of the
+// leftover". `100%` inside the calc resolves against the table (which is
+// `width: 100%`), so the shares add back up to exactly the full width, and
+// `table-layout: auto` still lets a column grow past its share when its content
+// genuinely needs more (nothing gets clipped, and the no-horizontal-scroll
+// guarantee at 1440px holds).
+//
+// The classes are written out literally on purpose: Tailwind scans the source
+// text, so a class assembled from a template literal would never be generated.
+// Totals: the user table needs 920px of content across 7 columns, the admin
+// table 1240px across 10.
+const USER_COL = {
+  name: 'w-[calc(200px_+_(100%_-_920px)_/_7)]',
+  status: 'w-[calc(110px_+_(100%_-_920px)_/_7)]',
+  key: 'w-[calc(170px_+_(100%_-_920px)_/_7)]',
+  limit: 'w-[calc(90px_+_(100%_-_920px)_/_7)]',
+  usage: 'w-[calc(90px_+_(100%_-_920px)_/_7)]',
+  created: 'w-[calc(110px_+_(100%_-_920px)_/_7)]',
+  actions: 'w-[calc(150px_+_(100%_-_920px)_/_7)]'
+}
+
+const ADMIN_COL = {
+  name: 'w-[calc(200px_+_(100%_-_1240px)_/_10)]',
+  status: 'w-[calc(110px_+_(100%_-_1240px)_/_10)]',
+  key: 'w-[calc(170px_+_(100%_-_1240px)_/_10)]',
+  limit: 'w-[calc(90px_+_(100%_-_1240px)_/_10)]',
+  usage: 'w-[calc(90px_+_(100%_-_1240px)_/_10)]',
+  owner: 'w-[calc(100px_+_(100%_-_1240px)_/_10)]',
+  group: 'w-[calc(110px_+_(100%_-_1240px)_/_10)]',
+  rate_limit: 'w-[calc(110px_+_(100%_-_1240px)_/_10)]',
+  created: 'w-[calc(110px_+_(100%_-_1240px)_/_10)]',
+  actions: 'w-[calc(150px_+_(100%_-_1240px)_/_10)] text-right'
+}
+
 const columns = computed<Column[]>(() => {
   if (isAdmin.value) {
     return [
-      { key: 'name', label: t('common.name'), sortable: true, class: 'w-[17%]' },
-      { key: 'status', label: t('common.status'), sortable: true, class: 'w-[8%]' },
-      { key: 'key', label: t('keys.apiKey'), sortable: false, class: 'w-[13%]' },
-      { key: 'limit', label: t('keys.limit'), sortable: false, class: 'w-[9%]' },
-      { key: 'usage', label: t('keys.usage'), sortable: false, class: 'w-[9%]' },
-      { key: 'owner', label: 'Owner', sortable: false, class: 'w-[8%]' },
-      { key: 'group', label: t('keys.group'), sortable: false, class: 'w-[10%]' },
-      { key: 'rate_limit', label: t('keys.rateLimitColumn'), sortable: false, class: 'w-[9%]' },
-      { key: 'created_at', label: t('keys.created'), sortable: true, class: 'w-[9%]' },
-      { key: 'actions', label: t('common.actions'), sortable: false, class: 'w-[8%] text-right' }
+      { key: 'name', label: t('common.name'), sortable: true, class: ADMIN_COL.name },
+      { key: 'status', label: t('common.status'), sortable: true, class: ADMIN_COL.status },
+      { key: 'key', label: t('keys.apiKey'), sortable: false, class: ADMIN_COL.key },
+      { key: 'limit', label: t('keys.limit'), sortable: false, class: ADMIN_COL.limit },
+      { key: 'usage', label: t('keys.usage'), sortable: false, class: ADMIN_COL.usage },
+      { key: 'owner', label: 'Owner', sortable: false, class: ADMIN_COL.owner },
+      { key: 'group', label: t('keys.group'), sortable: false, class: ADMIN_COL.group },
+      { key: 'rate_limit', label: t('keys.rateLimitColumn'), sortable: false, class: ADMIN_COL.rate_limit },
+      { key: 'created_at', label: t('keys.created'), sortable: true, class: ADMIN_COL.created },
+      { key: 'actions', label: t('common.actions'), sortable: false, class: ADMIN_COL.actions }
     ]
   }
   return [
-    { key: 'name', label: t('common.name'), sortable: true, class: 'w-[24%]' },
-    { key: 'status', label: t('common.status'), sortable: true, class: 'w-[10%]' },
-    { key: 'key', label: t('keys.apiKey'), sortable: false, class: 'w-[20%]' },
-    { key: 'limit', label: t('keys.limit'), sortable: false, class: 'w-[10%]' },
-    { key: 'usage', label: t('keys.usage'), sortable: false, class: 'w-[11%]' },
-    { key: 'created_at', label: t('keys.created'), sortable: true, class: 'w-[13%]' },
-    { key: 'actions', label: t('common.actions'), sortable: false, class: 'w-[12%] text-right' }
+    { key: 'name', label: t('common.name'), sortable: true, class: USER_COL.name },
+    { key: 'status', label: t('common.status'), sortable: true, class: USER_COL.status },
+    { key: 'key', label: t('keys.apiKey'), sortable: false, class: USER_COL.key },
+    { key: 'limit', label: t('keys.limit'), sortable: false, class: USER_COL.limit },
+    { key: 'usage', label: t('keys.usage'), sortable: false, class: USER_COL.usage },
+    { key: 'created_at', label: t('keys.created'), sortable: true, class: USER_COL.created },
+    { key: 'actions', label: t('common.actions'), sortable: false, class: USER_COL.actions }
   ]
 })
 
