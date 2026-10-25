@@ -409,6 +409,10 @@ The Sub2API user frontend is reused (no second cabinet), mapped to the recommend
 ### Admin Sidebar: Payments Entries
 - The admin sidebar (`AppSidebar.vue`) now links to `/admin/orders` (`nav.orderManagement`, all top-up orders with status, provider, transaction hash and per-order audit log) and `/admin/orders/dashboard` (`nav.paymentDashboard`). Previously these routes existed but were reachable only by typing the URL. Both are hidden in simple mode.
 
+### Payment Subject Currency & Sub-Path Navigation
+- `paymentSubjectCurrency` (`internal/service/payment_order.go`) picks the currency named in the payment subject shown on the provider's checkout page: CNY for Alipay/WeChat Pay/EasyPay, the instance `currency` (default USD) for NOWPayments, USD otherwise (Stripe included). Previously every subject ended in a hardcoded "CNY" even for USD invoices.
+- `appPath()` (`frontend/src/utils/url.ts`) prefixes an in-app path with the Vite base path. It is used for navigations that bypass the router (`window.location.href`, `window.opener.location.href`) so they stay inside the app under a reverse-proxy sub-path such as `/gateway`: the "Back to recharge" / "View orders" buttons of `PaymentResultView.vue` and the `/admin/ops` -> `/admin/settings` redirect in `api/client.ts`.
+
 ### Documentation & Onboarding (§13)
 In-product documentation page at `/docs` (`frontend/src/views/user/DocsView.vue`, public route, sidebar `nav.docs`). It walks the user from sign-up to a first request and is bilingual (en/zh):
 - **Quick start**: (1) register + top up, (2) create/copy an API key, (3) pick a model and send a request — each step links to the matching screen (`/purchase`, `/keys`, `/available-channels`).

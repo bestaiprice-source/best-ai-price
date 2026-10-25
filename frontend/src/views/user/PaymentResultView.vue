@@ -115,6 +115,7 @@ import { usePaymentStore } from '@/stores/payment'
 import { paymentAPI } from '@/api/payment'
 import type { PaymentOrder } from '@/types/payment'
 import { normalizePaymentMethodForDisplay, paymentMethodI18nKey } from './paymentUx'
+import { appPath } from '@/utils/url'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -128,7 +129,7 @@ const isPopup = ref(typeof window !== 'undefined' && Boolean(window.opener && !w
 function handleBackToRecharge() {
   if (typeof window !== 'undefined' && window.opener && !window.opener.closed) {
     try {
-      window.opener.location.href = '/purchase'
+      window.opener.location.href = appPath('/purchase')
       window.close()
       return
     } catch (_e) {
@@ -141,7 +142,7 @@ function handleBackToRecharge() {
 function handleViewOrders() {
   if (typeof window !== 'undefined' && window.opener && !window.opener.closed) {
     try {
-      window.opener.location.href = '/orders'
+      window.opener.location.href = appPath('/orders')
       window.close()
       return
     } catch (_e) {

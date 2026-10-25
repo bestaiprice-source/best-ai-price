@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import PaymentResultView from '../PaymentResultView.vue'
 
@@ -45,6 +45,49 @@ vi.mock('vue-i18n', () => ({
 describe('PaymentResultView', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  it('sends the popup opener inside the app base, not to the origin root', async () => {
+    // Production serves the SPA under /gateway/ (vite.config.ts). A bare
+    // '/purchase' on the opener would be resolved against the origin and drop
+    // the user on the catalogue site instead of the gateway.
+    vi.stubEnv('BASE_URL', '/gateway/')
+    pollOrderStatus.mockResolvedValue({
+      id: 12,
+      out_trade_no: 'sub2_20260913McR9IPNs',
+      pay_amount: 100,
+      amount: 100,
+      status: 'COMPLETED',
+      payment_type: 'nowpayments',
+      fee_rate: 0,
+    })
+
+    const openerLocation = { href: '' }
+    const closeSpy = vi.fn()
+    Object.defineProperty(window, 'opener', {
+      value: { closed: false, location: openerLocation },
+      writable: true,
+      configurable: true,
+    })
+    Object.defineProperty(window, 'close', { value: closeSpy, writable: true, configurable: true })
+
+    const wrapper = mount(PaymentResultView)
+    await flushPromises()
+
+    const setup = (wrapper.vm as any).$?.setupState
+
+    setup.handleBackToRecharge()
+    expect(openerLocation.href).toBe('/gateway/purchase')
+    expect(closeSpy).toHaveBeenCalled()
+    expect(mockRouter.push).not.toHaveBeenCalled()
+
+    openerLocation.href = ''
+    setup.handleViewOrders()
+    expect(openerLocation.href).toBe('/gateway/orders')
   })
 
   it('renders numeric baseAmount without NaN when fee_rate is missing or 0', async () => {

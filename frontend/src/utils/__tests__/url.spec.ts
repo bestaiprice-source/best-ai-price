@@ -1,5 +1,5 @@
-import { describe, it, expect, afterEach } from 'vitest'
-import { getPublicAppBaseUrl } from '../url'
+import { describe, it, expect, afterEach, vi } from 'vitest'
+import { appPath, getBasePath, getPublicAppBaseUrl } from '../url'
 
 describe('getPublicAppBaseUrl', () => {
   const originalWindow = globalThis.window
@@ -57,5 +57,40 @@ describe('getPublicAppBaseUrl', () => {
     })
 
     expect(getPublicAppBaseUrl()).toBe('https://sub2api.example.com')
+  })
+})
+
+describe('appPath', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  it('prefixes an in-app path with the reverse-proxy base', () => {
+    vi.stubEnv('BASE_URL', '/gateway/')
+
+    expect(appPath('/purchase')).toBe('/gateway/purchase')
+    expect(appPath('/orders')).toBe('/gateway/orders')
+    expect(appPath('/admin/settings')).toBe('/gateway/admin/settings')
+  })
+
+  it('normalizes a base without a trailing slash and a path without a leading one', () => {
+    vi.stubEnv('BASE_URL', '/gateway')
+
+    expect(appPath('purchase')).toBe('/gateway/purchase')
+  })
+
+  it('stays a no-op when the app is served from the origin root', () => {
+    vi.stubEnv('BASE_URL', '/')
+
+    expect(appPath('/purchase')).toBe('/purchase')
+  })
+
+  it('never returns a root-relative path while a base is configured', () => {
+    vi.stubEnv('BASE_URL', '/gateway/')
+
+    // A bare '/purchase' would be resolved against the origin by the browser and
+    // leave the SPA entirely — the bug this helper exists to prevent.
+    expect(appPath('/purchase')).not.toBe('/purchase')
+    expect(appPath('/purchase').startsWith(getBasePath())).toBe(true)
   })
 })

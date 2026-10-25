@@ -56,6 +56,20 @@ export function getBasePath(): string {
 }
 
 /**
+ * Prefixes an in-app path with Vite's base path, so it resolves inside the SPA
+ * when it is served under a reverse-proxy sub-path ('/purchase' -> '/gateway/purchase').
+ *
+ * Use this for the navigations that leave the router — `window.location.href`
+ * and `window.opener.location.href` — because those are resolved by the browser
+ * against the origin root and would otherwise land outside the app.
+ */
+export function appPath(path: string): string {
+  const base = getBasePath()
+  const clean = path.startsWith('/') ? path.slice(1) : path
+  return `${base}${clean}`
+}
+
+/**
  * Returns the public application base URL (origin + sub-path prefix if any, e.g. 'https://bestaiprice.com/gateway').
  * Detects reverse proxy path prefixes dynamically from window.location.pathname or import.meta.env.BASE_URL.
  */

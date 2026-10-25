@@ -6,7 +6,7 @@
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig, AxiosResponse } from 'axios'
 import type { ApiResponse } from '@/types'
 import { getLocale } from '@/i18n'
-import { getApiBaseUrl } from '@/utils/url'
+import { appPath, getApiBaseUrl } from '@/utils/url'
 
 // ==================== Axios Instance Configuration ====================
 
@@ -143,7 +143,7 @@ apiClient.interceptors.response.use(
         }
 
         if (window.location.pathname.startsWith('/admin/ops')) {
-          window.location.href = '/admin/settings'
+          window.location.href = appPath('/admin/settings')
         }
 
         return Promise.reject({
