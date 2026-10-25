@@ -413,6 +413,9 @@ The Sub2API user frontend is reused (no second cabinet), mapped to the recommend
 - `paymentSubjectCurrency` (`internal/service/payment_order.go`) picks the currency named in the payment subject shown on the provider's checkout page: CNY for Alipay/WeChat Pay/EasyPay, the instance `currency` (default USD) for NOWPayments, USD otherwise (Stripe included). Previously every subject ended in a hardcoded "CNY" even for USD invoices.
 - `appPath()` (`frontend/src/utils/url.ts`) prefixes an in-app path with the Vite base path. It is used for navigations that bypass the router (`window.location.href`, `window.opener.location.href`) so they stay inside the app under a reverse-proxy sub-path such as `/gateway`: the "Back to recharge" / "View orders" buttons of `PaymentResultView.vue` and the `/admin/ops` -> `/admin/settings` redirect in `api/client.ts`.
 
+### Payment i18n Keys
+- The payment screens (`/admin/orders`, payment dashboard, plan/refund dialogs, user checkout errors) call `t('payment.admin.*')`, `t('payment.orders.*')`, `t('payment.planCard.*')`, `t('payment.errors.*')` and `common.view/saved/deleted/created`. These keys were missing from `en.ts`/`zh.ts` and rendered as raw key paths; they are now defined in both locales. Remaining known gap: `admin.settings.payment.*Guide*` (Alipay/WeChat provider setup guides), unused by the USD/NOWPayments setup.
+
 ### Documentation & Onboarding (§13)
 In-product documentation page at `/docs` (`frontend/src/views/user/DocsView.vue`, public route, sidebar `nav.docs`). It walks the user from sign-up to a first request and is bilingual (en/zh):
 - **Quick start**: (1) register + top up, (2) create/copy an API key, (3) pick a model and send a request — each step links to the matching screen (`/purchase`, `/keys`, `/available-channels`).
