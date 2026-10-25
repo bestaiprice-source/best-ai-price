@@ -287,10 +287,18 @@ const facetModels = computed(() => {
   })
 })
 
+/** Biggest discount first; equal discounts keep the feed order (stable sort). */
+function byDiscountDesc(a: PublicModelPricing, b: PublicModelPricing): number {
+  return (Number(b.discount_percent) || 0) - (Number(a.discount_percent) || 0)
+}
+
 const filtered = computed(() =>
-  activeVendor.value
+  (activeVendor.value
     ? facetModels.value.filter((model) => vendorOf(model) === activeVendor.value)
     : facetModels.value
+  )
+    .slice()
+    .sort(byDiscountDesc)
 )
 
 /** Per-vendor model counts for the CURRENT type + search. */
@@ -367,7 +375,7 @@ const groupedByVendor = computed(() => {
     })
     .map(([vendor, list]) => ({
       vendor,
-      models: list.slice().sort((a, b) => shortName(a).localeCompare(shortName(b)))
+      models: list.slice().sort((a, b) => byDiscountDesc(a, b) || shortName(a).localeCompare(shortName(b)))
     }))
 })
 
