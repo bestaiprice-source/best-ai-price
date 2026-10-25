@@ -407,7 +407,7 @@ The Sub2API user frontend is reused (no second cabinet), mapped to the recommend
 - The "Welcome to Sub2API" guided tour (`useOnboardingTour`, mounted in `AppLayout.vue`) no longer auto-starts (`autoStart: false`), and the "Restart tour" item was removed from the user dropdown in `AppHeader.vue`. The tour code and `onboarding` store remain in place but are unreachable from the UI.
 
 ### Admin Sidebar: Payments Entries
-- The admin sidebar (`AppSidebar.vue`) now links to `/admin/orders` (`nav.orderManagement`, all top-up orders with status, provider, transaction hash and per-order audit log) and `/admin/orders/dashboard` (`nav.paymentDashboard`). Previously these routes existed but were reachable only by typing the URL. Both are hidden in simple mode.
+- The admin sidebar (`AppSidebar.vue`) now links to `/admin/orders` (`nav.orderManagement`, all top-up orders with status, provider, transaction hash and per-order audit log) and `/admin/orders/dashboard` (`nav.paymentDashboard`). Previously these routes existed but were reachable only by typing the URL. Both are hidden in simple mode. The payment dashboard (`AdminPaymentDashboardView.vue`) renders amounts in USD (`$`), not the legacy hardcoded `¥`.
 
 ### Payment Subject Currency & Sub-Path Navigation
 - `paymentSubjectCurrency` (`internal/service/payment_order.go`) picks the currency named in the payment subject shown on the provider's checkout page: CNY for Alipay/WeChat Pay/EasyPay, the instance `currency` (default USD) for NOWPayments, USD otherwise (Stripe included). Previously every subject ended in a hardcoded "CNY" even for USD invoices.
