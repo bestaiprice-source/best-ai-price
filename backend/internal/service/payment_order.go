@@ -377,7 +377,7 @@ func (s *PaymentService) invokeProvider(ctx context.Context, order *dbent.Paymen
 		return nil, infraerrors.ServiceUnavailable("PAYMENT_PROVIDER_MISCONFIGURED", "provider_misconfigured").
 			WithMetadata(map[string]string{"provider": sel.ProviderKey, "instance_id": sel.InstanceID})
 	}
-	subject := s.buildPaymentSubject(plan, limitAmount, cfg)
+	subject := s.buildPaymentSubject(plan, limitAmount, cfg, paymentSubjectCurrency(sel))
 	outTradeNo := order.OutTradeNo
 	canonicalReturnURL, err := CanonicalizeReturnURL(req.ReturnURL, req.SrcHost, req.SrcURL)
 	if err != nil {
@@ -483,7 +483,30 @@ func selectedInstanceSupportedTypes(sel *payment.InstanceSelection) string {
 	return sel.SupportedTypes
 }
 
-func (s *PaymentService) buildPaymentSubject(plan *dbent.SubscriptionPlan, limitAmount float64, cfg *PaymentConfig) string {
+// paymentSubjectCurrency resolves the currency the payment subject must name for
+// the selected provider. The subject is rendered verbatim on the provider's own
+// checkout page ("More details"), so it has to match what is actually charged:
+// hardcoding CNY there labelled every USD invoice (Stripe, NOWPayments) as CNY
+// while the invoice itself was denominated in dollars.
+func paymentSubjectCurrency(sel *payment.InstanceSelection) string {
+	if sel == nil {
+		return "USD"
+	}
+	switch sel.ProviderKey {
+	case payment.TypeWxpay, payment.TypeWxpayDirect, payment.TypeAlipay, payment.TypeAlipayDirect, payment.TypeEasyPay:
+		return "CNY"
+	case payment.TypeNowPayments:
+		// NOWPayments invoices in the instance's configured currency (default usd).
+		if cur := strings.TrimSpace(sel.Config["currency"]); cur != "" {
+			return strings.ToUpper(cur)
+		}
+		return "USD"
+	default:
+		return "USD"
+	}
+}
+
+func (s *PaymentService) buildPaymentSubject(plan *dbent.SubscriptionPlan, limitAmount float64, cfg *PaymentConfig, currency string) string {
 	if plan != nil {
 		if plan.ProductName != "" {
 			return plan.ProductName
@@ -496,7 +519,10 @@ func (s *PaymentService) buildPaymentSubject(plan *dbent.SubscriptionPlan, limit
 	if pf != "" || sf != "" {
 		return strings.TrimSpace(pf + " " + amountStr + " " + sf)
 	}
-	return "Sub2API " + amountStr + " CNY"
+	if strings.TrimSpace(currency) == "" {
+		currency = "USD"
+	}
+	return "Sub2API " + amountStr + " " + currency
 }
 
 func (s *PaymentService) maybeBuildWeChatOAuthRequiredResponse(ctx context.Context, req CreateOrderRequest, amount, payAmount, feeRate float64) (*CreateOrderResponse, error) {
