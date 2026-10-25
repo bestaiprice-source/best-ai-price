@@ -58,7 +58,7 @@
           <template #cell-key="{ value, row }">
             <div class="flex items-center gap-1">
               <code
-                class="code inline-block max-w-[110px] truncate text-xs"
+                class="code inline-block max-w-[160px] truncate text-sm"
                 :title="revealedKeys[row.id] || undefined"
               >
                 {{ displayKey(row, value) }}
@@ -93,7 +93,7 @@
               </template>
               <span
                 v-else
-                class="whitespace-nowrap text-xs text-gray-400 dark:text-dark-500"
+                class="whitespace-nowrap text-sm text-gray-400 dark:text-dark-500"
                 :title="t('keys.keyNotRecoverable')"
               >
                 {{ t('keys.keyNotRecoverableShort') }}
@@ -102,18 +102,18 @@
           </template>
 
           <template #cell-owner="{ row }">
-            <div v-if="isAdmin" class="flex flex-col leading-4">
-              <span class="max-w-[76px] truncate text-xs font-medium text-gray-900 dark:text-white">
+            <div v-if="isAdmin" class="flex flex-col leading-5">
+              <span class="max-w-[110px] truncate text-sm font-medium text-gray-900 dark:text-white">
                 {{ row.user?.username || row.user?.email || 'N/A' }}
               </span>
-              <span class="text-[10px] text-gray-500">ID: {{ row.user_id }}</span>
+              <span class="text-xs text-gray-500">ID: {{ row.user_id }}</span>
             </div>
           </template>
 
           <template #cell-name="{ value, row }">
             <div class="flex items-center gap-1.5">
               <span
-                class="min-w-0 whitespace-normal break-words font-medium text-gray-900 dark:text-white"
+                class="min-w-0 whitespace-normal break-words text-base font-medium text-gray-900 dark:text-white"
                 :title="value"
               >{{ value }}</span>
               <Icon
@@ -147,12 +147,12 @@
                 />
                 <span
                   v-if="row.groups && row.groups.length > 1"
-                  class="rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-500 dark:bg-dark-700 dark:text-gray-300"
+                  class="rounded-full bg-gray-100 px-1.5 py-0.5 text-xs text-gray-500 dark:bg-dark-700 dark:text-gray-300"
                 >
                   +{{ row.groups.length - 1 }}
                 </span>
               </div>
-              <span v-else class="text-sm text-gray-400 dark:text-dark-500">{{
+              <span v-else class="text-base text-gray-400 dark:text-dark-500">{{
                 t('keys.noGroup')
               }}</span>
             </button>
@@ -162,7 +162,7 @@
                it is already consumed. Unlimited keys show a dash. -->
           <template #cell-limit="{ row }">
             <div v-if="row.quota > 0" class="w-[58px]">
-              <div class="text-xs leading-4 tabular-nums">
+              <div class="text-sm leading-5 tabular-nums">
                 <div :class="[
                   'font-medium',
                   row.quota_used >= row.quota ? 'text-red-500' :
@@ -185,13 +185,13 @@
                 />
               </div>
             </div>
-            <span v-else class="text-xs text-gray-400 dark:text-dark-500">{{ t('keys.unlimited') }}</span>
+            <span v-else class="text-sm text-gray-400 dark:text-dark-500">{{ t('keys.unlimited') }}</span>
           </template>
 
           <!-- Spend. Label above value keeps the column narrow (the whole table
                has to fit the card without a horizontal scrollbar). -->
           <template #cell-usage="{ row }">
-            <div class="text-xs leading-4 tabular-nums">
+            <div class="text-sm leading-5 tabular-nums">
               <div class="text-gray-400 dark:text-dark-500">{{ t('keys.today') }}</div>
               <div class="font-medium text-gray-900 dark:text-white">
                 ${{ (usageStats[row.id]?.today_actual_cost ?? 0).toFixed(4) }}
@@ -207,7 +207,7 @@
             <div v-if="row.rate_limit_5h > 0 || row.rate_limit_1d > 0 || row.rate_limit_7d > 0" class="w-[88px] space-y-1">
               <!-- 5h window -->
               <div v-if="row.rate_limit_5h > 0">
-                <div class="flex items-center justify-between text-xs">
+                <div class="flex items-center justify-between text-sm">
                   <span class="text-gray-500 dark:text-gray-400">5h</span>
                   <span :class="[
                     'font-medium tabular-nums',
@@ -229,13 +229,13 @@
                     :style="{ width: Math.min((row.usage_5h / row.rate_limit_5h) * 100, 100) + '%' }"
                   />
                 </div>
-                <div v-if="row.reset_5h_at && formatResetTime(row.reset_5h_at)" class="text-[10px] text-gray-400 dark:text-gray-500 tabular-nums">
+                <div v-if="row.reset_5h_at && formatResetTime(row.reset_5h_at)" class="text-xs text-gray-400 dark:text-gray-500 tabular-nums">
                   ⟳ {{ formatResetTime(row.reset_5h_at) }}
                 </div>
               </div>
               <!-- 1d window -->
               <div v-if="row.rate_limit_1d > 0">
-                <div class="flex items-center justify-between text-xs">
+                <div class="flex items-center justify-between text-sm">
                   <span class="text-gray-500 dark:text-gray-400">1d</span>
                   <span :class="[
                     'font-medium tabular-nums',
@@ -257,13 +257,13 @@
                     :style="{ width: Math.min((row.usage_1d / row.rate_limit_1d) * 100, 100) + '%' }"
                   />
                 </div>
-                <div v-if="row.reset_1d_at && formatResetTime(row.reset_1d_at)" class="text-[10px] text-gray-400 dark:text-gray-500 tabular-nums">
+                <div v-if="row.reset_1d_at && formatResetTime(row.reset_1d_at)" class="text-xs text-gray-400 dark:text-gray-500 tabular-nums">
                   ⟳ {{ formatResetTime(row.reset_1d_at) }}
                 </div>
               </div>
               <!-- 7d window -->
               <div v-if="row.rate_limit_7d > 0">
-                <div class="flex items-center justify-between text-xs">
+                <div class="flex items-center justify-between text-sm">
                   <span class="text-gray-500 dark:text-gray-400">7d</span>
                   <span :class="[
                     'font-medium tabular-nums',
@@ -285,7 +285,7 @@
                     :style="{ width: Math.min((row.usage_7d / row.rate_limit_7d) * 100, 100) + '%' }"
                   />
                 </div>
-                <div v-if="row.reset_7d_at && formatResetTime(row.reset_7d_at)" class="text-[10px] text-gray-400 dark:text-gray-500 tabular-nums">
+                <div v-if="row.reset_7d_at && formatResetTime(row.reset_7d_at)" class="text-xs text-gray-400 dark:text-gray-500 tabular-nums">
                   ⟳ {{ formatResetTime(row.reset_7d_at) }}
                 </div>
               </div>
@@ -293,14 +293,14 @@
               <button
                 v-if="row.usage_5h > 0 || row.usage_1d > 0 || row.usage_7d > 0"
                 @click.stop="confirmResetRateLimitFromTable(row)"
-                class="mt-0.5 inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-gray-500 transition-colors hover:bg-gray-100 hover:text-primary-600 dark:hover:bg-dark-700 dark:hover:text-primary-400"
+                class="mt-0.5 inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-sm text-gray-500 transition-colors hover:bg-gray-100 hover:text-primary-600 dark:hover:bg-dark-700 dark:hover:text-primary-400"
                 :title="t('keys.resetRateLimitUsage')"
               >
                 <Icon name="refresh" size="xs" />
                 {{ t('keys.resetUsage') }}
               </button>
             </div>
-            <span v-else class="text-sm text-gray-400 dark:text-dark-500">-</span>
+            <span v-else class="text-base text-gray-400 dark:text-dark-500">-</span>
           </template>
 
           <template #cell-status="{ value }">
@@ -317,7 +317,7 @@
 
           <!-- Date above time: two short lines instead of one wide timestamp. -->
           <template #cell-created_at="{ value }">
-            <div class="text-xs leading-4 tabular-nums text-gray-500 dark:text-dark-400">
+            <div class="text-sm leading-5 tabular-nums text-gray-500 dark:text-dark-400">
               <div>{{ formatDatePart(value) }}</div>
               <div>{{ formatTimePart(value) }}</div>
             </div>
@@ -1279,26 +1279,26 @@ const { copyToClipboard: clipboardCopy } = useClipboard()
 // Totals: the user table needs 920px of content across 7 columns, the admin
 // table 1240px across 10.
 const USER_COL = {
-  name: 'w-[calc(200px_+_(100%_-_920px)_/_7)]',
-  status: 'w-[calc(110px_+_(100%_-_920px)_/_7)]',
-  key: 'w-[calc(170px_+_(100%_-_920px)_/_7)]',
-  limit: 'w-[calc(90px_+_(100%_-_920px)_/_7)]',
-  usage: 'w-[calc(90px_+_(100%_-_920px)_/_7)]',
-  created: 'w-[calc(110px_+_(100%_-_920px)_/_7)]',
-  actions: 'w-[calc(150px_+_(100%_-_920px)_/_7)]'
+  name: 'w-[calc(220px_+_(100%_-_1090px)_/_7)]',
+  status: 'w-[calc(120px_+_(100%_-_1090px)_/_7)]',
+  key: 'w-[calc(250px_+_(100%_-_1090px)_/_7)]',
+  limit: 'w-[calc(110px_+_(100%_-_1090px)_/_7)]',
+  usage: 'w-[calc(110px_+_(100%_-_1090px)_/_7)]',
+  created: 'w-[calc(130px_+_(100%_-_1090px)_/_7)]',
+  actions: 'w-[calc(150px_+_(100%_-_1090px)_/_7)]'
 }
 
 const ADMIN_COL = {
-  name: 'w-[calc(200px_+_(100%_-_1240px)_/_10)]',
-  status: 'w-[calc(110px_+_(100%_-_1240px)_/_10)]',
-  key: 'w-[calc(170px_+_(100%_-_1240px)_/_10)]',
-  limit: 'w-[calc(90px_+_(100%_-_1240px)_/_10)]',
-  usage: 'w-[calc(90px_+_(100%_-_1240px)_/_10)]',
-  owner: 'w-[calc(100px_+_(100%_-_1240px)_/_10)]',
-  group: 'w-[calc(110px_+_(100%_-_1240px)_/_10)]',
-  rate_limit: 'w-[calc(110px_+_(100%_-_1240px)_/_10)]',
-  created: 'w-[calc(110px_+_(100%_-_1240px)_/_10)]',
-  actions: 'w-[calc(150px_+_(100%_-_1240px)_/_10)] text-right'
+  name: 'w-[calc(220px_+_(100%_-_1470px)_/_10)]',
+  status: 'w-[calc(120px_+_(100%_-_1470px)_/_10)]',
+  key: 'w-[calc(250px_+_(100%_-_1470px)_/_10)]',
+  limit: 'w-[calc(110px_+_(100%_-_1470px)_/_10)]',
+  usage: 'w-[calc(110px_+_(100%_-_1470px)_/_10)]',
+  owner: 'w-[calc(120px_+_(100%_-_1470px)_/_10)]',
+  group: 'w-[calc(130px_+_(100%_-_1470px)_/_10)]',
+  rate_limit: 'w-[calc(130px_+_(100%_-_1470px)_/_10)]',
+  created: 'w-[calc(130px_+_(100%_-_1470px)_/_10)]',
+  actions: 'w-[calc(150px_+_(100%_-_1470px)_/_10)] text-right'
 }
 
 const columns = computed<Column[]>(() => {

@@ -106,16 +106,34 @@
                 {{ model.canonical_model_id || model.model_id }}
               </p>
             </div>
-            <span
-              v-if="isAvailable(model)"
-              class="mt-1 inline-block h-2 w-2 shrink-0 rounded-full bg-emerald-500"
-              :title="t('modelsCatalog.available')"
-            ></span>
-            <span
-              v-else
-              class="mt-1 inline-block h-2 w-2 shrink-0 rounded-full bg-gray-300"
-              :title="t('modelsCatalog.unavailable')"
-            ></span>
+            <div class="flex shrink-0 items-center gap-2">
+              <span
+                v-if="discountOf(model)"
+                class="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
+                :title="t('modelsCatalog.discountTitle')"
+              >
+                -{{ discountOf(model) }}%
+              </span>
+              <button
+                type="button"
+                class="rounded-md p-1 text-gray-400 transition-colors hover:bg-black/5 hover:text-gray-700 dark:hover:bg-white/10 dark:hover:text-white"
+                :title="t('common.copy')"
+                :aria-label="t('common.copy')"
+                @click.prevent.stop="copyModelName(model)"
+              >
+                <Icon name="copy" size="sm" />
+              </button>
+              <span
+                v-if="isAvailable(model)"
+                class="inline-block h-2 w-2 shrink-0 rounded-full bg-emerald-500"
+                :title="t('modelsCatalog.available')"
+              ></span>
+              <span
+                v-else
+                class="inline-block h-2 w-2 shrink-0 rounded-full bg-gray-300"
+                :title="t('modelsCatalog.unavailable')"
+              ></span>
+            </div>
           </div>
 
           <div class="mt-3 flex items-end justify-between gap-2">
@@ -150,14 +168,16 @@
             <span class="text-xs text-gray-400">({{ group.models.length }})</span>
           </div>
           <div class="mt-2 flex flex-wrap gap-1.5">
-            <span
+            <button
               v-for="model in group.models"
               :key="model.canonical_model_id || model.model_id"
-              class="rounded-lg border border-gray-200 bg-white px-2 py-1 font-mono text-[11px] text-gray-700 dark:border-dark-600 dark:bg-dark-800 dark:text-gray-300"
-              :title="model.canonical_model_id || model.model_id"
+              type="button"
+              class="rounded-lg border border-gray-200 bg-white px-2 py-1 font-mono text-[11px] text-gray-700 transition-colors hover:border-gray-400 dark:border-dark-600 dark:bg-dark-800 dark:text-gray-300"
+              :title="t('common.copy')"
+              @click="copyModelName(model)"
             >
               {{ shortName(model) }}
-            </span>
+            </button>
           </div>
         </div>
       </div>
@@ -170,6 +190,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
+import { useClipboard } from '@/composables/useClipboard'
 import { getPublicModels, type PublicModelPricing } from '@/api/publicModels'
 
 const { t } = useI18n()
@@ -193,6 +214,23 @@ const modelTypes = [
   { id: 'audio' as const, labelKey: 'modelsCatalog.typeAudio' },
   { id: 'embedding' as const, labelKey: 'modelsCatalog.typeEmbedding' },
 ]
+
+const { copyToClipboard } = useClipboard()
+
+/**
+ * How far below the vendor's official list price we sell, as a whole percent.
+ * Comes from the public catalog feed (same retail basis the gateway charges), so
+ * it moves together with provider price changes; hidden when there is no saving.
+ */
+function discountOf(model: PublicModelPricing): number {
+  const value = Math.round(Number(model.discount_percent ?? 0))
+  return value >= 1 && value <= 99 ? value : 0
+}
+
+/** Copies the model id exactly as it must be sent in the API `model` field. */
+function copyModelName(model: PublicModelPricing) {
+  void copyToClipboard(model.model_id || model.canonical_model_id || '', t('common.copiedToClipboard'))
+}
 
 /** Vendor = the canonical prefix (`anthropic/claude-…` -> `anthropic`). */
 function vendorOf(model: PublicModelPricing): string {
@@ -266,9 +304,11 @@ const vendorCounts = computed(() => {
 })
 
 /**
- * Provider chips, most popular first. A vendor's popularity here is how many
- * models it offers under the current filter — the same number the chip shows —
- * with alphabetical tie-breaks. The `other` bucket (models carrying no vendor
+ * Provider chips: the three flagship vendors come first in a fixed order
+ * (anthropic / Claude, openai, google / Gemini), then every other vendor by
+ * popularity. A vendor's popularity here is how many models it offers under the
+ * current filter — the same number the chip shows — with alphabetical
+ * tie-breaks. The `other` bucket (models carrying no vendor
  * prefix) is not a provider, so it stays pinned at the end instead of leading
  * the list.
  *
@@ -280,6 +320,8 @@ const vendorCounts = computed(() => {
  * (openlux / portdan / …), which never match these model vendor prefixes, so it
  * cannot order this row.
  */
+const PINNED_VENDORS = ['anthropic', 'openai', 'google']
+
 const vendors = computed(() => {
   const counts = vendorCounts.value
   const visible = Object.keys(counts).filter((vendor) => (counts[vendor] ?? 0) > 0)
@@ -291,6 +333,13 @@ const vendors = computed(() => {
   return visible.sort((aVendor, bVendor) => {
     if (aVendor === 'other') return 1
     if (bVendor === 'other') return -1
+    const aPin = PINNED_VENDORS.indexOf(aVendor)
+    const bPin = PINNED_VENDORS.indexOf(bVendor)
+    if (aPin !== -1 || bPin !== -1) {
+      if (aPin === -1) return 1
+      if (bPin === -1) return -1
+      return aPin - bPin
+    }
     const diff = (counts[bVendor] ?? 0) - (counts[aVendor] ?? 0)
     return diff !== 0 ? diff : aVendor.localeCompare(bVendor)
   })
@@ -304,7 +353,18 @@ const groupedByVendor = computed(() => {
     groups.get(vendor)!.push(model)
   }
   return [...groups.entries()]
-    .sort((a, b) => b[1].length - a[1].length)
+    .sort((a, b) => {
+      if (a[0] === 'other') return 1
+      if (b[0] === 'other') return -1
+      const aPin = PINNED_VENDORS.indexOf(a[0])
+      const bPin = PINNED_VENDORS.indexOf(b[0])
+      if (aPin !== -1 || bPin !== -1) {
+        if (aPin === -1) return 1
+        if (bPin === -1) return -1
+        return aPin - bPin
+      }
+      return b[1].length - a[1].length
+    })
     .map(([vendor, list]) => ({
       vendor,
       models: list.slice().sort((a, b) => shortName(a).localeCompare(shortName(b)))

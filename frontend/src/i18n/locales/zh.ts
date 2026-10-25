@@ -483,6 +483,7 @@ export default {
     }
   },
   modelsCatalog: {
+    discountTitle: '低于官方价',
     title: '模型与价格',
     description: '一个密钥即可调用全部模型，价格即实际扣费价格。',
     searchPlaceholder: '搜索模型…',

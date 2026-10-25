@@ -44,6 +44,10 @@ vi.mock('@/api/publicModels', () => ({
   ])
 }))
 
+vi.mock('@/composables/useClipboard', () => ({
+  useClipboard: () => ({ copyToClipboard: vi.fn() })
+}))
+
 vi.mock('@/components/icons/Icon.vue', () => ({
   default: { name: 'Icon', props: ['name'], template: '<i />' }
 }))

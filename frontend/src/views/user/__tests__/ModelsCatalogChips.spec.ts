@@ -26,6 +26,10 @@ vi.mock('@/api/publicModels', () => ({
   ])
 }))
 
+vi.mock('@/composables/useClipboard', () => ({
+  useClipboard: () => ({ copyToClipboard: vi.fn() })
+}))
+
 vi.mock('@/components/icons/Icon.vue', () => ({
   default: { name: 'Icon', props: ['name'], template: '<i />' }
 }))
@@ -61,13 +65,13 @@ const chips = (wrapper: any) =>
 const cardsOf = (wrapper: any) => wrapper.findAll('.model-card')
 
 describe('ModelsCatalogView provider chips', () => {
-  it('orders them by model count, alphabetically on ties, "other" last', async () => {
+  it('pins anthropic, openai and google first, then the rest by count, "other" last', async () => {
     const wrapper = await mountView()
 
     expect(chips(wrapper)).toEqual([
+      'anthropic (1)',
       'openai (3)',
       'google (2)',
-      'anthropic (1)',
       'other (1)'
     ])
   })
@@ -102,14 +106,14 @@ describe('ModelsCatalogView provider chips', () => {
     // openai has no image model: its chip must survive so the filter can be
     // cleared again.
     await buttonByText(wrapper, 'modelsCatalog.typeImage').trigger('click')
-    expect(chips(wrapper)).toEqual(['google (1)', 'openai (0)'])
+    expect(chips(wrapper)).toEqual(['openai (0)', 'google (1)'])
 
     // Clearing the type filter brings the other providers back.
     await buttonByText(wrapper, 'modelsCatalog.typeAll').trigger('click')
     expect(chips(wrapper)).toEqual([
+      'anthropic (1)',
       'openai (3)',
       'google (2)',
-      'anthropic (1)',
       'other (1)'
     ])
   })
