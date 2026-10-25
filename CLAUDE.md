@@ -406,6 +406,9 @@ The Sub2API user frontend is reused (no second cabinet), mapped to the recommend
 ### Guided Tour Disabled
 - The "Welcome to Sub2API" guided tour (`useOnboardingTour`, mounted in `AppLayout.vue`) no longer auto-starts (`autoStart: false`), and the "Restart tour" item was removed from the user dropdown in `AppHeader.vue`. The tour code and `onboarding` store remain in place but are unreachable from the UI.
 
+### Admin Sidebar: Payments Entries
+- The admin sidebar (`AppSidebar.vue`) now links to `/admin/orders` (`nav.orderManagement`, all top-up orders with status, provider, transaction hash and per-order audit log) and `/admin/orders/dashboard` (`nav.paymentDashboard`). Previously these routes existed but were reachable only by typing the URL. Both are hidden in simple mode.
+
 ### Documentation & Onboarding (§13)
 In-product documentation page at `/docs` (`frontend/src/views/user/DocsView.vue`, public route, sidebar `nav.docs`). It walks the user from sign-up to a first request and is bilingual (en/zh):
 - **Quick start**: (1) register + top up, (2) create/copy an API key, (3) pick a model and send a request — each step links to the matching screen (`/purchase`, `/keys`, `/available-channels`).
