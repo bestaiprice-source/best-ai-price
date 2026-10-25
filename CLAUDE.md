@@ -416,6 +416,9 @@ The Sub2API user frontend is reused (no second cabinet), mapped to the recommend
 ### Payment i18n Keys
 - The payment screens (`/admin/orders`, payment dashboard, plan/refund dialogs, user checkout errors) call `t('payment.admin.*')`, `t('payment.orders.*')`, `t('payment.planCard.*')`, `t('payment.errors.*')` and `common.view/saved/deleted/created`. These keys were missing from `en.ts`/`zh.ts` and rendered as raw key paths; they are now defined in both locales. Remaining known gap: `admin.settings.payment.*Guide*` (Alipay/WeChat provider setup guides), unused by the USD/NOWPayments setup.
 
+### Admin Orders: Refund Actions Removed
+- `/admin/orders` (`AdminOrdersView.vue`) no longer offers Refund / Approve refund / Retry refund; the row actions are View, Cancel (pending) and Retry (failed). The refund dialog wiring was removed from the view; the backend refund endpoint and `AdminRefundDialog.vue` are kept but unreachable from the UI.
+
 ### Documentation & Onboarding (§13)
 In-product documentation page at `/docs` (`frontend/src/views/user/DocsView.vue`, public route, sidebar `nav.docs`). It walks the user from sign-up to a first request and is bilingual (en/zh):
 - **Quick start**: (1) register + top up, (2) create/copy an API key, (3) pick a model and send a request — each step links to the matching screen (`/purchase`, `/keys`, `/available-channels`).
