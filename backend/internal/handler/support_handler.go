@@ -27,6 +27,11 @@ type SendSupportMessageRequest struct {
 	RequestID string `json:"request_id"`
 	Model     string `json:"model"`
 	Page      string `json:"page"`
+	// Topic selects the Telegram headline ("manual_invoice" for an invoice
+	// request); unknown values fall back to a normal support message.
+	Topic string `json:"topic"`
+	// Amount is the requested invoice / top-up amount, shown in the alert.
+	Amount string `json:"amount"`
 }
 
 // Send stores the user's message and forwards it to the admin Telegram bot.
@@ -47,6 +52,7 @@ func (h *SupportHandler) SendGateway(c gatewayctx.GatewayContext) {
 	}
 	res, err := h.supportService.SendUserMessage(c.Request().Context(), subject.UserID, service.SupportSendInput{
 		Message: req.Message, RequestID: req.RequestID, Model: req.Model, Page: req.Page,
+		Topic: req.Topic, Amount: req.Amount,
 	})
 	switch {
 	case errors.Is(err, service.ErrSupportEmptyMessage):

@@ -31,11 +31,19 @@ const (
 	SupportDirectionUser  = "user"
 	SupportDirectionAdmin = "admin"
 
-	supportMaxBodyRunes  = 2000
-	supportMaxFieldRunes = 128
-	supportRateWindow    = time.Minute
-	supportRateLimit     = 5
-	supportListLimit     = 200
+	// SupportTopicSupport is the default: an ordinary message to the consultant.
+	SupportTopicSupport = ""
+	// SupportTopicManualInvoice marks a business request — the user wants an
+	// invoice (e.g. for a bank transfer) instead of paying with crypto.
+	SupportTopicManualInvoice = "manual_invoice"
+
+	supportMaxBodyRunes   = 2000
+	supportMaxFieldRunes  = 128
+	supportMaxTopicRunes  = 64
+	supportMaxAmountRunes = 32
+	supportRateWindow     = time.Minute
+	supportRateLimit      = 5
+	supportListLimit      = 200
 )
 
 var (
@@ -66,6 +74,12 @@ type SupportSendInput struct {
 	RequestID string
 	Model     string
 	Page      string
+	// Topic selects the Telegram headline (see supportTopicTitles). Empty means
+	// an ordinary support message.
+	Topic string
+	// Amount is the top-up amount the user is asking an invoice for, when the
+	// request came from the payment screen.
+	Amount string
 }
 
 // SupportSendResult reports the stored message and whether Telegram got it.
@@ -118,6 +132,8 @@ func (s *SupportService) SendUserMessage(ctx context.Context, userID int64, in S
 	requestID := truncateRunes(in.RequestID, supportMaxFieldRunes)
 	model := truncateRunes(in.Model, supportMaxFieldRunes)
 	page := truncateRunes(in.Page, 255)
+	topic := truncateRunes(in.Topic, supportMaxTopicRunes)
+	amount := sanitizeSupportAmount(in.Amount)
 
 	var recent int
 	if err := s.db.GetContext(ctx, &recent,
@@ -143,10 +159,23 @@ func (s *SupportService) SendUserMessage(ctx context.Context, userID int64, in S
 		return result, nil
 	}
 
-	var email string
-	_ = s.db.GetContext(ctx, &email, `SELECT email FROM users WHERE id = $1`, userID)
+	var contact struct {
+		Email    string `db:"email"`
+		Username string `db:"username"`
+	}
+	_ = s.db.GetContext(ctx, &contact, `SELECT email, username FROM users WHERE id = $1`, userID)
 
-	sent, err := s.sender.SendTelegramNotificationDetailed(ctx, formatSupportTelegramMessage(userID, email, body, requestID, model, page))
+	sent, err := s.sender.SendTelegramNotificationDetailed(ctx, formatSupportTelegramMessage(supportTelegramNotice{
+		UserID:    userID,
+		Username:  contact.Username,
+		Email:     contact.Email,
+		Body:      body,
+		RequestID: requestID,
+		Model:     model,
+		Page:      page,
+		Topic:     topic,
+		Amount:    amount,
+	}))
 	if err != nil {
 		slog.Warn("[Support] telegram delivery failed", "user_id", userID, "error", err)
 		return result, nil
@@ -165,24 +194,76 @@ func (s *SupportService) SendUserMessage(ctx context.Context, userID int64, in S
 	return result, nil
 }
 
-func formatSupportTelegramMessage(userID int64, email, body, requestID, model, page string) string {
+// supportTelegramNotice is everything rendered into the admin's Telegram copy.
+type supportTelegramNotice struct {
+	UserID    int64
+	Username  string
+	Email     string
+	Body      string
+	RequestID string
+	Model     string
+	Page      string
+	Topic     string
+	Amount    string
+}
+
+// supportTopicTitles maps a client-declared topic onto the Telegram headline.
+// The client never controls the rendered title: an unknown (or empty) topic
+// falls back to the generic support headline.
+var supportTopicTitles = map[string]string{
+	SupportTopicSupport:       "💬 <b>Сообщение в поддержку</b>",
+	SupportTopicManualInvoice: "🧾 <b>Запрос счёта (банк / безнал)</b>",
+}
+
+func supportTopicTitle(topic string) string {
+	if title, ok := supportTopicTitles[strings.TrimSpace(topic)]; ok {
+		return title
+	}
+	return supportTopicTitles[SupportTopicSupport]
+}
+
+// sanitizeSupportAmount keeps a client-provided amount usable as a money value:
+// digits and the usual separators only, capped in length. Anything else (an
+// @handle, HTML, a sentence) is dropped rather than rendered into the alert.
+func sanitizeSupportAmount(raw string) string {
+	trimmed := truncateRunes(raw, supportMaxAmountRunes)
 	var b strings.Builder
-	b.WriteString("💬 <b>Сообщение в поддержку</b>\n")
-	fmt.Fprintf(&b, "• <b>User:</b> #%d", userID)
-	if email != "" {
-		fmt.Fprintf(&b, " (%s)", html.EscapeString(email))
+	for _, r := range trimmed {
+		if (r >= '0' && r <= '9') || r == '.' || r == ',' {
+			b.WriteRune(r)
+		}
+	}
+	out := strings.Trim(b.String(), ".,")
+	if out == "" {
+		return ""
+	}
+	return out
+}
+
+func formatSupportTelegramMessage(n supportTelegramNotice) string {
+	var b strings.Builder
+	b.WriteString(supportTopicTitle(n.Topic) + "\n")
+	fmt.Fprintf(&b, "• <b>User:</b> #%d", n.UserID)
+	if n.Username != "" {
+		fmt.Fprintf(&b, " @%s", html.EscapeString(n.Username))
+	}
+	if n.Email != "" {
+		fmt.Fprintf(&b, " (%s)", html.EscapeString(n.Email))
 	}
 	b.WriteString("\n")
-	if requestID != "" {
-		fmt.Fprintf(&b, "• <b>Request ID:</b> <code>%s</code>\n", html.EscapeString(requestID))
+	if n.Amount != "" {
+		fmt.Fprintf(&b, "• <b>Amount:</b> $%s\n", html.EscapeString(n.Amount))
 	}
-	if model != "" {
-		fmt.Fprintf(&b, "• <b>Model:</b> %s\n", html.EscapeString(model))
+	if n.RequestID != "" {
+		fmt.Fprintf(&b, "• <b>Request ID:</b> <code>%s</code>\n", html.EscapeString(n.RequestID))
 	}
-	if page != "" {
-		fmt.Fprintf(&b, "• <b>Page:</b> %s\n", html.EscapeString(page))
+	if n.Model != "" {
+		fmt.Fprintf(&b, "• <b>Model:</b> %s\n", html.EscapeString(n.Model))
 	}
-	fmt.Fprintf(&b, "\n%s\n\n", html.EscapeString(body))
+	if n.Page != "" {
+		fmt.Fprintf(&b, "• <b>Page:</b> %s\n", html.EscapeString(n.Page))
+	}
+	fmt.Fprintf(&b, "\n%s\n\n", html.EscapeString(n.Body))
 	b.WriteString("<i>Ответьте на это сообщение (Reply), чтобы написать пользователю.</i>")
 	return b.String()
 }
