@@ -110,6 +110,7 @@ import { useRoute } from 'vue-router'
 import Icon from '@/components/icons/Icon.vue'
 import { useAppStore } from '@/stores'
 import { useAuthStore } from '@/stores/auth'
+import { useSupportWidget } from '@/composables/useSupportWidget'
 import {
   getSupportThread,
   markSupportRead,
@@ -122,7 +123,7 @@ const route = useRoute()
 const appStore = useAppStore()
 const authStore = useAuthStore()
 
-const open = ref(false)
+const { open, prefill, topic, amount } = useSupportWidget()
 const message = ref('')
 const requestId = ref('')
 const modelName = ref('')
@@ -174,6 +175,13 @@ function toggleOpen() {
 watch(open, (isOpen) => {
   if (isOpen) void refreshThread()
   schedulePoll()
+})
+// Another screen asked us to talk to the consultant (e.g. "write to us" on the
+// top-up page): the widget opens itself and the message box is pre-filled.
+watch(prefill, (text) => {
+  if (!text) return
+  message.value = text
+  prefill.value = ''
 })
 watch(chatEnabled, (enabled) => {
   if (enabled) void refreshThread()
@@ -256,8 +264,14 @@ async function sendToConsultant() {
         request_id: requestId.value.trim(),
         model: modelName.value.trim(),
         page: route.fullPath,
+        // Topic/amount only shape the admin's Telegram copy; they are cleared
+        // below so a later, unrelated message is not tagged with them.
+        topic: topic.value,
+        amount: amount.value,
       })
       message.value = ''
+      topic.value = ''
+      amount.value = ''
       await refreshThread()
       if (res.delivered) {
         sentNote.value = t('support.sentToTelegram')

@@ -25,7 +25,18 @@ export interface SendSupportMessagePayload {
   request_id?: string
   model?: string
   page?: string
+  /**
+   * Selects the Telegram headline so the admin sees what kind of request it is.
+   * Must match a topic the backend knows (`manual_invoice`) — an unknown value
+   * is rendered as an ordinary support message.
+   */
+  topic?: string
+  /** Requested invoice / top-up amount, called out in the Telegram alert. */
+  amount?: string
 }
+
+/** Topic for "issue me an invoice (e.g. bank transfer)" requests. */
+export const SUPPORT_TOPIC_MANUAL_INVOICE = 'manual_invoice'
 
 export interface SendSupportMessageResult {
   message: SupportMessage

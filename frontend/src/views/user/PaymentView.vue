@@ -85,6 +85,19 @@
               </span>
               <span v-else>{{ t('payment.createOrder') }} ${{ totalAmount.toFixed(2) }}</span>
             </button>
+            <!-- Manual invoice (bank transfer, etc.) — hands over to the consultant -->
+            <div class="card p-5 text-center">
+              <p class="text-sm font-medium text-gray-900 dark:text-white">{{ t('payment.manualInvoiceTitle') }}</p>
+              <p class="mt-1 text-xs leading-relaxed text-gray-500 dark:text-gray-400">{{ t('payment.manualInvoiceHint') }}</p>
+              <button
+                type="button"
+                class="mt-3 inline-flex items-center gap-2 rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-dark-600 dark:text-gray-200 dark:hover:bg-dark-700"
+                @click="requestManualInvoice"
+              >
+                <Icon name="chat" size="sm" />
+                {{ t('payment.manualInvoiceCta') }}
+              </button>
+            </div>
             </template>
           </template>
           <!-- Subscribe Tab -->
@@ -274,6 +287,8 @@ import { platformAccentBarClass, platformBadgeLightClass, platformBadgeClass, pl
 import SubscriptionPlanCard from '@/components/payment/SubscriptionPlanCard.vue'
 import PaymentStatusPanel from '@/components/payment/PaymentStatusPanel.vue'
 import Icon from '@/components/icons/Icon.vue'
+import { openSupportWidget } from '@/composables/useSupportWidget'
+import { SUPPORT_TOPIC_MANUAL_INVOICE } from '@/api/support'
 import type { PaymentMethodOption } from '@/components/payment/PaymentMethodSelector.vue'
 import { buildPaymentErrorToastMessage, describePaymentScenarioError } from './paymentUx'
 import { hasWechatResumeQuery, parseWechatResumeRoute, stripWechatResumeQuery } from './paymentWechatResume'
@@ -654,6 +669,20 @@ function closeRenewalModal() {
 async function handleSubmitRecharge() {
   if (!canSubmit.value || submitting.value) return
   await createOrder(validAmount.value, 'balance')
+}
+
+/**
+ * Manual (e.g. bank-transfer) invoice: hand the user over to the human
+ * consultant with the requested amount already in the message box.
+ */
+function requestManualInvoice() {
+  const amountText = validAmount.value > 0 ? validAmount.value.toFixed(2) : ''
+  openSupportWidget(
+    amountText
+      ? t('payment.manualInvoicePrefill', { amount: amountText })
+      : t('payment.manualInvoicePrefillNoAmount'),
+    { topic: SUPPORT_TOPIC_MANUAL_INVOICE, amount: amountText },
+  )
 }
 
 async function confirmSubscribe() {
