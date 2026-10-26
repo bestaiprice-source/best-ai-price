@@ -1078,6 +1078,7 @@ export default {
     operationAdjustment: 'Adjustment',
     amount: 'Amount',
     reference: 'Reference',
+    ledgerDescription: 'Description',
     noOperations: 'No money operations in this range',
     filterModel: 'Model',
     filterAllModels: 'All models',

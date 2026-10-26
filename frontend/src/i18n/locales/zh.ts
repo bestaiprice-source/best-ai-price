@@ -1083,6 +1083,7 @@ export default {
     operationAdjustment: '调整',
     amount: '金额',
     reference: '参考号',
+    ledgerDescription: '描述',
     noOperations: '该时间范围内没有资金操作',
     filterModel: '模型',
     filterAllModels: '全部模型',

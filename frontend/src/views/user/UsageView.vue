@@ -1,6 +1,6 @@
 <template>
   <AppLayout>
-    <TablePageLayout>
+    <TablePageLayout page-scroll>
       <template #actions>
         <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
           <!-- Total Requests -->
@@ -255,51 +255,57 @@
           </button>
         </div>
 
-        <DataTable v-if="activeUsageTab === 'requests'" :columns="columns" :data="usageLogs" :loading="loading">
-          <template #cell-api_key="{ row }">
-            <span class="text-sm text-gray-900 dark:text-white">{{
-              row.api_key?.name || '-'
-            }}</span>
-          </template>
-
-          <template #cell-model="{ value }">
-            <span class="font-medium text-gray-900 dark:text-white">{{ value }}</span>
+        <DataTable v-if="activeUsageTab === 'requests'" :columns="columns" :data="usageLogs" :loading="loading" :scrollable="false">
+          <template #cell-model="{ row }">
+            <div class="flex min-w-0 flex-col leading-5">
+              <span class="min-w-0 truncate font-medium text-gray-900 dark:text-white" :title="row.model">
+                {{ row.model }}
+              </span>
+              <span class="truncate text-xs text-gray-500 dark:text-dark-400" :title="row.api_key?.name">
+                {{ row.api_key?.name || '—' }}
+              </span>
+            </div>
           </template>
 
           <template #cell-request_id="{ row }">
-            <button
-              v-if="row.request_id"
-              class="group inline-flex max-w-[200px] items-center gap-1 truncate font-mono text-xs text-gray-500 hover:text-primary-600 dark:text-gray-400"
-              :title="t('usage.copyRequestId')"
-              @click="copyRequestId(row.request_id)"
-            >
-              <span class="truncate">{{ row.request_id }}</span>
-              <span class="flex-shrink-0 opacity-0 transition-opacity group-hover:opacity-100">
-                {{ copiedRequestId === row.request_id ? '✓' : '⧉' }}
+            <div class="flex min-w-0 flex-col leading-5">
+              <button
+                v-if="row.request_id"
+                class="group inline-flex max-w-full items-center gap-1 truncate font-mono text-xs text-gray-500 hover:text-primary-600 dark:text-gray-400"
+                :title="t('usage.copyRequestId')"
+                @click="copyRequestId(row.request_id)"
+              >
+                <span class="max-w-[160px] truncate">{{ row.request_id }}</span>
+                <span class="flex-shrink-0 opacity-0 transition-opacity group-hover:opacity-100">
+                  {{ copiedRequestId === row.request_id ? '✓' : '⧉' }}
+                </span>
+              </button>
+              <span v-else class="text-gray-400">—</span>
+              <span
+                class="block max-w-[180px] truncate text-xs text-gray-400 dark:text-dark-500"
+                :title="formatUsageEndpoints(row)"
+              >
+                {{ formatUsageEndpoints(row) }}
               </span>
-            </button>
-            <span v-else class="text-gray-400">—</span>
-          </template>
-
-          <template #cell-reasoning_effort="{ row }">
-            <span class="text-sm text-gray-900 dark:text-white">
-              {{ formatReasoningEffort(row.reasoning_effort) }}
-            </span>
-          </template>
-
-          <template #cell-endpoint="{ row }">
-            <span class="text-sm text-gray-600 dark:text-gray-300 block max-w-[320px] whitespace-normal break-all">
-              {{ formatUsageEndpoints(row) }}
-            </span>
+            </div>
           </template>
 
           <template #cell-stream="{ row }">
-            <span
-              class="inline-flex items-center rounded px-2 py-0.5 text-xs font-medium"
-              :class="getRequestTypeBadgeClass(row)"
-            >
-              {{ getRequestTypeLabel(row) }}
-            </span>
+            <div class="flex min-w-0 flex-col items-start gap-1 leading-5">
+              <span
+                class="inline-flex items-center rounded px-2 py-0.5 text-xs font-medium"
+                :class="getRequestTypeBadgeClass(row)"
+              >
+                {{ getRequestTypeLabel(row) }}
+              </span>
+              <span
+                v-if="row.user_agent"
+                class="max-w-full truncate text-xs text-gray-400 dark:text-dark-500"
+                :title="row.user_agent"
+              >
+                {{ formatUserAgent(row.user_agent) }}
+              </span>
+            </div>
           </template>
 
           <template #cell-tokens="{ row }">
@@ -407,31 +413,29 @@
             </div>
           </template>
 
-          <template #cell-first_token="{ row }">
-            <span
-              v-if="row.first_token_ms != null"
-              class="text-sm text-gray-600 dark:text-gray-400"
-            >
-              {{ formatDuration(row.first_token_ms) }}
-            </span>
-            <span v-else class="text-sm text-gray-400 dark:text-gray-500">-</span>
-          </template>
-
           <template #cell-duration="{ row }">
-            <span class="text-sm text-gray-600 dark:text-gray-400">{{
-              formatDuration(row.duration_ms)
-            }}</span>
+            <div class="flex flex-col leading-5">
+              <span class="text-sm text-gray-600 dark:text-gray-400">{{
+                formatDuration(row.duration_ms)
+              }}</span>
+              <span
+                v-if="row.first_token_ms != null"
+                class="text-xs text-gray-400 dark:text-dark-500"
+              >
+                {{ t('usage.firstToken') }}: {{ formatDuration(row.first_token_ms) }}
+              </span>
+            </div>
           </template>
 
           <template #cell-created_at="{ value }">
-            <span class="text-sm text-gray-600 dark:text-gray-400">{{
-              formatDateTime(value)
-            }}</span>
-          </template>
-
-          <template #cell-user_agent="{ row }">
-            <span v-if="row.user_agent" class="text-sm text-gray-600 dark:text-gray-400 block max-w-[320px] whitespace-normal break-all" :title="row.user_agent">{{ formatUserAgent(row.user_agent) }}</span>
-            <span v-else class="text-sm text-gray-400 dark:text-gray-500">-</span>
+            <div class="flex flex-col leading-5">
+              <span class="whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">{{
+                formatDatePart(value)
+              }}</span>
+              <span class="whitespace-nowrap text-xs text-gray-400 dark:text-dark-500">{{
+                formatTimePart(value)
+              }}</span>
+            </div>
           </template>
 
           <template #empty>
@@ -444,42 +448,67 @@
           :columns="errorColumns"
           :data="errorLogs"
           :loading="errorLoading"
+          :scrollable="false"
         >
+          <template #cell-created_at="{ value }">
+            <div class="flex flex-col leading-5">
+              <span class="whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">{{
+                formatDatePart(value)
+              }}</span>
+              <span class="whitespace-nowrap text-xs text-gray-400 dark:text-dark-500">{{
+                formatTimePart(value)
+              }}</span>
+            </div>
+          </template>
+
           <template #cell-model="{ value }">
-            <span class="font-medium text-gray-900 dark:text-white">{{ value || '-' }}</span>
+            <span
+              class="block max-w-[120px] truncate font-medium text-gray-900 dark:text-white"
+              :title="value || undefined"
+            >{{ value || '-' }}</span>
           </template>
 
           <template #cell-status_code="{ row }">
-            <span class="font-mono text-xs font-semibold" :class="errorStatusClass(row.status_code)">
-              {{ row.status_code || '-' }}
-            </span>
+            <div class="flex flex-col leading-5">
+              <span class="font-mono text-xs font-semibold" :class="errorStatusClass(row.status_code)">
+                {{ row.status_code || '-' }}
+              </span>
+              <span
+                class="text-xs"
+                :class="row.is_retryable ? 'text-amber-600 dark:text-amber-400' : 'text-gray-400 dark:text-gray-500'"
+              >
+                {{ row.is_retryable ? t('usage.retryable') : t('usage.notRetryable') }}
+                <template v-if="row.retry_count > 0"> · {{ row.retry_count }}</template>
+              </span>
+            </div>
           </template>
 
           <template #cell-message="{ row }">
-            <span
-              class="block max-w-[360px] truncate text-xs text-gray-600 dark:text-gray-300"
-              :title="row.message"
-            >{{ row.message || '-' }}</span>
+            <div class="flex min-w-0 flex-col leading-5">
+              <span class="block max-w-[300px] truncate text-xs text-gray-600 dark:text-gray-300" :title="row.message">
+                {{ row.message || '-' }}
+              </span>
+              <span class="block max-w-[300px] truncate text-xs text-gray-400 dark:text-dark-500" :title="row.error_type">
+                {{ row.error_type || '—' }}
+              </span>
+            </div>
           </template>
 
-          <template #cell-retry="{ row }">
+          <template #cell-endpoint="{ row }">
             <span
-              class="text-xs"
-              :class="row.is_retryable ? 'text-amber-600 dark:text-amber-400' : 'text-gray-400 dark:text-gray-500'"
-            >
-              {{ row.is_retryable ? t('usage.retryable') : t('usage.notRetryable') }}
-              <template v-if="row.retry_count > 0"> · {{ row.retry_count }}</template>
-            </span>
+              class="block max-w-[140px] truncate text-xs text-gray-600 dark:text-gray-300"
+              :title="row.endpoint || undefined"
+            >{{ row.endpoint || '—' }}</span>
           </template>
 
           <template #cell-request_id="{ row }">
             <button
               v-if="row.request_id"
-              class="group inline-flex max-w-[200px] items-center gap-1 truncate font-mono text-xs text-gray-500 hover:text-primary-600 dark:text-gray-400"
+              class="group inline-flex max-w-full items-center gap-1 truncate font-mono text-xs text-gray-500 hover:text-primary-600 dark:text-gray-400"
               :title="t('usage.copyRequestId')"
               @click="copyRequestId(row.request_id)"
             >
-              <span class="truncate">{{ row.request_id }}</span>
+              <span class="max-w-[160px] truncate">{{ row.request_id }}</span>
               <span class="flex-shrink-0 opacity-0 transition-opacity group-hover:opacity-100">
                 {{ copiedRequestId === row.request_id ? '✓' : '⧉' }}
               </span>
@@ -503,6 +532,7 @@
           :columns="ledgerColumns"
           :data="ledgerEntries"
           :loading="ledgerLoading"
+          :scrollable="false"
         >
           <template #cell-created_at="{ value }">
             <span class="whitespace-nowrap text-sm text-gray-600 dark:text-gray-300">{{
@@ -758,19 +788,51 @@ async function copyRequestId(id: string) {
   }
 }
 
+// Column widths: every column gets "what its content needs" plus an equal share
+// of the leftover, so the shares add back up to exactly the table width and the
+// requests table never scrolls horizontally (same recipe as the API-keys table).
+// `table-layout` stays auto, so a column can still grow past its share when its
+// content needs more room.
+const REQUEST_COL_NATURAL = 970
+const REQUEST_COL = {
+  model: `w-[calc(200px_+_(100%_-_${REQUEST_COL_NATURAL}px)_/_7)]`,
+  request_id: `w-[calc(190px_+_(100%_-_${REQUEST_COL_NATURAL}px)_/_7)]`,
+  stream: `w-[calc(110px_+_(100%_-_${REQUEST_COL_NATURAL}px)_/_7)]`,
+  tokens: `w-[calc(130px_+_(100%_-_${REQUEST_COL_NATURAL}px)_/_7)]`,
+  cost: `w-[calc(110px_+_(100%_-_${REQUEST_COL_NATURAL}px)_/_7)]`,
+  duration: `w-[calc(130px_+_(100%_-_${REQUEST_COL_NATURAL}px)_/_7)]`,
+  created_at: `w-[calc(100px_+_(100%_-_${REQUEST_COL_NATURAL}px)_/_7)]`
+}
+
+// Same recipe for the Errors and Operations tabs of the same screen.
+const ERROR_COL_NATURAL = 980
+const ERROR_COL = {
+  created_at: `w-[calc(100px_+_(100%_-_${ERROR_COL_NATURAL}px)_/_6)]`,
+  model: `w-[calc(150px_+_(100%_-_${ERROR_COL_NATURAL}px)_/_6)]`,
+  status_code: `w-[calc(110px_+_(100%_-_${ERROR_COL_NATURAL}px)_/_6)]`,
+  message: `w-[calc(300px_+_(100%_-_${ERROR_COL_NATURAL}px)_/_6)]`,
+  endpoint: `w-[calc(150px_+_(100%_-_${ERROR_COL_NATURAL}px)_/_6)]`,
+  request_id: `w-[calc(170px_+_(100%_-_${ERROR_COL_NATURAL}px)_/_6)]`
+}
+
+const LEDGER_COL_NATURAL = 960
+const LEDGER_COL = {
+  created_at: `w-[calc(160px_+_(100%_-_${LEDGER_COL_NATURAL}px)_/_6)]`,
+  type: `w-[calc(140px_+_(100%_-_${LEDGER_COL_NATURAL}px)_/_6)]`,
+  amount_usd: `w-[calc(110px_+_(100%_-_${LEDGER_COL_NATURAL}px)_/_6)]`,
+  status: `w-[calc(110px_+_(100%_-_${LEDGER_COL_NATURAL}px)_/_6)]`,
+  description: `w-[calc(280px_+_(100%_-_${LEDGER_COL_NATURAL}px)_/_6)]`,
+  reference: `w-[calc(160px_+_(100%_-_${LEDGER_COL_NATURAL}px)_/_6)]`
+}
+
 const columns = computed<Column[]>(() => [
-  { key: 'api_key', label: t('usage.apiKeyFilter'), sortable: false },
-  { key: 'model', label: t('usage.model'), sortable: true },
-  { key: 'request_id', label: t('usage.requestId'), sortable: false },
-  { key: 'reasoning_effort', label: t('usage.reasoningEffort'), sortable: false },
-  { key: 'endpoint', label: t('usage.endpoint'), sortable: false },
-  { key: 'stream', label: t('usage.type'), sortable: false },
-  { key: 'tokens', label: t('usage.tokens'), sortable: false },
-  { key: 'cost', label: t('usage.cost'), sortable: false },
-  { key: 'first_token', label: t('usage.firstToken'), sortable: false },
-  { key: 'duration', label: t('usage.duration'), sortable: false },
-  { key: 'created_at', label: t('usage.time'), sortable: true },
-  { key: 'user_agent', label: t('usage.userAgent'), sortable: false }
+  { key: 'model', label: t('usage.model'), sortable: true, class: REQUEST_COL.model },
+  { key: 'request_id', label: t('usage.requestId'), sortable: false, class: REQUEST_COL.request_id },
+  { key: 'stream', label: t('usage.type'), sortable: false, class: REQUEST_COL.stream },
+  { key: 'tokens', label: t('usage.tokens'), sortable: false, class: REQUEST_COL.tokens },
+  { key: 'cost', label: t('usage.cost'), sortable: false, class: REQUEST_COL.cost },
+  { key: 'duration', label: t('usage.duration'), sortable: false, class: REQUEST_COL.duration },
+  { key: 'created_at', label: t('usage.time'), sortable: true, class: REQUEST_COL.created_at }
 ])
 
 // ---- Errors tab -----------------------------------------------------------
@@ -791,14 +853,12 @@ const errorPagination = reactive({ page: 1, page_size: 20, total: 0, pages: 1 })
 let errorAbortController: AbortController | null = null
 
 const errorColumns = computed<Column[]>(() => [
-  { key: 'created_at', label: t('usage.time'), sortable: false },
-  { key: 'model', label: t('usage.model'), sortable: false },
-  { key: 'status_code', label: t('usage.status'), sortable: false },
-  { key: 'error_type', label: t('usage.errorType'), sortable: false },
-  { key: 'message', label: t('usage.errorMessage'), sortable: false },
-  { key: 'endpoint', label: t('usage.endpoint'), sortable: false },
-  { key: 'retry', label: t('usage.retry'), sortable: false },
-  { key: 'request_id', label: t('usage.requestId'), sortable: false }
+  { key: 'created_at', label: t('usage.time'), sortable: false, class: ERROR_COL.created_at },
+  { key: 'model', label: t('usage.model'), sortable: false, class: ERROR_COL.model },
+  { key: 'status_code', label: t('usage.status'), sortable: false, class: ERROR_COL.status_code },
+  { key: 'message', label: t('usage.errorMessage'), sortable: false, class: ERROR_COL.message },
+  { key: 'endpoint', label: t('usage.endpoint'), sortable: false, class: ERROR_COL.endpoint },
+  { key: 'request_id', label: t('usage.requestId'), sortable: false, class: ERROR_COL.request_id }
 ])
 
 /** Tri-state wrappers: the Select component needs a concrete value for "all". */
@@ -817,12 +877,12 @@ const groupFilter = computed({
 })
 
 const ledgerColumns = computed<Column[]>(() => [
-  { key: 'created_at', label: t('usage.time'), sortable: false },
-  { key: 'type', label: t('usage.operation'), sortable: false },
-  { key: 'amount_usd', label: t('usage.amount'), sortable: false },
-  { key: 'status', label: t('usage.status'), sortable: false },
-  { key: 'description', label: t('usage.description'), sortable: false },
-  { key: 'reference', label: t('usage.reference'), sortable: false }
+  { key: 'created_at', label: t('usage.time'), sortable: false, class: LEDGER_COL.created_at },
+  { key: 'type', label: t('usage.operation'), sortable: false, class: LEDGER_COL.type },
+  { key: 'amount_usd', label: t('usage.amount'), sortable: false, class: LEDGER_COL.amount_usd },
+  { key: 'status', label: t('usage.status'), sortable: false, class: LEDGER_COL.status },
+  { key: 'description', label: t('usage.ledgerDescription'), sortable: false, class: LEDGER_COL.description },
+  { key: 'reference', label: t('usage.reference'), sortable: false, class: LEDGER_COL.reference }
 ])
 
 const errorStatusClass = (code: number): string => {
@@ -1042,6 +1102,13 @@ const formatDuration = (ms: number): string => {
   if (ms < 1000) return `${ms.toFixed(0)}ms`
   return `${(ms / 1000).toFixed(2)}s`
 }
+
+// The TIME column renders as two lines (date over time) so it stays narrow
+// without clipping: same locale-aware formatter, split by explicit options.
+const formatDatePart = (value: string): string =>
+  formatDateTime(value, { year: 'numeric', month: '2-digit', day: '2-digit' })
+const formatTimePart = (value: string): string =>
+  formatDateTime(value, { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
 
 const formatUserAgent = (ua: string): string => {
   return ua
