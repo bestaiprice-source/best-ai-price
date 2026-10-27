@@ -1,8 +1,15 @@
 import { describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 
+const { tCalls } = vi.hoisted(() => ({ tCalls: [] as Array<[string, unknown]> }))
+
 vi.mock('vue-i18n', () => ({
-  useI18n: () => ({ t: (key: string) => key })
+  useI18n: () => ({
+    t: (key: string, params?: unknown) => {
+      tCalls.push([key, params])
+      return key
+    }
+  })
 }))
 
 // The view pulls in AppLayout, which reaches for the app-wide i18n singleton.
@@ -104,6 +111,17 @@ describe('ModelsCatalogView', () => {
     expect(wrapper.text()).toContain('openai')
     expect(wrapper.text()).toContain('google')
     expect(wrapper.findAll('h3').length).toBe(3)
+  })
+
+  it('explains the discount badge on hover, with the percentage', async () => {
+    tCalls.length = 0
+    const wrapper = await mountView()
+
+    const badge = wrapper.findAll('span').find((s: any) => s.text() === '-90%')
+    expect(badge).toBeTruthy()
+    expect(badge!.attributes('title')).toBe('modelsCatalog.discountTitle')
+    // The percentage is interpolated, so the tooltip reads "−90% from the official price".
+    expect(tCalls).toContainEqual(['modelsCatalog.discountTitle', { percent: 90 }])
   })
 
   it('filters by type and by free-text search', async () => {

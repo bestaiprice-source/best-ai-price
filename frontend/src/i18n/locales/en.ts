@@ -483,7 +483,7 @@ export default {
     }
   },
   modelsCatalog: {
-    discountTitle: 'Below the official price',
+    discountTitle: '-{percent}% from the official price',
     title: 'Models & Pricing',
     description: 'Every model you can call with one key, at the price we actually charge.',
     searchPlaceholder: 'Search models…',

@@ -110,7 +110,7 @@
               <span
                 v-if="discountOf(model)"
                 class="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
-                :title="t('modelsCatalog.discountTitle')"
+                :title="t('modelsCatalog.discountTitle', { percent: discountOf(model) })"
               >
                 -{{ discountOf(model) }}%
               </span>
