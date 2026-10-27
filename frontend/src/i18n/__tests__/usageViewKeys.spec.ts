@@ -3,7 +3,6 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import en from '../locales/en'
-import zh from '../locales/zh'
 
 /**
  * The usage screens rendered raw dotted key paths (`usage.tabRequests`,
@@ -26,15 +25,13 @@ function referencedUsageKeys(): string[] {
 }
 
 describe('usage locale keys', () => {
-  it('defines every usage.* key the usage screens reference, in both locales', () => {
+  it('defines every usage.* key the usage screens reference', () => {
     const keys = referencedUsageKeys()
     // Guard against the regex silently matching nothing.
     expect(keys.length).toBeGreaterThan(40)
 
     const enUsage = en.usage as Record<string, unknown>
-    const zhUsage = zh.usage as Record<string, unknown>
 
     expect(keys.filter((key) => !(key in enUsage))).toEqual([])
-    expect(keys.filter((key) => !(key in zhUsage))).toEqual([])
   })
 })

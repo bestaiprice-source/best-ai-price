@@ -1,6 +1,11 @@
 import { createI18n } from 'vue-i18n'
 
-type LocaleCode = 'en' | 'zh'
+/**
+ * The product ships English-only. The Chinese locale was removed, so a value
+ * persisted by an older build (or a zh browser) must not resurrect it — see
+ * `getDefaultLocale` / `isLocaleCode`.
+ */
+type LocaleCode = 'en'
 
 type LocaleMessages = Record<string, any>
 
@@ -8,23 +13,19 @@ const LOCALE_KEY = 'sub2api_locale'
 const DEFAULT_LOCALE: LocaleCode = 'en'
 
 const localeLoaders: Record<LocaleCode, () => Promise<{ default: LocaleMessages }>> = {
-  en: () => import('./locales/en'),
-  zh: () => import('./locales/zh')
+  en: () => import('./locales/en')
 }
 
 function isLocaleCode(value: string): value is LocaleCode {
-  return value === 'en' || value === 'zh'
+  return value === 'en'
 }
 
 function getDefaultLocale(): LocaleCode {
+  // A saved value from a build that still offered other locales (e.g. 'zh') is
+  // simply ignored — the app falls back to English instead of failing to load.
   const saved = localStorage.getItem(LOCALE_KEY)
   if (saved && isLocaleCode(saved)) {
     return saved
-  }
-
-  const browserLang = navigator.language.toLowerCase()
-  if (browserLang.startsWith('zh')) {
-    return 'zh'
   }
 
   return DEFAULT_LOCALE
@@ -83,9 +84,6 @@ export function getLocale(): LocaleCode {
   return isLocaleCode(current) ? current : DEFAULT_LOCALE
 }
 
-export const availableLocales = [
-  { code: 'en', name: 'English', flag: '🇺🇸' },
-  { code: 'zh', name: '中文', flag: '🇨🇳' }
-] as const
+export const availableLocales = [{ code: 'en', name: 'English', flag: '🇺🇸' }] as const
 
 export default i18n

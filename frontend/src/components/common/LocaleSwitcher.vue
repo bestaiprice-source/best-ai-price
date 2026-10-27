@@ -1,5 +1,6 @@
 <template>
-  <div class="relative" ref="dropdownRef">
+  <!-- A single shipped locale makes the switcher pointless — render nothing. -->
+  <div v-if="hasMultipleLocales" class="relative" ref="dropdownRef">
     <button
       @click="toggleDropdown"
       :disabled="switching"
@@ -53,6 +54,7 @@ const isOpen = ref(false)
 const dropdownRef = ref<HTMLElement | null>(null)
 const switching = ref(false)
 
+const hasMultipleLocales = computed(() => availableLocales.length > 1)
 const currentLocaleCode = computed(() => locale.value)
 const currentLocale = computed(() => availableLocales.find((l) => l.code === locale.value))
 
