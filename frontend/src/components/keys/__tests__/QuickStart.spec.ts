@@ -18,6 +18,7 @@ vi.mock('@/components/icons/Icon.vue', () => ({
 }))
 
 import QuickStart from '../QuickStart.vue'
+import { buildApiSnippet } from '@/utils/apiSnippets'
 
 const KEY = 'sk-test-key-1234567890'
 
@@ -68,5 +69,20 @@ describe('QuickStart', () => {
   it('reports the number of additional keys minted in the same batch', () => {
     const wrapper = mount(QuickStart, { props: { apiKey: KEY, moreKeys: 4 } })
     expect(wrapper.text()).toContain('quickStart.moreKeys')
+  })
+
+  // Drift guard: the dialog and the dashboard onboarding must not grow their own
+  // copies of the example — both render what the shared builder returns.
+  it('renders exactly what the shared snippet builder produces', () => {
+    const wrapper = mountQuickStart()
+
+    expect(wrapper.find('pre code').text()).toBe(
+      buildApiSnippet({
+        protocol: 'openai',
+        language: 'python',
+        baseURL: 'https://api.example.com/v1',
+        apiKey: KEY
+      })
+    )
   })
 })

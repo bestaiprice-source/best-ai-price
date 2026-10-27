@@ -722,7 +722,7 @@ export default {
       stepBalanceDesc: 'Requests are billed per token from your balance, so add funds before the first call.',
       stepBalanceAction: 'Top up',
       stepRequestTitle: 'Send your first request',
-      stepRequestDesc: 'Run the cURL example below against the gateway. Any OpenAI-compatible client works too.',
+      stepRequestDesc: 'Run one of the examples below — Python, Node.js or cURL. Any OpenAI-compatible client works too.',
       stepRequestAction: 'Read the docs',
       firstRequest: 'First API request',
       firstRequestHint: 'Replace the API key placeholder with a key from',

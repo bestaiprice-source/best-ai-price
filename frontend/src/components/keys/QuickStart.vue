@@ -69,6 +69,7 @@ import { useI18n } from 'vue-i18n'
 import Icon from '@/components/icons/Icon.vue'
 import { useAppStore } from '@/stores'
 import { useClipboard } from '@/composables/useClipboard'
+import { buildApiSnippet, type ApiSnippetLanguage, type ApiSnippetProtocol } from '@/utils/apiSnippets'
 
 const props = defineProps<{
   /** The key to embed in the snippets. */
@@ -81,8 +82,8 @@ const { t } = useI18n()
 const appStore = useAppStore()
 const { copyToClipboard } = useClipboard()
 
-const activeProtocol = ref<'openai' | 'anthropic' | 'gemini'>('openai')
-const activeLanguage = ref<'python' | 'nodejs' | 'curl'>('python')
+const activeProtocol = ref<ApiSnippetProtocol>('openai')
+const activeLanguage = ref<ApiSnippetLanguage>('python')
 const copied = ref('')
 
 const protocols = computed(() => [
@@ -108,111 +109,14 @@ const gatewayBase = computed(() => {
 /** Base URL a client of the selected protocol should point at. */
 const baseURL = computed(() => (activeProtocol.value === 'openai' ? `${gatewayBase.value}/v1` : gatewayBase.value))
 
-const prompt = 'Hello, please introduce yourself in one sentence.'
-const openaiModel = 'gpt-5.2-pro'
-const anthropicModel = 'claude-sonnet-4-5'
-const geminiModel = 'gemini-2.5-flash'
-
-const snippet = computed(() => {
-  const key = props.apiKey
-  const base = baseURL.value
-  if (activeProtocol.value === 'openai') {
-    if (activeLanguage.value === 'python') {
-      return `# POST ${base}/chat/completions (OpenAI compatible)
-from openai import OpenAI
-
-client = OpenAI(api_key="${key}", base_url="${base}")
-
-resp = client.chat.completions.create(
-    model="${openaiModel}",
-    messages=[{"role": "user", "content": "${prompt}"}],
-    temperature=0.7,
+const snippet = computed(() =>
+  buildApiSnippet({
+    protocol: activeProtocol.value,
+    language: activeLanguage.value,
+    baseURL: baseURL.value,
+    apiKey: props.apiKey
+  })
 )
-print(resp.choices[0].message.content)`
-    }
-    if (activeLanguage.value === 'nodejs') {
-      return `// POST ${base}/chat/completions (OpenAI compatible)
-import OpenAI from 'openai'
-
-const client = new OpenAI({ apiKey: '${key}', baseURL: '${base}' })
-
-const resp = await client.chat.completions.create({
-  model: '${openaiModel}',
-  messages: [{ role: 'user', content: '${prompt}' }],
-  temperature: 0.7,
-})
-console.log(resp.choices[0].message.content)`
-    }
-    return `curl ${base}/chat/completions \\
-  -H "Authorization: Bearer ${key}" \\
-  -H "Content-Type: application/json" \\
-  -d '{"model":"${openaiModel}","messages":[{"role":"user","content":"${prompt}"}],"temperature":0.7}'`
-  }
-
-  if (activeProtocol.value === 'anthropic') {
-    if (activeLanguage.value === 'python') {
-      return `# POST ${base}/v1/messages (Anthropic compatible)
-from anthropic import Anthropic
-
-client = Anthropic(api_key="${key}", base_url="${base}")
-
-msg = client.messages.create(
-    model="${anthropicModel}",
-    max_tokens=256,
-    messages=[{"role": "user", "content": "${prompt}"}],
-)
-print(msg.content[0].text)`
-    }
-    if (activeLanguage.value === 'nodejs') {
-      return `// POST ${base}/v1/messages (Anthropic compatible)
-import Anthropic from '@anthropic-ai/sdk'
-
-const client = new Anthropic({ apiKey: '${key}', baseURL: '${base}' })
-
-const msg = await client.messages.create({
-  model: '${anthropicModel}',
-  max_tokens: 256,
-  messages: [{ role: 'user', content: '${prompt}' }],
-})
-console.log(msg.content[0].text)`
-    }
-    return `curl ${base}/v1/messages \\
-  -H "x-api-key: ${key}" \\
-  -H "anthropic-version: 2023-06-01" \\
-  -H "Content-Type: application/json" \\
-  -d '{"model":"${anthropicModel}","max_tokens":256,"messages":[{"role":"user","content":"${prompt}"}]}'`
-  }
-
-  // Gemini (native v1beta)
-  if (activeLanguage.value === 'python') {
-    return `# POST ${base}/v1beta/models/${geminiModel}:generateContent (Gemini compatible)
-from google import genai
-
-client = genai.Client(api_key="${key}", http_options={"base_url": "${base}"})
-
-resp = client.models.generate_content(
-    model="${geminiModel}",
-    contents="${prompt}",
-)
-print(resp.text)`
-  }
-  if (activeLanguage.value === 'nodejs') {
-    return `// POST ${base}/v1beta/models/${geminiModel}:generateContent (Gemini compatible)
-import { GoogleGenAI } from '@google/genai'
-
-const ai = new GoogleGenAI({ apiKey: '${key}', httpOptions: { baseUrl: '${base}' } })
-
-const resp = await ai.models.generateContent({
-  model: '${geminiModel}',
-  contents: '${prompt}',
-})
-console.log(resp.text)`
-  }
-  return `curl "${base}/v1beta/models/${geminiModel}:generateContent" \\
-  -H "x-goog-api-key: ${key}" \\
-  -H "Content-Type: application/json" \\
-  -d '{"contents":[{"parts":[{"text":"${prompt}"}]}]}'`
-})
 
 async function copy(value: string) {
   if (!value) return
