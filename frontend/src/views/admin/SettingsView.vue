@@ -955,9 +955,8 @@
               </div>
               <Toggle v-model="form.invitation_code_enabled" />
             </div>
-            <!-- Password Reset - Only show when email verification is enabled -->
+            <!-- Password Reset -->
             <div
-              v-if="form.email_verify_enabled"
               class="flex items-center justify-between border-t border-gray-100 pt-4 dark:border-dark-700"
             >
               <div>
@@ -972,7 +971,7 @@
             </div>
             <!-- Frontend URL - Only show when password reset is enabled -->
             <div
-              v-if="form.email_verify_enabled && form.password_reset_enabled"
+              v-if="form.password_reset_enabled"
               class="border-t border-gray-100 pt-4 dark:border-dark-700"
             >
               <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">

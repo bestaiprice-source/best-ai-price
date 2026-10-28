@@ -430,7 +430,7 @@ func (s *EmailService) SendPasswordResetEmail(ctx context.Context, email, siteNa
 	fullResetURL := fmt.Sprintf("%s?email=%s&token=%s", resetURL, url.QueryEscape(email), url.QueryEscape(token))
 
 	// Build email content
-	subject := fmt.Sprintf("[%s] 密码重置请求", siteName)
+	subject := fmt.Sprintf("[%s] Password Reset Request", siteName)
 	body := s.buildPasswordResetEmailBody(fullResetURL, siteName)
 
 	// Send email
@@ -519,20 +519,20 @@ func (s *EmailService) buildPasswordResetEmailBody(resetURL, siteName string) st
             <h1>%s</h1>
         </div>
         <div class="content">
-            <p style="font-size: 18px; color: #333;">密码重置请求</p>
-            <p style="color: #666;">您已请求重置密码。请点击下方按钮设置新密码：</p>
-            <a href="%s" class="button">重置密码</a>
+            <p style="font-size: 18px; color: #333;">Password reset requested</p>
+            <p style="color: #666;">You asked to reset your password. Click the button below to set a new one:</p>
+            <a href="%s" class="button">Reset password</a>
             <div class="info">
-                <p>此链接将在 <strong>30 分钟</strong>后失效。</p>
-                <p class="warning">如果您没有请求重置密码，请忽略此邮件。您的密码将保持不变。</p>
+                <p>This link expires in <strong>30 minutes</strong>.</p>
+                <p class="warning">If you did not request a password reset, ignore this email — your password stays unchanged.</p>
             </div>
             <div class="link-fallback">
-                <p>如果按钮无法点击，请复制以下链接到浏览器中打开：</p>
+                <p>If the button does not work, copy this link into your browser:</p>
                 <p>%s</p>
             </div>
         </div>
         <div class="footer">
-            <p>这是一封自动发送的邮件，请勿回复。</p>
+            <p>This is an automated message, please do not reply.</p>
         </div>
     </div>
 </body>

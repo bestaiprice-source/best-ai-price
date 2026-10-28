@@ -234,23 +234,32 @@
 
 ## 🔄 10. Восстановление пароля
 
-### Шаг 1: Запрос кода на почту
+Требует включённого `password_reset_enabled` и настроенного SMTP. Флаг `email_verify_enabled`
+(проверка почты при регистрации) для этого не нужен — ссылка сама уходит на адрес аккаунта.
+
+### Шаг 1: Запрос письма со ссылкой
 `POST /api/v1/auth/forgot-password`
 ```json
 {
   "email": "user@example.com"
 }
 ```
+Ответ всегда одинаковый (защита от перебора аккаунтов). Если аккаунт существует, на почту
+приходит ссылка `<frontend_url>/reset-password?email=...&token=...` (настройка `frontend_url`
+обязательна, иначе API отвечает `500 Password reset is not configured`).
 
 ### Шаг 2: Установка нового пароля
 `POST /api/v1/auth/reset-password`
 ```json
 {
   "email": "user@example.com",
-  "verify_code": "123456",
+  "token": "token_from_email_link",
   "new_password": "new_strong_password"
 }
 ```
+Токен одноразовый и берётся из ссылки в письме; `verify_code` из письма при регистрации здесь
+не используется. При успехе инкрементируется `TokenVersion`, то есть все выданные ранее JWT
+становятся недействительными.
 
 ---
 
