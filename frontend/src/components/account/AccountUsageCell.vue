@@ -392,7 +392,7 @@
             :color="bar.color"
           />
           <p class="mt-1 text-[9px] leading-tight text-gray-400 dark:text-gray-500 italic">
-            * {{ t('admin.accounts.gemini.quotaPolicy.simulatedNote') || 'Simulated quota' }}
+            * {{ t('admin.accounts.gemini.quotaPolicy.simulatedNote') || t('ui.accountUsageCell.simulatedQuota') }}
           </p>
         </div>
         <!-- AI Studio Client OAuth: show unlimited flow (no usage tracking) -->

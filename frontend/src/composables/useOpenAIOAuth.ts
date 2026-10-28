@@ -3,6 +3,7 @@ import { useAppStore } from '@/stores/app'
 import { adminAPI } from '@/api/admin'
 import { buildAuthErrorMessage } from '@/utils/authError'
 import { parseOpenAIRefreshTokenInput } from '@/utils/openaiRefreshTokenParser'
+import { i18n } from '@/i18n'
 
 export interface OpenAITokenInfo {
   access_token?: string
@@ -83,7 +84,7 @@ export function useOpenAIOAuth(options?: UseOpenAIOAuthOptions) {
       }
       return true
     } catch (err: any) {
-      error.value = err.response?.data?.detail || 'Failed to generate OpenAI auth URL'
+      error.value = err.response?.data?.detail || i18n.global.t('ui.useOpenAIOAuth.failedToGenerateOpenAIAuthUrl')
       appStore.showError(error.value)
       return false
     } finally {
@@ -119,7 +120,7 @@ export function useOpenAIOAuth(options?: UseOpenAIOAuthOptions) {
       const tokenInfo = await adminAPI.accounts.exchangeCode(`${endpointPrefix}/exchange-code`, payload)
       return tokenInfo as OpenAITokenInfo
     } catch (err: any) {
-      error.value = err.response?.data?.detail || 'Failed to exchange OpenAI auth code'
+      error.value = err.response?.data?.detail || i18n.global.t('ui.useOpenAIOAuth.failedToExchangeOpenAIAuthCode')
       appStore.showError(error.value)
       return null
     } finally {
@@ -180,7 +181,7 @@ export function useOpenAIOAuth(options?: UseOpenAIOAuthOptions) {
       )
       return tokenInfo as OpenAITokenInfo
     } catch (err: any) {
-      error.value = err.response?.data?.detail || 'Failed to validate session token'
+      error.value = err.response?.data?.detail || i18n.global.t('ui.useOpenAIOAuth.failedToValidateSessionToken')
       appStore.showError(error.value)
       return null
     } finally {

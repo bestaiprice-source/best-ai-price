@@ -7,7 +7,7 @@
       :disabled="disabled"
       :aria-expanded="isOpen"
       :aria-haspopup="true"
-      aria-label="Select option"
+      :aria-label="t('ui.select.selectoption')"
       :class="[
         'select-trigger',
         isOpen && 'select-trigger-open',

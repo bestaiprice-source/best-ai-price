@@ -41,7 +41,7 @@
       <nav class="mx-auto flex max-w-6xl items-center justify-between">
         <!-- Logo -->
         <div class="flex items-center">
-          <BrandLogo :src="siteLogo" alt="Logo" class="h-10 w-10 rounded-xl" />
+          <BrandLogo :src="siteLogo" :alt="t('ui.homeView.logo')" class="h-10 w-10 rounded-xl" />
         </div>
 
         <!-- Nav Actions -->
@@ -147,13 +147,13 @@
                     <span class="btn-minimize"></span>
                     <span class="btn-maximize"></span>
                   </div>
-                  <span class="terminal-title">terminal</span>
+                  <span class="terminal-title">{{ t('ui.homeView.terminal') }}</span>
                 </div>
                 <!-- Terminal content -->
                 <div class="terminal-body">
                   <div class="code-line line-1">
                     <span class="code-prompt">$</span>
-                    <span class="code-cmd">curl</span>
+                    <span class="code-cmd">{{ t('ui.homeView.curl') }}</span>
                     <span class="code-flag">-X POST</span>
                     <span class="code-url">/v1/messages</span>
                   </div>
@@ -478,7 +478,7 @@ function handleProviderClick(providerId: string) {
 // Site settings - directly from appStore (already initialized from injected config)
 const siteName = computed(() => resolveBrandName(appStore.cachedPublicSettings?.site_name || appStore.siteName))
 const siteLogo = computed(() => appStore.cachedPublicSettings?.site_logo || appStore.siteLogo || '')
-const siteSubtitle = computed(() => appStore.cachedPublicSettings?.site_subtitle || 'AI API Gateway Platform')
+const siteSubtitle = computed(() => appStore.cachedPublicSettings?.site_subtitle || t('ui.homeView.aiApiGatewayPlatform'))
 const docUrl = computed(() => appStore.cachedPublicSettings?.doc_url || appStore.docUrl || '')
 const homeContent = computed(() => appStore.cachedPublicSettings?.home_content || '')
 const homeContentUrl = computed(() => sanitizeUrl(homeContent.value))

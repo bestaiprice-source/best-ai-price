@@ -13,7 +13,7 @@
         </div>
         <div class="actions">
           <button class="primary-btn" @click="handleCheckOpportunities" :disabled="checkingOpportunities">
-            <span class="icon">🔍</span> {{ checkingOpportunities ? 'Checking BestAIPrice...' : 'Check BestAIPrice Now' }}
+            <span class="icon">🔍</span> {{ checkingOpportunities ? t('ui.vendorsPricingView.checkingBestAIPrice') : t('ui.vendorsPricingView.checkBestAIPriceNow') }}
           </button>
         </div>
       </div>
@@ -22,18 +22,18 @@
       <div class="opportunities-section">
         <div class="opportunities-header glass-panel">
           <div class="opp-info">
-            <h3>Discovered Cheaper Providers (BestAIPrice Candidates)</h3>
+            <h3>{{ t('ui.vendorsPricingView.discoveredCheaperProvidersBestAIPr') }}</h3>
             <p>Regularly compares active Primary & Backup routes against BestAIPrice database grouped by Model Family. Cheaper candidate providers are identified relative to your currently active providers.</p>
           </div>
           <div class="filter-controls">
             <div class="filter-group">
-              <label>Status Filter:</label>
+              <label>{{ t('ui.vendorsPricingView.statusFilter') }}</label>
               <select v-model="opportunityStatusFilter" @change="loadOpportunities" class="filter-select">
-                <option value="">All Statuses</option>
-                <option value="detected">Detected (Pending)</option>
-                <option value="promoted_primary">Promoted to Primary</option>
-                <option value="promoted_backup">Promoted to Backup</option>
-                <option value="dismissed">Dismissed</option>
+                <option value="">{{ t('ui.vendorsPricingView.allStatuses') }}</option>
+                <option value="detected">{{ t('ui.vendorsPricingView.detectedPending') }}</option>
+                <option value="promoted_primary">{{ t('ui.vendorsPricingView.promotedtoPrimary') }}</option>
+                <option value="promoted_backup">{{ t('ui.vendorsPricingView.promotedtoBackup') }}</option>
+                <option value="dismissed">{{ t('ui.vendorsPricingView.dismissed') }}</option>
               </select>
             </div>
           </div>
@@ -57,13 +57,13 @@
 
         <!-- Opportunities Content -->
         <div v-if="loadingOpportunities" class="table-container glass-panel mt-4 text-center text-muted py-5">
-          Loading opportunities...
+          {{ t('ui.vendorsPricingView.loadingopportunities') }}
         </div>
         <div v-else-if="opportunities.length === 0" class="table-container glass-panel mt-4 text-center text-muted py-5">
           No cheaper opportunities detected for current models. Click "Check BestAIPrice Now" to scan.
         </div>
         <div v-else-if="displayedFamilyGroups.length === 0" class="table-container glass-panel mt-4 text-center text-muted py-5">
-          No cheaper opportunities detected for the selected family.
+          {{ t('ui.vendorsPricingView.nocheaperopportunitiesdetected') }}
         </div>
         <div v-else class="family-groups-container mt-4">
           <div 
@@ -84,7 +84,7 @@
 
               <!-- Candidate Selector Pills if multiple exist -->
               <div v-if="group.candidateProviders.length > 1" class="candidate-selector-bar">
-                <span class="selector-label text-muted">Candidates:</span>
+                <span class="selector-label text-muted">{{ t('ui.vendorsPricingView.candidates') }}</span>
                 <button
                   v-for="(cand, idx) in group.candidateProviders"
                   :key="cand.domain"
@@ -92,7 +92,7 @@
                   :class="{ active: group.activeProvider.domain === cand.domain }"
                   @click="selectedCandidateForFamily[group.familyId] = cand.domain"
                 >
-                  <span v-if="idx === 0" class="best-star" title="Best Savings">★</span>
+                  <span v-if="idx === 0" class="best-star" :title="t('ui.vendorsPricingView.bestSavings')">★</span>
                   <span class="cand-name">{{ cand.name }}</span>
                   <span class="cand-savings">-{{ cand.avgSavings.toFixed(1) }}%</span>
                 </button>
@@ -101,12 +101,12 @@
               <!-- Average Price Across All Models of Family -->
               <div class="family-savings-summary">
                 <div class="price-stat">
-                  <span class="stat-label">Current Avg:</span>
+                  <span class="stat-label">{{ t('ui.vendorsPricingView.currentAvg') }}</span>
                   <span class="stat-val">${{ group.activeProvider.currentAvgPrice.toFixed(2) }}</span>
                 </div>
                 <span class="stat-arrow">→</span>
                 <div class="price-stat">
-                  <span class="stat-label">Candidate Avg:</span>
+                  <span class="stat-label">{{ t('ui.vendorsPricingView.candidateAvg') }}</span>
                   <span class="stat-val text-success">${{ group.activeProvider.candidateAvgPrice.toFixed(2) }}</span>
                 </div>
                 <span class="savings-badge ml-2">-{{ group.activeProvider.avgSavings.toFixed(1) }}%</span>
@@ -116,12 +116,12 @@
             <!-- Candidate Provider Info Subbar -->
             <div class="candidate-info-subbar px-4 py-2">
               <div class="candidate-meta">
-                <span class="text-muted">Candidate:</span> <strong class="text-accent">{{ group.activeProvider.name }}</strong> <span class="sub-text text-muted">({{ group.activeProvider.domain }})</span>
+                <span class="text-muted">{{ t('ui.vendorsPricingView.candidate') }}</span> <strong class="text-accent">{{ group.activeProvider.name }}</strong> <span class="sub-text text-muted">({{ group.activeProvider.domain }})</span>
                 <span class="mx-2 text-muted">|</span>
-                <span class="text-muted">Current:</span> {{ group.activeProvider.currentPrimaryProviders.join(', ') || 'Active' }}
+                <span class="text-muted">{{ t('ui.vendorsPricingView.current') }}</span> {{ group.activeProvider.currentPrimaryProviders.join(', ') || 'Active' }}
               </div>
               <a v-if="group.activeProvider.cardUrl" :href="group.activeProvider.cardUrl" target="_blank" class="card-link">
-                <span>BestAIPrice Card</span> <span class="ext-icon">↗</span>
+                <span>{{ t('ui.vendorsPricingView.bestAIPriceCard') }}</span> <span class="ext-icon">↗</span>
               </a>
             </div>
 
@@ -130,11 +130,11 @@
               <table class="vendors-table">
                 <thead>
                   <tr>
-                    <th>Model</th>
-                    <th title="Combined benchmark price: 1M Input + 1M Output tokens">Current Route & Price (1M In+Out)</th>
-                    <th title="Combined benchmark price: 1M Input + 1M Output tokens">Candidate Price (1M In+Out)</th>
-                    <th>Savings</th>
-                    <th>Status</th>
+                    <th>{{ t('ui.vendorsPricingView.model') }}</th>
+                    <th :title="t('ui.vendorsPricingView.combinedbenchmarkprice1M')">{{ t('ui.vendorsPricingView.currentRoutePrice1M') }}</th>
+                    <th :title="t('ui.vendorsPricingView.combinedbenchmarkprice1M2')">{{ t('ui.vendorsPricingView.candidatePrice1MIn') }}</th>
+                    <th>{{ t('ui.vendorsPricingView.savings') }}</th>
+                    <th>{{ t('ui.vendorsPricingView.status') }}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -149,12 +149,12 @@
                     </td>
                     <td>
                       <div class="route-price-cell">
-                        <span class="route-badge primary">Primary:</span>
+                        <span class="route-badge primary">{{ t('ui.vendorsPricingView.primary') }}</span>
                         <span class="provider-name">{{ opp.current_primary_provider }}</span>
                         <span class="price-val ml-1">${{ opp.current_primary_price.toFixed(4) }} / 1M</span>
                       </div>
                       <div v-if="opp.current_backup_provider" class="route-price-cell mt-1">
-                        <span class="route-badge backup">Backup:</span>
+                        <span class="route-badge backup">{{ t('ui.vendorsPricingView.backup') }}</span>
                         <span class="provider-name text-muted">{{ opp.current_backup_provider }}</span>
                         <span class="price-val text-muted ml-1">${{ (opp.current_backup_price || 0).toFixed(4) }} / 1M</span>
                       </div>
@@ -195,7 +195,9 @@ import {
   CheaperProviderOpportunity
 } from '@/api/admin/vendor';
 import { useAppStore } from '@/stores';
+import { useI18n } from 'vue-i18n';
 
+const { t } = useI18n();
 const appStore = useAppStore();
 
 // Cheaper Provider Opportunities state
@@ -360,10 +362,10 @@ const handleCheckOpportunities = async () => {
     checkingOpportunities.value = true;
     const res = await checkProviderOpportunities();
     const count = res.discovered_count !== undefined ? res.discovered_count : (res.opportunities?.length || 0);
-    appStore.showSuccess(`${res.message || 'Check completed'}: ${count} cheaper model opportunities found across best family providers`);
+    appStore.showSuccess(`${res.message || t('ui.vendorsPricingView.checkCompleted')}: ${count} cheaper model opportunities found across best family providers`);
     await loadOpportunities();
   } catch (error: any) {
-    appStore.showError(error.message || 'Check failed');
+    appStore.showError(error.message || t('ui.vendorsPricingView.checkFailed'));
   } finally {
     checkingOpportunities.value = false;
   }

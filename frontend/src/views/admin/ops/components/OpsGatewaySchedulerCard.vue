@@ -71,8 +71,8 @@ onMounted(() => {
   <div class="flex h-full flex-col rounded-3xl bg-white p-6 shadow-sm ring-1 ring-gray-900/5 dark:bg-dark-800 dark:ring-dark-700">
     <div class="mb-4 flex items-center justify-between">
       <div>
-        <h3 class="text-sm font-bold text-gray-900 dark:text-white">Gateway Scheduler</h3>
-        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Generic path runtime selection and transport reuse</p>
+        <h3 class="text-sm font-bold text-gray-900 dark:text-white">{{ t('ui.opsGatewaySchedulerCard.gatewayScheduler') }}</h3>
+        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t('ui.opsGatewaySchedulerCard.genericpathruntimeselection') }}</p>
       </div>
       <div class="text-right text-xs text-gray-500 dark:text-gray-400">
         <div>{{ runtime?.active_scheduling_accounts ?? 0 }} scheduling</div>
@@ -88,19 +88,19 @@ onMounted(() => {
 
     <div class="grid grid-cols-2 gap-3 text-sm">
       <div class="rounded-2xl bg-gray-50 p-3 dark:bg-dark-700">
-        <div class="text-[11px] uppercase tracking-wide text-gray-500 dark:text-gray-400">Sticky Hit</div>
+        <div class="text-[11px] uppercase tracking-wide text-gray-500 dark:text-gray-400">{{ t('ui.opsGatewaySchedulerCard.stickyHit') }}</div>
         <div class="mt-1 text-lg font-bold text-gray-900 dark:text-white">{{ formatPercent(runtime?.metrics?.sticky_hit_ratio) }}</div>
       </div>
       <div class="rounded-2xl bg-gray-50 p-3 dark:bg-dark-700">
-        <div class="text-[11px] uppercase tracking-wide text-gray-500 dark:text-gray-400">Scheduler Latency</div>
+        <div class="text-[11px] uppercase tracking-wide text-gray-500 dark:text-gray-400">{{ t('ui.opsGatewaySchedulerCard.schedulerLatency') }}</div>
         <div class="mt-1 text-lg font-bold text-gray-900 dark:text-white">{{ formatMs(runtime?.metrics?.scheduler_latency_ms_avg) }}</div>
       </div>
       <div class="rounded-2xl bg-gray-50 p-3 dark:bg-dark-700">
-        <div class="text-[11px] uppercase tracking-wide text-gray-500 dark:text-gray-400">Transport Hit</div>
+        <div class="text-[11px] uppercase tracking-wide text-gray-500 dark:text-gray-400">{{ t('ui.opsGatewaySchedulerCard.transportHit') }}</div>
         <div class="mt-1 text-lg font-bold text-gray-900 dark:text-white">{{ formatPercent(cacheHitRate) }}</div>
       </div>
       <div class="rounded-2xl bg-gray-50 p-3 dark:bg-dark-700">
-        <div class="text-[11px] uppercase tracking-wide text-gray-500 dark:text-gray-400">Switch Rate</div>
+        <div class="text-[11px] uppercase tracking-wide text-gray-500 dark:text-gray-400">{{ t('ui.opsGatewaySchedulerCard.switchRate') }}</div>
         <div class="mt-1 text-lg font-bold text-gray-900 dark:text-white">{{ formatPercent(runtime?.metrics?.account_switch_rate) }}</div>
       </div>
     </div>
@@ -115,12 +115,12 @@ onMounted(() => {
       <table v-else class="min-w-full text-left text-xs">
         <thead class="text-gray-500 dark:text-gray-400">
           <tr>
-            <th class="pb-2 pr-2 font-medium">Account</th>
-            <th class="pb-2 pr-2 font-medium">Load</th>
+            <th class="pb-2 pr-2 font-medium">{{ t('ui.opsGatewaySchedulerCard.account') }}</th>
+            <th class="pb-2 pr-2 font-medium">{{ t('ui.opsGatewaySchedulerCard.load') }}</th>
             <th class="pb-2 pr-2 font-medium">TTFT</th>
             <th class="pb-2 pr-2 font-medium">Err</th>
-            <th class="pb-2 pr-2 font-medium">Hits</th>
-            <th class="pb-2 font-medium">Seen</th>
+            <th class="pb-2 pr-2 font-medium">{{ t('ui.opsGatewaySchedulerCard.hits') }}</th>
+            <th class="pb-2 font-medium">{{ t('ui.opsGatewaySchedulerCard.seen') }}</th>
           </tr>
         </thead>
         <tbody class="text-gray-700 dark:text-gray-200">

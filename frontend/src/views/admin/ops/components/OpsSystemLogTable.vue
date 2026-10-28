@@ -354,18 +354,18 @@ onMounted(async () => {
         <label class="text-xs text-gray-600 dark:text-gray-300">
           {{ systemLogT('level') }}
           <select v-model="runtimeConfig.level" class="input mt-1">
-            <option value="debug">debug</option>
-            <option value="info">info</option>
-            <option value="warn">warn</option>
-            <option value="error">error</option>
+            <option value="debug">{{ t('ui.opsSystemLogTable.debug') }}</option>
+            <option value="info">{{ t('ui.opsSystemLogTable.info') }}</option>
+            <option value="warn">{{ t('ui.opsSystemLogTable.warn') }}</option>
+            <option value="error">{{ t('ui.opsSystemLogTable.error') }}</option>
           </select>
         </label>
         <label class="text-xs text-gray-600 dark:text-gray-300">
           {{ systemLogT('stacktraceLevel') }}
           <select v-model="runtimeConfig.stacktrace_level" class="input mt-1">
-            <option value="none">none</option>
-            <option value="error">error</option>
-            <option value="fatal">fatal</option>
+            <option value="none">{{ t('ui.opsSystemLogTable.none') }}</option>
+            <option value="error">{{ t('ui.opsSystemLogTable.error2') }}</option>
+            <option value="fatal">{{ t('ui.opsSystemLogTable.fatal') }}</option>
           </select>
         </label>
         <label class="text-xs text-gray-600 dark:text-gray-300">
@@ -383,11 +383,11 @@ onMounted(async () => {
         <div class="flex items-end gap-2">
           <label class="inline-flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300">
             <input v-model="runtimeConfig.caller" type="checkbox" />
-            caller
+            {{ t('ui.opsSystemLogTable.caller') }}
           </label>
           <label class="inline-flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300">
             <input v-model="runtimeConfig.enable_sampling" type="checkbox" />
-            sampling
+            {{ t('ui.opsSystemLogTable.sampling') }}
           </label>
           <button type="button" class="btn btn-primary btn-sm" :disabled="runtimeSaving" @click="saveRuntimeConfig">
             {{ runtimeSaving ? t('common.saving') : systemLogT('saveAndApply') }}
@@ -425,10 +425,10 @@ onMounted(async () => {
         {{ systemLogT('level') }}
         <select v-model="filters.level" class="input mt-1">
           <option value="">{{ t('common.all') }}</option>
-          <option value="debug">debug</option>
-          <option value="info">info</option>
-          <option value="warn">warn</option>
-          <option value="error">error</option>
+          <option value="debug">{{ t('ui.opsSystemLogTable.debug2') }}</option>
+          <option value="info">{{ t('ui.opsSystemLogTable.info2') }}</option>
+          <option value="warn">{{ t('ui.opsSystemLogTable.warn2') }}</option>
+          <option value="error">{{ t('ui.opsSystemLogTable.error3') }}</option>
         </select>
       </label>
       <label class="text-xs text-gray-600 dark:text-gray-300">

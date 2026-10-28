@@ -9,7 +9,7 @@
             </h3>
             <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
               {{ t('admin.backup.s3.descriptionPrefix') }}
-              <button type="button" class="text-primary-600 underline hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300" @click="showR2Guide = true">Cloudflare R2</button>
+              <button type="button" class="text-primary-600 underline hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300" @click="showR2Guide = true">{{ t('ui.backupView.cloudflareR2') }}</button>
               {{ t('admin.backup.s3.descriptionSuffix') }}
             </p>
           </div>
@@ -21,7 +21,7 @@
           </div>
           <div>
             <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">{{ t('admin.backup.s3.region') }}</label>
-            <input v-model="s3Form.region" class="input w-full" placeholder="auto" />
+            <input v-model="s3Form.region" class="input w-full" :placeholder="t('ui.backupView.auto')" />
           </div>
           <div>
             <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">{{ t('admin.backup.s3.bucket') }}</label>
@@ -29,7 +29,7 @@
           </div>
           <div>
             <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">{{ t('admin.backup.s3.prefix') }}</label>
-            <input v-model="s3Form.prefix" class="input w-full" placeholder="backups/" />
+            <input v-model="s3Form.prefix" class="input w-full" :placeholder="t('ui.backupView.backups')" />
           </div>
           <div>
             <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">{{ t('admin.backup.s3.accessKeyId') }}</label>

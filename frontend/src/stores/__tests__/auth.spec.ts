@@ -24,6 +24,20 @@ vi.mock('@/api', () => ({
   isTotp2FARequired: (response: any) => response?.requires_2fa === true,
 }))
 
+// The store renders its error through the i18n singleton, so resolve keys
+// against the real English locale instead of returning the dotted key.
+vi.mock('@/i18n', async () => {
+  const en = (await import('../../i18n/locales/en')).default as Record<string, unknown>
+  const resolve = (key: string) =>
+    key.split('.').reduce<unknown>((acc, part) => (acc as Record<string, unknown>)?.[part], en) ?? key
+  return {
+    i18n: { global: { t: (key: string) => resolve(key), locale: { value: 'en' } } },
+    getLocale: () => 'en',
+    setLocale: async () => {},
+    availableLocales: []
+  }
+})
+
 const fakeUser = {
   id: 1,
   username: 'testuser',

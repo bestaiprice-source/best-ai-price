@@ -420,19 +420,19 @@
     >
       <form id="key-form" @submit.prevent="handleSubmit" class="space-y-5">
         <div v-if="isAdmin && !showEditModal">
-          <label class="input-label">User / Owner</label>
+          <label class="input-label">{{ t('ui.keysView.userOwner') }}</label>
           <select
             v-model="formData.user_id"
             class="input select w-full"
             required
           >
-            <option :value="null" disabled>Select user...</option>
+            <option :value="null" disabled>{{ t('ui.keysView.selectuser') }}</option>
             <option
               v-for="user in allUsers"
               :key="user.id"
               :value="user.id"
             >
-              {{ user.email }} ({{ user.username || 'no username' }})
+              {{ user.email }} ({{ user.username || t('ui.keysView.noUsername') }})
             </option>
           </select>
         </div>
@@ -1498,7 +1498,7 @@ const onUserFilterChange = (value: string | number | boolean | null) => {
 
 const userFilterOptions = computed(() => {
   const options = [
-    { label: t('common.allUsers') || 'All Users', value: '' }
+    { label: t('common.allUsers') || t('ui.keysView.allUsers'), value: '' }
   ]
   allUsers.value.forEach(u => {
     options.push({

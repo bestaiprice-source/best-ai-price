@@ -11,10 +11,10 @@
                   <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
                   <span class="relative inline-flex h-2 w-2 rounded-full bg-emerald-500"></span>
                 </span>
-                Hypervisor Active
+                {{ t('ui.dashboardView.hypervisorActive') }}
               </span>
               <span class="bap-pill bap-pill-purple uppercase text-[10px]">
-                Admin Console
+                {{ t('ui.dashboardView.adminConsole') }}
               </span>
             </div>
             <h1 class="text-xl font-bold tracking-tight text-gray-900 sm:text-2xl dark:text-white">
@@ -74,9 +74,9 @@
               </span>
             </div>
             <div class="mt-4 flex items-center justify-between border-t border-black/[0.04] pt-3 text-xs text-gray-500 dark:border-white/[0.06] dark:text-gray-400">
-              <span>Status: <strong class="text-emerald-600 dark:text-emerald-400">{{ stats.active_api_keys }} Online</strong></span>
+              <span>{{ t('ui.dashboardView.status') }} <strong class="text-emerald-600 dark:text-emerald-400">{{ stats.active_api_keys }} Online</strong></span>
               <router-link to="/keys" class="font-medium text-[#4791ff] hover:underline">
-                Manage &rarr;
+                {{ t('ui.dashboardView.manage') }}
               </router-link>
             </div>
           </div>
@@ -105,9 +105,9 @@
               <span v-if="stats.error_accounts > 0" class="font-medium text-rose-500">
                 {{ stats.error_accounts }} {{ t('common.error') }}
               </span>
-              <span v-else class="text-emerald-600 dark:text-emerald-400">All Nodes Normal</span>
+              <span v-else class="text-emerald-600 dark:text-emerald-400">{{ t('ui.dashboardView.allNodesNormal') }}</span>
               <router-link to="/admin/accounts" class="font-medium text-[#4791ff] hover:underline">
-                View &rarr;
+                {{ t('ui.dashboardView.view') }}
               </router-link>
             </div>
           </div>
@@ -135,7 +135,7 @@
             <div class="mt-4 flex items-center justify-between border-t border-black/[0.04] pt-3 text-xs text-gray-500 dark:border-white/[0.06] dark:text-gray-400">
               <span>{{ t('common.total') }}: <span class="font-mono font-medium text-gray-900 dark:text-white">{{ formatNumber(stats.total_requests) }}</span></span>
               <router-link to="/admin/usage" class="font-medium text-[#4791ff] hover:underline">
-                Logs &rarr;
+                {{ t('ui.dashboardView.logs') }}
               </router-link>
             </div>
           </div>
@@ -157,13 +157,13 @@
                 </div>
               </div>
               <span class="bap-pill bap-pill-green">
-                New Today
+                {{ t('ui.dashboardView.newToday') }}
               </span>
             </div>
             <div class="mt-4 flex items-center justify-between border-t border-black/[0.04] pt-3 text-xs text-gray-500 dark:border-white/[0.06] dark:text-gray-400">
               <span>{{ t('common.total') }}: <span class="font-mono font-medium text-gray-900 dark:text-white">{{ formatNumber(stats.total_users) }}</span></span>
               <router-link to="/admin/users" class="font-medium text-[#4791ff] hover:underline">
-                Users &rarr;
+                {{ t('ui.dashboardView.users') }}
               </router-link>
             </div>
           </div>
@@ -187,7 +187,7 @@
               </div>
             </div>
             <div class="mt-4 flex items-center justify-between border-t border-black/[0.04] pt-3 font-mono text-xs text-gray-500 dark:border-white/[0.06] dark:text-gray-400">
-              <span>Cost: <strong class="text-amber-600 dark:text-amber-400">${{ formatCost(stats.today_actual_cost) }}</strong></span>
+              <span>{{ t('ui.dashboardView.cost') }} <strong class="text-amber-600 dark:text-amber-400">${{ formatCost(stats.today_actual_cost) }}</strong></span>
               <span class="text-gray-400 dark:text-gray-500">${{ formatCost(stats.today_cost) }}</span>
             </div>
           </div>
@@ -208,7 +208,7 @@
               </div>
             </div>
             <div class="mt-4 flex items-center justify-between border-t border-black/[0.04] pt-3 font-mono text-xs text-gray-500 dark:border-white/[0.06] dark:text-gray-400">
-              <span>Cost: <strong class="text-indigo-600 dark:text-indigo-400">${{ formatCost(stats.total_actual_cost) }}</strong></span>
+              <span>{{ t('ui.dashboardView.cost2') }} <strong class="text-indigo-600 dark:text-indigo-400">${{ formatCost(stats.total_actual_cost) }}</strong></span>
               <span class="text-gray-400 dark:text-gray-500">${{ formatCost(stats.total_cost) }}</span>
             </div>
           </div>
@@ -232,7 +232,7 @@
               </div>
             </div>
             <div class="mt-4 flex items-center justify-between border-t border-black/[0.04] pt-3 text-xs text-gray-500 dark:border-white/[0.06] dark:text-gray-400">
-              <span>Throughput:</span>
+              <span>{{ t('ui.dashboardView.throughput') }}</span>
               <span class="font-mono font-semibold text-violet-600 dark:text-violet-400">
                 {{ formatTokens(stats.tpm) }} TPM
               </span>
@@ -255,8 +255,8 @@
               </div>
             </div>
             <div class="mt-4 flex items-center justify-between border-t border-black/[0.04] pt-3 text-xs text-gray-500 dark:border-white/[0.06] dark:text-gray-400">
-              <span>Active users: <strong class="text-gray-900 dark:text-white">{{ stats.active_users }}</strong></span>
-              <span class="font-medium text-emerald-600 dark:text-emerald-400">Live</span>
+              <span>{{ t('ui.dashboardView.activeusers') }} <strong class="text-gray-900 dark:text-white">{{ stats.active_users }}</strong></span>
+              <span class="font-medium text-emerald-600 dark:text-emerald-400">{{ t('ui.dashboardView.live') }}</span>
             </div>
           </div>
         </div>
@@ -341,9 +341,9 @@
                 <h3 class="text-sm font-semibold tracking-tight text-gray-900 dark:text-white">
                   {{ t('admin.dashboard.recentUsage') }}
                 </h3>
-                <span class="bap-pill bap-pill-blue text-[10px]">Top 12 Users</span>
+                <span class="bap-pill bap-pill-blue text-[10px]">{{ t('ui.dashboardView.top12Users') }}</span>
               </div>
-              <span class="text-xs text-gray-400 dark:text-gray-500">Token Consumption</span>
+              <span class="text-xs text-gray-400 dark:text-gray-500">{{ t('ui.dashboardView.tokenConsumption') }}</span>
             </div>
             <div class="h-64">
               <div v-if="userTrendLoading" class="flex h-full items-center justify-center">

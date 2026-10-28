@@ -141,7 +141,7 @@
       </div>
       <div class="mt-4 flex items-center justify-between border-t border-black/[0.04] pt-3 font-mono text-xs text-gray-500 dark:border-white/[0.06] dark:text-gray-400">
         <span>In: <strong class="text-gray-900 dark:text-white">{{ formatTokens(stats?.today_input_tokens || 0) }}</strong></span>
-        <span>Out: <strong class="text-gray-900 dark:text-white">{{ formatTokens(stats?.today_output_tokens || 0) }}</strong></span>
+        <span>{{ t('ui.userDashboardStats.out') }} <strong class="text-gray-900 dark:text-white">{{ formatTokens(stats?.today_output_tokens || 0) }}</strong></span>
       </div>
     </div>
 
@@ -162,7 +162,7 @@
       </div>
       <div class="mt-4 flex items-center justify-between border-t border-black/[0.04] pt-3 font-mono text-xs text-gray-500 dark:border-white/[0.06] dark:text-gray-400">
         <span>In: <strong class="text-gray-900 dark:text-white">{{ formatTokens(stats?.total_input_tokens || 0) }}</strong></span>
-        <span>Out: <strong class="text-gray-900 dark:text-white">{{ formatTokens(stats?.total_output_tokens || 0) }}</strong></span>
+        <span>{{ t('ui.userDashboardStats.out2') }} <strong class="text-gray-900 dark:text-white">{{ formatTokens(stats?.total_output_tokens || 0) }}</strong></span>
       </div>
     </div>
 
@@ -185,7 +185,7 @@
         </div>
       </div>
       <div class="mt-4 flex items-center justify-between border-t border-black/[0.04] pt-3 text-xs text-gray-500 dark:border-white/[0.06] dark:text-gray-400">
-        <span>Throughput:</span>
+        <span>{{ t('ui.userDashboardStats.throughput') }}</span>
         <span class="font-mono font-semibold text-violet-600 dark:text-violet-400">
           {{ formatTokens(stats?.tpm || 0) }} TPM
         </span>
@@ -210,9 +210,9 @@
       <div class="mt-4 flex items-center justify-between border-t border-black/[0.04] pt-3 text-xs text-gray-500 dark:border-white/[0.06] dark:text-gray-400">
         <span class="flex items-center gap-1.5">
           <span class="h-2 w-2 rounded-full bg-emerald-500"></span>
-          <span>Latency</span>
+          <span>{{ t('ui.userDashboardStats.latency') }}</span>
         </span>
-        <span class="font-medium text-emerald-600 dark:text-emerald-400">Optimal</span>
+        <span class="font-medium text-emerald-600 dark:text-emerald-400">{{ t('ui.userDashboardStats.optimal') }}</span>
       </div>
     </div>
   </div>

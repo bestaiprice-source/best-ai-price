@@ -194,7 +194,7 @@
             ]"
           >
             <span class="text-sm font-semibold">Y</span>
-            Yunwu
+            {{ t('ui.createAccountModal.yunwu') }}
           </button>
         </div>
       </div>
@@ -205,68 +205,68 @@
       >
         <div class="flex items-center justify-between">
           <div>
-            <label class="input-label">Kiro OAuth</label>
-            <p class="input-hint">Refresh Token based Kiro reverse account. Stored as Kiro platform / OAuth type.</p>
+            <label class="input-label">{{ t('ui.createAccountModal.kiroOAuth') }}</label>
+            <p class="input-hint">{{ t('ui.createAccountModal.kiroRefreshTokenReverseAccount') }}</p>
           </div>
           <select v-model="kiroAuthMethod" class="input w-36">
-            <option value="social">social</option>
+            <option value="social">{{ t('ui.createAccountModal.social') }}</option>
             <option value="idc">idc</option>
           </select>
         </div>
         <div>
-          <label class="input-label">Refresh Token</label>
+          <label class="input-label">{{ t('ui.createAccountModal.refreshToken') }}</label>
           <textarea
             v-model="kiroRefreshToken"
             rows="4"
             class="input font-mono text-sm"
-            placeholder="Paste Kiro refreshToken"
+            :placeholder="t('ui.createAccountModal.pasteKirorefreshToken')"
           />
         </div>
         <div v-if="kiroAuthMethod === 'idc'" class="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div>
-            <label class="input-label">Client ID</label>
-            <input v-model="kiroClientID" type="text" class="input font-mono text-sm" placeholder="Kiro clientId" />
+            <label class="input-label">{{ t('ui.createAccountModal.clientID') }}</label>
+            <input v-model="kiroClientID" type="text" class="input font-mono text-sm" :placeholder="t('ui.createAccountModal.kiroclientId')" />
           </div>
           <div>
-            <label class="input-label">Client Secret</label>
-            <input v-model="kiroClientSecret" type="password" class="input font-mono text-sm" placeholder="Kiro clientSecret" />
+            <label class="input-label">{{ t('ui.createAccountModal.clientSecret') }}</label>
+            <input v-model="kiroClientSecret" type="password" class="input font-mono text-sm" :placeholder="t('ui.createAccountModal.kiroclientSecret')" />
           </div>
         </div>
         <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
           <div>
-            <label class="input-label">Region</label>
-            <input v-model="kiroRegion" type="text" class="input font-mono text-sm" placeholder="us-east-1" />
+            <label class="input-label">{{ t('ui.createAccountModal.region') }}</label>
+            <input v-model="kiroRegion" type="text" class="input font-mono text-sm" :placeholder="t('ui.createAccountModal.useast1')" />
           </div>
           <div>
-            <label class="input-label">Auth Region</label>
-            <input v-model="kiroAuthRegion" type="text" class="input font-mono text-sm" placeholder="Optional" />
+            <label class="input-label">{{ t('ui.createAccountModal.authRegion') }}</label>
+            <input v-model="kiroAuthRegion" type="text" class="input font-mono text-sm" :placeholder="t('ui.createAccountModal.optional')" />
           </div>
           <div>
-            <label class="input-label">API Region</label>
-            <input v-model="kiroAPIRegion" type="text" class="input font-mono text-sm" placeholder="Optional" />
+            <label class="input-label">{{ t('ui.createAccountModal.aPIRegion') }}</label>
+            <input v-model="kiroAPIRegion" type="text" class="input font-mono text-sm" :placeholder="t('ui.createAccountModal.optional2')" />
           </div>
         </div>
         <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div>
-            <label class="input-label">Profile ARN</label>
-            <input v-model="kiroProfileARN" type="text" class="input font-mono text-sm" placeholder="Optional" />
+            <label class="input-label">{{ t('ui.createAccountModal.profileARN') }}</label>
+            <input v-model="kiroProfileARN" type="text" class="input font-mono text-sm" :placeholder="t('ui.createAccountModal.optional3')" />
           </div>
           <div>
-            <label class="input-label">Machine ID</label>
-            <input v-model="kiroMachineID" type="text" class="input font-mono text-sm" placeholder="Optional" />
+            <label class="input-label">{{ t('ui.createAccountModal.machineID') }}</label>
+            <input v-model="kiroMachineID" type="text" class="input font-mono text-sm" :placeholder="t('ui.createAccountModal.optional4')" />
           </div>
         </div>
         <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
           <div>
-            <label class="input-label">Kiro Version</label>
+            <label class="input-label">{{ t('ui.createAccountModal.kiroVersion') }}</label>
             <input v-model="kiroVersion" type="text" class="input font-mono text-sm" placeholder="0.10.0" />
           </div>
           <div>
-            <label class="input-label">System Version</label>
-            <input v-model="kiroSystemVersion" type="text" class="input font-mono text-sm" placeholder="darwin#24.6.0" />
+            <label class="input-label">{{ t('ui.createAccountModal.systemVersion') }}</label>
+            <input v-model="kiroSystemVersion" type="text" class="input font-mono text-sm" :placeholder="t('ui.createAccountModal.darwin2460')" />
           </div>
           <div>
-            <label class="input-label">Node Version</label>
+            <label class="input-label">{{ t('ui.createAccountModal.nodeVersion') }}</label>
             <input v-model="kiroNodeVersion" type="text" class="input font-mono text-sm" placeholder="22.21.1" />
           </div>
         </div>
@@ -278,27 +278,27 @@
         class="space-y-4 rounded-lg border border-emerald-200 bg-emerald-50/60 p-4 dark:border-emerald-900/40 dark:bg-emerald-950/20"
       >
         <div>
-          <label class="input-label">Provider</label>
+          <label class="input-label">{{ t('ui.createAccountModal.provider') }}</label>
           <select v-model="yunwuProvider" class="input" @change="onYunwuProviderChange">
-            <option value="openlux">OpenLux (api.openlux.ai)</option>
-            <option value="portdan">Portdan AI (portdan.com)</option>
-            <option value="api-top">Top-API (api-top.com)</option>
-            <option value="yuanqiaoyun">Yuanqiaoyun (yuanqiaoyun.com)</option>
-            <option value="x-llm">X-LLM (x-llm.net)</option>
-            <option value="custom">Custom Upstream Provider</option>
+            <option value="openlux">{{ t('ui.createAccountModal.openLuxapiopenluxai') }}</option>
+            <option value="portdan">{{ t('ui.createAccountModal.portdanAIportdancom') }}</option>
+            <option value="api-top">{{ t('ui.createAccountModal.topAPIapitop') }}</option>
+            <option value="yuanqiaoyun">{{ t('ui.createAccountModal.yuanqiaoyunyuanqiaoyuncom') }}</option>
+            <option value="x-llm">{{ t('ui.createAccountModal.xLLMxllm') }}</option>
+            <option value="custom">{{ t('ui.createAccountModal.customUpstreamProvider') }}</option>
           </select>
         </div>
         <div v-if="yunwuProvider === 'custom'">
-          <label class="input-label">Provider Name / Key</label>
+          <label class="input-label">{{ t('ui.createAccountModal.providerNameKey') }}</label>
           <input
             v-model="yunwuCustomProvider"
             type="text"
             class="input font-mono"
-            placeholder="e.g. openlux, portdan, custom-vendor"
+            :placeholder="t('ui.createAccountModal.egopenluxportdan')"
           />
         </div>
         <div>
-          <label class="input-label">Base URL</label>
+          <label class="input-label">{{ t('ui.createAccountModal.baseURL') }}</label>
           <input
             v-model="yunwuBaseUrl"
             type="text"
@@ -315,23 +315,23 @@
             type="password"
             required
             class="input font-mono"
-            placeholder="sk-yunwu-..."
+            :placeholder="t('ui.createAccountModal.skyunwu')"
           />
-          <p class="input-hint">Your API Key / Bearer Token</p>
+          <p class="input-hint">{{ t('ui.createAccountModal.yourAPIKeyBearer') }}</p>
         </div>
         <div>
-          <label class="input-label">Protocol</label>
+          <label class="input-label">{{ t('ui.createAccountModal.protocol') }}</label>
           <select v-model="yunwuProtocol" class="input">
-            <option value="openai">OpenAI Compatible (standard /v1/chat/completions)</option>
-            <option value="anthropic">Anthropic Messages (native /v1/messages)</option>
-            <option value="gemini">Google Gemini (native /v1beta/models)</option>
-            <option value="responses">OpenAI Responses API</option>
+            <option value="openai">{{ t('ui.createAccountModal.openAICompatiblestandardv1') }}</option>
+            <option value="anthropic">{{ t('ui.createAccountModal.anthropicMessagesnativev1') }}</option>
+            <option value="gemini">{{ t('ui.createAccountModal.googleGemininativev1beta') }}</option>
+            <option value="responses">{{ t('ui.createAccountModal.openAIResponsesAPI') }}</option>
           </select>
         </div>
 
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
-            <label class="input-label">Initial / Current Balance ($ USD)</label>
+            <label class="input-label">{{ t('ui.createAccountModal.initialCurrentBalanceUSD') }}</label>
             <input
               v-model.number="yunwuInitialBalance"
               type="number"
@@ -340,10 +340,10 @@
               class="input font-mono"
               placeholder="0.00"
             />
-            <p class="input-hint">For manual deposit tracking and usage estimation</p>
+            <p class="input-hint">{{ t('ui.createAccountModal.formanualdeposittracking') }}</p>
           </div>
           <div>
-            <label class="input-label">Min Balance Alert Threshold ($ USD)</label>
+            <label class="input-label">{{ t('ui.createAccountModal.minBalanceAlertThreshold') }}</label>
             <input
               v-model.number="yunwuMinBalance"
               type="number"
@@ -352,14 +352,14 @@
               class="input font-mono"
               placeholder="20.00"
             />
-            <p class="input-hint">Telegram alert triggers when balance drops below this</p>
+            <p class="input-hint">{{ t('ui.createAccountModal.telegramalerttriggerswhen') }}</p>
           </div>
         </div>
 
         <div>
-          <label class="input-label">Supported Model Families</label>
+          <label class="input-label">{{ t('ui.createAccountModal.supportedModelFamilies') }}</label>
           <p class="mb-2 text-xs text-gray-500 dark:text-gray-400">
-            Select which neural network families will be routed to this node:
+            {{ t('ui.createAccountModal.selectwhichneuralnetwork') }}
           </p>
           <div class="grid grid-cols-2 gap-2">
             <label
@@ -386,10 +386,10 @@
           <div class="flex items-center justify-between mb-2">
             <div>
               <span class="text-xs font-semibold uppercase tracking-wider text-gray-700 dark:text-gray-300">
-                Model Mapping (Optional)
+                {{ t('ui.createAccountModal.modelMappingOptional') }}
               </span>
               <p class="text-[11px] text-gray-500 dark:text-gray-400">
-                Map incoming canonical model IDs to upstream provider model IDs
+                {{ t('ui.createAccountModal.mapincomingcanonicalmodel') }}
               </p>
             </div>
             <button
@@ -402,7 +402,7 @@
           </div>
 
           <div v-if="yunwuModelMappings.length === 0" class="py-2 text-center text-xs text-gray-400 dark:text-gray-500">
-            No custom model mappings configured. Standard model IDs will be passed as-is.
+            {{ t('ui.createAccountModal.noCustomModelMappings') }}
           </div>
 
           <div v-else class="space-y-2">
@@ -414,14 +414,14 @@
               <input
                 v-model="row.canonical"
                 type="text"
-                placeholder="Canonical (e.g. claude-3-7-sonnet)"
+                :placeholder="t('ui.createAccountModal.canonicalegclaude')"
                 class="input flex-1 font-mono text-xs"
               />
               <span class="text-xs text-gray-400">→</span>
               <input
                 v-model="row.upstream"
                 type="text"
-                placeholder="Upstream (e.g. claude-3-7-sonnet-20250219)"
+                :placeholder="t('ui.createAccountModal.upstreamegclaude')"
                 class="input flex-1 font-mono text-xs"
               />
               <button
@@ -641,7 +641,7 @@
               <Icon name="link" size="sm" />
             </div>
             <div>
-              <span class="block text-sm font-medium text-gray-900 dark:text-white">WebAPI</span>
+              <span class="block text-sm font-medium text-gray-900 dark:text-white">{{ t('ui.createAccountModal.webAPI') }}</span>
               <span class="text-xs text-gray-500 dark:text-gray-400">{{ t('admin.accounts.types.chatgptWebApi') }}</span>
             </div>
           </button>
@@ -1084,7 +1084,7 @@
             type="text"
             required
             class="input"
-            placeholder="https://cloudcode-pa.googleapis.com"
+            :placeholder="t('ui.createAccountModal.httpscloudcodepagoogleapis')"
           />
           <p class="input-hint">{{ t('admin.accounts.upstream.baseUrlHint') }}</p>
         </div>
@@ -1639,7 +1639,7 @@
               type="text"
               required
               class="input font-mono"
-              placeholder="AKIA..."
+              :placeholder="t('ui.createAccountModal.aKIA')"
             />
           </div>
           <div>
@@ -1678,34 +1678,34 @@
           <label class="input-label">{{ t('admin.accounts.bedrockRegion') }}</label>
           <select v-model="bedrockRegion" class="input">
             <optgroup label="US">
-              <option value="us-east-1">us-east-1 (N. Virginia)</option>
-              <option value="us-east-2">us-east-2 (Ohio)</option>
-              <option value="us-west-1">us-west-1 (N. California)</option>
-              <option value="us-west-2">us-west-2 (Oregon)</option>
-              <option value="us-gov-east-1">us-gov-east-1 (GovCloud US-East)</option>
-              <option value="us-gov-west-1">us-gov-west-1 (GovCloud US-West)</option>
+              <option value="us-east-1">{{ t('ui.createAccountModal.useast1N') }}</option>
+              <option value="us-east-2">{{ t('ui.createAccountModal.useast2Ohio') }}</option>
+              <option value="us-west-1">{{ t('ui.createAccountModal.uswest1N') }}</option>
+              <option value="us-west-2">{{ t('ui.createAccountModal.uswest2Oregon') }}</option>
+              <option value="us-gov-east-1">{{ t('ui.createAccountModal.usgoveast1') }}</option>
+              <option value="us-gov-west-1">{{ t('ui.createAccountModal.usgovwest1') }}</option>
             </optgroup>
             <optgroup label="Europe">
-              <option value="eu-west-1">eu-west-1 (Ireland)</option>
-              <option value="eu-west-2">eu-west-2 (London)</option>
-              <option value="eu-west-3">eu-west-3 (Paris)</option>
-              <option value="eu-central-1">eu-central-1 (Frankfurt)</option>
-              <option value="eu-central-2">eu-central-2 (Zurich)</option>
-              <option value="eu-south-1">eu-south-1 (Milan)</option>
-              <option value="eu-south-2">eu-south-2 (Spain)</option>
-              <option value="eu-north-1">eu-north-1 (Stockholm)</option>
+              <option value="eu-west-1">{{ t('ui.createAccountModal.euwest1Ireland') }}</option>
+              <option value="eu-west-2">{{ t('ui.createAccountModal.euwest2London') }}</option>
+              <option value="eu-west-3">{{ t('ui.createAccountModal.euwest3Paris') }}</option>
+              <option value="eu-central-1">{{ t('ui.createAccountModal.eucentral1Frankfurt') }}</option>
+              <option value="eu-central-2">{{ t('ui.createAccountModal.eucentral2Zurich') }}</option>
+              <option value="eu-south-1">{{ t('ui.createAccountModal.eusouth1Milan') }}</option>
+              <option value="eu-south-2">{{ t('ui.createAccountModal.eusouth2Spain') }}</option>
+              <option value="eu-north-1">{{ t('ui.createAccountModal.eunorth1Stockholm') }}</option>
             </optgroup>
             <optgroup label="Asia Pacific">
-              <option value="ap-northeast-1">ap-northeast-1 (Tokyo)</option>
-              <option value="ap-northeast-2">ap-northeast-2 (Seoul)</option>
-              <option value="ap-northeast-3">ap-northeast-3 (Osaka)</option>
-              <option value="ap-south-1">ap-south-1 (Mumbai)</option>
-              <option value="ap-south-2">ap-south-2 (Hyderabad)</option>
-              <option value="ap-southeast-1">ap-southeast-1 (Singapore)</option>
-              <option value="ap-southeast-2">ap-southeast-2 (Sydney)</option>
+              <option value="ap-northeast-1">{{ t('ui.createAccountModal.apnortheast1Tokyo') }}</option>
+              <option value="ap-northeast-2">{{ t('ui.createAccountModal.apnortheast2Seoul') }}</option>
+              <option value="ap-northeast-3">{{ t('ui.createAccountModal.apnortheast3Osaka') }}</option>
+              <option value="ap-south-1">{{ t('ui.createAccountModal.apsouth1Mumbai') }}</option>
+              <option value="ap-south-2">{{ t('ui.createAccountModal.apsouth2Hyderabad') }}</option>
+              <option value="ap-southeast-1">{{ t('ui.createAccountModal.apsoutheast1Singapore') }}</option>
+              <option value="ap-southeast-2">{{ t('ui.createAccountModal.apsoutheast2Sydney') }}</option>
             </optgroup>
             <optgroup label="Canada">
-              <option value="ca-central-1">ca-central-1 (Canada)</option>
+              <option value="ca-central-1">{{ t('ui.createAccountModal.cacentral1Canada') }}</option>
             </optgroup>
             <optgroup label="South America">
               <option value="sa-east-1">sa-east-1 (São Paulo)</option>
@@ -3055,14 +3055,14 @@
                 <td class="px-3 py-2 text-gray-900 dark:text-white">
                   {{ t('admin.accounts.gemini.quotaPolicy.rows.gcp.channel') }}
                 </td>
-                <td class="px-3 py-2 text-gray-600 dark:text-gray-400">Standard</td>
+                <td class="px-3 py-2 text-gray-600 dark:text-gray-400">{{ t('ui.createAccountModal.standard') }}</td>
                 <td class="px-3 py-2 text-gray-600 dark:text-gray-400">
                   {{ t('admin.accounts.gemini.quotaPolicy.rows.gcp.limitsStandard') }}
                 </td>
               </tr>
               <tr>
                 <td class="px-3 py-2 text-gray-900 dark:text-white"></td>
-                <td class="px-3 py-2 text-gray-600 dark:text-gray-400">Enterprise</td>
+                <td class="px-3 py-2 text-gray-600 dark:text-gray-400">{{ t('ui.createAccountModal.enterprise') }}</td>
                 <td class="px-3 py-2 text-gray-600 dark:text-gray-400">
                   {{ t('admin.accounts.gemini.quotaPolicy.rows.gcp.limitsEnterprise') }}
                 </td>
@@ -3078,7 +3078,7 @@
               </tr>
               <tr>
                 <td class="px-3 py-2 text-gray-900 dark:text-white"></td>
-                <td class="px-3 py-2 text-gray-600 dark:text-gray-400">Paid</td>
+                <td class="px-3 py-2 text-gray-600 dark:text-gray-400">{{ t('ui.createAccountModal.paid') }}</td>
                 <td class="px-3 py-2 text-gray-600 dark:text-gray-400">
                   {{ t('admin.accounts.gemini.quotaPolicy.rows.aiStudio.limitsPaid') }}
                 </td>
@@ -4690,7 +4690,7 @@ const handleImportAccessToken = async (accessTokenInput: string) => {
         const tokenInfo = await oauthClient.validateAccessToken(accessTokens[i], '/admin/openai/at2info')
         if (!tokenInfo) {
           failedCount++
-          errors.push(`#${i + 1}: ${oauthClient.error.value || 'Validation failed'}`)
+          errors.push(`#${i + 1}: ${oauthClient.error.value || t('ui.createAccountModal.validationFailed')}`)
           oauthClient.error.value = ''
           continue
         }
@@ -4732,7 +4732,7 @@ const handleImportAccessToken = async (accessTokenInput: string) => {
         successCount++
       } catch (error: any) {
         failedCount++
-        const errMsg = error.response?.data?.message || error.response?.data?.detail || error.message || 'Unknown error'
+        const errMsg = error.response?.data?.message || error.response?.data?.detail || error.message || t('ui.createAccountModal.unknownError')
         errors.push(`#${i + 1}: ${errMsg}`)
       }
     }
@@ -4958,7 +4958,7 @@ const handleOpenAIValidateRT = async (refreshTokenInput: string) => {
         )
         if (!tokenInfo) {
           failedCount++
-          errors.push(`#${i + 1}: ${oauthClient.error.value || 'Validation failed'}`)
+          errors.push(`#${i + 1}: ${oauthClient.error.value || t('ui.createAccountModal.validationFailed')}`)
           oauthClient.error.value = ''
           continue
         }
@@ -5030,7 +5030,7 @@ const handleOpenAIValidateRT = async (refreshTokenInput: string) => {
         successCount++
       } catch (error: any) {
         failedCount++
-        const errMsg = error.response?.data?.detail || error.message || 'Unknown error'
+        const errMsg = error.response?.data?.detail || error.message || t('ui.createAccountModal.unknownError')
         errors.push(`#${i + 1}: ${errMsg}`)
       }
     }
@@ -5091,7 +5091,7 @@ const handleOpenAIChatWebValidateST = async (sessionTokenInput: string) => {
         )
         if (!tokenInfo) {
           failedCount++
-          errors.push(`#${i + 1}: ${oauthClient.error.value || 'Validation failed'}`)
+          errors.push(`#${i + 1}: ${oauthClient.error.value || t('ui.createAccountModal.validationFailed')}`)
           oauthClient.error.value = ''
           continue
         }
@@ -5132,7 +5132,7 @@ const handleOpenAIChatWebValidateST = async (sessionTokenInput: string) => {
         successCount++
       } catch (error: any) {
         failedCount++
-        const errMsg = error.response?.data?.detail || error.message || 'Unknown error'
+        const errMsg = error.response?.data?.detail || error.message || t('ui.createAccountModal.unknownError')
         errors.push(`#${i + 1}: ${errMsg}`)
       }
     }
@@ -5188,7 +5188,7 @@ const handleSoraValidateST = async (sessionTokenInput: string) => {
         const tokenInfo = await oauthClient.validateSessionToken(sessionTokens[i], form.proxy_id)
         if (!tokenInfo) {
           failedCount++
-          errors.push(`#${i + 1}: ${oauthClient.error.value || 'Validation failed'}`)
+          errors.push(`#${i + 1}: ${oauthClient.error.value || t('ui.createAccountModal.validationFailed')}`)
           oauthClient.error.value = ''
           continue
         }
@@ -5218,7 +5218,7 @@ const handleSoraValidateST = async (sessionTokenInput: string) => {
         successCount++
       } catch (error: any) {
         failedCount++
-        const errMsg = error.response?.data?.detail || error.message || 'Unknown error'
+        const errMsg = error.response?.data?.detail || error.message || t('ui.createAccountModal.unknownError')
         errors.push(`#${i + 1}: ${errMsg}`)
       }
     }
@@ -5277,7 +5277,7 @@ const handleAntigravityValidateRT = async (refreshTokenInput: string) => {
         )
         if (!tokenInfo) {
           failedCount++
-          errors.push(`#${i + 1}: ${antigravityOAuth.error.value || 'Validation failed'}`)
+          errors.push(`#${i + 1}: ${antigravityOAuth.error.value || t('ui.createAccountModal.validationFailed')}`)
           antigravityOAuth.error.value = ''
           continue
         }
@@ -5308,7 +5308,7 @@ const handleAntigravityValidateRT = async (refreshTokenInput: string) => {
         successCount++
       } catch (error: any) {
         failedCount++
-        const errMsg = error.response?.data?.detail || error.message || 'Unknown error'
+        const errMsg = error.response?.data?.detail || error.message || t('ui.createAccountModal.unknownError')
         errors.push(`#${i + 1}: ${errMsg}`)
       }
     }

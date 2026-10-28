@@ -4,6 +4,19 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { ref } from 'vue'
+
+// The component resolves its aria-label through vue-i18n, so resolve the key
+// against the real English locale instead of stubbing `t` (the assertions below
+// check the rendered label).
+vi.mock('vue-i18n', async () => {
+  const en = (await import('../../../i18n/locales/en')).default as Record<string, unknown>
+  return {
+    useI18n: () => ({
+      t: (key: string) => key.split('.').reduce<unknown>((acc, part) => (acc as Record<string, unknown>)?.[part], en) ?? key
+    })
+  }
+})
+
 import NavigationProgress from '../../common/NavigationProgress.vue'
 
 // Mock useNavigationLoadingState

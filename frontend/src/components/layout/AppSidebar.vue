@@ -15,7 +15,7 @@
       <button
         @click="closeMobile"
         class="rounded-lg p-2 text-[#797a79] hover:bg-black/5 hover:text-[#090c0a]"
-        aria-label="Close Menu"
+        :aria-label="t('ui.appSidebar.closeMenu')"
       >
         <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />

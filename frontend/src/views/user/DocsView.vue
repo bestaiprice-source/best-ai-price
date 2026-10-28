@@ -223,7 +223,7 @@
                 v-model="disputeRequestId"
                 type="text"
                 class="input mt-1 w-full text-xs"
-                placeholder="req_01j7..."
+                :placeholder="t('ui.docsView.req01j7')"
               />
             </div>
             <div>

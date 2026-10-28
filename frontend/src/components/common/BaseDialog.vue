@@ -21,7 +21,7 @@
             <button
               @click="emit('close')"
               class="-mr-2 rounded-xl p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:text-dark-500 dark:hover:bg-dark-700 dark:hover:text-dark-300"
-              aria-label="Close modal"
+              :aria-label="t('ui.baseDialog.closemodal')"
             >
               <Icon name="x" size="md" />
             </button>
@@ -44,6 +44,7 @@
 
 <script setup lang="ts">
 import { computed, watch, onMounted, onUnmounted, ref, nextTick } from 'vue'
+import { useI18n } from 'vue-i18n'
 import Icon from '@/components/icons/Icon.vue'
 
 // 生成唯一ID以避免多个对话框时ID冲突
@@ -81,6 +82,8 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const emit = defineEmits<Emits>()
+
+const { t } = useI18n()
 
 // Tracks whether the dialog has ever been opened, so keepMounted dialogs stay
 // mounted after their first open.

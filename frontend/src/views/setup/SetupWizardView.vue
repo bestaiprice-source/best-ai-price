@@ -77,7 +77,7 @@
                 v-model="formData.database.host"
                 type="text"
                 class="input"
-                placeholder="localhost"
+                :placeholder="t('ui.setupWizardView.localhost')"
               />
             </div>
             <div>
@@ -110,7 +110,7 @@
                 v-model="formData.database.user"
                 type="text"
                 class="input"
-                placeholder="postgres"
+                :placeholder="t('ui.setupWizardView.postgres')"
               />
             </div>
             <div>
@@ -131,7 +131,7 @@
                 v-model="formData.database.dbname"
                 type="text"
                 class="input"
-                placeholder="sub2api"
+                :placeholder="t('ui.setupWizardView.sub2api')"
               />
             </div>
             <div>
@@ -202,7 +202,7 @@
                 v-model="formData.redis.host"
                 type="text"
                 class="input"
-                placeholder="localhost"
+                :placeholder="t('ui.setupWizardView.localhost2')"
               />
             </div>
             <div>
@@ -308,7 +308,7 @@
               v-model="formData.admin.email"
               type="email"
               class="input"
-              placeholder="admin@example.com"
+              :placeholder="t('ui.setupWizardView.adminexamplecom')"
             />
           </div>
 
@@ -585,7 +585,7 @@ async function testDatabaseConnection() {
   } catch (error: unknown) {
     const err = error as { response?: { data?: { detail?: string; message?: string } }; message?: string }
     errorMessage.value =
-      err.response?.data?.detail || err.response?.data?.message || err.message || 'Connection failed'
+      err.response?.data?.detail || err.response?.data?.message || err.message || t('ui.setupWizardView.connectionFailed')
   } finally {
     testingDb.value = false
   }
@@ -602,7 +602,7 @@ async function testRedisConnection() {
   } catch (error: unknown) {
     const err = error as { response?: { data?: { detail?: string; message?: string } }; message?: string }
     errorMessage.value =
-      err.response?.data?.detail || err.response?.data?.message || err.message || 'Connection failed'
+      err.response?.data?.detail || err.response?.data?.message || err.message || t('ui.setupWizardView.connectionFailed')
   } finally {
     testingRedis.value = false
   }
@@ -627,7 +627,7 @@ async function performInstall() {
   } catch (error: unknown) {
     const err = error as { response?: { data?: { detail?: string; message?: string } }; message?: string }
     errorMessage.value =
-      err.response?.data?.detail || err.response?.data?.message || err.message || 'Installation failed'
+      err.response?.data?.detail || err.response?.data?.message || err.message || t('ui.setupWizardView.installationFailed')
   } finally {
     installing.value = false
   }

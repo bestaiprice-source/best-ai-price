@@ -46,7 +46,7 @@
               class="flex w-full items-center gap-2 px-4 py-2 text-sm text-purple-600 hover:bg-gray-100 dark:hover:bg-dark-700"
             >
               <Icon name="bolt" size="sm" class="text-purple-500" />
-              {{ t('admin.accounts.syncBalance') || 'Sync Balance' }}
+              {{ t('admin.accounts.syncBalance') || t('ui.accountActionMenu.syncBalance') }}
             </button>
             <div v-if="hasRecoverableState" class="my-1 border-t border-gray-100 dark:border-dark-700"></div>
             <button v-if="hasRecoverableState" @click="$emit('recover-state', account); $emit('close')" class="flex w-full items-center gap-2 px-4 py-2 text-sm text-emerald-600 hover:bg-gray-100 dark:hover:bg-dark-700">

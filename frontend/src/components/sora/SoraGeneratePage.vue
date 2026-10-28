@@ -227,7 +227,7 @@ async function handleGenerate(req: GenerateRequest) {
     schedulePolling(gen.id)
   } catch (e: any) {
     console.error('Generate failed:', e)
-    alert(e?.response?.data?.message || e?.message || 'Generation failed')
+    alert(e?.response?.data?.message || e?.message || t('ui.soraGeneratePage.generationFailed'))
   } finally {
     generating.value = false
   }

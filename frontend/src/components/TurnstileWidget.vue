@@ -6,6 +6,9 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 interface TurnstileRenderOptions {
   sitekey: string
@@ -80,7 +83,7 @@ const loadScript = (): Promise<void> => {
     }
 
     script.onerror = () => {
-      reject(new Error('Failed to load Turnstile script'))
+      reject(new Error(t('ui.turnstileWidget.failedToLoadTurnstileScript')))
     }
 
     document.head.appendChild(script)

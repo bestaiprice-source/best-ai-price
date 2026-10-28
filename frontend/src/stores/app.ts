@@ -13,6 +13,7 @@ import {
 } from '@/api/admin/system'
 import { getPublicSettings as fetchPublicSettingsAPI } from '@/api/auth'
 import { BRAND_NAME, resolveBrandName } from '@/constants/brand'
+import { i18n } from '@/i18n'
 
 type ToastOptions = {
   title?: string
@@ -261,7 +262,7 @@ export const useAppStore = defineStore('app', () => {
     try {
       return await operation()
     } catch (error) {
-      const message = errorMessage || (error as { message?: string }).message || 'An error occurred'
+      const message = errorMessage || (error as { message?: string }).message || i18n.global.t('ui.appStore.anErrorOccurred')
       showError(message)
       return null
     } finally {

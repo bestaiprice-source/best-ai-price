@@ -23,14 +23,14 @@
               to="/admin/provider-health"
               class="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
             >
-              <span>Provider Health</span>
+              <span>{{ t('ui.parserStatsView.providerHealth') }}</span>
             </router-link>
           </div>
           <h1 class="text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
-            Provider Parser Statistics
+            {{ t('ui.parserStatsView.providerParserStatistics') }}
           </h1>
           <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            Crawl execution metrics, provider pricing synchronization, and change diffs from <code class="rounded bg-gray-100 px-1.5 py-0.5 text-xs text-primary-600 dark:bg-dark-800 dark:text-primary-400">data/run_stats.json</code>.
+            {{ t('ui.parserStatsView.crawlExecutionMetrics') }} <code class="rounded bg-gray-100 px-1.5 py-0.5 text-xs text-primary-600 dark:bg-dark-800 dark:text-primary-400">data/run_stats.json</code>.
           </p>
         </div>
 
@@ -50,7 +50,7 @@
             @click="showRawModal = true"
           >
             <Icon name="link" size="sm" />
-            <span>Raw JSON</span>
+            <span>{{ t('ui.parserStatsView.rawJSON') }}</span>
           </button>
         </div>
       </div>
@@ -77,25 +77,25 @@
             </span>
             <div class="text-sm">
               <span class="font-medium text-gray-900 dark:text-white">
-                {{ stats?.file_exists ? 'Source File:' : 'File Status:' }}
+                {{ stats?.file_exists ? t('ui.parserStatsView.sourceFile') : t('ui.parserStatsView.fileStatus') }}
               </span>
               <span
                 class="ml-2 font-mono text-xs"
                 :class="stats?.file_exists ? 'text-gray-600 dark:text-gray-300' : 'text-amber-700 dark:text-amber-400 font-semibold'"
               >
-                {{ stats?.file_exists ? stats.source_path : 'Not found in candidate paths' }}
+                {{ stats?.file_exists ? stats.source_path : t('ui.parserStatsView.notFoundInCandidatePaths') }}
               </span>
             </div>
           </div>
 
           <div class="flex flex-wrap items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
             <div v-if="stats?.last_sync_at">
-              <span class="font-medium text-gray-700 dark:text-gray-300">Last Sync:</span>
+              <span class="font-medium text-gray-700 dark:text-gray-300">{{ t('ui.parserStatsView.lastSync') }}</span>
               <span class="ml-1.5">{{ formatDate(stats.last_sync_at) }}</span>
               <span class="ml-1 text-gray-400">({{ timeAgo(stats.last_sync_at) }})</span>
             </div>
             <div v-if="stats?.file_mod_time">
-              <span class="font-medium text-gray-700 dark:text-gray-300">File Updated:</span>
+              <span class="font-medium text-gray-700 dark:text-gray-300">{{ t('ui.parserStatsView.fileUpdated') }}</span>
               <span class="ml-1.5">{{ formatDate(stats.file_mod_time) }}</span>
             </div>
           </div>
@@ -103,7 +103,7 @@
 
         <div v-if="!stats?.file_exists" class="mt-3 border-t border-amber-200/80 pt-3 text-xs text-amber-900 dark:border-amber-900/40 dark:text-amber-200">
           <p class="font-medium">
-            ⚠️ File <code class="font-mono">run_stats.json</code> could not be read. Checked candidate paths:
+            ⚠️ File <code class="font-mono">run_stats.json</code> {{ t('ui.parserStatsView.couldnotberead') }}
           </p>
           <div v-if="stats?.candidate_paths && stats.candidate_paths.length" class="mt-2 max-h-48 overflow-y-auto rounded-lg border border-amber-300/60 bg-amber-100/50 p-2 dark:border-amber-900/60 dark:bg-amber-950/40 font-mono text-[11px] space-y-1">
             <div
@@ -113,12 +113,12 @@
             >
               <span class="text-gray-800 dark:text-gray-200 break-all">{{ path }}</span>
               <span class="text-amber-700 dark:text-amber-400 text-[10px] shrink-0 font-sans">
-                {{ stats.checked_errors?.[path] || 'not found' }}
+                {{ stats.checked_errors?.[path] || t('ui.parserStatsView.notFound') }}
               </span>
             </div>
           </div>
           <p class="mt-2 text-[11px] text-amber-800/90 dark:text-amber-300/80">
-            💡 Tip: You can set an exact path using environment variable <code class="font-mono">RUN_STATS_PATH=/path/to/run_stats.json</code> or ensure user permissions permit reading <code class="font-mono">/root/bestai_prices_parser/public/data/run_stats.json</code>.
+            💡 Tip: You can set an exact path using environment variable <code class="font-mono">RUN_STATS_PATH=/path/to/run_stats.json</code> {{ t('ui.parserStatsView.orensureuserpermissions') }} <code class="font-mono">/root/bestai_prices_parser/public/data/run_stats.json</code>.
           </p>
         </div>
       </div>
@@ -137,7 +137,7 @@
             <div>
               <div class="flex items-center gap-2">
                 <span class="text-sm font-semibold uppercase tracking-wider text-blue-900 dark:text-blue-200">
-                  Crawl In Progress
+                  {{ t('ui.parserStatsView.crawlInProgress') }}
                 </span>
                 <span class="rounded bg-blue-200 px-2 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900 dark:text-blue-200">
                   {{ stats.current_run.status }}
@@ -151,19 +151,19 @@
 
           <div class="grid grid-cols-3 gap-4 text-center sm:text-right">
             <div>
-              <p class="text-xs uppercase text-blue-600 dark:text-blue-400">Progress</p>
+              <p class="text-xs uppercase text-blue-600 dark:text-blue-400">{{ t('ui.parserStatsView.progress') }}</p>
               <p class="text-base font-bold text-blue-950 dark:text-blue-100">
                 {{ stats.current_run.providers_done }} / {{ stats.current_run.providers_total }}
               </p>
             </div>
             <div>
-              <p class="text-xs uppercase text-blue-600 dark:text-blue-400">Prices Extracted</p>
+              <p class="text-xs uppercase text-blue-600 dark:text-blue-400">{{ t('ui.parserStatsView.pricesExtracted') }}</p>
               <p class="text-base font-bold text-blue-950 dark:text-blue-100">
                 {{ stats.current_run.prices_extracted }}
               </p>
             </div>
             <div>
-              <p class="text-xs uppercase text-blue-600 dark:text-blue-400">Errors</p>
+              <p class="text-xs uppercase text-blue-600 dark:text-blue-400">{{ t('ui.parserStatsView.errors') }}</p>
               <p class="text-base font-bold" :class="stats.current_run.errors_count > 0 ? 'text-red-600 dark:text-red-400' : 'text-blue-950 dark:text-blue-100'">
                 {{ stats.current_run.errors_count }}
               </p>
@@ -189,7 +189,7 @@
         <!-- Models -->
         <div class="rounded-2xl border border-gray-200/80 bg-white/85 p-5 shadow-sm dark:border-dark-700/80 dark:bg-dark-800/85">
           <div class="flex items-center justify-between">
-            <p class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Total Models</p>
+            <p class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">{{ t('ui.parserStatsView.totalModels') }}</p>
             <span class="rounded-lg bg-primary-50 p-2 text-primary-600 dark:bg-primary-950/40 dark:text-primary-400">
               <Icon name="grid" size="sm" />
             </span>
@@ -197,13 +197,13 @@
           <p class="mt-2 text-3xl font-bold text-gray-900 dark:text-white">
             {{ formatNumber(stats?.totals?.models || 0) }}
           </p>
-          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Discovered canonical AI models</p>
+          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t('ui.parserStatsView.discoveredcanonicalAImodels') }}</p>
         </div>
 
         <!-- Providers -->
         <div class="rounded-2xl border border-gray-200/80 bg-white/85 p-5 shadow-sm dark:border-dark-700/80 dark:bg-dark-800/85">
           <div class="flex items-center justify-between">
-            <p class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Total Providers</p>
+            <p class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">{{ t('ui.parserStatsView.totalProviders') }}</p>
             <span class="rounded-lg bg-emerald-50 p-2 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400">
               <Icon name="link" size="sm" />
             </span>
@@ -211,13 +211,13 @@
           <p class="mt-2 text-3xl font-bold text-emerald-600 dark:text-emerald-400">
             {{ formatNumber(stats?.totals?.providers || 0) }}
           </p>
-          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Active pricing sources</p>
+          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t('ui.parserStatsView.activepricingsources') }}</p>
         </div>
 
         <!-- Auth Providers -->
         <div class="rounded-2xl border border-gray-200/80 bg-white/85 p-5 shadow-sm dark:border-dark-700/80 dark:bg-dark-800/85">
           <div class="flex items-center justify-between">
-            <p class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Auth-Only Providers</p>
+            <p class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">{{ t('ui.parserStatsView.authOnlyProviders') }}</p>
             <span class="rounded-lg bg-indigo-50 p-2 text-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-400">
               <Icon name="cog" size="sm" />
             </span>
@@ -225,13 +225,13 @@
           <p class="mt-2 text-3xl font-bold text-indigo-600 dark:text-indigo-400">
             {{ formatNumber(stats?.totals?.auth_providers || 0) }}
           </p>
-          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Requiring registered API key</p>
+          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t('ui.parserStatsView.requiringregisteredAPIkey') }}</p>
         </div>
 
         <!-- Offers -->
         <div class="rounded-2xl border border-gray-200/80 bg-white/85 p-5 shadow-sm dark:border-dark-700/80 dark:bg-dark-800/85">
           <div class="flex items-center justify-between">
-            <p class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Provider-Model Offers</p>
+            <p class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">{{ t('ui.parserStatsView.providerModelOffers') }}</p>
             <span class="rounded-lg bg-amber-50 p-2 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400">
               <Icon name="chart" size="sm" />
             </span>
@@ -239,7 +239,7 @@
           <p class="mt-2 text-3xl font-bold text-amber-600 dark:text-amber-400">
             {{ formatNumber(stats?.totals?.offers || 0) }}
           </p>
-          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Tracked model price points</p>
+          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t('ui.parserStatsView.trackedmodelpricepoints') }}</p>
         </div>
       </div>
 
@@ -271,7 +271,7 @@
       <!-- TAB 1: Last Full Run -->
       <div v-if="activeTab === 'full_run'" class="space-y-6">
         <div v-if="!stats?.last_full_run" class="rounded-2xl border border-gray-200/80 bg-white/85 p-8 text-center text-sm text-gray-500 dark:border-dark-700/80 dark:bg-dark-800/85 dark:text-gray-400">
-          No recorded full run yet. Run stats will appear once the <code class="font-mono">update-all</code> pipeline completes.
+          {{ t('ui.parserStatsView.norecordedfullrun') }} <code class="font-mono">{{ t('ui.parserStatsView.updateall') }}</code> {{ t('ui.parserStatsView.pipelinecompletes') }}
         </div>
 
         <div v-else class="space-y-6">
@@ -280,7 +280,7 @@
             <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-gray-100 pb-4 dark:border-dark-700">
               <div>
                 <div class="flex items-center gap-3">
-                  <h3 class="text-base font-semibold text-gray-900 dark:text-white">Full Pipeline Execution</h3>
+                  <h3 class="text-base font-semibold text-gray-900 dark:text-white">{{ t('ui.parserStatsView.fullPipelineExecution') }}</h3>
                   <span
                     class="rounded-full px-3 py-1 text-xs font-semibold"
                     :class="stats.last_full_run.success
@@ -291,7 +291,7 @@
                   </span>
                 </div>
                 <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  Execution completed in <span class="font-semibold text-gray-700 dark:text-gray-200">{{ formatDuration(stats.last_full_run.duration_seconds) }}</span>
+                  {{ t('ui.parserStatsView.executioncompletedin') }} <span class="font-semibold text-gray-700 dark:text-gray-200">{{ formatDuration(stats.last_full_run.duration_seconds) }}</span>
                 </p>
               </div>
 
@@ -304,33 +304,33 @@
             <!-- Full Run Detailed Metrics Grid -->
             <div class="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-7">
               <div class="rounded-xl bg-gray-50/70 p-4 text-center dark:bg-dark-900/40">
-                <p class="text-xs text-gray-500 dark:text-gray-400">Providers Found</p>
+                <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('ui.parserStatsView.providersFound') }}</p>
                 <p class="mt-1 text-xl font-bold text-gray-900 dark:text-white">{{ stats.last_full_run.providers_found }}</p>
               </div>
               <div class="rounded-xl bg-gray-50/70 p-4 text-center dark:bg-dark-900/40">
-                <p class="text-xs text-gray-500 dark:text-gray-400">Unique Providers</p>
+                <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('ui.parserStatsView.uniqueProviders') }}</p>
                 <p class="mt-1 text-xl font-bold text-gray-900 dark:text-white">{{ stats.last_full_run.providers_unique }}</p>
               </div>
               <div class="rounded-xl bg-gray-50/70 p-4 text-center dark:bg-dark-900/40">
-                <p class="text-xs text-gray-500 dark:text-gray-400">Pricing Pages</p>
+                <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('ui.parserStatsView.pricingPages') }}</p>
                 <p class="mt-1 text-xl font-bold text-gray-900 dark:text-white">{{ stats.last_full_run.pricing_pages_found }}</p>
               </div>
               <div class="rounded-xl bg-gray-50/70 p-4 text-center dark:bg-dark-900/40">
-                <p class="text-xs text-gray-500 dark:text-gray-400">Prices Extracted</p>
+                <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('ui.parserStatsView.pricesExtracted2') }}</p>
                 <p class="mt-1 text-xl font-bold text-primary-600 dark:text-primary-400">{{ stats.last_full_run.prices_extracted }}</p>
               </div>
               <div class="rounded-xl bg-gray-50/70 p-4 text-center dark:bg-dark-900/40">
-                <p class="text-xs text-gray-500 dark:text-gray-400">Prices Published</p>
+                <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('ui.parserStatsView.pricesPublished') }}</p>
                 <p class="mt-1 text-xl font-bold text-emerald-600 dark:text-emerald-400">{{ stats.last_full_run.prices_published }}</p>
               </div>
               <div class="rounded-xl bg-gray-50/70 p-4 text-center dark:bg-dark-900/40">
-                <p class="text-xs text-gray-500 dark:text-gray-400">Needing Review</p>
+                <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('ui.parserStatsView.needingReview') }}</p>
                 <p class="mt-1 text-xl font-bold" :class="stats.last_full_run.records_needing_review > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-gray-900 dark:text-white'">
                   {{ stats.last_full_run.records_needing_review }}
                 </p>
               </div>
               <div class="rounded-xl bg-gray-50/70 p-4 text-center dark:bg-dark-900/40">
-                <p class="text-xs text-gray-500 dark:text-gray-400">Errors</p>
+                <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('ui.parserStatsView.errors2') }}</p>
                 <p class="mt-1 text-xl font-bold" :class="stats.last_full_run.errors_count > 0 ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'">
                   {{ stats.last_full_run.errors_count }}
                 </p>
@@ -343,7 +343,7 @@
       <!-- TAB 2: Last Change / Diff -->
       <div v-if="activeTab === 'last_change'" class="space-y-6">
         <div v-if="!stats?.last_change" class="rounded-2xl border border-gray-200/80 bg-white/85 p-8 text-center text-sm text-gray-500 dark:border-dark-700/80 dark:bg-dark-800/85 dark:text-gray-400">
-          No changes recorded yet.
+          {{ t('ui.parserStatsView.nochangesrecordedyet') }}
         </div>
 
         <div v-else class="space-y-6">
@@ -352,18 +352,18 @@
             <div class="flex flex-wrap items-center justify-between gap-4">
               <div>
                 <div class="flex items-center gap-3">
-                  <h3 class="text-base font-semibold text-gray-900 dark:text-white">Recent Sync Diff</h3>
+                  <h3 class="text-base font-semibold text-gray-900 dark:text-white">{{ t('ui.parserStatsView.recentSyncDiff') }}</h3>
                   <span
                     v-if="stats.last_change.baseline"
                     class="rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700 dark:bg-blue-950/50 dark:text-blue-300"
                   >
-                    Baseline Established
+                    {{ t('ui.parserStatsView.baselineEstablished') }}
                   </span>
                   <span
                     v-if="stats.last_change.in_progress"
                     class="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700 dark:bg-amber-950/50 dark:text-amber-300"
                   >
-                    In Progress
+                    {{ t('ui.parserStatsView.inProgress') }}
                   </span>
                 </div>
                 <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
@@ -382,19 +382,19 @@
             <!-- Summary Chips -->
             <div class="mt-6 flex flex-wrap gap-3">
               <span class="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50/60 px-3 py-1.5 text-xs font-medium text-emerald-800 dark:border-emerald-900/40 dark:bg-emerald-950/20 dark:text-emerald-300">
-                <span>New Models:</span>
+                <span>{{ t('ui.parserStatsView.newModels') }}</span>
                 <span class="font-bold">{{ stats.last_change.new_models?.length || 0 }}</span>
               </span>
               <span class="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50/60 px-3 py-1.5 text-xs font-medium text-emerald-800 dark:border-emerald-900/40 dark:bg-emerald-950/20 dark:text-emerald-300">
-                <span>New Providers:</span>
+                <span>{{ t('ui.parserStatsView.newProviders') }}</span>
                 <span class="font-bold">{{ stats.last_change.new_providers?.length || 0 }}</span>
               </span>
               <span class="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50/60 px-3 py-1.5 text-xs font-medium text-red-800 dark:border-red-900/40 dark:bg-red-950/20 dark:text-red-300">
-                <span>Removed Models:</span>
+                <span>{{ t('ui.parserStatsView.removedModels') }}</span>
                 <span class="font-bold">{{ stats.last_change.removed_models?.length || 0 }}</span>
               </span>
               <span class="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50/60 px-3 py-1.5 text-xs font-medium text-red-800 dark:border-red-900/40 dark:bg-red-950/20 dark:text-red-300">
-                <span>Removed Providers:</span>
+                <span>{{ t('ui.parserStatsView.removedProviders') }}</span>
                 <span class="font-bold">{{ stats.last_change.removed_providers?.length || 0 }}</span>
               </span>
             </div>
@@ -411,10 +411,10 @@
               <table class="min-w-full divide-y divide-gray-100 text-sm dark:divide-dark-700">
                 <thead class="bg-gray-50/60 text-left text-xs uppercase tracking-wider text-gray-500 dark:bg-dark-900/40 dark:text-gray-400">
                   <tr>
-                    <th class="px-6 py-3">Canonical Model ID</th>
-                    <th class="px-6 py-3">Display Name</th>
-                    <th class="px-6 py-3">Serving Providers</th>
-                    <th class="px-6 py-3 text-right">Requires Auth</th>
+                    <th class="px-6 py-3">{{ t('ui.parserStatsView.canonicalModelID') }}</th>
+                    <th class="px-6 py-3">{{ t('ui.parserStatsView.displayName') }}</th>
+                    <th class="px-6 py-3">{{ t('ui.parserStatsView.servingProviders') }}</th>
+                    <th class="px-6 py-3 text-right">{{ t('ui.parserStatsView.requiresAuth') }}</th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-50 dark:divide-dark-800">
@@ -454,9 +454,9 @@
               <table class="min-w-full divide-y divide-gray-100 text-sm dark:divide-dark-700">
                 <thead class="bg-gray-50/60 text-left text-xs uppercase tracking-wider text-gray-500 dark:bg-dark-900/40 dark:text-gray-400">
                   <tr>
-                    <th class="px-6 py-3">Provider Name</th>
-                    <th class="px-6 py-3">Domain</th>
-                    <th class="px-6 py-3 text-right">Requires Auth</th>
+                    <th class="px-6 py-3">{{ t('ui.parserStatsView.providerName') }}</th>
+                    <th class="px-6 py-3">{{ t('ui.parserStatsView.domain') }}</th>
+                    <th class="px-6 py-3 text-right">{{ t('ui.parserStatsView.requiresAuth2') }}</th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-50 dark:divide-dark-800">
@@ -472,9 +472,9 @@
                         v-if="p.requires_auth"
                         class="rounded bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-300"
                       >
-                        Auth Only
+                        {{ t('ui.parserStatsView.authOnly') }}
                       </span>
-                      <span v-else class="text-xs text-gray-400">Public</span>
+                      <span v-else class="text-xs text-gray-400">{{ t('ui.parserStatsView.public') }}</span>
                     </td>
                   </tr>
                 </tbody>
@@ -523,7 +523,7 @@
       <!-- TAB 3: History -->
       <div v-if="activeTab === 'history'" class="space-y-6">
         <div v-if="!stats?.history || stats.history.length === 0" class="rounded-2xl border border-gray-200/80 bg-white/85 p-8 text-center text-sm text-gray-500 dark:border-dark-700/80 dark:bg-dark-800/85 dark:text-gray-400">
-          No history entries yet.
+          {{ t('ui.parserStatsView.nohistoryentriesyet') }}
         </div>
 
         <div v-else class="overflow-hidden rounded-2xl border border-gray-200/80 bg-white/85 shadow-sm dark:border-dark-700/80 dark:bg-dark-800/85">
@@ -536,12 +536,12 @@
             <table class="min-w-full divide-y divide-gray-100 text-sm dark:divide-dark-700">
               <thead class="bg-gray-50/60 text-left text-xs uppercase tracking-wider text-gray-500 dark:bg-dark-900/40 dark:text-gray-400">
                 <tr>
-                  <th class="px-6 py-3">Timestamp</th>
-                  <th class="px-6 py-3">Type</th>
-                  <th class="px-6 py-3 text-right">New Models</th>
-                  <th class="px-6 py-3 text-right">New Providers</th>
-                  <th class="px-6 py-3 text-right">Removed</th>
-                  <th class="px-6 py-3 text-right">New Offers</th>
+                  <th class="px-6 py-3">{{ t('ui.parserStatsView.timestamp') }}</th>
+                  <th class="px-6 py-3">{{ t('ui.parserStatsView.type') }}</th>
+                  <th class="px-6 py-3 text-right">{{ t('ui.parserStatsView.newModels2') }}</th>
+                  <th class="px-6 py-3 text-right">{{ t('ui.parserStatsView.newProviders2') }}</th>
+                  <th class="px-6 py-3 text-right">{{ t('ui.parserStatsView.removed') }}</th>
+                  <th class="px-6 py-3 text-right">{{ t('ui.parserStatsView.newOffers') }}</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-gray-50 dark:divide-dark-800">
@@ -555,13 +555,13 @@
                       v-if="h.baseline"
                       class="rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-950/50 dark:text-blue-300"
                     >
-                      Baseline
+                      {{ t('ui.parserStatsView.baseline') }}
                     </span>
                     <span
                       v-else
                       class="rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-700 dark:bg-dark-700 dark:text-gray-300"
                     >
-                      Diff
+                      {{ t('ui.parserStatsView.diff') }}
                     </span>
                   </td>
                   <td class="px-6 py-3.5 text-right font-semibold" :class="h.new_models?.length ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-400'">
@@ -586,7 +586,7 @@
       <!-- TAB 4: Official Prices -->
       <div v-if="activeTab === 'official_prices'" class="space-y-6">
         <div v-if="!stats?.official_prices" class="rounded-2xl border border-gray-200/80 bg-white/85 p-8 text-center text-sm text-gray-500 dark:border-dark-700/80 dark:bg-dark-800/85 dark:text-gray-400">
-          No official pricing telemetry recorded yet.
+          {{ t('ui.parserStatsView.noofficialpricingtelemetry') }}
         </div>
 
         <div v-else class="space-y-6">
@@ -595,7 +595,7 @@
             <div class="flex flex-wrap items-center justify-between gap-4">
               <div>
                 <h3 class="text-base font-semibold text-gray-900 dark:text-white">
-                  Official Provider Pricing & Verification
+                  {{ t('ui.parserStatsView.officialProviderPricingVerificatio') }}
                 </h3>
                 <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
                   Audit log of canonical provider price changes, detected price spikes/drops, and verification history.
@@ -609,13 +609,13 @@
             <!-- Metric summary cards -->
             <div class="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
               <div class="rounded-xl border border-emerald-100 bg-emerald-50/50 p-4 text-center dark:border-emerald-900/40 dark:bg-emerald-950/20">
-                <p class="text-xs font-medium text-emerald-700 dark:text-emerald-400">Newly Added</p>
+                <p class="text-xs font-medium text-emerald-700 dark:text-emerald-400">{{ t('ui.parserStatsView.newlyAdded') }}</p>
                 <p class="mt-1 text-2xl font-bold text-emerald-800 dark:text-emerald-300">
                   {{ stats.official_prices.added?.length || 0 }}
                 </p>
               </div>
               <div class="rounded-xl border border-blue-100 bg-blue-50/50 p-4 text-center dark:border-blue-900/40 dark:bg-blue-950/20">
-                <p class="text-xs font-medium text-blue-700 dark:text-blue-400">Price Updates</p>
+                <p class="text-xs font-medium text-blue-700 dark:text-blue-400">{{ t('ui.parserStatsView.priceUpdates') }}</p>
                 <p class="mt-1 text-2xl font-bold text-blue-800 dark:text-blue-300">
                   {{ stats.official_prices.updated?.length || 0 }}
                 </p>
@@ -630,7 +630,7 @@
                   class="text-xs font-medium"
                   :class="(stats.official_prices.suspicious?.length || 0) > 0 ? 'text-amber-800 dark:text-amber-400' : 'text-gray-500 dark:text-gray-400'"
                 >
-                  Suspicious Flags
+                  {{ t('ui.parserStatsView.suspiciousFlags') }}
                 </p>
                 <p
                   class="mt-1 text-2xl font-bold"
@@ -640,7 +640,7 @@
                 </p>
               </div>
               <div class="rounded-xl border border-gray-100 bg-gray-50/70 p-4 text-center dark:border-dark-700 dark:bg-dark-900/40">
-                <p class="text-xs font-medium text-gray-500 dark:text-gray-400">History Records</p>
+                <p class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('ui.parserStatsView.historyRecords') }}</p>
                 <p class="mt-1 text-2xl font-bold text-gray-900 dark:text-white">
                   {{ stats.official_prices.history?.length || 0 }}
                 </p>
@@ -723,7 +723,7 @@
             class="rounded-2xl border border-gray-200/80 bg-white/85 p-8 text-center text-sm text-gray-500 dark:border-dark-700/80 dark:bg-dark-800/85 dark:text-gray-400"
           >
             <Icon name="checkCircle" size="lg" class="mx-auto mb-2 text-emerald-500" />
-            <p class="font-medium text-gray-900 dark:text-white">All Official Prices Up-to-Date</p>
+            <p class="font-medium text-gray-900 dark:text-white">{{ t('ui.parserStatsView.allOfficialPricesUp') }}</p>
             <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">No added, updated, or suspicious official pricing changes detected in this synchronization run.</p>
           </div>
         </div>
@@ -733,7 +733,7 @@
       <div v-if="activeTab === 'errors'" class="space-y-6">
         <div v-if="!stats?.errors || stats.errors.length === 0" class="rounded-2xl border border-emerald-200/70 bg-emerald-50/40 p-8 text-center dark:border-emerald-900/40 dark:bg-emerald-950/20">
           <Icon name="checkCircle" size="lg" class="mx-auto mb-2 text-emerald-600 dark:text-emerald-400" />
-          <h4 class="text-base font-semibold text-emerald-950 dark:text-emerald-200">Zero Parser Errors</h4>
+          <h4 class="text-base font-semibold text-emerald-950 dark:text-emerald-200">{{ t('ui.parserStatsView.zeroParserErrors') }}</h4>
           <p class="mt-1 text-xs text-emerald-700 dark:text-emerald-400">
             All crawlers, network fetches, and pricing page processors finished cleanly without reported exceptions.
           </p>
@@ -748,7 +748,7 @@
                   {{ stats.errors.length }} {{ stats.errors.length === 1 ? 'Error' : 'Errors' }} Encountered
                 </h4>
                 <p class="text-xs text-red-700 dark:text-red-300">
-                  The crawler reported failure events during page fetching or data parsing.
+                  {{ t('ui.parserStatsView.crawlerReportedFailures') }}
                 </p>
               </div>
             </div>
@@ -780,7 +780,7 @@
           <div class="relative w-full max-w-4xl max-h-[85vh] flex flex-col rounded-2xl border border-gray-200 bg-white shadow-2xl dark:border-dark-700 dark:bg-dark-800">
             <div class="flex items-center justify-between border-b border-gray-100 px-6 py-4 dark:border-dark-700">
               <h3 class="text-base font-semibold text-gray-900 dark:text-white">
-                Raw run_stats.json Content
+                {{ t('ui.parserStatsView.rawRunStatsContent') }}
               </h3>
               <div class="flex items-center gap-2">
                 <button
@@ -788,7 +788,7 @@
                   class="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-dark-700 dark:text-gray-300 dark:hover:bg-dark-700"
                   @click="copyRawJSON"
                 >
-                  {{ copySuccess ? 'Copied!' : 'Copy JSON' }}
+                  {{ copySuccess ? t('ui.parserStatsView.copied') : t('ui.parserStatsView.copyJson') }}
                 </button>
                 <button
                   type="button"
@@ -811,9 +811,12 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { getParserRunStats, type RunStatsData } from '@/api/admin/parserStats'
+
+const { t } = useI18n()
 
 const loading = ref(false)
 const stats = ref<RunStatsData | null>(null)
@@ -894,13 +897,13 @@ function timeAgo(dateStr?: string | null): string {
   const d = new Date(dateStr)
   if (isNaN(d.getTime())) return ''
   const diffSec = Math.floor((Date.now() - d.getTime()) / 1000)
-  if (diffSec < 60) return `${diffSec}s ago`
+  if (diffSec < 60) return t('common.time.justNow')
   const diffMin = Math.floor(diffSec / 60)
-  if (diffMin < 60) return `${diffMin}m ago`
+  if (diffMin < 60) return t('common.time.minutesAgo', { n: diffMin })
   const diffHours = Math.floor(diffMin / 60)
-  if (diffHours < 24) return `${diffHours}h ago`
+  if (diffHours < 24) return t('common.time.hoursAgo', { n: diffHours })
   const diffDays = Math.floor(diffHours / 24)
-  return `${diffDays}d ago`
+  return t('common.time.daysAgo', { n: diffDays })
 }
 
 function formatDuration(seconds?: number): string {

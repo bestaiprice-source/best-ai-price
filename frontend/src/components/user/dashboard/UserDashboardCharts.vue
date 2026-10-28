@@ -70,7 +70,7 @@
               {{ models.length }} models
             </span>
           </div>
-          <span class="text-xs text-gray-400 dark:text-gray-500">By Token Volume</span>
+          <span class="text-xs text-gray-400 dark:text-gray-500">{{ t('ui.userDashboardCharts.byTokenVolume') }}</span>
         </div>
 
         <div class="flex flex-col items-center gap-6 sm:flex-row">

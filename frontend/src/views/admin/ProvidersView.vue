@@ -5,7 +5,7 @@
       <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 class="text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
-            AI Providers
+            {{ t('ui.providersView.aIProviders') }}
           </h1>
           <div class="mt-3 inline-flex rounded-xl border border-gray-200 bg-white p-1 dark:border-dark-700 dark:bg-dark-800">
             <button
@@ -14,7 +14,7 @@
               :class="activeTab === 'providers' ? 'bg-primary-600 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-dark-700'"
               @click="activeTab = 'providers'"
             >
-              Providers
+              {{ t('ui.providersView.providers') }}
             </button>
             <button
               type="button"
@@ -22,7 +22,7 @@
               :class="activeTab === 'routing' ? 'bg-primary-600 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-dark-700'"
               @click="activeTab = 'routing'"
             >
-              Model Routing
+              {{ t('ui.providersView.modelRouting') }}
             </button>
           </div>
         </div>
@@ -33,21 +33,21 @@
             class="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 shadow-sm transition-all hover:bg-gray-50 hover:shadow disabled:opacity-50 dark:border-dark-700 dark:bg-dark-800 dark:text-gray-200 dark:hover:bg-dark-700"
           >
             <Icon name="sync" size="sm" :class="{ 'animate-spin': isSyncingAll }" />
-            <span>{{ isSyncingAll ? 'Syncing...' : 'Sync All Balances' }}</span>
+            <span>{{ isSyncingAll ? t('ui.providersView.syncing') : t('ui.providersView.syncAllBalances') }}</span>
           </button>
           <router-link
             to="/admin/vendors"
             class="inline-flex items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-sm font-medium text-indigo-700 shadow-sm transition-all hover:bg-indigo-100 hover:shadow dark:border-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-300 dark:hover:bg-indigo-900/50"
           >
             <Icon name="lightbulb" size="sm" />
-            <span>Cheaper Alternatives</span>
+            <span>{{ t('ui.providersView.cheaperAlternatives') }}</span>
           </router-link>
           <router-link
             to="/admin/accounts"
             class="inline-flex items-center gap-2 rounded-xl bg-primary-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-all hover:bg-primary-500 hover:shadow-md dark:bg-primary-500 dark:hover:bg-primary-400"
           >
             <Icon name="server" size="sm" />
-            <span>Manage Nodes</span>
+            <span>{{ t('ui.providersView.manageNodes') }}</span>
           </router-link>
         </div>
       </div>
@@ -58,44 +58,44 @@
         <!-- Total Providers -->
         <div
           @click="resetFilters"
-          title="Reset filters and show all"
+          :title="t('ui.providersView.resetfiltersandshow')"
           class="relative cursor-pointer overflow-hidden rounded-2xl border border-gray-200/80 bg-white/70 p-5 shadow-sm transition-transform hover:scale-[1.01] dark:border-dark-700/80 dark:bg-dark-800/70"
         >
           <div class="flex items-center justify-between">
-            <span class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Total Providers</span>
+            <span class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">{{ t('ui.providersView.totalProviders') }}</span>
             <div class="rounded-xl bg-blue-500/10 p-2.5 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400">
               <Icon name="grid" size="sm" />
             </div>
           </div>
           <p class="mt-2 text-2xl font-bold text-gray-900 dark:text-white">{{ summaryStats.total_providers }}</p>
-          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Connected upstream services</p>
+          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t('ui.providersView.connectedupstreamservices') }}</p>
         </div>
 
         <!-- Active Providers -->
         <div
           @click="filters.status = 'active'; filters.state = ''; fetchData()"
-          title="Filter: active only"
+          :title="t('ui.providersView.filteractiveonly')"
           class="relative cursor-pointer overflow-hidden rounded-2xl border border-gray-200/80 bg-white/70 p-5 shadow-sm transition-transform hover:scale-[1.01] dark:border-dark-700/80 dark:bg-dark-800/70"
         >
           <div class="flex items-center justify-between">
-            <span class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Active</span>
+            <span class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">{{ t('ui.providersView.active') }}</span>
             <div class="rounded-xl bg-emerald-500/10 p-2.5 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400">
               <Icon name="check" size="sm" />
             </div>
           </div>
           <p class="mt-2 text-2xl font-bold text-emerald-600 dark:text-emerald-400">{{ summaryStats.active_providers }}</p>
-          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Ready for traffic</p>
+          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t('ui.providersView.readyfortraffic') }}</p>
         </div>
 
         <!-- Low Balance Alert -->
         <div
           @click="filters.state = 'Low balance'; filters.status = ''; fetchData()"
-          title="Filter: low balance"
+          :title="t('ui.providersView.filterlowbalance')"
           class="relative cursor-pointer overflow-hidden rounded-2xl border border-gray-200/80 bg-white/70 p-5 shadow-sm transition-transform hover:scale-[1.01] dark:border-dark-700/80 dark:bg-dark-800/70"
           :class="{ 'ring-2 ring-red-500/30': summaryStats.low_balance_providers > 0 }"
         >
           <div class="flex items-center justify-between">
-            <span class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Low Balance</span>
+            <span class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">{{ t('ui.providersView.lowBalance') }}</span>
             <div :class="[
               'rounded-xl p-2.5',
               summaryStats.low_balance_providers > 0
@@ -108,31 +108,31 @@
           <p class="mt-2 text-2xl font-bold" :class="summaryStats.low_balance_providers > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-gray-900 dark:text-white'">
             {{ summaryStats.low_balance_providers }}
           </p>
-          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Below min_balance threshold</p>
+          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t('ui.providersView.belowMinBalanceThreshold') }}</p>
         </div>
 
         <!-- Total Balance USD -->
         <div class="relative overflow-hidden rounded-2xl border border-gray-200/80 bg-white/70 p-5 shadow-sm dark:border-dark-700/80 dark:bg-dark-800/70">
           <div class="flex items-center justify-between">
-            <span class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Total Balance</span>
+            <span class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">{{ t('ui.providersView.totalBalance') }}</span>
             <div class="rounded-xl bg-violet-500/10 p-2.5 text-violet-600 dark:bg-violet-500/20 dark:text-violet-400">
               <span class="text-base font-bold">$</span>
             </div>
           </div>
           <p class="mt-2 text-2xl font-bold text-gray-900 dark:text-white">${{ formatCurrency(summaryStats.total_balance_usd) }}</p>
-          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Available across accounts</p>
+          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t('ui.providersView.availableacrossaccounts') }}</p>
         </div>
 
         <!-- Total Spend USD -->
         <div class="relative overflow-hidden rounded-2xl border border-gray-200/80 bg-white/70 p-5 shadow-sm dark:border-dark-700/80 dark:bg-dark-800/70">
           <div class="flex items-center justify-between">
-            <span class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Total Spend</span>
+            <span class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">{{ t('ui.providersView.totalSpend') }}</span>
             <div class="rounded-xl bg-amber-500/10 p-2.5 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400">
               <Icon name="chart" size="sm" />
             </div>
           </div>
           <p class="mt-2 text-2xl font-bold text-gray-900 dark:text-white">${{ formatCurrency(summaryStats.total_spend_usd) }}</p>
-          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Used during current period</p>
+          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t('ui.providersView.usedduringcurrentperiod') }}</p>
         </div>
       </div>
 
@@ -146,7 +146,7 @@
               v-model="filters.search"
               @input="handleSearchInput"
               type="text"
-              placeholder="Search by name, domain..."
+              :placeholder="t('ui.providersView.searchbynamedomain')"
               class="w-full rounded-xl border border-gray-200 bg-gray-50/50 py-2 pl-9 pr-3 text-sm text-gray-900 placeholder-gray-400 focus:border-primary-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-dark-600 dark:bg-dark-700/50 dark:text-white dark:focus:bg-dark-700"
             />
           </div>
@@ -157,9 +157,9 @@
             @change="fetchData"
             class="rounded-xl border border-gray-200 bg-white py-2 pl-3 pr-8 text-sm text-gray-700 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-dark-600 dark:bg-dark-700 dark:text-gray-200"
           >
-            <option value="">All Statuses</option>
-            <option value="active">Active Only</option>
-            <option value="disabled">Disabled</option>
+            <option value="">{{ t('ui.providersView.allStatuses') }}</option>
+            <option value="active">{{ t('ui.providersView.activeOnly') }}</option>
+            <option value="disabled">{{ t('ui.providersView.disabled') }}</option>
           </select>
 
           <!-- State Filter -->
@@ -168,13 +168,13 @@
             @change="fetchData"
             class="rounded-xl border border-gray-200 bg-white py-2 pl-3 pr-8 text-sm text-gray-700 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-dark-600 dark:bg-dark-700 dark:text-gray-200"
           >
-            <option value="">All States</option>
-            <option value="Healthy">Healthy</option>
-            <option value="Degraded">Degraded</option>
-            <option value="Down">Down</option>
-            <option value="Low balance">Low balance</option>
-            <option value="Invalid key">Invalid key</option>
-            <option value="Disabled">Disabled</option>
+            <option value="">{{ t('ui.providersView.allStates') }}</option>
+            <option value="Healthy">{{ t('ui.providersView.healthy') }}</option>
+            <option value="Degraded">{{ t('ui.providersView.degraded') }}</option>
+            <option value="Down">{{ t('ui.providersView.down') }}</option>
+            <option value="Low balance">{{ t('ui.providersView.lowbalance') }}</option>
+            <option value="Invalid key">{{ t('ui.providersView.invalidkey') }}</option>
+            <option value="Disabled">{{ t('ui.providersView.disabled2') }}</option>
           </select>
         </div>
 
@@ -183,7 +183,7 @@
           class="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 dark:border-dark-600 dark:text-gray-300 dark:hover:bg-dark-700"
         >
           <Icon name="refresh" size="sm" :class="{ 'animate-spin': isLoading }" />
-          <span>Refresh</span>
+          <span>{{ t('ui.providersView.refresh') }}</span>
         </button>
       </div>
 
@@ -193,14 +193,14 @@
           <table class="w-full text-left text-sm">
             <thead class="border-b border-gray-200 bg-gray-50/75 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:border-dark-700 dark:bg-dark-900/50 dark:text-gray-400">
               <tr>
-                <th class="px-5 py-3.5">Provider</th>
-                <th class="px-5 py-3.5">State</th>
-                <th class="px-5 py-3.5">Balance</th>
-                <th class="px-5 py-3.5">Min Threshold</th>
-                <th class="px-5 py-3.5">Metrics</th>
-                <th class="px-5 py-3.5">Models</th>
-                <th class="px-5 py-3.5 text-center">Status</th>
-                <th class="px-5 py-3.5 text-right">Actions</th>
+                <th class="px-5 py-3.5">{{ t('ui.providersView.provider') }}</th>
+                <th class="px-5 py-3.5">{{ t('ui.providersView.state') }}</th>
+                <th class="px-5 py-3.5">{{ t('ui.providersView.balance') }}</th>
+                <th class="px-5 py-3.5">{{ t('ui.providersView.minThreshold') }}</th>
+                <th class="px-5 py-3.5">{{ t('ui.providersView.metrics') }}</th>
+                <th class="px-5 py-3.5">{{ t('ui.providersView.models') }}</th>
+                <th class="px-5 py-3.5 text-center">{{ t('ui.providersView.status') }}</th>
+                <th class="px-5 py-3.5 text-right">{{ t('ui.providersView.actions') }}</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-gray-100 dark:divide-dark-700/60">
@@ -208,7 +208,7 @@
                 <td colspan="8" class="px-5 py-12 text-center text-gray-500 dark:text-gray-400">
                   <div class="flex flex-col items-center justify-center gap-2">
                     <Icon name="sync" size="lg" class="animate-spin text-primary-500" />
-                    <span>Loading providers list...</span>
+                    <span>{{ t('ui.providersView.loadingproviderslist') }}</span>
                   </div>
                 </td>
               </tr>
@@ -216,7 +216,7 @@
                 <td colspan="8" class="px-5 py-12 text-center text-gray-500 dark:text-gray-400">
                   <div class="flex flex-col items-center justify-center gap-2">
                     <Icon name="grid" size="lg" class="text-gray-300 dark:text-gray-600" />
-                    <span class="text-base font-medium">No Yunwu providers found</span>
+                    <span class="text-base font-medium">{{ t('ui.providersView.noYunwuprovidersfound') }}</span>
                     <span class="text-xs text-gray-400 max-w-md text-center">
                       This section displays upstream providers for the Yunwu group (OpenLux, Portdan, Yuanqiaoyun, API-Top, X-LLM, etc.). Official accounts (Claude, OpenAI, Gemini) are configured under Nodes.
                     </span>
@@ -226,14 +226,14 @@
                         class="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-dark-700 dark:bg-dark-800 dark:text-gray-200 dark:hover:bg-dark-750"
                       >
                         <Icon name="server" size="sm" />
-                        Go to Nodes
+                        {{ t('ui.providersView.gotoNodes') }}
                       </router-link>
                       <button
                         v-if="filters.search || filters.status || filters.state"
                         @click="resetFilters"
                         class="text-xs text-primary-500 hover:underline"
                       >
-                        Reset filters
+                        {{ t('ui.providersView.resetfilters') }}
                       </button>
                     </div>
                   </div>
@@ -284,7 +284,7 @@
                     :class="getStateBadgeClass(provider.state)"
                   >
                     <span class="h-1.5 w-1.5 rounded-full" :class="getStateDotClass(provider.state)"></span>
-                    {{ provider.state }}
+                    {{ stateLabel(provider.state) }}
                   </span>
                 </td>
 
@@ -298,13 +298,13 @@
                       </span>
                       <span v-if="provider.balance_usd <= provider.min_balance_usd && provider.status === 'active'"
                             class="inline-flex items-center rounded bg-rose-50 px-1 py-0.2 text-[10px] font-semibold text-rose-600 dark:bg-rose-950/40 dark:text-rose-400"
-                            title="Balance is below the minimum threshold">
-                        Low
+                            :title="t('ui.providersView.balanceisbelowthe')">
+                        {{ t('ui.providersView.lowBalance') }}
                       </span>
                     </div>
                     <div class="mt-0.5 text-[11px] text-gray-400 dark:text-gray-500">
                       {{ formatTimeAgo(provider.last_synced_at) }}
-                      <span v-if="provider.balance_source" class="opacity-70">({{ provider.balance_source }})</span>
+                      <span v-if="provider.balance_source" class="opacity-70">({{ balanceSourceLabel(provider.balance_source) }})</span>
                     </div>
                   </div>
                 </td>
@@ -321,28 +321,28 @@
                   <div class="flex items-center gap-3 text-xs">
                     <!-- Latency -->
                     <div class="flex flex-col" :title="'Average latency: ' + (provider.metrics.latency_ms || 0) + ' ms'">
-                      <span class="text-[10px] uppercase text-gray-400">Latency</span>
+                      <span class="text-[10px] uppercase text-gray-400">{{ t('ui.providersView.latency') }}</span>
                       <span class="font-medium" :class="getLatencyClass(provider.metrics.latency_ms)">
                         {{ provider.metrics.latency_ms > 0 ? provider.metrics.latency_ms + 'ms' : '—' }}
                       </span>
                     </div>
                     <!-- Error Rate -->
                     <div class="flex flex-col" :title="'Error rate: ' + (provider.metrics.error_rate || 0) + '%'">
-                      <span class="text-[10px] uppercase text-gray-400">Errors</span>
+                      <span class="text-[10px] uppercase text-gray-400">{{ t('ui.providersView.errors') }}</span>
                       <span class="font-medium" :class="getErrorRateClass(provider.metrics.error_rate)">
                         {{ provider.metrics.error_rate !== undefined ? provider.metrics.error_rate + '%' : '0%' }}
                       </span>
                     </div>
                     <!-- Requests -->
                     <div class="flex flex-col" :title="'Total requests: ' + (provider.metrics.requests || 0)">
-                      <span class="text-[10px] uppercase text-gray-400">Reqs</span>
+                      <span class="text-[10px] uppercase text-gray-400">{{ t('ui.providersView.reqs') }}</span>
                       <span class="font-medium text-gray-700 dark:text-gray-300">
                         {{ formatCompactNumber(provider.metrics.requests) }}
                       </span>
                     </div>
                     <!-- Spend -->
                     <div class="flex flex-col" :title="'Spend: $' + (provider.metrics.spend_usd || 0)">
-                      <span class="text-[10px] uppercase text-gray-400">Spend</span>
+                      <span class="text-[10px] uppercase text-gray-400">{{ t('ui.providersView.spend') }}</span>
                       <span class="font-medium text-gray-700 dark:text-gray-300">
                         ${{ formatCurrency(provider.metrics.spend_usd) }}
                       </span>
@@ -402,7 +402,7 @@
                       @click="handleTestConnection(provider)"
                       :disabled="testingProviderId === provider.id"
                       class="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-primary-600 disabled:opacity-50 dark:hover:bg-dark-700 dark:hover:text-primary-400"
-                      title="Test connection & latency"
+                      :title="t('ui.providersView.testconnectionlatency')"
                     >
                       <Icon name="play" size="sm" :class="{ 'animate-spin': testingProviderId === provider.id }" />
                     </button>
@@ -412,7 +412,7 @@
                       @click="handleSyncBalance(provider)"
                       :disabled="syncingProviderId === provider.id"
                       class="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-emerald-600 disabled:opacity-50 dark:hover:bg-dark-700 dark:hover:text-emerald-400"
-                      title="Sync balance"
+                      :title="t('ui.providersView.syncbalance')"
                     >
                       <Icon name="sync" size="sm" :class="{ 'animate-spin': syncingProviderId === provider.id }" />
                     </button>
@@ -421,7 +421,7 @@
                     <button
                       @click="openEditModal(provider)"
                       class="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-blue-600 dark:hover:bg-dark-700 dark:hover:text-blue-400"
-                      title="Edit"
+                      :title="t('ui.providersView.edit')"
                     >
                       <Icon name="edit" size="sm" />
                     </button>
@@ -430,7 +430,7 @@
                     <button
                       @click="openDeleteDialog(provider)"
                       class="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/30 dark:hover:text-rose-400"
-                      title="Delete"
+                      :title="t('ui.providersView.delete')"
                     >
                       <Icon name="trash" size="sm" />
                     </button>
@@ -459,7 +459,7 @@
     <!-- Edit Provider Modal -->
     <BaseDialog
       :show="showEditModal"
-      title="Edit Provider"
+      :title="t('ui.providersView.editProvider')"
       width="wide"
       :keep-mounted="true"
       @close="closeEditModal"
@@ -468,7 +468,7 @@
         <!-- Preset Quick Pick (for new provider) -->
         <div v-if="!editingProvider" class="space-y-1.5 rounded-xl border border-dashed border-gray-200 bg-gray-50/50 p-3 dark:border-dark-600 dark:bg-dark-800/40">
           <label class="block text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
-            Quick Fill Presets
+            {{ t('ui.providersView.quickFillPresets') }}
           </label>
           <div class="flex flex-wrap gap-2">
             <button
@@ -488,25 +488,25 @@
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label class="block text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1">
-              Provider Name <span class="text-rose-500">*</span>
+              {{ t('ui.providersView.providerName') }} <span class="text-rose-500">*</span>
             </label>
             <input
               v-model="form.provider_name"
               type="text"
               required
-              placeholder="e.g. OpenLux, Portdan, API-Top"
+              :placeholder="t('ui.providersView.egOpenLuxPortdan')"
               class="w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2 text-sm text-gray-900 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-dark-600 dark:bg-dark-700 dark:text-white"
             />
           </div>
 
           <div>
             <label class="block text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1">
-              Domain
+              {{ t('ui.providersView.domain') }}
             </label>
             <input
               v-model="form.domain"
               type="text"
-              placeholder="e.g. api.openlux.ai (auto-extracted from URL if empty)"
+              :placeholder="t('ui.providersView.egapiopenlux')"
               class="w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2 text-sm text-gray-900 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-dark-600 dark:bg-dark-700 dark:text-white"
             />
           </div>
@@ -516,29 +516,29 @@
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <div>
             <label class="block text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1">
-              API Protocol <span class="text-rose-500">*</span>
+              {{ t('ui.providersView.aPIProtocol') }} <span class="text-rose-500">*</span>
             </label>
             <select
               v-model="form.protocol"
               required
               class="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-dark-600 dark:bg-dark-700 dark:text-white"
             >
-              <option value="openai">OpenAI Compatible (/v1/chat/completions)</option>
-              <option value="anthropic">Anthropic Native (/v1/messages)</option>
-              <option value="gemini">Google Gemini Native</option>
-              <option value="responses">OpenAI Realtime / Responses</option>
+              <option value="openai">{{ t('ui.providersView.openAICompatiblev1chat') }}</option>
+              <option value="anthropic">{{ t('ui.providersView.anthropicNativev1messages') }}</option>
+              <option value="gemini">{{ t('ui.providersView.googleGeminiNative') }}</option>
+              <option value="responses">{{ t('ui.providersView.openAIRealtimeResponses') }}</option>
             </select>
           </div>
 
           <div class="sm:col-span-2">
             <label class="block text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1">
-              API Endpoint (Base URL) <span class="text-rose-500">*</span>
+              {{ t('ui.providersView.aPIEndpointBaseURL') }} <span class="text-rose-500">*</span>
             </label>
             <input
               v-model="form.base_url"
               type="url"
               required
-              placeholder="https://api.openlux.ai/v1"
+              :placeholder="t('ui.providersView.httpsapiopenluxai')"
               class="w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2 text-sm text-gray-900 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-dark-600 dark:bg-dark-700 dark:text-white"
             />
           </div>
@@ -548,10 +548,10 @@
         <div>
           <div class="flex items-center justify-between mb-1">
             <label class="block text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
-              API Key (Credentials) <span v-if="!editingProvider" class="text-rose-500">*</span>
+              {{ t('ui.providersView.aPIKeyCredentials') }} <span v-if="!editingProvider" class="text-rose-500">*</span>
             </label>
             <span class="text-[11px] text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-              <Icon name="check" size="xs" /> Encrypted with AES-256-GCM in DB
+              <Icon name="check" size="xs" /> {{ t('ui.providersView.encryptedwithAES256') }}
             </span>
           </div>
           <div class="relative">
@@ -576,7 +576,7 @@
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <div>
             <label class="block text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1">
-              Initial / Current Balance ($ USD)
+              {{ t('ui.providersView.initialCurrentBalanceUSD') }}
             </label>
             <div class="relative">
               <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm text-gray-400">$</span>
@@ -589,12 +589,12 @@
                 class="w-full rounded-xl border border-gray-200 bg-white py-2 pl-8 pr-3 text-sm text-gray-900 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-dark-600 dark:bg-dark-700 dark:text-white"
               />
             </div>
-            <p class="mt-1 text-[11px] text-gray-400">For manual sync / estimated balance tracking when balance API is absent.</p>
+            <p class="mt-1 text-[11px] text-gray-400">{{ t('ui.providersView.manualSyncEstimatedTracking') }}</p>
           </div>
 
           <div>
             <label class="block text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1">
-              Minimum Balance ($ USD)
+              {{ t('ui.providersView.minimumBalanceUSD') }}
             </label>
             <div class="relative">
               <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm text-gray-400">$</span>
@@ -612,14 +612,14 @@
 
           <div>
             <label class="block text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1">
-              Usage Status
+              {{ t('ui.providersView.usageStatus') }}
             </label>
             <select
               v-model="form.status"
               class="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-dark-600 dark:bg-dark-700 dark:text-white"
             >
-              <option value="active">Active (Enabled in Hypervisor scheduler)</option>
-              <option value="disabled">Disabled (Inactive)</option>
+              <option value="active">{{ t('ui.providersView.activeEnabledinHypervisor') }}</option>
+              <option value="disabled">{{ t('ui.providersView.disabledInactive') }}</option>
             </select>
           </div>
         </div>
@@ -627,7 +627,7 @@
         <!-- Supported Model Families -->
         <div>
           <label class="block text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-2">
-            Supported Model Families
+            {{ t('ui.providersView.supportedModelFamilies') }}
           </label>
           <div class="flex flex-wrap gap-2.5">
             <label
@@ -656,7 +656,7 @@
               <label class="block text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
                 Model Mappings (Canonical Model ↔ Upstream Model)
               </label>
-              <p class="text-[11px] text-gray-400">Override system canonical model names to provider-specific upstream names</p>
+              <p class="text-[11px] text-gray-400">{{ t('ui.providersView.overrideCanonicalModelNames') }}</p>
             </div>
             <button
               type="button"
@@ -664,12 +664,12 @@
               class="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-dark-600 dark:text-gray-300 dark:hover:bg-dark-700"
             >
               <Icon name="plus" size="xs" />
-              <span>Add Row</span>
+              <span>{{ t('ui.providersView.addRow') }}</span>
             </button>
           </div>
 
           <div v-if="mappingRows.length === 0" class="rounded-xl border border-dashed border-gray-200 p-3 text-center text-xs text-gray-400 dark:border-dark-700">
-            No custom overrides (canonical names will be used 1-to-1)
+            {{ t('ui.providersView.nocustomoverridescanonical') }}
           </div>
           <div v-else class="space-y-2 max-h-48 overflow-y-auto pr-1">
             <div
@@ -680,14 +680,14 @@
               <input
                 v-model="row.canonical"
                 type="text"
-                placeholder="Canonical (e.g. claude-3-7-sonnet)"
+                :placeholder="t('ui.providersView.canonicalegclaude')"
                 class="flex-1 rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-xs text-gray-900 focus:border-primary-500 focus:outline-none dark:border-dark-600 dark:bg-dark-700 dark:text-white"
               />
               <span class="text-gray-400 font-bold">→</span>
               <input
                 v-model="row.upstream"
                 type="text"
-                placeholder="Upstream (e.g. claude-3-7-sonnet-20250219)"
+                :placeholder="t('ui.providersView.upstreamegclaude')"
                 class="flex-1 rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-xs text-gray-900 focus:border-primary-500 focus:outline-none dark:border-dark-600 dark:bg-dark-700 dark:text-white"
               />
               <button
@@ -705,12 +705,12 @@
         <div v-if="draftTestResult" class="rounded-xl p-3 text-xs" :class="draftTestResult.success ? 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300' : 'bg-rose-50 text-rose-800 dark:bg-rose-950/40 dark:text-rose-300'">
           <div class="flex items-center gap-2 font-semibold">
             <Icon :name="draftTestResult.success ? 'check' : 'x'" size="xs" />
-            <span>{{ draftTestResult.success ? 'Connection successful!' : 'Connection error' }}</span>
+            <span>{{ draftTestResult.success ? t('ui.providersView.connectionSuccessful') : t('ui.providersView.connectionError') }}</span>
           </div>
           <p class="mt-1">
             {{ draftTestResult.success
               ? `Latency: ${draftTestResult.latency_ms} ms | Available models: ${draftTestResult.model_count}`
-              : (draftTestResult.error || 'Please check Base URL and API Key')
+              : (draftTestResult.error || t('ui.providersView.pleaseCheckBaseUrlAndApiKey'))
             }}
           </p>
         </div>
@@ -724,7 +724,7 @@
             class="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 px-3.5 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:border-dark-600 dark:text-gray-300 dark:hover:bg-dark-700"
           >
             <Icon name="play" size="xs" :class="{ 'animate-spin': isTestingDraft }" />
-            <span>{{ isTestingDraft ? 'Testing...' : 'Test Connection' }}</span>
+            <span>{{ isTestingDraft ? t('ui.providersView.testing') : t('ui.providersView.testConnection') }}</span>
           </button>
 
           <div class="flex items-center gap-2.5">
@@ -733,7 +733,7 @@
               @click="closeEditModal"
               class="rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-dark-600 dark:text-gray-300 dark:hover:bg-dark-700"
             >
-              Cancel
+              {{ t('ui.providersView.cancel') }}
             </button>
             <button
               type="submit"
@@ -741,7 +741,7 @@
               class="inline-flex items-center gap-2 rounded-xl bg-primary-600 px-5 py-2 text-sm font-medium text-white shadow-sm hover:bg-primary-500 disabled:opacity-50 dark:bg-primary-500 dark:hover:bg-primary-400"
             >
               <Icon v-if="isSaving" name="sync" size="xs" class="animate-spin" />
-              <span>{{ isSaving ? 'Saving...' : (editingProvider ? 'Save Changes' : 'Create Provider') }}</span>
+              <span>{{ isSaving ? t('ui.providersView.saving') : (editingProvider ? t('ui.providersView.saveChanges') : t('ui.providersView.createProvider')) }}</span>
             </button>
           </div>
         </div>
@@ -760,8 +760,8 @@
           <table class="w-full text-left text-xs">
             <thead class="bg-gray-50 dark:bg-dark-800 text-gray-500 uppercase font-semibold">
               <tr>
-                <th class="px-4 py-2.5">Canonical Model</th>
-                <th class="px-4 py-2.5">Upstream Model</th>
+                <th class="px-4 py-2.5">{{ t('ui.providersView.canonicalModel') }}</th>
+                <th class="px-4 py-2.5">{{ t('ui.providersView.upstreamModel') }}</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-gray-100 dark:divide-dark-700">
@@ -778,7 +778,7 @@
     <!-- Delete Confirmation Dialog -->
     <ConfirmDialog
       :show="showDeleteConfirm"
-      title="Delete Provider"
+      :title="t('ui.providersView.deleteProvider')"
       :message="`Are you sure you want to delete provider «${deletingProvider?.provider_name}»? This action cannot be undone and will stop routing requests through this gateway.`"
       confirmText="Delete"
       cancelText="Cancel"
@@ -791,6 +791,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
@@ -814,6 +815,7 @@ import {
   type TestConnectionResponse
 } from '@/api/admin/providers'
 
+const { t } = useI18n()
 const appStore = useAppStore()
 
 // State
@@ -967,7 +969,7 @@ async function fetchData() {
       summaryStats.value = res.summary
     }
   } catch (err: any) {
-    appStore.showToast('error', err?.message || 'Failed to load providers')
+    appStore.showToast('error', err?.message || t('ui.providersView.failedToLoadProviders'))
   } finally {
     isLoading.value = false
   }
@@ -1077,7 +1079,7 @@ async function saveProvider() {
     closeEditModal()
     fetchData()
   } catch (err: any) {
-    appStore.showToast('error', err?.message || 'Failed to save provider')
+    appStore.showToast('error', err?.message || t('ui.providersView.failedToSaveProvider'))
   } finally {
     isSaving.value = false
   }
@@ -1091,11 +1093,11 @@ async function handleTestConnection(provider: Provider) {
     if (res.success) {
       appStore.showToast('success', `Connection to «${provider.provider_name}» verified (Latency: ${res.latency_ms} ms, Models: ${res.model_count})`)
     } else {
-      appStore.showToast('error', `Connection test failed: ${res.error || 'Status ' + res.status_code}`)
+      appStore.showToast('error', `Connection test failed: ${res.error || t('ui.providersView.statusPrefix') + res.status_code}`)
     }
     fetchData()
   } catch (err: any) {
-    appStore.showToast('error', err?.message || 'Connection test error')
+    appStore.showToast('error', err?.message || t('ui.providersView.connectionTestError'))
   } finally {
     testingProviderId.value = null
   }
@@ -1123,7 +1125,7 @@ async function testDraftCredentials() {
       latency_ms: 0,
       status_code: 500,
       model_count: 0,
-      error: err?.message || 'Connection error'
+      error: err?.message || t('ui.providersView.connectionError')
     }
   } finally {
     isTestingDraft.value = false
@@ -1138,7 +1140,7 @@ async function handleSyncBalance(provider: Provider) {
     appStore.showToast('success', `Balance for «${provider.provider_name}» synced: $${formatCurrency(res.balance_usd)}`)
     fetchData()
   } catch (err: any) {
-    appStore.showToast('error', err?.message || 'Failed to sync balance')
+    appStore.showToast('error', err?.message || t('ui.providersView.failedToSyncBalance'))
   } finally {
     syncingProviderId.value = null
   }
@@ -1156,7 +1158,7 @@ async function handleSyncAll() {
     }
     fetchData()
   } catch (err: any) {
-    appStore.showToast('error', err?.message || 'Batch balance sync failed')
+    appStore.showToast('error', err?.message || t('ui.providersView.batchBalanceSyncFailed'))
   } finally {
     isSyncingAll.value = false
   }
@@ -1171,7 +1173,7 @@ async function toggleProviderStatus(provider: Provider) {
     appStore.showToast('success', `Provider «${provider.provider_name}» ${newStatus === 'active' ? 'enabled' : 'disabled'}`)
     fetchData()
   } catch (err: any) {
-    appStore.showToast('error', err?.message || 'Failed to update status')
+    appStore.showToast('error', err?.message || t('ui.providersView.failedToUpdateStatus'))
   }
 }
 
@@ -1196,7 +1198,7 @@ async function confirmDelete() {
     deletingProvider.value = null
     fetchData()
   } catch (err: any) {
-    appStore.showToast('error', err?.message || 'Failed to delete provider')
+    appStore.showToast('error', err?.message || t('ui.providersView.failedToDeleteProvider'))
   }
 }
 
@@ -1214,16 +1216,45 @@ function formatCompactNumber(num?: number): string {
 }
 
 function formatTimeAgo(timeStr?: string | null): string {
-  if (!timeStr) return 'Never synced'
+  if (!timeStr) return t('ui.providersView.neverSynced')
   const diff = Date.now() - new Date(timeStr).getTime()
   const sec = Math.floor(diff / 1000)
-  if (sec < 60) return 'just now'
+  if (sec < 60) return t('common.time.justNow')
   const min = Math.floor(sec / 60)
-  if (min < 60) return `${min}m ago`
+  if (min < 60) return t('common.time.minutesAgo', { n: min })
   const hrs = Math.floor(min / 60)
-  if (hrs < 24) return `${hrs}h ago`
+  if (hrs < 24) return t('common.time.hoursAgo', { n: hrs })
   const days = Math.floor(hrs / 24)
-  return `${days}d ago`
+  return t('common.time.daysAgo', { n: days })
+}
+
+function balanceSourceLabel(source?: string | null): string {
+  const map: Record<string, string> = {
+    credit_grants: 'ui.providersView.sourceCreditGrants',
+    token_allowance: 'ui.providersView.sourceTokenAllowance',
+    subscription: 'ui.providersView.sourceSubscription',
+    manual: 'ui.providersView.sourceManual',
+    estimated: 'ui.providersView.sourceEstimated'
+  }
+  const key = String(source ?? '').toLowerCase()
+  const translationKey = map[key]
+  return translationKey ? t(translationKey) : String(source ?? '')
+}
+
+function stateLabel(state?: string | null): string {
+  // The state comes from the API as a machine value; render it through the
+  // locale so the badge reads in the active language.
+  const map: Record<string, string> = {
+    healthy: 'ui.providersView.healthy',
+    degraded: 'ui.providersView.degraded',
+    down: 'ui.providersView.down',
+    lowbalance: 'ui.providersView.lowBalance',
+    invalidkey: 'ui.providersView.invalidkey',
+    disabled: 'ui.providersView.disabled'
+  }
+  const key = String(state ?? '').toLowerCase().replace(/[^a-z]/g, '')
+  const translationKey = map[key]
+  return translationKey ? t(translationKey) : String(state ?? '')
 }
 
 function getStateBadgeClass(state: ProviderState): string {

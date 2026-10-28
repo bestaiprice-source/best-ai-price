@@ -242,7 +242,7 @@
               v-model="form.currency"
               type="text"
               class="input font-mono text-sm max-w-xs uppercase"
-              placeholder="USD"
+              :placeholder="t('ui.adminNowPaymentsView.uSD')"
             />
             <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
               {{ t('nowpayments.currencyHint') }}

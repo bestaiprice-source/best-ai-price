@@ -4,7 +4,7 @@
       <!-- Header -->
       <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 class="text-2xl font-bold tracking-tight text-gray-900 dark:text-white">Provider Health</h1>
+          <h1 class="text-2xl font-bold tracking-tight text-gray-900 dark:text-white">{{ t('ui.providerHealthView.providerHealth') }}</h1>
           <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
             Live upstream availability: pool state, latency, error rate, failover and recent incidents.
           </p>
@@ -16,14 +16,14 @@
             @click="load"
           >
             <Icon name="sync" size="sm" :class="{ 'animate-spin': loading }" />
-            <span>Refresh</span>
+            <span>{{ t('ui.providerHealthView.refresh') }}</span>
           </button>
           <router-link
             to="/admin/providers"
             class="inline-flex items-center gap-2 rounded-xl bg-primary-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-all hover:bg-primary-500"
           >
             <Icon name="globe" size="sm" />
-            <span>Manage Providers</span>
+            <span>{{ t('ui.providerHealthView.manageProviders') }}</span>
           </router-link>
         </div>
       </div>
@@ -36,24 +36,24 @@
       >
         <div class="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <p class="text-xs font-semibold uppercase tracking-wider opacity-70">Yunwu pool state</p>
+            <p class="text-xs font-semibold uppercase tracking-wider opacity-70">{{ t('ui.providerHealthView.yunwupoolstate') }}</p>
             <p class="mt-1 text-2xl font-bold">{{ pool.system_state }}</p>
           </div>
           <div class="grid grid-cols-2 gap-x-8 gap-y-2 text-sm sm:grid-cols-4">
             <div>
-              <p class="opacity-70">Healthy nodes</p>
+              <p class="opacity-70">{{ t('ui.providerHealthView.healthynodes') }}</p>
               <p class="text-lg font-semibold">{{ pool.healthy_nodes }} / {{ pool.total_nodes }}</p>
             </div>
             <div>
-              <p class="opacity-70">In cooldown</p>
+              <p class="opacity-70">{{ t('ui.providerHealthView.incooldown') }}</p>
               <p class="text-lg font-semibold">{{ pool.cooldown_nodes }}</p>
             </div>
             <div>
-              <p class="opacity-70">Rebinds (24h)</p>
+              <p class="opacity-70">{{ t('ui.providerHealthView.rebinds24h') }}</p>
               <p class="text-lg font-semibold">{{ pool.rebinding_24h_cnt ?? 0 }}</p>
             </div>
             <div>
-              <p class="opacity-70">Allocatable</p>
+              <p class="opacity-70">{{ t('ui.providerHealthView.allocatable') }}</p>
               <p class="text-lg font-semibold">{{ formatUsd(pool.total_allocatable_usd) }}</p>
             </div>
           </div>
@@ -63,19 +63,19 @@
       <!-- KPIs -->
       <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div class="rounded-2xl border border-gray-200/80 bg-white/85 p-5 shadow-sm dark:border-dark-700/80 dark:bg-dark-800/85">
-          <p class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Providers</p>
+          <p class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">{{ t('ui.providerHealthView.providers') }}</p>
           <p class="mt-2 text-2xl font-bold text-gray-900 dark:text-white">{{ providers.length }}</p>
         </div>
         <div class="rounded-2xl border border-gray-200/80 bg-white/85 p-5 shadow-sm dark:border-dark-700/80 dark:bg-dark-800/85">
-          <p class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Healthy</p>
+          <p class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">{{ t('ui.providerHealthView.healthy') }}</p>
           <p class="mt-2 text-2xl font-bold text-emerald-600 dark:text-emerald-400">{{ healthyCount }}</p>
         </div>
         <div class="rounded-2xl border border-gray-200/80 bg-white/85 p-5 shadow-sm dark:border-dark-700/80 dark:bg-dark-800/85">
-          <p class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Degraded / Down</p>
+          <p class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">{{ t('ui.providerHealthView.degradedDown') }}</p>
           <p class="mt-2 text-2xl font-bold text-amber-600 dark:text-amber-400">{{ degradedCount }}</p>
         </div>
         <div class="rounded-2xl border border-gray-200/80 bg-white/85 p-5 shadow-sm dark:border-dark-700/80 dark:bg-dark-800/85">
-          <p class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Low balance</p>
+          <p class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">{{ t('ui.providerHealthView.lowbalance') }}</p>
           <p class="mt-2 text-2xl font-bold text-red-600 dark:text-red-400">{{ lowBalanceCount }}</p>
         </div>
       </div>
@@ -83,20 +83,20 @@
       <!-- Providers health table -->
       <div class="overflow-hidden rounded-2xl border border-gray-200/80 bg-white/85 shadow-sm dark:border-dark-700/80 dark:bg-dark-800/85">
         <div class="border-b border-gray-200 px-5 py-3 dark:border-dark-700">
-          <h2 class="text-sm font-semibold text-gray-900 dark:text-white">Provider metrics</h2>
+          <h2 class="text-sm font-semibold text-gray-900 dark:text-white">{{ t('ui.providerHealthView.providermetrics') }}</h2>
         </div>
         <div class="overflow-x-auto">
           <table class="min-w-full divide-y divide-gray-100 text-sm dark:divide-dark-700">
             <thead class="bg-gray-50/60 dark:bg-dark-900/40">
               <tr class="text-left text-xs uppercase tracking-wider text-gray-500 dark:text-gray-400">
-                <th class="px-5 py-3">Provider</th>
-                <th class="px-5 py-3">State</th>
-                <th class="px-5 py-3">Families</th>
-                <th class="px-5 py-3 text-right">Latency</th>
-                <th class="px-5 py-3 text-right">Error rate</th>
-                <th class="px-5 py-3 text-right">Requests</th>
-                <th class="px-5 py-3 text-right">Spend</th>
-                <th class="px-5 py-3 text-right">Balance</th>
+                <th class="px-5 py-3">{{ t('ui.providerHealthView.provider') }}</th>
+                <th class="px-5 py-3">{{ t('ui.providerHealthView.state') }}</th>
+                <th class="px-5 py-3">{{ t('ui.providerHealthView.families') }}</th>
+                <th class="px-5 py-3 text-right">{{ t('ui.providerHealthView.latency') }}</th>
+                <th class="px-5 py-3 text-right">{{ t('ui.providerHealthView.errorrate') }}</th>
+                <th class="px-5 py-3 text-right">{{ t('ui.providerHealthView.requests') }}</th>
+                <th class="px-5 py-3 text-right">{{ t('ui.providerHealthView.spend') }}</th>
+                <th class="px-5 py-3 text-right">{{ t('ui.providerHealthView.balance') }}</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-gray-50 dark:divide-dark-800">
@@ -122,7 +122,7 @@
                 </td>
               </tr>
               <tr v-if="!loading && providers.length === 0">
-                <td colspan="8" class="px-5 py-8 text-center text-gray-400">No providers configured.</td>
+                <td colspan="8" class="px-5 py-8 text-center text-gray-400">{{ t('ui.providerHealthView.noprovidersconfigured') }}</td>
               </tr>
             </tbody>
           </table>
@@ -133,15 +133,15 @@
         <!-- Nodes -->
         <div class="overflow-hidden rounded-2xl border border-gray-200/80 bg-white/85 shadow-sm dark:border-dark-700/80 dark:bg-dark-800/85">
           <div class="border-b border-gray-200 px-5 py-3 dark:border-dark-700">
-            <h2 class="text-sm font-semibold text-gray-900 dark:text-white">Execution nodes</h2>
+            <h2 class="text-sm font-semibold text-gray-900 dark:text-white">{{ t('ui.providerHealthView.executionnodes') }}</h2>
           </div>
           <div class="max-h-[420px] overflow-y-auto">
             <table class="min-w-full divide-y divide-gray-100 text-sm dark:divide-dark-700">
               <thead class="sticky top-0 bg-gray-50/90 text-left text-xs uppercase tracking-wider text-gray-500 dark:bg-dark-900 dark:text-gray-400">
                 <tr>
-                  <th class="px-4 py-2">Node</th>
-                  <th class="px-4 py-2">State</th>
-                  <th class="px-4 py-2 text-right">Allocatable</th>
+                  <th class="px-4 py-2">{{ t('ui.providerHealthView.node') }}</th>
+                  <th class="px-4 py-2">{{ t('ui.providerHealthView.state2') }}</th>
+                  <th class="px-4 py-2 text-right">{{ t('ui.providerHealthView.allocatable2') }}</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-gray-50 dark:divide-dark-800">
@@ -154,7 +154,7 @@
                   <td class="px-4 py-2 text-right">{{ formatUsd(n.allocatable_usd ?? n.total_available_usd) }}</td>
                 </tr>
                 <tr v-if="!loading && nodes.length === 0">
-                  <td colspan="3" class="px-4 py-8 text-center text-gray-400">No execution nodes.</td>
+                  <td colspan="3" class="px-4 py-8 text-center text-gray-400">{{ t('ui.providerHealthView.noexecutionnodes') }}</td>
                 </tr>
               </tbody>
             </table>
@@ -164,7 +164,7 @@
         <!-- Recent incidents -->
         <div class="overflow-hidden rounded-2xl border border-gray-200/80 bg-white/85 shadow-sm dark:border-dark-700/80 dark:bg-dark-800/85">
           <div class="border-b border-gray-200 px-5 py-3 dark:border-dark-700">
-            <h2 class="text-sm font-semibold text-gray-900 dark:text-white">Recent incidents</h2>
+            <h2 class="text-sm font-semibold text-gray-900 dark:text-white">{{ t('ui.providerHealthView.recentincidents') }}</h2>
           </div>
           <div class="max-h-[420px] overflow-y-auto divide-y divide-gray-50 dark:divide-dark-800">
             <div v-for="ev in incidents" :key="ev.id" class="px-5 py-3">
@@ -177,7 +177,7 @@
               <p class="text-xs text-gray-400">status: {{ ev.status }}</p>
             </div>
             <div v-if="!loading && incidents.length === 0" class="px-5 py-8 text-center text-gray-400">
-              No incidents recorded.
+              {{ t('ui.providerHealthView.noincidentsrecorded') }}
             </div>
           </div>
         </div>
@@ -188,6 +188,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { useAppStore } from '@/stores'
@@ -197,6 +198,7 @@ import { listAlertEvents, listAlertRules, type AlertEvent } from '@/api/admin/op
 import { metricLabel, isLatinText } from '@/utils/opsLabels'
 
 const appStore = useAppStore()
+const { t } = useI18n()
 
 const loading = ref(false)
 const providers = ref<Provider[]>([])

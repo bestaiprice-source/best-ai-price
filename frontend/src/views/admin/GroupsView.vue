@@ -218,10 +218,10 @@
                 @click="handleSyncGroupBalances(row)"
                 :disabled="syncingGroups[row.id]"
                 class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-purple-600 transition-colors hover:bg-purple-50 hover:text-purple-700 dark:text-purple-400 dark:hover:bg-purple-900/30"
-                title="Sync all node balances in this Yunwu group"
+                :title="t('ui.groupsView.syncallnodebalances')"
               >
                 <Icon name="bolt" size="sm" :class="{ 'animate-spin': syncingGroups[row.id] }" />
-                <span class="text-xs">{{ syncingGroups[row.id] ? 'Syncing...' : 'Sync Balance' }}</span>
+                <span class="text-xs">{{ syncingGroups[row.id] ? t('ui.groupsView.syncing') : t('ui.groupsView.syncBalance') }}</span>
               </button>
               <button
                 @click="handleEdit(row)"
@@ -2623,7 +2623,7 @@ const handleSyncGroupBalances = async (group: AdminGroup) => {
       `Synced ${summary.synced_nodes}/${summary.total_nodes} nodes for "${group.name}". Available: $${summary.total_available_usd.toFixed(2)}`
     )
   } catch (error: any) {
-    appStore.showError(error.response?.data?.error || error.message || 'Failed to sync group balances')
+    appStore.showError(error.response?.data?.error || error.message || t('ui.groupsView.failedToSyncGroupBalances'))
     console.error('Error syncing group balances:', error)
   } finally {
     syncingGroups[group.id] = false

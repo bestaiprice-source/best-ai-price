@@ -8,19 +8,19 @@
       <template v-else-if="detail">
         <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div class="card p-5">
-            <p class="text-sm text-gray-500">Rebate Rate</p>
+            <p class="text-sm text-gray-500">{{ t('ui.affiliateView.rebateRate') }}</p>
             <p class="mt-2 text-2xl font-semibold text-primary-600">{{ formattedRate }}%</p>
           </div>
           <div class="card p-5">
-            <p class="text-sm text-gray-500">Invited Users</p>
+            <p class="text-sm text-gray-500">{{ t('ui.affiliateView.invitedUsers') }}</p>
             <p class="mt-2 text-2xl font-semibold text-gray-900 dark:text-white">{{ detail.aff_count }}</p>
           </div>
           <div class="card p-5">
-            <p class="text-sm text-gray-500">Available Quota</p>
+            <p class="text-sm text-gray-500">{{ t('ui.affiliateView.availableQuota') }}</p>
             <p class="mt-2 text-2xl font-semibold text-emerald-600">{{ formatCurrency(detail.aff_quota) }}</p>
           </div>
           <div class="card p-5">
-            <p class="text-sm text-gray-500">Total Quota</p>
+            <p class="text-sm text-gray-500">{{ t('ui.affiliateView.totalQuota') }}</p>
             <p class="mt-2 text-2xl font-semibold text-gray-900 dark:text-white">{{ formatCurrency(detail.aff_history_quota) }}</p>
             <p v-if="detail.aff_frozen_quota > 0" class="mt-1 text-xs text-amber-600">
               Frozen: {{ formatCurrency(detail.aff_frozen_quota) }}
@@ -29,28 +29,28 @@
         </div>
 
         <div class="card p-6">
-          <h2 class="text-base font-semibold text-gray-900 dark:text-white">Affiliate</h2>
-          <p class="mt-1 text-sm text-gray-500">Share your code or invite link with new users.</p>
+          <h2 class="text-base font-semibold text-gray-900 dark:text-white">{{ t('ui.affiliateView.affiliate') }}</h2>
+          <p class="mt-1 text-sm text-gray-500">{{ t('ui.affiliateView.shareyourcodeor') }}</p>
 
           <div class="mt-5 grid gap-4 md:grid-cols-2">
             <div class="space-y-2">
-              <p class="text-sm font-medium text-gray-700 dark:text-gray-300">Your Code</p>
+              <p class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t('ui.affiliateView.yourCode') }}</p>
               <div class="flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 dark:border-dark-700 dark:bg-dark-900">
                 <code class="flex-1 truncate text-sm font-semibold text-gray-900 dark:text-white">{{ detail.aff_code }}</code>
                 <button class="btn btn-secondary btn-sm" @click="copyValue(detail.aff_code, 'Affiliate code copied')">
                   <Icon name="copy" size="sm" />
-                  <span>Copy</span>
+                  <span>{{ t('ui.affiliateView.copy') }}</span>
                 </button>
               </div>
             </div>
 
             <div class="space-y-2">
-              <p class="text-sm font-medium text-gray-700 dark:text-gray-300">Invite Link</p>
+              <p class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t('ui.affiliateView.inviteLink') }}</p>
               <div class="flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 dark:border-dark-700 dark:bg-dark-900">
                 <code class="flex-1 truncate text-sm text-gray-700 dark:text-gray-300">{{ inviteLink }}</code>
                 <button class="btn btn-secondary btn-sm" @click="copyValue(inviteLink, 'Invite link copied')">
                   <Icon name="copy" size="sm" />
-                  <span>Copy</span>
+                  <span>{{ t('ui.affiliateView.copy2') }}</span>
                 </button>
               </div>
             </div>
@@ -60,30 +60,30 @@
         <div class="card p-6">
           <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h3 class="text-base font-semibold text-gray-900 dark:text-white">Transfer Quota</h3>
-              <p class="mt-1 text-sm text-gray-500">Move available affiliate quota into your balance.</p>
+              <h3 class="text-base font-semibold text-gray-900 dark:text-white">{{ t('ui.affiliateView.transferQuota') }}</h3>
+              <p class="mt-1 text-sm text-gray-500">{{ t('ui.affiliateView.moveavailableaffiliatequota') }}</p>
             </div>
             <button class="btn btn-primary" :disabled="transferring || detail.aff_quota <= 0" @click="transferQuota">
               <Icon v-if="transferring" name="refresh" size="sm" class="animate-spin" />
               <Icon v-else name="dollar" size="sm" />
-              <span>{{ transferring ? 'Transferring...' : 'Transfer to Balance' }}</span>
+              <span>{{ transferring ? t('ui.affiliateView.transferring') : t('ui.affiliateView.transferToBalance') }}</span>
             </button>
           </div>
         </div>
 
         <div class="card p-6">
-          <h3 class="text-base font-semibold text-gray-900 dark:text-white">Invitees</h3>
+          <h3 class="text-base font-semibold text-gray-900 dark:text-white">{{ t('ui.affiliateView.invitees') }}</h3>
           <div v-if="detail.invitees.length === 0" class="mt-4 rounded-xl border border-dashed border-gray-300 p-6 text-center text-sm text-gray-500 dark:border-dark-700">
-            No invited users yet.
+            {{ t('ui.affiliateView.noinvitedusersyet') }}
           </div>
           <div v-else class="mt-4 overflow-x-auto">
             <table class="w-full min-w-[560px] text-left text-sm">
               <thead>
                 <tr class="border-b border-gray-200 text-gray-500 dark:border-dark-700">
-                  <th class="px-3 py-2 font-medium">Email</th>
-                  <th class="px-3 py-2 font-medium">Username</th>
-                  <th class="px-3 py-2 text-right font-medium">Rebate</th>
-                  <th class="px-3 py-2 font-medium">Joined</th>
+                  <th class="px-3 py-2 font-medium">{{ t('ui.affiliateView.email') }}</th>
+                  <th class="px-3 py-2 font-medium">{{ t('ui.affiliateView.username') }}</th>
+                  <th class="px-3 py-2 text-right font-medium">{{ t('ui.affiliateView.rebate') }}</th>
+                  <th class="px-3 py-2 font-medium">{{ t('ui.affiliateView.joined') }}</th>
                 </tr>
               </thead>
               <tbody>
@@ -104,6 +104,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
 import userAPI from '@/api/user'
@@ -114,6 +115,7 @@ import { useClipboard } from '@/composables/useClipboard'
 import { formatCurrency, formatDateTime } from '@/utils/format'
 import { extractApiErrorMessage } from '@/utils/apiError'
 
+const { t } = useI18n()
 const appStore = useAppStore()
 const authStore = useAuthStore()
 const { copyToClipboard } = useClipboard()

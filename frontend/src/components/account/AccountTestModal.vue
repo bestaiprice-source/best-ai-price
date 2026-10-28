@@ -168,7 +168,7 @@
             </button>
             <img
               :src="previewImageUrl"
-              alt="preview"
+              :alt="t('ui.accountaccountTestModal.preview')"
               class="max-h-[90vh] max-w-[90vw] rounded-lg object-contain shadow-2xl"
             />
           </div>
@@ -451,7 +451,7 @@ const startTest = async () => {
 
     const reader = response.body?.getReader()
     if (!reader) {
-      throw new Error('No response body')
+      throw new Error(t('ui.accountTestModal2.noResponseBody'))
     }
 
     const decoder = new TextDecoder()
@@ -481,7 +481,7 @@ const startTest = async () => {
     }
   } catch (error: any) {
     status.value = 'error'
-    errorMessage.value = error.message || 'Unknown error'
+    errorMessage.value = error.message || t('ui.accountTestModal2.unknownError')
     addLine(`Error: ${errorMessage.value}`, 'text-red-400')
   }
 }
@@ -540,13 +540,13 @@ const handleEvent = (event: {
         status.value = 'success'
       } else {
         status.value = 'error'
-        errorMessage.value = event.error || 'Test failed'
+        errorMessage.value = event.error || t('ui.accountTestModal2.testFailed')
       }
       break
 
     case 'error':
       status.value = 'error'
-      errorMessage.value = event.error || 'Unknown error'
+      errorMessage.value = event.error || t('ui.accountTestModal2.unknownError')
       if (streamingContent.value) {
         addLine(streamingContent.value, 'text-green-300')
         streamingContent.value = ''

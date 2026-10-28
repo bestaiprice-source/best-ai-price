@@ -25,7 +25,9 @@
             <div class="truncate text-sm text-gray-700 dark:text-dark-200">
               {{ fileName || t('admin.accounts.dataImportSelectFile') }}
             </div>
-            <div class="text-xs text-gray-500 dark:text-dark-400">JSON (.json)</div>
+            <div class="text-xs text-gray-500 dark:text-dark-400">
+              {{ t('ui.accountimportDataModal.jSONjson') }}
+            </div>
           </div>
           <button type="button" class="btn btn-secondary shrink-0" @click="openFilePicker">
             {{ t('common.chooseFile') }}

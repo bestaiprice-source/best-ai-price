@@ -4,7 +4,9 @@
       <h2 class="text-sm font-semibold tracking-tight text-gray-900 dark:text-white">
         {{ t('dashboard.quickActions') }}
       </h2>
-      <span class="bap-pill bap-pill-gray text-[10px]">Shortcuts</span>
+      <span class="bap-pill bap-pill-gray text-[10px]">{{
+        t('ui.userDashboardQuickActions.shortcuts')
+      }}</span>
     </div>
 
     <div class="space-y-2.5">
@@ -87,10 +89,10 @@
         </div>
         <div class="min-w-0 flex-1">
           <p class="text-xs font-semibold text-gray-900 dark:text-white">
-            Top Up & Plans
+            {{ t('ui.userDashboardQuickActions.topUpPlans') }}
           </p>
           <p class="text-[11px] text-gray-400 dark:text-gray-500">
-            Manage quota & billing
+            {{ t('ui.userDashboardQuickActions.managequotabilling') }}
           </p>
         </div>
         <Icon

@@ -4,7 +4,7 @@
       <h3 class="text-sm font-semibold tracking-tight text-gray-900 dark:text-white">
         {{ t('admin.dashboard.tokenUsageTrend') }}
       </h3>
-      <span class="bap-pill bap-pill-blue text-[10px]">Trend</span>
+      <span class="bap-pill bap-pill-blue text-[10px]">{{ t('ui.tokenUsageTrend.trend') }}</span>
     </div>
     <div v-if="loading" class="flex h-48 items-center justify-center">
       <LoadingSpinner />

@@ -15,6 +15,7 @@ import type {
   TotpLoginResponse,
   TotpLogin2FARequest
 } from '@/types'
+import { i18n } from '@/i18n'
 
 /**
  * Login response type - can be either full auth or 2FA required
@@ -208,7 +209,7 @@ export interface RefreshTokenResponse {
 export async function refreshToken(): Promise<RefreshTokenResponse> {
   const currentRefreshToken = getRefreshToken()
   if (!currentRefreshToken) {
-    throw new Error('No refresh token available')
+    throw new Error(i18n.global.t('ui.apiAuth.noRefreshTokenAvailable'))
   }
 
   const { data } = await apiClient.post<RefreshTokenResponse>('/auth/refresh', {

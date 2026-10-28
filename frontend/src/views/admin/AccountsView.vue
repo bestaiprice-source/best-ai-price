@@ -1455,7 +1455,7 @@ const handleSyncBalance = async (a: Account) => {
     reload()
   } catch (error: any) {
     console.error('Failed to sync balance:', error)
-    appStore.showError(error?.response?.data?.error || error?.message || 'Failed to sync balance')
+    appStore.showError(error?.response?.data?.error || error?.message || t('ui.accountsView.failedToSyncBalance'))
   }
 }
 const handleDelete = (a: Account) => { deletingAcc.value = a; showDeleteDialog.value = true }

@@ -1053,7 +1053,7 @@
                     v-model="form.turnstile_site_key"
                     type="text"
                     class="input font-mono text-sm"
-                    placeholder="0x4AAAAAAA..."
+                    :placeholder="t('ui.settingsView.0x4AAAAAAA')"
                   />
                   <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
                     {{ t('admin.settings.turnstile.siteKeyHint') }}
@@ -1073,7 +1073,7 @@
                     v-model="form.turnstile_secret_key"
                     type="password"
                     class="input font-mono text-sm"
-                    placeholder="0x4AAAAAAA..."
+                    :placeholder="t('ui.settingsView.0x4AAAAAAA2')"
                   />
                   <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
                     {{

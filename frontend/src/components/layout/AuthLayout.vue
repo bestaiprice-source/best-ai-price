@@ -32,7 +32,7 @@
         <template v-if="settingsLoaded">
           <BrandLogo
             :src="siteLogo"
-            alt="Logo"
+            :alt="t('ui.authLayout.logo')"
             class="mb-4 inline-flex h-16 w-16 rounded-2xl shadow-lg shadow-[#4791ff]/20"
           />
           <h1 class="text-gradient mb-2 text-3xl font-bold">
@@ -64,16 +64,18 @@
 
 <script setup lang="ts">
 import { computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores'
 import { sanitizeUrl } from '@/utils/url'
 import BrandLogo from '@/components/common/BrandLogo.vue'
 import { resolveBrandName } from '@/constants/brand'
 
 const appStore = useAppStore()
+const { t } = useI18n()
 
 const siteName = computed(() => resolveBrandName(appStore.siteName))
 const siteLogo = computed(() => sanitizeUrl(appStore.siteLogo || '', { allowRelative: true, allowDataUrl: true }))
-const siteSubtitle = computed(() => appStore.cachedPublicSettings?.site_subtitle || 'Subscription to API Conversion Platform')
+const siteSubtitle = computed(() => appStore.cachedPublicSettings?.site_subtitle || t('ui.authLayout.subscriptionToApiConversionPlatform'))
 const settingsLoaded = computed(() => appStore.publicSettingsLoaded)
 
 const currentYear = computed(() => new Date().getFullYear())

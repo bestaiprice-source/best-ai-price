@@ -33,68 +33,68 @@
       >
         <div class="flex items-center justify-between">
           <div>
-            <label class="input-label">Kiro OAuth</label>
-            <p class="input-hint">Update Kiro refresh credentials and runtime identifiers.</p>
+            <label class="input-label">{{ t('ui.editAccountModal.kiroOAuth') }}</label>
+            <p class="input-hint">{{ t('ui.editAccountModal.updateKirorefreshcredentials') }}</p>
           </div>
           <select v-model="kiroAuthMethod" class="input w-36">
-            <option value="social">social</option>
+            <option value="social">{{ t('ui.editAccountModal.social') }}</option>
             <option value="idc">idc</option>
           </select>
         </div>
         <div>
-          <label class="input-label">Refresh Token</label>
+          <label class="input-label">{{ t('ui.editAccountModal.refreshToken') }}</label>
           <textarea
             v-model="kiroRefreshToken"
             rows="4"
             class="input font-mono text-sm"
-            placeholder="Paste new refresh token or keep existing value"
+            :placeholder="t('ui.editAccountModal.pastenewrefreshtoken')"
           ></textarea>
         </div>
         <div v-if="kiroAuthMethod === 'idc'" class="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div>
-            <label class="input-label">Client ID</label>
+            <label class="input-label">{{ t('ui.editAccountModal.clientID') }}</label>
             <input v-model="kiroClientID" type="text" class="input font-mono text-sm" />
           </div>
           <div>
-            <label class="input-label">Client Secret</label>
-            <input v-model="kiroClientSecret" type="password" class="input font-mono text-sm" placeholder="Leave empty to keep existing" />
+            <label class="input-label">{{ t('ui.editAccountModal.clientSecret') }}</label>
+            <input v-model="kiroClientSecret" type="password" class="input font-mono text-sm" :placeholder="t('ui.editAccountModal.leaveemptytokeep')" />
           </div>
         </div>
         <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
           <div>
-            <label class="input-label">Region</label>
+            <label class="input-label">{{ t('ui.editAccountModal.region') }}</label>
             <input v-model="kiroRegion" type="text" class="input font-mono text-sm" />
           </div>
           <div>
-            <label class="input-label">Auth Region</label>
+            <label class="input-label">{{ t('ui.editAccountModal.authRegion') }}</label>
             <input v-model="kiroAuthRegion" type="text" class="input font-mono text-sm" />
           </div>
           <div>
-            <label class="input-label">API Region</label>
+            <label class="input-label">{{ t('ui.editAccountModal.aPIRegion') }}</label>
             <input v-model="kiroAPIRegion" type="text" class="input font-mono text-sm" />
           </div>
         </div>
         <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div>
-            <label class="input-label">Profile ARN</label>
+            <label class="input-label">{{ t('ui.editAccountModal.profileARN') }}</label>
             <input v-model="kiroProfileARN" type="text" class="input font-mono text-sm" />
           </div>
           <div>
-            <label class="input-label">Machine ID</label>
+            <label class="input-label">{{ t('ui.editAccountModal.machineID') }}</label>
             <input v-model="kiroMachineID" type="text" class="input font-mono text-sm" />
           </div>
         </div>
         <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
           <div>
-            <label class="input-label">Kiro Version</label>
+            <label class="input-label">{{ t('ui.editAccountModal.kiroVersion') }}</label>
             <input v-model="kiroVersion" type="text" class="input font-mono text-sm" />
           </div>
           <div>
-            <label class="input-label">System Version</label>
+            <label class="input-label">{{ t('ui.editAccountModal.systemVersion') }}</label>
             <input v-model="kiroSystemVersion" type="text" class="input font-mono text-sm" />
           </div>
           <div>
-            <label class="input-label">Node Version</label>
+            <label class="input-label">{{ t('ui.editAccountModal.nodeVersion') }}</label>
             <input v-model="kiroNodeVersion" type="text" class="input font-mono text-sm" />
           </div>
         </div>
@@ -148,38 +148,38 @@
           class="space-y-4 rounded-lg border border-emerald-200 bg-emerald-50/60 p-4 dark:border-emerald-900/40 dark:bg-emerald-950/20"
         >
           <div>
-            <label class="input-label">Provider</label>
+            <label class="input-label">{{ t('ui.editAccountModal.provider') }}</label>
             <select v-model="yunwuProvider" class="input" @change="onYunwuProviderChange">
-              <option value="openlux">OpenLux (api.openlux.ai)</option>
-              <option value="portdan">Portdan AI (portdan.com)</option>
-              <option value="api-top">Top-API (api-top.com)</option>
-              <option value="yuanqiaoyun">Yuanqiaoyun (yuanqiaoyun.com)</option>
-              <option value="x-llm">X-LLM (x-llm.net)</option>
-              <option value="custom">Custom Upstream Provider</option>
+              <option value="openlux">{{ t('ui.editAccountModal.openLuxapiopenluxai') }}</option>
+              <option value="portdan">{{ t('ui.editAccountModal.portdanAIportdancom') }}</option>
+              <option value="api-top">{{ t('ui.editAccountModal.topAPIapitop') }}</option>
+              <option value="yuanqiaoyun">{{ t('ui.editAccountModal.yuanqiaoyunyuanqiaoyuncom') }}</option>
+              <option value="x-llm">{{ t('ui.editAccountModal.xLLMxllm') }}</option>
+              <option value="custom">{{ t('ui.editAccountModal.customUpstreamProvider') }}</option>
             </select>
           </div>
           <div v-if="yunwuProvider === 'custom'">
-            <label class="input-label">Provider Name / Key</label>
+            <label class="input-label">{{ t('ui.editAccountModal.providerNameKey') }}</label>
             <input
               v-model="yunwuCustomProvider"
               type="text"
               class="input font-mono"
-              placeholder="e.g. openlux, portdan, custom-vendor"
+              :placeholder="t('ui.editAccountModal.egopenluxportdan')"
             />
           </div>
 
           <!-- Protocol & Alert Threshold -->
           <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
-              <label class="input-label">Forwarding Protocol</label>
+              <label class="input-label">{{ t('ui.editAccountModal.forwardingProtocol') }}</label>
               <select v-model="yunwuProtocol" class="input">
-                <option value="openai">OpenAI Chat Protocol (/v1/chat/completions)</option>
-                <option value="anthropic">Anthropic Messages Protocol (/v1/messages)</option>
-                <option value="gemini">Native Gemini Protocol (/v1beta/models/...)</option>
+                <option value="openai">{{ t('ui.editAccountModal.openAIChatProtocolv1') }}</option>
+                <option value="anthropic">{{ t('ui.editAccountModal.anthropicMessagesProtocolv1') }}</option>
+                <option value="gemini">{{ t('ui.editAccountModal.nativeGeminiProtocolv1beta') }}</option>
               </select>
             </div>
             <div>
-              <label class="input-label">Low Balance Alert Threshold ($)</label>
+              <label class="input-label">{{ t('ui.editAccountModal.lowBalanceAlertThreshold') }}</label>
               <input
                 v-model.number="yunwuMinBalance"
                 type="number"
@@ -192,9 +192,9 @@
           </div>
 
           <div>
-            <label class="input-label">Supported Model Families</label>
+            <label class="input-label">{{ t('ui.editAccountModal.supportedModelFamilies') }}</label>
             <p class="mb-2 text-xs text-gray-500 dark:text-gray-400">
-              Select which neural network families route to this node:
+              {{ t('ui.editAccountModal.selectwhichneuralnetwork') }}
             </p>
             <div class="grid grid-cols-2 gap-2">
               <label
@@ -699,7 +699,7 @@
             v-model="editBaseUrl"
             type="text"
             class="input"
-            placeholder="https://cloudcode-pa.googleapis.com"
+            :placeholder="t('ui.editAccountModal.httpscloudcodepagoogleapis')"
           />
           <p class="input-hint">{{ t('admin.accounts.upstream.baseUrlHint') }}</p>
         </div>
@@ -725,7 +725,7 @@
               v-model="editBedrockAccessKeyId"
               type="text"
               class="input font-mono"
-              placeholder="AKIA..."
+              :placeholder="t('ui.editAccountModal.aKIA')"
             />
           </div>
           <div>
@@ -769,7 +769,7 @@
             v-model="editBedrockRegion"
             type="text"
             class="input"
-            placeholder="us-east-1"
+            :placeholder="t('ui.editAccountModal.useast1')"
           />
           <p class="input-hint">{{ t('admin.accounts.bedrockRegionHint') }}</p>
         </div>

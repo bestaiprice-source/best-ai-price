@@ -5,7 +5,7 @@
 
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig, AxiosResponse } from 'axios'
 import type { ApiResponse } from '@/types'
-import { getLocale } from '@/i18n'
+import { getLocale, i18n } from '@/i18n'
 import { appPath, getApiBaseUrl } from '@/utils/url'
 
 // ==================== Axios Instance Configuration ====================
@@ -105,7 +105,7 @@ apiClient.interceptors.response.use(
         return Promise.reject({
           status: response.status,
           code: apiResponse.code,
-          message: apiResponse.message || 'Unknown error'
+          message: apiResponse.message || i18n.global.t('ui.apiClient.unknownError')
         })
       }
     }
@@ -230,7 +230,7 @@ apiClient.interceptors.response.use(
             }
 
             // Refresh response was not successful, fall through to clear auth
-            throw new Error('Token refresh failed')
+            throw new Error(i18n.global.t('ui.apiClient.tokenRefreshFailed'))
           } catch (refreshError) {
             // Refresh failed - notify subscribers with empty token
             onTokenRefreshed('')

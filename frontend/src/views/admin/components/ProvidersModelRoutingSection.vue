@@ -2,10 +2,10 @@
   <div class="space-y-6">
     <!-- Intro / info -->
     <div class="rounded-2xl border border-indigo-200/70 bg-indigo-50/60 p-5 text-sm text-indigo-900 dark:border-indigo-800/60 dark:bg-indigo-950/30 dark:text-indigo-200">
-      <p class="font-medium">Primary / Backup routing is assigned automatically by price.</p>
+      <p class="font-medium">{{ t('ui.providersModelRoutingSection.primaryBackuproutingis') }}</p>
       <p class="mt-1 text-indigo-800/80 dark:text-indigo-300/80">
-        When no rule is set for a model, the system routes to the <b>cheapest</b> available provider
-        as <b>Primary</b> and failsover to the <b>next cheapest</b> provider as <b>Backup</b>.
+        {{ t('ui.providersModelRoutingSection.whennoruleis') }} <b>{{ t('ui.providersModelRoutingSection.cheapest') }}</b> available provider
+        as <b>{{ t('ui.providersModelRoutingSection.primary') }}</b> {{ t('ui.providersModelRoutingSection.andfailsovertothe') }} <b>{{ t('ui.providersModelRoutingSection.nextcheapest') }}</b> {{ t('ui.providersModelRoutingSection.provideras') }} <b>{{ t('ui.providersModelRoutingSection.backup') }}</b>.
         Add a rule below only to pin specific providers (first = Primary, second = Backup, …).
       </p>
     </div>
@@ -13,7 +13,7 @@
     <!-- Group selector -->
     <div class="flex flex-wrap items-end gap-3">
       <div class="min-w-[240px]">
-        <label class="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Group</label>
+        <label class="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">{{ t('ui.providersModelRoutingSection.group') }}</label>
         <select v-model.number="selectedGroupId" class="input w-full" @change="loadSelectedGroup">
           <option :value="0">Select a Yunwu group…</option>
           <option v-for="g in groups" :key="g.id" :value="g.id">{{ g.name }} ({{ g.platform }})</option>
@@ -34,7 +34,7 @@
           :disabled="!selectedGroupId || saving"
           @click="save"
         >
-          {{ saving ? 'Saving…' : 'Save routing' }}
+          {{ saving ? t('ui.providersModelRoutingSection.saving') : t('ui.providersModelRoutingSection.saveRouting') }}
         </button>
       </div>
     </div>
@@ -52,18 +52,18 @@
       >
         <div class="flex flex-wrap items-center gap-3">
           <div class="grow">
-            <label class="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Model pattern</label>
+            <label class="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">{{ t('ui.providersModelRoutingSection.modelpattern') }}</label>
             <input
               v-model="rule.pattern"
               type="text"
               class="input w-full"
-              placeholder="e.g. claude-3-7-sonnet or claude-opus-*"
+              :placeholder="t('ui.providersModelRoutingSection.egclaude3')"
             />
           </div>
           <button
             type="button"
             class="mt-5 rounded-lg p-2 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/40"
-            title="Remove rule"
+            :title="t('ui.providersModelRoutingSection.removerule')"
             @click="removeRule(index)"
           >
             <Icon name="x" size="sm" />
@@ -88,7 +88,7 @@
               <span v-if="accountIndex(rule, p.id) >= 0" class="font-bold">#{{ accountIndex(rule, p.id) + 1 }}</span>
               {{ p.provider_name || ('#' + p.id) }}
             </button>
-            <span v-if="providerOptions.length === 0" class="text-xs text-gray-400">No active providers loaded.</span>
+            <span v-if="providerOptions.length === 0" class="text-xs text-gray-400">{{ t('ui.providersModelRoutingSection.noactiveprovidersloaded') }}</span>
           </div>
         </div>
       </div>
@@ -99,7 +99,7 @@
         @click="addRule"
       >
         <Icon name="plus" size="sm" />
-        Add rule
+        {{ t('ui.providersModelRoutingSection.addrule') }}
       </button>
     </div>
 
@@ -110,7 +110,7 @@
     >
       <div class="flex items-center justify-between border-b border-gray-200 px-5 py-3 dark:border-dark-700">
         <div>
-          <h2 class="text-sm font-semibold text-gray-900 dark:text-white">Resolved routes</h2>
+          <h2 class="text-sm font-semibold text-gray-900 dark:text-white">{{ t('ui.providersModelRoutingSection.resolvedroutes') }}</h2>
           <p class="text-xs text-gray-500 dark:text-gray-400">
             Live Primary/Backup for every sellable model — the actual providers, upstream model ids,
             retail price, status and last verified.
@@ -123,7 +123,7 @@
           @click="loadRoutes"
         >
           <Icon name="sync" size="sm" />
-          {{ routesLoading ? 'Loading…' : 'Refresh' }}
+          {{ routesLoading ? t('ui.providersModelRoutingSection.loading') : t('ui.providersModelRoutingSection.refresh') }}
         </button>
       </div>
 
@@ -131,12 +131,12 @@
         <table class="min-w-full divide-y divide-gray-100 text-sm dark:divide-dark-700">
           <thead class="bg-gray-50/60 text-left text-xs uppercase tracking-wider text-gray-500 dark:bg-dark-900/40 dark:text-gray-400">
             <tr>
-              <th class="px-4 py-3">Model</th>
-              <th class="px-4 py-3">Primary</th>
-              <th class="px-4 py-3">Backup</th>
-              <th class="px-4 py-3 text-right">Retail in / out</th>
-              <th class="px-4 py-3">Status</th>
-              <th class="px-4 py-3">Last verified</th>
+              <th class="px-4 py-3">{{ t('ui.providersModelRoutingSection.model') }}</th>
+              <th class="px-4 py-3">{{ t('ui.providersModelRoutingSection.primary2') }}</th>
+              <th class="px-4 py-3">{{ t('ui.providersModelRoutingSection.backup2') }}</th>
+              <th class="px-4 py-3 text-right">{{ t('ui.providersModelRoutingSection.retailinout') }}</th>
+              <th class="px-4 py-3">{{ t('ui.providersModelRoutingSection.status') }}</th>
+              <th class="px-4 py-3">{{ t('ui.providersModelRoutingSection.lastverified') }}</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-50 dark:divide-dark-800">
@@ -170,7 +170,7 @@
             </tr>
             <tr v-if="!routesLoading && routes.length === 0">
               <td colspan="6" class="px-4 py-8 text-center text-gray-400">
-                No routed models. Add a rule above, or connect providers with priced models.
+                {{ t('ui.providersModelRoutingSection.noRoutedModels') }}
               </td>
             </tr>
           </tbody>
@@ -182,6 +182,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import Icon from '@/components/icons/Icon.vue'
 import { useAppStore } from '@/stores'
 import { getAll as listGroups, getById as getGroup, update as updateGroup } from '@/api/admin/groups'
@@ -197,6 +198,7 @@ interface RoutingRule {
 
 const props = defineProps<{ providers: Provider[] }>()
 const appStore = useAppStore()
+const { t } = useI18n()
 
 const groups = ref<AdminGroup[]>([])
 const selectedGroupId = ref<number>(0)
