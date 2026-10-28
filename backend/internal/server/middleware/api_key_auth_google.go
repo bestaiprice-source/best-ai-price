@@ -80,40 +80,45 @@ func ApplyAPIKeyAuthWithSubscriptionGoogleContext(apiKeyService *service.APIKeyS
 	}
 
 	var subscription *service.UserSubscription
-	isSubscriptionType := apiKey.Group != nil && apiKey.Group.IsSubscriptionType()
-	if isSubscriptionType && subscriptionService != nil {
-		var err error
-		subscription, err = subscriptionService.GetActiveSubscription(
-			c.Request().Context(),
-			apiKey.User.ID,
-			apiKey.Group.ID,
-		)
-		if err != nil {
-			abortWithGoogleErrorContext(c, 403, "No active subscription found for this group")
-			return false
-		}
-
-		needsMaintenance, err := subscriptionService.ValidateAndCheckLimits(subscription, apiKey.Group)
-		if err != nil {
-			status := 403
-			if errors.Is(err, service.ErrDailyLimitExceeded) ||
-				errors.Is(err, service.ErrWeeklyLimitExceeded) ||
-				errors.Is(err, service.ErrMonthlyLimitExceeded) {
-				status = 429
+	if skipBillingForPath(c.Path()) {
+		// Metadata-only route (model catalog, key usage): authenticate, then let it through
+		// regardless of quota/subscription/balance state. See billingExemptPaths.
+	} else {
+		isSubscriptionType := apiKey.Group != nil && apiKey.Group.IsSubscriptionType()
+		if isSubscriptionType && subscriptionService != nil {
+			var err error
+			subscription, err = subscriptionService.GetActiveSubscription(
+				c.Request().Context(),
+				apiKey.User.ID,
+				apiKey.Group.ID,
+			)
+			if err != nil {
+				abortWithGoogleErrorContext(c, 403, "No active subscription found for this group")
+				return false
 			}
-			abortWithGoogleErrorContext(c, status, err.Error())
+
+			needsMaintenance, err := subscriptionService.ValidateAndCheckLimits(subscription, apiKey.Group)
+			if err != nil {
+				status := 403
+				if errors.Is(err, service.ErrDailyLimitExceeded) ||
+					errors.Is(err, service.ErrWeeklyLimitExceeded) ||
+					errors.Is(err, service.ErrMonthlyLimitExceeded) {
+					status = 429
+				}
+				abortWithGoogleErrorContext(c, status, err.Error())
+				return false
+			}
+
+			c.SetValue(string(ContextKeySubscription), subscription)
+
+			if needsMaintenance {
+				maintenanceCopy := *subscription
+				subscriptionService.DoWindowMaintenance(&maintenanceCopy)
+			}
+		} else if apiKey.User.Balance < service.MinOperationalBalance {
+			abortWithGoogleErrorContext(c, 403, "Insufficient account balance")
 			return false
 		}
-
-		c.SetValue(string(ContextKeySubscription), subscription)
-
-		if needsMaintenance {
-			maintenanceCopy := *subscription
-			subscriptionService.DoWindowMaintenance(&maintenanceCopy)
-		}
-	} else if apiKey.User.Balance < service.MinOperationalBalance {
-		abortWithGoogleErrorContext(c, 403, "Insufficient account balance")
-		return false
 	}
 
 	c.SetValue(string(ContextKeyAPIKey), apiKey)

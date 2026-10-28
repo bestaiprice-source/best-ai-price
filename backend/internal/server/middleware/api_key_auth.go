@@ -35,6 +35,30 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 	}
 }
 
+// billingExemptPaths lists the endpoints that are authenticated but NOT billed:
+// they only expose metadata (the caller's own key usage, the model catalog) and
+// cost nothing upstream. Enforcing quota/subscription/balance state on them makes
+// every OpenAI- or Gemini-compatible client report "invalid key" on the model list
+// — a request that must stay free — before it ever sends a real completion.
+// Paths are the ROUTE PATTERNS as gin registers them (`c.Path()`), so the wildcard
+// Gemini/antigravity patterns are matched literally and the paid
+// `/v1beta/models/*modelAction` stays billed.
+var billingExemptPaths = map[string]struct{}{
+	"/v1/usage":                         {},
+	"/v1/models":                        {},
+	"/v1beta/models":                    {},
+	"/v1beta/models/:model":             {},
+	"/antigravity/models":               {},
+	"/antigravity/v1beta/models":        {},
+	"/antigravity/v1beta/models/:model": {},
+}
+
+// skipBillingForPath reports whether a route only needs authentication.
+func skipBillingForPath(path string) bool {
+	_, ok := billingExemptPaths[path]
+	return ok
+}
+
 func ApplyAPIKeyAuthWithSubscriptionContext(apiKeyService *service.APIKeyService, subscriptionService *service.SubscriptionService, cfg *config.Config, c gatewayctx.GatewayContext) bool {
 	if c == nil || c.Request() == nil || apiKeyService == nil {
 		return false
@@ -93,7 +117,7 @@ func ApplyAPIKeyAuthWithSubscriptionContext(apiKeyService *service.APIKeyService
 		return true
 	}
 
-	skipBilling := c.Path() == "/v1/usage"
+	skipBilling := skipBillingForPath(c.Path())
 	var subscription *service.UserSubscription
 	isSubscriptionType := apiKey.Group != nil && apiKey.Group.IsSubscriptionType()
 
