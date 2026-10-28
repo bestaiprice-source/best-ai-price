@@ -139,9 +139,12 @@ const groupOptions = computed(() => {
   return [{ value: null, label: t('common.all') }, ...filtered.map((g) => ({ value: g.id, label: g.name }))]
 })
 
-const displayLocale = computed(() =>
-  String(locale.value || '').toLowerCase().startsWith('zh') ? 'zh-CN' : 'en-US'
-)
+const displayLocale = computed(() => {
+  const code = String(locale.value || '').toLowerCase()
+  if (code.startsWith('zh')) return 'zh-CN'
+  if (code.startsWith('ru')) return 'ru-RU'
+  return 'en-US'
+})
 
 function formatLastUpdated(date: Date | null): string {
   if (!date) return t('common.unknown')

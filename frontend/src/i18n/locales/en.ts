@@ -580,7 +580,14 @@ export default {
     paymentDashboard: 'Payment Dashboard',
     orderManagement: 'Order Management',
     paymentPlans: 'Payment Plans',
-    paymentProviders: 'Payment Providers'
+    paymentProviders: 'Payment Providers',
+    availableChannels: 'Available Channels',
+    affiliate: 'Affiliate',
+    myOrders: 'My Orders',
+    channelStatus: 'Channel Status',
+    channelPricing: 'Channel Pricing',
+    channelMonitor: 'Channel Monitor',
+    nowpayments: 'NOWPayments'
   },
 
   // Auth

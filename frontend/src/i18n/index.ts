@@ -1,11 +1,11 @@
 import { createI18n } from 'vue-i18n'
 
 /**
- * The product ships English-only. The Chinese locale was removed, so a value
- * persisted by an older build (or a zh browser) must not resurrect it — see
- * `getDefaultLocale` / `isLocaleCode`.
+ * Shipped locales: English (default) and Russian. The Chinese locale was
+ * removed, so a value persisted by an older build (or a zh browser) must not
+ * resurrect it — see `getDefaultLocale` / `isLocaleCode`.
  */
-type LocaleCode = 'en'
+type LocaleCode = 'en' | 'ru'
 
 type LocaleMessages = Record<string, any>
 
@@ -13,11 +13,12 @@ const LOCALE_KEY = 'sub2api_locale'
 const DEFAULT_LOCALE: LocaleCode = 'en'
 
 const localeLoaders: Record<LocaleCode, () => Promise<{ default: LocaleMessages }>> = {
-  en: () => import('./locales/en')
+  en: () => import('./locales/en'),
+  ru: () => import('./locales/ru')
 }
 
 function isLocaleCode(value: string): value is LocaleCode {
-  return value === 'en'
+  return value === 'en' || value === 'ru'
 }
 
 function getDefaultLocale(): LocaleCode {
@@ -84,6 +85,9 @@ export function getLocale(): LocaleCode {
   return isLocaleCode(current) ? current : DEFAULT_LOCALE
 }
 
-export const availableLocales = [{ code: 'en', name: 'English', flag: '🇺🇸' }] as const
+export const availableLocales = [
+  { code: 'en', name: 'English', flag: '🇺🇸' },
+  { code: 'ru', name: 'Русский', flag: '🇷🇺' }
+] as const
 
 export default i18n

@@ -627,13 +627,13 @@ const userNavItems = computed((): NavItem[] => {
     { path: '/models', label: t('nav.models'), icon: ModelsIcon },
     { path: '/usage', label: t('nav.usage'), icon: ChartIcon, hideInSimpleMode: true },
     ...(availableChannelsEnabled.value
-      ? [{ path: '/available-channels', label: 'Available Channels', icon: ChannelIcon, hideInSimpleMode: true }]
+      ? [{ path: '/available-channels', label: t('nav.availableChannels'), icon: ChannelIcon, hideInSimpleMode: true }]
       : []),
     ...(affiliateEnabled.value
-      ? [{ path: '/affiliate', label: 'Affiliate', icon: UsersIcon, hideInSimpleMode: true }]
+      ? [{ path: '/affiliate', label: t('nav.affiliate'), icon: UsersIcon, hideInSimpleMode: true }]
       : []),
     ...(channelMonitorEnabled.value
-      ? [{ path: '/monitor', label: 'Channel Status', icon: SignalIcon }]
+      ? [{ path: '/monitor', label: t('nav.channelStatus'), icon: SignalIcon }]
       : []),
     ...(appStore.cachedPublicSettings?.sora_client_enabled
       ? [{ path: '/sora', label: t('nav.sora'), icon: SoraIcon }]
@@ -649,7 +649,7 @@ const userNavItems = computed((): NavItem[] => {
         ]
       : []),
     ...(paymentEnabled.value
-      ? [{ path: '/orders', label: 'My Orders', icon: OrderListIcon, hideInSimpleMode: true }]
+      ? [{ path: '/orders', label: t('nav.myOrders'), icon: OrderListIcon, hideInSimpleMode: true }]
       : []),
     { path: '/profile', label: t('nav.profile'), icon: UserIcon },
     { path: '/docs', label: t('nav.docs'), icon: BookIcon, hideInSimpleMode: true },
@@ -673,10 +673,10 @@ const personalNavItems = computed((): NavItem[] => {
     { path: '/models', label: t('nav.models'), icon: ModelsIcon },
     { path: '/usage', label: t('nav.usage'), icon: ChartIcon, hideInSimpleMode: true },
     ...(availableChannelsEnabled.value
-      ? [{ path: '/available-channels', label: 'Available Channels', icon: ChannelIcon, hideInSimpleMode: true }]
+      ? [{ path: '/available-channels', label: t('nav.availableChannels'), icon: ChannelIcon, hideInSimpleMode: true }]
       : []),
     ...(channelMonitorEnabled.value
-      ? [{ path: '/monitor', label: 'Channel Status', icon: SignalIcon }]
+      ? [{ path: '/monitor', label: t('nav.channelStatus'), icon: SignalIcon }]
       : []),
     ...(appStore.cachedPublicSettings?.sora_client_enabled
       ? [{ path: '/sora', label: t('nav.sora'), icon: SoraIcon }]
@@ -692,7 +692,7 @@ const personalNavItems = computed((): NavItem[] => {
         ]
       : []),
     ...(paymentEnabled.value
-      ? [{ path: '/orders', label: 'My Orders', icon: OrderListIcon, hideInSimpleMode: true }]
+      ? [{ path: '/orders', label: t('nav.myOrders'), icon: OrderListIcon, hideInSimpleMode: true }]
       : []),
     { path: '/profile', label: t('nav.profile'), icon: UserIcon },
     { path: '/docs', label: t('nav.docs'), icon: BookIcon, hideInSimpleMode: true },
@@ -732,14 +732,14 @@ const adminNavItems = computed((): NavItem[] => {
       : []),
     { path: '/admin/users', label: t('nav.users'), icon: UsersIcon, hideInSimpleMode: true },
     { path: '/admin/groups', label: t('nav.groups'), icon: FolderIcon, hideInSimpleMode: true },
-    { path: '/admin/channels/pricing', label: 'Channel Pricing', icon: ChannelIcon, hideInSimpleMode: true },
+    { path: '/admin/channels/pricing', label: t('nav.channelPricing'), icon: ChannelIcon, hideInSimpleMode: true },
     { path: '/admin/providers', label: t('nav.providers'), icon: GlobeIcon, hideInSimpleMode: true },
     { path: '/admin/vendors', label: t('nav.vendors'), icon: LightbulbIcon, hideInSimpleMode: true },
     { path: '/admin/provider-health', label: t('nav.providerHealth'), icon: ShieldIcon, hideInSimpleMode: true },
     { path: '/admin/parser-stats', label: t('nav.parserStats') || 'Parser Stats', icon: ParserStatsIcon, hideInSimpleMode: true },
     { path: '/admin/alerts', label: t('nav.alerts'), icon: AlertIcon, hideInSimpleMode: true },
     ...(channelMonitorEnabled.value
-      ? [{ path: '/admin/channels/monitor', label: 'Channel Monitor', icon: SignalIcon, hideInSimpleMode: true }]
+      ? [{ path: '/admin/channels/monitor', label: t('nav.channelMonitor'), icon: SignalIcon, hideInSimpleMode: true }]
       : []),
     { path: '/admin/accounts', label: t('nav.accounts'), icon: GlobeIcon },
     { path: '/admin/announcements', label: t('nav.announcements'), icon: BellIcon },
@@ -747,7 +747,7 @@ const adminNavItems = computed((): NavItem[] => {
     { path: '/admin/redeem', label: t('nav.redeemCodes'), icon: TicketIcon, hideInSimpleMode: true },
     { path: '/admin/orders', label: t('nav.orderManagement'), icon: OrderListIcon, hideInSimpleMode: true },
     { path: '/admin/orders/dashboard', label: t('nav.paymentDashboard'), icon: ChartIcon, hideInSimpleMode: true },
-    { path: '/admin/nowpayments', label: 'NOWPayments', icon: CreditCardIcon, hideInSimpleMode: true },
+    { path: '/admin/nowpayments', label: t('nav.nowpayments'), icon: CreditCardIcon, hideInSimpleMode: true },
     { path: '/admin/usage', label: t('nav.usage'), icon: ChartIcon }
   ]
 

@@ -362,8 +362,12 @@ import Icon from '@/components/icons/Icon.vue'
 const { t, locale } = useI18n()
 const appStore = useAppStore()
 
-const isZhLocale = computed(() => String(locale.value || '').toLowerCase().startsWith('zh'))
-const displayLocale = computed(() => (isZhLocale.value ? 'zh-CN' : 'en-US'))
+const displayLocale = computed(() => {
+  const code = String(locale.value || '').toLowerCase()
+  if (code.startsWith('zh')) return 'zh-CN'
+  if (code.startsWith('ru')) return 'ru-RU'
+  return 'en-US'
+})
 
 // ==================== Site Settings (same as HomeView) ====================
 
