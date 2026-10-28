@@ -398,7 +398,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		TotpEnabled:                          settings[SettingKeyTotpEnabled] == "true",
 		TurnstileEnabled:                     settings[SettingKeyTurnstileEnabled] == "true",
 		TurnstileSiteKey:                     settings[SettingKeyTurnstileSiteKey],
-		SiteName:                             s.getStringOrDefault(settings, SettingKeySiteName, "Sub2API"),
+		SiteName:                             NormalizeSiteName(s.getStringOrDefault(settings, SettingKeySiteName, DefaultSiteName)),
 		SiteLogo:                             settings[SettingKeySiteLogo],
 		SiteSubtitle:                         s.getStringOrDefault(settings, SettingKeySiteSubtitle, "Subscription to API Conversion Platform"),
 		APIBaseURL:                           settings[SettingKeyAPIBaseURL],
@@ -734,7 +734,9 @@ func (s *SettingService) UpdateSettings(ctx context.Context, settings *SystemSet
 	}
 
 	// OEM设置
-	updates[SettingKeySiteName] = settings.SiteName
+	// The stored value is normalized so a save can never re-persist the legacy
+	// upstream default: an empty or "Sub2API" submission stores the brand.
+	updates[SettingKeySiteName] = NormalizeSiteName(settings.SiteName)
 	updates[SettingKeySiteLogo] = settings.SiteLogo
 	updates[SettingKeySiteSubtitle] = settings.SiteSubtitle
 	updates[SettingKeyAPIBaseURL] = settings.APIBaseURL
@@ -1074,10 +1076,10 @@ func (s *SettingService) IsTotpEncryptionKeyConfigured() bool {
 // GetSiteName 获取网站名称
 func (s *SettingService) GetSiteName(ctx context.Context) string {
 	value, err := s.settingRepo.GetValue(ctx, SettingKeySiteName)
-	if err != nil || value == "" {
-		return "Sub2API"
+	if err != nil {
+		return DefaultSiteName
 	}
-	return value
+	return NormalizeSiteName(value)
 }
 
 // GetDefaultConcurrency 获取默认并发量
@@ -1266,7 +1268,7 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeyEmailVerifyEnabled:               "false",
 		SettingKeyRegistrationEmailSuffixWhitelist: "[]",
 		SettingKeyPromoCodeEnabled:                 "false", // 默认禁用优惠码功能
-		SettingKeySiteName:                         "Sub2API",
+		SettingKeySiteName:                         DefaultSiteName,
 		SettingKeySiteLogo:                         "",
 		SettingKeyPurchaseSubscriptionEnabled:      "false",
 		SettingKeyPurchaseSubscriptionURL:          "",
@@ -1338,7 +1340,7 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 		TurnstileEnabled:                 settings[SettingKeyTurnstileEnabled] == "true",
 		TurnstileSiteKey:                 settings[SettingKeyTurnstileSiteKey],
 		TurnstileSecretKeyConfigured:     settings[SettingKeyTurnstileSecretKey] != "",
-		SiteName:                         s.getStringOrDefault(settings, SettingKeySiteName, "Sub2API"),
+		SiteName:                         NormalizeSiteName(s.getStringOrDefault(settings, SettingKeySiteName, DefaultSiteName)),
 		SiteLogo:                         settings[SettingKeySiteLogo],
 		SiteSubtitle:                     s.getStringOrDefault(settings, SettingKeySiteSubtitle, "Subscription to API Conversion Platform"),
 		APIBaseURL:                       settings[SettingKeyAPIBaseURL],

@@ -520,7 +520,7 @@ func TestAPIContracts(t *testing.T) {
 						"ops_realtime_monitoring_enabled": true,
 						"ops_query_mode_default": "auto",
 						"ops_metrics_interval_seconds": 60,
-						"site_name": "Sub2API",
+						"site_name": "BestAIPrices",
 						"site_logo": "",
 						"site_subtitle": "Subtitle",
 						"api_base_url": "https://api.example.com",
@@ -696,6 +696,9 @@ func newContractDeps(t *testing.T) *contractDeps {
 	v1Auth.Use(jwtAuth)
 	v1Auth.GET("/auth/me", authHandler.GetCurrentUser)
 
+	// Public (unauthenticated) settings — the config the cabinet boots from.
+	v1.GET("/settings/public", handler.NewSettingHandler(settingService, "test").GetPublicSettings)
+
 	v1Keys := v1.Group("")
 	v1Keys.Use(jwtAuth)
 	v1Keys.GET("/keys", apiKeyHandler.List)
@@ -847,7 +850,6 @@ func (r *stubUserRepo) DisableTotp(ctx context.Context, userID int64) error {
 func (r *stubUserRepo) GetOverdraftStats(ctx context.Context) (float64, int64, error) {
 	return 0, 0, nil
 }
-
 
 type stubApiKeyCache struct{}
 
@@ -1835,7 +1837,6 @@ func (r *stubUsageLogRepo) GetGrossMarginAnalytics(ctx context.Context, startTim
 	return &usagestats.GrossMarginAnalytics{}, nil
 }
 
-
 type stubSettingRepo struct {
 	all map[string]string
 }
@@ -1938,3 +1939,31 @@ var (
 	_ service.UsageLogRepository         = (*stubUsageLogRepo)(nil)
 	_ service.SettingRepository          = (*stubSettingRepo)(nil)
 )
+
+// The cabinet boots from GET /api/v1/settings/public, so the brand must be what
+// that response carries — including on an installation whose stored `site_name`
+// is still the legacy upstream default.
+func TestPublicSettingsPublishTheBrand(t *testing.T) {
+	cases := []struct {
+		name  string
+		store string
+		want  string
+	}{
+		{name: "legacy stored value publishes the brand", store: "Sub2API", want: service.DefaultSiteName},
+		{name: "unset publishes the brand", store: "", want: service.DefaultSiteName},
+		{name: "configured value wins", store: "My Gateway", want: "My Gateway"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			deps := newContractDeps(t)
+			deps.settingRepo.SetAll(map[string]string{service.SettingKeySiteName: tc.store})
+
+			status, body := doRequest(t, deps.router, http.MethodGet, "/api/v1/settings/public", "", nil)
+
+			require.Equal(t, http.StatusOK, status)
+			require.NotContains(t, body, `"site_name":"`+service.LegacySiteName+`"`)
+			require.Contains(t, body, `"site_name":"`+tc.want+`"`)
+		})
+	}
+}

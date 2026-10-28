@@ -13,7 +13,7 @@
 
         <!-- Brand Header: Exact match to bestaiprice.com from api-center -->
         <router-link to="/" class="bap-header-logo">
-          <BrandLogo :src="siteLogo" alt="Best Ai Price" class="bap-main-logo" />
+          <BrandLogo :src="siteLogo" :alt="displaySiteName" class="bap-main-logo" />
           <span class="bap-logo-text">{{ displaySiteName }}</span>
         </router-link>
 
@@ -222,6 +222,7 @@ import { useAdminSettingsStore } from '@/stores/adminSettings'
 import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
 import AnnouncementBell from '@/components/common/AnnouncementBell.vue'
 import BrandLogo from '@/components/common/BrandLogo.vue'
+import { resolveBrandName } from '@/constants/brand'
 import Icon from '@/components/icons/Icon.vue'
 
 const route = useRoute()
@@ -231,13 +232,7 @@ const authStore = useAuthStore()
 const adminSettingsStore = useAdminSettingsStore()
 
 const siteLogo = computed(() => appStore.siteLogo)
-const displaySiteName = computed(() => {
-  const name = appStore.siteName
-  if (!name || name === 'Sub2API') {
-    return 'Best Ai Price'
-  }
-  return name
-})
+const displaySiteName = computed(() => resolveBrandName(appStore.siteName))
 
 const user = computed(() => authStore.user)
 const dropdownOpen = ref(false)

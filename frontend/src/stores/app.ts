@@ -12,6 +12,7 @@ import {
   type ReleaseInfo
 } from '@/api/admin/system'
 import { getPublicSettings as fetchPublicSettingsAPI } from '@/api/auth'
+import { BRAND_NAME, resolveBrandName } from '@/constants/brand'
 
 type ToastOptions = {
   title?: string
@@ -32,7 +33,7 @@ export const useAppStore = defineStore('app', () => {
   // Public settings cache state
   const publicSettingsLoaded = ref<boolean>(false)
   const publicSettingsLoading = ref<boolean>(false)
-  const siteName = ref<string>('Best Ai Price')
+  const siteName = ref<string>(BRAND_NAME)
   const siteLogo = ref<string>('')
   const siteVersion = ref<string>('')
   const contactInfo = ref<string>('')
@@ -336,7 +337,7 @@ export const useAppStore = defineStore('app', () => {
    */
   function applySettings(config: PublicSettings): void {
     cachedPublicSettings.value = config
-    siteName.value = (!config.site_name || config.site_name === 'Sub2API') ? 'Best Ai Price' : config.site_name
+    siteName.value = resolveBrandName(config.site_name)
     siteLogo.value = config.site_logo || ''
     siteVersion.value = config.version || ''
     contactInfo.value = config.contact_info || ''

@@ -797,9 +797,10 @@ sub2api/
 - **Brand Header Alignment (`bestaiprice.com`)**:
   - Full-width top header (`AppHeader.vue`) on `#ededed` background with 68px height.
   - Features the native vector calligraphy "B" with "Ai" pill badge (`BrandLogo.vue`) styled identically to `api-center` (`width: 62px; height: 62px; top: -18px;`).
-  - Brand typography: `Best Ai Price` set in `Inter Tight`, 24px font size, font-weight 500, letter-spacing `-0.01em`, color `#090c0a`.
+  - Brand typography: `BestAIPrices` set in `Inter Tight`, 24px font size, font-weight 500, letter-spacing `-0.01em`, color `#090c0a`.
   - Body container (`AppLayout.vue`) organizes sidebar (`#f6f6f6`) and main content area (`#ffffff`) as sleek `rounded-2xl` cards directly beneath the top header, reproducing the exact aesthetic of `bestaiprice.com`.
-  - Global `siteName` fallback resolves to `'Best Ai Price'` in `stores/app.ts` whenever unconfigured or set to legacy defaults.
+  - **Deployment brand — one source of truth**: the brand string is `BestAIPrices`. It is defined once per side — `BRAND_NAME` / `resolveBrandName()` in `frontend/src/constants/brand.ts` and `DefaultSiteName` / `NormalizeSiteName()` in `backend/internal/service/brand.go` — and every published site name resolves through them: the `site_name` setting on `GET /api/v1/settings/public` (and the injected `<title>` / `window.__APP_CONFIG__` of the embedded SPA), page titles (`router/title.ts`, `main.ts`, the router guard), the header / sidebar / auth-screen brand, signup, verification and password-reset e-mails, the TOTP issuer and the payment subject shown on the provider's checkout page.
+  - **Legacy value is treated as "not configured"**: installations set up by the upstream wizard have `site_name = "Sub2API"` persisted in the database. `NormalizeSiteName` (backend) and `resolveBrandName` (frontend) map an empty value AND that legacy default onto the brand, so those deployments publish `BestAIPrices` with no manual settings edit; any other value the admin configures wins unchanged. Admin settings are normalized on WRITE as well, so saving can never re-persist the legacy default. Covered by `TestSettingService_GetPublicSettings_PublishesTheBrand` (service) and `TestPublicSettingsPublishTheBrand` (endpoint contract).
   - Fully responsive: scales smoothly to mobile with off-canvas sidebar drawer and scalable header branding.
 
 ### Running Frontend Verification

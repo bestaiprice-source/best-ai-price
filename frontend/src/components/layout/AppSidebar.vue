@@ -9,7 +9,7 @@
     <!-- Mobile Brand Header (shown when mobile drawer is open) -->
     <div v-if="mobileOpen" class="flex h-16 items-center justify-between border-b border-black/[0.07] px-4 lg:hidden">
       <router-link to="/" class="bap-sidebar-brand" @click="closeMobile">
-        <BrandLogo :src="siteLogo" alt="Best Ai Price" class="bap-sidebar-logo" />
+        <BrandLogo :src="siteLogo" :alt="displaySiteName" class="bap-sidebar-logo" />
         <span class="bap-sidebar-name">{{ displaySiteName }}</span>
       </router-link>
       <button
@@ -171,6 +171,7 @@ import { useI18n } from 'vue-i18n'
 import { useAdminSettingsStore, useAppStore, useAuthStore, useOnboardingStore } from '@/stores'
 import VersionBadge from '@/components/common/VersionBadge.vue'
 import BrandLogo from '@/components/common/BrandLogo.vue'
+import { resolveBrandName } from '@/constants/brand'
 import { sanitizeSvg } from '@/utils/sanitize'
 
 interface NavItem {
@@ -200,13 +201,7 @@ const isAdmin = computed(() => authStore.isAdmin)
 const siteName = computed(() => appStore.siteName)
 const siteLogo = computed(() => appStore.siteLogo)
 const siteVersion = computed(() => appStore.siteVersion)
-const displaySiteName = computed(() => {
-  const name = siteName.value
-  if (!name || name === 'Sub2API') {
-    return 'Best Ai Price'
-  }
-  return name
-})
+const displaySiteName = computed(() => resolveBrandName(siteName.value))
 
 const DashboardIcon = {
   render: () =>

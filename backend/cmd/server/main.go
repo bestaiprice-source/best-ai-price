@@ -57,7 +57,7 @@ func main() {
 	flag.Parse()
 
 	if *showVersion {
-		log.Printf("Sub2API %s (commit: %s, built: %s)\n", Version, Commit, Date)
+		log.Printf("BestAIPrices %s (commit: %s, built: %s)\n", Version, Commit, Date)
 		return
 	}
 
@@ -110,7 +110,7 @@ func runSetupServer() {
 
 	addr := cfg.Server.Address()
 	log.Printf("Setup wizard available at http://%s", addr)
-	log.Println("Complete the setup wizard to configure Sub2API")
+	log.Println("Complete the setup wizard to configure BestAIPrices")
 
 	httpServer := serverruntime.NewHTTPServer(cfg, serverruntime.BuildHTTPHandler(cfg, r))
 	runtime := serverruntime.ResolveIngressRuntime(cfg, httpServer)

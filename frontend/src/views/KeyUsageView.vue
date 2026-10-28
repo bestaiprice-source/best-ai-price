@@ -356,6 +356,7 @@ import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores'
 import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
 import BrandLogo from '@/components/common/BrandLogo.vue'
+import { resolveBrandName } from '@/constants/brand'
 import Icon from '@/components/icons/Icon.vue'
 
 const { t, locale } = useI18n()
@@ -366,7 +367,7 @@ const displayLocale = computed(() => (isZhLocale.value ? 'zh-CN' : 'en-US'))
 
 // ==================== Site Settings (same as HomeView) ====================
 
-const siteName = computed(() => appStore.cachedPublicSettings?.site_name || appStore.siteName || 'Sub2API')
+const siteName = computed(() => resolveBrandName(appStore.cachedPublicSettings?.site_name || appStore.siteName))
 const siteLogo = computed(() => appStore.cachedPublicSettings?.site_logo || appStore.siteLogo || '')
 const docUrl = computed(() => appStore.cachedPublicSettings?.doc_url || appStore.docUrl || '')
 const githubUrl = 'https://github.com/DR-lin-eng/sub2api'

@@ -2365,6 +2365,7 @@ import type {
 } from '@/api/admin/settings'
 import type { AdminGroup } from '@/types'
 import AppLayout from '@/components/layout/AppLayout.vue'
+import { BRAND_NAME } from '@/constants/brand'
 import Icon from '@/components/icons/Icon.vue'
 import Select from '@/components/common/Select.vue'
 import GroupBadge from '@/components/common/GroupBadge.vue'
@@ -2506,7 +2507,7 @@ const form = reactive<SettingsForm>({
   default_rate_multiplier: 1.10,
   model_markups: {} as Record<string, number>,
   default_subscriptions: [],
-  site_name: 'Sub2API',
+  site_name: BRAND_NAME,
   site_logo: '',
   site_subtitle: 'Subscription to API Conversion Platform',
   api_base_url: '',

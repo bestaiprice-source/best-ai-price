@@ -3,7 +3,7 @@
     <img
       v-if="!useNativeSvg && resolvedSrc"
       :src="resolvedSrc"
-      :alt="alt || 'Best Ai Price'"
+      :alt="alt || BRAND_NAME"
       class="h-full w-full object-contain"
       @error="loadFailed = true"
     />
@@ -15,7 +15,7 @@
       xmlns="http://www.w3.org/2000/svg"
       class="h-full w-full object-contain"
       role="img"
-      :aria-label="alt || 'Best Ai Price'"
+      :aria-label="alt || BRAND_NAME"
     >
       <rect x="230" y="232" width="97" height="68" rx="19" fill="#4791FF" />
       <path
@@ -34,6 +34,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { resolveAssetUrl } from '@/utils/url'
+import { BRAND_NAME } from '@/constants/brand'
 
 interface Props {
   src?: string | null
