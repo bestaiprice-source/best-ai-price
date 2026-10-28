@@ -1681,7 +1681,11 @@ const loadApiKeys = async () => {
       try {
         const usageResponse = await usageAPI.getDashboardApiKeysUsage(keyIds, { signal })
         if (signal.aborted) return
-        usageStats.value = usageResponse.stats
+        // A response without `stats` must not leave this undefined: the table template
+        // reads `usageStats[row.id]`, and an undefined map throws on EVERY row render —
+        // which leaves the table empty ("Showing 1 to 1 of 1 results" with no rows) and
+        // aborts the in-flight patch, so a dialog that was just told to close stays on screen.
+        usageStats.value = usageResponse?.stats ?? {}
       } catch (e) {
         if (!isAbortError(e)) {
           console.error('Failed to load usage stats:', e)
@@ -2071,6 +2075,10 @@ const handleDelete = async () => {
 const closeModals = () => {
   showCreateModal.value = false
   showEditModal.value = false
+  // Never leave the form's in-flight flag set: the create/edit dialog renders its submit
+  // button disabled and labelled "Saving…" while `submitting` is true, so a close that
+  // raced an in-flight submit would leave a dead-looking dialog behind.
+  submitting.value = false
   selectedKey.value = null
   formData.value = {
     user_id: null,

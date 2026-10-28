@@ -288,6 +288,7 @@ export default {
     yes: 'Yes',
     no: 'No',
     all: 'All',
+    allUsers: 'All Users',
     none: 'None',
     noData: 'No data',
     expand: 'Expand',
