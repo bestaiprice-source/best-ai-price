@@ -124,6 +124,25 @@ export function getApiBaseUrl(): string {
 }
 
 /**
+ * Returns the API base URL a CLIENT should be configured with (the value shown in the
+ * docs and the created-key Quick Start): the `api_base_url` public setting when the
+ * admin set one, otherwise the app's own base URL — origin INCLUDING the reverse-proxy
+ * sub-path (`https://bestaiprice.com/gateway`).
+ *
+ * Deliberately NOT `window.location.origin`: the gateway is served under a sub-path
+ * (Vite `base`, e.g. `/gateway/`), so the bare origin points at the catalog site and
+ * every documented endpoint (`/v1/chat/completions`, `/v1/messages`, `/v1/models`, …)
+ * answers with an HTML 404 there.
+ *
+ * @param configured raw `api_base_url` setting value (may be empty/undefined)
+ */
+export function getPublicApiBaseUrl(configured?: string | null): string {
+  const raw = String(configured ?? '').trim()
+  const base = raw || getPublicAppBaseUrl()
+  return base.replace(/\/+$/, '')
+}
+
+/**
  * Returns the Setup base URL incorporating the base path if VITE_SETUP_BASE_URL is not set.
  */
 export function getSetupBaseUrl(): string {

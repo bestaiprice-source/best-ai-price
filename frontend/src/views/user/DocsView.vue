@@ -263,6 +263,7 @@ import { useRoute } from 'vue-router'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import { useAppStore } from '@/stores'
 import { useAuthStore } from '@/stores/auth'
+import { getPublicApiBaseUrl } from '@/utils/url'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -284,13 +285,11 @@ function toggleFaq(idx: number) {
   expandedFaq.value = expandedFaq.value === idx ? null : idx
 }
 
-// The public API base URL, as configured in Admin Settings; falls back to the
-// current origin so the examples are always copy-paste runnable.
-const baseUrl = computed(() => {
-  const raw = String(appStore.cachedPublicSettings?.api_base_url || appStore.apiBaseUrl || '').trim()
-  const url = raw || window.location.origin
-  return url.replace(/\/+$/, '')
-})
+// The public API base URL, as configured in Admin Settings; falls back to the app's
+// own base (origin + sub-path) so the examples are always copy-paste runnable.
+const baseUrl = computed(() =>
+  getPublicApiBaseUrl(appStore.cachedPublicSettings?.api_base_url || appStore.apiBaseUrl)
+)
 
 async function copy(text: string) {
   try {

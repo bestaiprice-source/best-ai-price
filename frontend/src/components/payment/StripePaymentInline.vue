@@ -70,6 +70,7 @@ import { useRouter } from 'vue-router'
 import { extractI18nErrorMessage } from '@/utils/apiError'
 import { paymentAPI } from '@/api/payment'
 import { useAppStore } from '@/stores'
+import { getPublicAppBaseUrl } from '@/utils/url'
 import { getPaymentPopupFeatures } from '@/components/payment/providerConfig'
 import type { Stripe, StripeElements } from '@stripe/stripe-js'
 import Icon from '@/components/icons/Icon.vue'
@@ -175,7 +176,7 @@ async function handlePay() {
     const { error: stripeError } = await stripeInstance.confirmPayment({
       elements: elementsInstance,
       confirmParams: {
-        return_url: window.location.origin + '/payment/result?order_id=' + props.orderId + '&status=success',
+        return_url: getPublicAppBaseUrl() + '/payment/result?order_id=' + props.orderId + '&status=success',
       },
       redirect: 'if_required',
     })

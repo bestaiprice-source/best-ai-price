@@ -120,7 +120,7 @@ async function initStripe(clientSecret: string, publishableKey: string) {
     const stripe = await loadStripe(publishableKey)
     if (!stripe) { error.value = t('payment.stripeLoadFailed'); return }
 
-    const returnUrl = window.location.origin + '/payment/result?order_id=' + orderId + '&status=success'
+    const returnUrl = getPublicAppBaseUrl() + '/payment/result?order_id=' + orderId + '&status=success'
 
     if (method === 'alipay') {
       // Alipay: redirect this popup to Alipay payment page
@@ -147,7 +147,7 @@ async function initStripe(clientSecret: string, publishableKey: string) {
   }
 }
 
-import { getApiBaseUrl } from '@/utils/url'
+import { getApiBaseUrl, getPublicAppBaseUrl } from '@/utils/url'
 
 function startPolling() {
   pollTimer = setInterval(async () => {

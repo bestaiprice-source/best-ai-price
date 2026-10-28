@@ -70,6 +70,7 @@ import Icon from '@/components/icons/Icon.vue'
 import { useAppStore } from '@/stores'
 import { useClipboard } from '@/composables/useClipboard'
 import { buildApiSnippet, type ApiSnippetLanguage, type ApiSnippetProtocol } from '@/utils/apiSnippets'
+import { getPublicApiBaseUrl } from '@/utils/url'
 
 const props = defineProps<{
   /** The key to embed in the snippets. */
@@ -100,11 +101,8 @@ const languages = computed(() => [
 
 const moreKeys = computed(() => props.moreKeys ?? 0)
 
-/** Public gateway base URL, falling back to the current origin. */
-const gatewayBase = computed(() => {
-  const configured = String(appStore.cachedPublicSettings?.api_base_url || '').trim()
-  return (configured || window.location.origin).replace(/\/+$/, '')
-})
+/** Public gateway base URL: the api_base_url setting, else the app base (origin + sub-path). */
+const gatewayBase = computed(() => getPublicApiBaseUrl(appStore.cachedPublicSettings?.api_base_url))
 
 /** Base URL a client of the selected protocol should point at. */
 const baseURL = computed(() => (activeProtocol.value === 'openai' ? `${gatewayBase.value}/v1` : gatewayBase.value))

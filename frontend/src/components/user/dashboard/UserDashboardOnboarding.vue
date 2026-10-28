@@ -157,6 +157,7 @@ import { useAppStore } from '@/stores'
 import { useClipboard } from '@/composables/useClipboard'
 import { keysAPI } from '@/api'
 import { buildApiSnippet, type ApiSnippetLanguage } from '@/utils/apiSnippets'
+import { getPublicApiBaseUrl } from '@/utils/url'
 import type { ApiKey } from '@/types'
 
 const props = defineProps<{
@@ -217,11 +218,8 @@ const steps = computed(() => [
 const doneCount = computed(() => steps.value.filter((step) => step.done).length)
 const progressPercent = computed(() => Math.round((doneCount.value / steps.value.length) * 100))
 
-/** Public gateway base URL, falling back to the current origin. */
-const gatewayBase = computed(() => {
-  const configured = String(appStore.cachedPublicSettings?.api_base_url || '').trim()
-  return (configured || window.location.origin).replace(/\/+$/, '')
-})
+/** Public gateway base URL: the api_base_url setting, else the app base (origin + sub-path). */
+const gatewayBase = computed(() => getPublicApiBaseUrl(appStore.cachedPublicSettings?.api_base_url))
 
 /** OpenAI-compatible base — the protocol the cURL example targets. */
 const openAIBase = computed(() => `${gatewayBase.value}/v1`)

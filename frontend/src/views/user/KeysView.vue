@@ -1246,6 +1246,7 @@ import QuickStart from '@/components/keys/QuickStart.vue'
 import type { Column } from '@/components/common/types'
 import type { BatchApiKeyUsageStats } from '@/api/usage'
 import { formatDateTime } from '@/utils/format'
+import { getPublicApiBaseUrl } from '@/utils/url'
 
 // Helper to format date for datetime-local input
 const formatDateTimeLocal = (isoDate: string): string => {
@@ -2179,7 +2180,7 @@ const importToCcswitch = async (row: ApiKey) => {
 }
 
 const executeCcsImport = (row: ApiKey, clientType: 'claude' | 'gemini') => {
-  const baseUrl = publicSettings.value?.api_base_url || window.location.origin
+  const baseUrl = getPublicApiBaseUrl(publicSettings.value?.api_base_url)
   const platform = row.group?.platform || 'anthropic'
 
   // Determine app name and endpoint based on platform and client type

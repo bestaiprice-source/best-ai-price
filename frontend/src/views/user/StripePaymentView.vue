@@ -101,6 +101,7 @@ import { usePaymentStore } from '@/stores/payment'
 import { paymentAPI } from '@/api/payment'
 import { extractI18nErrorMessage } from '@/utils/apiError'
 import { isMobileDevice } from '@/utils/device'
+import { getPublicAppBaseUrl } from '@/utils/url'
 import type { PaymentOrder } from '@/types/payment'
 import type { Stripe, StripeElements } from '@stripe/stripe-js'
 import AppLayout from '@/components/layout/AppLayout.vue'
@@ -179,7 +180,7 @@ onUnmounted(() => {
 
 async function confirmAlipay(stripe: Stripe, clientSecret: string, orderId: number) {
   redirecting.value = true
-  const returnUrl = window.location.origin + '/payment/result?order_id=' + orderId + '&status=success'
+  const returnUrl = getPublicAppBaseUrl() + '/payment/result?order_id=' + orderId + '&status=success'
   const { error } = await stripe.confirmAlipayPayment(clientSecret, { return_url: returnUrl })
   if (error) {
     redirecting.value = false
@@ -237,7 +238,7 @@ async function handleGenericPay() {
     const { error } = await stripeInstance.confirmPayment({
       elements: elementsInstance,
       confirmParams: {
-        return_url: window.location.origin + '/payment/result?order_id=' + route.query.order_id + '&status=success',
+        return_url: getPublicAppBaseUrl() + '/payment/result?order_id=' + route.query.order_id + '&status=success',
       },
       redirect: 'if_required',
     })
