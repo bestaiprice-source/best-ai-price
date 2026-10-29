@@ -22,8 +22,11 @@ type ExecutionNode struct {
 	// derivation. The engine prices a candidate node with its own groups, so a
 	// pinned group must travel with the node.
 	TierGroups map[string]string `json:"tier_groups,omitempty"`
-	Priority   int               `json:"priority"`
-	UpdatedAt  time.Time         `json:"updated_at"`
+	// ObservedGroupRatio is the pricing FLOOR the provider's own accounting implies
+	// for this node (account.Extra observed_group_ratio). 0 = nothing measured.
+	ObservedGroupRatio float64   `json:"observed_group_ratio,omitempty"`
+	Priority           int       `json:"priority"`
+	UpdatedAt          time.Time `json:"updated_at"`
 }
 
 type NodeRuntimeState struct {

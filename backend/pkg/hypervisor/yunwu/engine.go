@@ -1461,17 +1461,22 @@ func (yh *YunwuHypervisor) getAllYunwuNodes(ctx context.Context) ([]health.Execu
 		provider := ParseNodeProvider(acc.Extra)
 		tiers := SupportedTiersForAccount(acc.Credentials, acc.Extra)
 		tierGroups := NodeTierGroups(acc.Extra)
+		var observedRatio float64
+		if ObservedRatioEnabled(acc.Extra) {
+			observedRatio = ObservedGroupRatioFromExtra(acc.Extra)
+		}
 		if err != nil || node == nil {
 			node = &health.ExecutionNode{
-				NodeID:       nodeID,
-				AccountName:  acc.Name,
-				Provider:     provider,
-				State:        "healthy",
-				Capabilities: families,
-				Tiers:        tiers,
-				TierGroups:   tierGroups,
-				Priority:     acc.Priority,
-				UpdatedAt:    time.Now(),
+				NodeID:             nodeID,
+				AccountName:        acc.Name,
+				Provider:           provider,
+				State:              "healthy",
+				Capabilities:       families,
+				Tiers:              tiers,
+				TierGroups:         tierGroups,
+				ObservedGroupRatio: observedRatio,
+				Priority:           acc.Priority,
+				UpdatedAt:          time.Now(),
 			}
 			_ = yh.nm.SaveNode(ctx, node)
 		} else {
@@ -1480,6 +1485,7 @@ func (yh *YunwuHypervisor) getAllYunwuNodes(ctx context.Context) ([]health.Execu
 			node.Provider = provider
 			node.Tiers = tiers
 			node.TierGroups = tierGroups
+			node.ObservedGroupRatio = observedRatio
 			node.Priority = acc.Priority
 		}
 		list = append(list, *node)

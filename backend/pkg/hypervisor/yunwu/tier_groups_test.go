@@ -123,11 +123,12 @@ func seedTierGroupTestPool(t *testing.T, node *health.ExecutionNode, ownerID str
 	return yh, rt
 }
 
-// TestNodeWithoutGroupFallsBackToTheOfficialRate: with nothing configured a
-// request is priced at the provider's OFFICIAL rate (its `default` group), never
-// at the cheapest advertised group — understating the cost is what made the
-// published price 20x below what the provider actually charges.
-func TestNodeWithoutGroupFallsBackToTheOfficialRate(t *testing.T) {
+// TestNodeWithoutGroupUsesTheTierDefaults: with nothing configured, smart is
+// priced at the provider's OFFICIAL rate (its unlisted `default` group => 1.0) and
+// fast at the official rate plus its safety margin (1.1) — never at the cheapest
+// advertised group, which is what made the published price 20x below the real
+// charge. Fast is priceable without configuring anything.
+func TestNodeWithoutGroupUsesTheTierDefaults(t *testing.T) {
 	owner := "tier-group-owner-default"
 	node := &health.ExecutionNode{
 		NodeID:     "110",
@@ -140,18 +141,64 @@ func TestNodeWithoutGroupFallsBackToTheOfficialRate(t *testing.T) {
 
 	in, _, ok := yh.PriceManager().ResolveNodePrice(ctx, node, tierGroupTestModel)
 	require.True(t, ok)
-	assert.InDelta(t, 0.0025, in, 1e-9, "the unlisted default group must bill at the official rate")
+	assert.InDelta(t, 0.0025*DefaultSmartGroupRatio, in, 1e-9,
+		"smart bills at the official rate when the group is unknown")
 
-	// Fast is priceable as well (same default group) — no more 400 on a fast key.
 	fastCtx := runtime.ContextWithTier(ctx, runtime.TierFast)
 	in, _, ok = yh.PriceManager().ResolveNodePrice(fastCtx, node, tierGroupTestModel)
 	require.True(t, ok)
-	assert.InDelta(t, 0.0025, in, 1e-9)
+	assert.InDelta(t, 0.0025*DefaultFastGroupRatio, in, 1e-9,
+		"fast bills at the official rate plus its safety margin")
 
 	payload := []byte(`{"model":"` + tierGroupTestModel + `"}`)
 	_, err := yh.HandleRequest(fastCtx, owner, "conv-default-fast", payload, io.Discard, "openai")
 	require.NoError(t, err)
 	assert.Equal(t, "110", rt.lastNodeID)
+}
+
+// TestNodeObservedRatioIsAPriceFloor: the reconciliation floor (option 2) lifts a
+// node's price to what the provider is known to charge, so a group assumption that
+// turned out too optimistic can never sell below cost.
+func TestNodeObservedRatioIsAPriceFloor(t *testing.T) {
+	owner := "tier-group-owner-observed"
+	node := &health.ExecutionNode{
+		NodeID:             "113",
+		Provider:           "openlux",
+		State:              "healthy",
+		TierGroups:         NodeTierGroups(nil),
+		ObservedGroupRatio: 1.4,
+	}
+	yh, _ := seedTierGroupTestPool(t, node, owner)
+	ctx := context.Background()
+
+	in, _, ok := yh.PriceManager().ResolveNodePrice(ctx, node, tierGroupTestModel)
+	require.True(t, ok)
+	assert.InDelta(t, 0.0025*1.4, in, 1e-9, "the observed ratio must raise the smart price")
+
+	fastCtx := runtime.ContextWithTier(ctx, runtime.TierFast)
+	in, _, ok = yh.PriceManager().ResolveNodePrice(fastCtx, node, tierGroupTestModel)
+	require.True(t, ok)
+	assert.InDelta(t, 0.0025*DefaultFastGroupRatio*1.4, in, 1e-9,
+		"the correction multiplies the fast default (it is defined against the basis we billed at)")
+}
+
+// A floor below the assumption changes nothing (we never lower a price from a
+// cheaper reading).
+func TestNodeObservedRatioBelowAssumptionIsIgnored(t *testing.T) {
+	owner := "tier-group-owner-observed-low"
+	node := &health.ExecutionNode{
+		NodeID:             "114",
+		Provider:           "openlux",
+		State:              "healthy",
+		TierGroups:         NodeTierGroups(map[string]any{ExtraSmartGroupName: "Azure-Gpt-6"}),
+		ObservedGroupRatio: 0.5,
+	}
+	yh, _ := seedTierGroupTestPool(t, node, owner)
+	ctx := context.Background()
+
+	in, _, ok := yh.PriceManager().ResolveNodePrice(ctx, node, tierGroupTestModel)
+	require.True(t, ok)
+	assert.InDelta(t, 0.0025*0.9, in, 1e-9, "the pinned group's rate stands")
 }
 
 // TestNodePinnedGroupWinsOverTheCheapestAdvertisedGroup: pinning the real

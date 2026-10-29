@@ -196,8 +196,8 @@ func (ppm *ProviderPriceManager) lookupModelInPricesMatch(prices map[string]Prov
 // pricedForTier turns a matched price into the request's tier price plus the
 // provider-side model name, failing closed when the provider prices per group
 // but publishes no rate for the request's tier.
-func (ppm *ProviderPriceManager) pricedForTier(ctx context.Context, p ProviderModelPrice, matchedModel string, groups map[string]string) (float64, float64, string, bool) {
-	in, out, ok := ppm.priceForTier(ctx, p, groups)
+func (ppm *ProviderPriceManager) pricedForTier(ctx context.Context, p ProviderModelPrice, matchedModel string, node *health.ExecutionNode) (float64, float64, string, bool) {
+	in, out, ok := ppm.priceForTier(ctx, p, node)
 	if !ok {
 		return 0, 0, "", false
 	}
@@ -438,9 +438,17 @@ func (ppm *ProviderPriceManager) fetchProviderPrices(ctx context.Context, endpoi
 // of the group its key was issued in — the group pinned on the node when one is
 // configured, otherwise the legacy derivation (cheapest enabled group for smart,
 // the literal `fast` group for fast, fail closed when it is unknown).
-func (ppm *ProviderPriceManager) priceForTier(ctx context.Context, p ProviderModelPrice, groups map[string]string) (float64, float64, bool) {
+func (ppm *ProviderPriceManager) priceForTier(ctx context.Context, p ProviderModelPrice, node *health.ExecutionNode) (float64, float64, bool) {
 	tier := TierFromContext(ctx)
-	ratio := ResolveTierGroupRatioForGroup(p.GroupRatios, GroupNameForTier(groups, tier))
+	var groups map[string]string
+	var observed float64
+	if node != nil {
+		groups = node.TierGroups
+		observed = node.ObservedGroupRatio
+	}
+	// Priced by the group this key bills in, then floored at what the provider is
+	// known to charge (option 2: never sell below the observed cost).
+	ratio := ApplyObservedFloor(ResolveTierGroupRatioForGroup(p.GroupRatios, tier, GroupNameForTier(groups, tier)), observed)
 	if len(p.GroupRatios) == 0 {
 		// The provider does not price per group: the stored price already is the
 		// only (and therefore tier-independent) price.
@@ -500,7 +508,7 @@ func (ppm *ProviderPriceManager) ResolveNodePriceMatch(ctx context.Context, node
 			if !hasExp || time.Now().Before(exp) {
 				if p, matched, found := ppm.lookupModelInPricesMatch(prices, model); found {
 					ppm.mu.RUnlock()
-					return ppm.pricedForTier(ctx, p, matched, node.TierGroups)
+					return ppm.pricedForTier(ctx, p, matched, node)
 				}
 			}
 		}
@@ -582,7 +590,7 @@ func (ppm *ProviderPriceManager) ResolveNodePriceMatch(ctx context.Context, node
 			if !hasExp || time.Now().Before(exp) {
 				ppm.mu.RUnlock()
 				if p, matched, found := ppm.lookupModelInPricesMatch(prices, model); found {
-					return ppm.pricedForTier(ctx, p, matched, node.TierGroups)
+					return ppm.pricedForTier(ctx, p, matched, node)
 				}
 				return 0, 0, "", false
 			}
@@ -607,7 +615,7 @@ func (ppm *ProviderPriceManager) ResolveNodePriceMatch(ctx context.Context, node
 			ppm.mu.Unlock()
 
 			if p, matched, found := ppm.lookupModelInPricesMatch(fetchedPrices, model); found {
-				return ppm.pricedForTier(ctx, p, matched, node.TierGroups)
+				return ppm.pricedForTier(ctx, p, matched, node)
 			}
 			return 0, 0, "", false
 		}
@@ -618,7 +626,7 @@ func (ppm *ProviderPriceManager) ResolveNodePriceMatch(ctx context.Context, node
 		if prices, ok := ppm.cache[pricingURL]; ok {
 			ppm.mu.RUnlock()
 			if p, matched, found := ppm.lookupModelInPricesMatch(prices, model); found {
-				return ppm.pricedForTier(ctx, p, matched, node.TierGroups)
+				return ppm.pricedForTier(ctx, p, matched, node)
 			}
 		} else {
 			ppm.mu.RUnlock()
@@ -634,7 +642,7 @@ func (ppm *ProviderPriceManager) ResolveNodePriceMatch(ctx context.Context, node
 			if !hasExp || time.Now().Before(exp) {
 				if p, matched, found := ppm.lookupModelInPricesMatch(prices, model); found {
 					ppm.mu.RUnlock()
-					return ppm.pricedForTier(ctx, p, matched, node.TierGroups)
+					return ppm.pricedForTier(ctx, p, matched, node)
 				}
 			}
 		}

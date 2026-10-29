@@ -37,10 +37,10 @@ type RecordYunwuUsageInput struct {
 const yunwuProviderScopeTTL = 60 * time.Second
 
 var (
-	yunwuScopeMu          sync.RWMutex
-	yunwuScopeAt          time.Time
-	yunwuScopeByFamily    map[string][]string
-	yunwuTierGroupsByProv map[string]yunwu.TierGroupNames
+	yunwuScopeMu       sync.RWMutex
+	yunwuScopeAt       time.Time
+	yunwuScopeByFamily map[string][]string
+	yunwuPricingScope  YunwuPricingScope
 )
 
 // yunwuProviderScope returns the unofficial providers we actually hold
@@ -59,32 +59,32 @@ func yunwuProviderScope(ctx context.Context, repo AccountRepository) map[string]
 // `fast_group_name` in account.Extra). The catalog and the charge resolve a
 // tier's rate from this map, so the published price equals the billed one.
 func yunwuTierGroupScope(ctx context.Context, repo AccountRepository) map[string]yunwu.TierGroupNames {
-	_, groups := yunwuScopeSnapshot(ctx, repo)
-	return groups
+	_, pricing := yunwuScopeSnapshot(ctx, repo)
+	return pricing.TierGroups
 }
 
 // yunwuScopeSnapshot returns the cached provider scope and tier-group map,
 // computing both in ONE pass over the schedulable accounts.
-func yunwuScopeSnapshot(ctx context.Context, repo AccountRepository) (map[string][]string, map[string]yunwu.TierGroupNames) {
+func yunwuScopeSnapshot(ctx context.Context, repo AccountRepository) (map[string][]string, YunwuPricingScope) {
 	if repo == nil {
-		return nil, nil
+		return nil, YunwuPricingScope{}
 	}
 	yunwuScopeMu.RLock()
 	if time.Since(yunwuScopeAt) < yunwuProviderScopeTTL {
-		scope, groups := yunwuScopeByFamily, yunwuTierGroupsByProv
+		family, pricing := yunwuScopeByFamily, yunwuPricingScope
 		yunwuScopeMu.RUnlock()
-		return scope, groups
+		return family, pricing
 	}
 	yunwuScopeMu.RUnlock()
 
-	scope, groups := computeYunwuScope(ctx, repo)
+	family, pricing := computeYunwuScope(ctx, repo)
 
 	yunwuScopeMu.Lock()
-	yunwuScopeByFamily = scope
-	yunwuTierGroupsByProv = groups
+	yunwuScopeByFamily = family
+	yunwuPricingScope = pricing
 	yunwuScopeAt = time.Now()
 	yunwuScopeMu.Unlock()
-	return scope, groups
+	return family, pricing
 }
 
 func computeYunwuProviderScope(ctx context.Context, repo AccountRepository) map[string][]string {
@@ -92,13 +92,14 @@ func computeYunwuProviderScope(ctx context.Context, repo AccountRepository) map[
 	return scope
 }
 
-func computeYunwuScope(ctx context.Context, repo AccountRepository) (map[string][]string, map[string]yunwu.TierGroupNames) {
+func computeYunwuScope(ctx context.Context, repo AccountRepository) (map[string][]string, YunwuPricingScope) {
 	accounts, err := repo.ListSchedulable(ctx)
 	if err != nil {
-		return nil, nil
+		return nil, YunwuPricingScope{}
 	}
 	scope := make(map[string][]string)
 	tierGroups := make(map[string]yunwu.TierGroupNames)
+	observed := make(map[string]float64)
 	seen := make(map[string]map[string]bool)
 	add := func(family, provider string) {
 		if family == "" || provider == "" {
@@ -136,12 +137,21 @@ func computeYunwuScope(ctx context.Context, repo AccountRepository) (map[string]
 			canonical := CanonicalPricingProvider(provider)
 			tierGroups[canonical] = tierGroups[canonical].Merge(pinned)
 		}
+		// The observed multiplier is a FLOOR: when several accounts of one provider
+		// disagree, the highest (safest) reading wins so a cheap-looking account can
+		// never pull the price below what another account really pays.
+		if ratio := yunwu.ObservedGroupRatioFromExtra(acc.Extra); ratio > 0 && yunwu.ObservedRatioEnabled(acc.Extra) {
+			canonical := CanonicalPricingProvider(provider)
+			if ratio > observed[canonical] {
+				observed[canonical] = ratio
+			}
+		}
 		// A node only prices models of the families it advertises.
 		for _, fam := range yunwu.ParseNodeModelFamilies(acc.Extra) {
 			add(yunwu.CanonicalFamily(fam), provider)
 		}
 	}
-	return scope, tierGroups
+	return scope, YunwuPricingScope{TierGroups: tierGroups, Observed: observed}
 }
 
 // withYunwuProviderScope attaches the account-derived, family-aware provider scope
@@ -149,42 +159,74 @@ func computeYunwuScope(ctx context.Context, repo AccountRepository) (map[string]
 // provider. The pinned tier groups travel in the same context, so the price a
 // tier resolves to is the price of the group its key bills in.
 func withYunwuProviderScope(ctx context.Context, repo AccountRepository) context.Context {
-	scope, tierGroups := yunwuScopeSnapshot(ctx, repo)
-	if len(tierGroups) > 0 {
-		ctx = ContextWithYunwuTierGroups(ctx, tierGroups)
+	familyScope, pricing := yunwuScopeSnapshot(ctx, repo)
+	if len(pricing.TierGroups) > 0 || len(pricing.Observed) > 0 {
+		ctx = ContextWithYunwuPricingScope(ctx, pricing)
 	}
-	if len(scope) > 0 {
-		return ContextWithYunwuProviderScope(ctx, scope)
+	if len(familyScope) > 0 {
+		return ContextWithYunwuProviderScope(ctx, familyScope)
 	}
 	return ctx
 }
 
-// yunwuTierGroupsKey keys the per-provider pinned billing groups in a context.
+// yunwuTierGroupsKey keys the per-provider pricing knobs in a context.
 type yunwuTierGroupsKey struct{}
+
+// YunwuPricingScope carries the pricing knobs derived from the schedulable
+// accounts, per canonical provider: the group each tier's key bills in and the
+// FLOOR implied by the provider's own accounting (observed_group_ratio).
+type YunwuPricingScope struct {
+	TierGroups map[string]yunwu.TierGroupNames
+	Observed   map[string]float64
+}
+
+// ContextWithYunwuPricingScope attaches a provider pricing scope to a context.
+func ContextWithYunwuPricingScope(ctx context.Context, scope YunwuPricingScope) context.Context {
+	if ctx == nil || (len(scope.TierGroups) == 0 && len(scope.Observed) == 0) {
+		return ctx
+	}
+	return context.WithValue(ctx, yunwuTierGroupsKey{}, scope)
+}
 
 // ContextWithYunwuTierGroups attaches the provider→pinned-groups map to a context.
 func ContextWithYunwuTierGroups(ctx context.Context, groups map[string]yunwu.TierGroupNames) context.Context {
-	if ctx == nil || len(groups) == 0 {
-		return ctx
-	}
-	return context.WithValue(ctx, yunwuTierGroupsKey{}, groups)
+	return ContextWithYunwuPricingScope(ctx, YunwuPricingScope{TierGroups: groups})
 }
 
-// yunwuTierGroupForProvider returns the pinned provider billing group for a tier
-// (empty when the provider's accounts pinned nothing, i.e. legacy derivation).
+// yunwuPricingScopeFromContext returns the scope carried by a context.
+func yunwuPricingScopeFromContext(ctx context.Context) (YunwuPricingScope, bool) {
+	if ctx == nil {
+		return YunwuPricingScope{}, false
+	}
+	scope, ok := ctx.Value(yunwuTierGroupsKey{}).(YunwuPricingScope)
+	if !ok {
+		return YunwuPricingScope{}, false
+	}
+	return scope, true
+}
+
+// yunwuTierGroupForProvider returns the provider billing group a tier's key lives
+// in ("" when the provider's accounts pinned nothing — the tier default applies).
 func yunwuTierGroupForProvider(ctx context.Context, provider, tier string) string {
-	if ctx == nil || provider == "" {
+	scope, ok := yunwuPricingScopeFromContext(ctx)
+	if !ok || provider == "" {
 		return ""
 	}
-	groups, ok := ctx.Value(yunwuTierGroupsKey{}).(map[string]yunwu.TierGroupNames)
-	if !ok || len(groups) == 0 {
-		return ""
-	}
-	pinned, ok := groups[CanonicalPricingProvider(provider)]
+	pinned, ok := scope.TierGroups[CanonicalPricingProvider(provider)]
 	if !ok {
 		return ""
 	}
 	return pinned.For(tier)
+}
+
+// yunwuObservedRatioForProvider returns the pricing floor the provider's own
+// accounting implies (0 when nothing has been measured yet).
+func yunwuObservedRatioForProvider(ctx context.Context, provider string) float64 {
+	scope, ok := yunwuPricingScopeFromContext(ctx)
+	if !ok || provider == "" {
+		return 0
+	}
+	return scope.Observed[CanonicalPricingProvider(provider)]
 }
 
 // resetYunwuProviderScopeCache clears the cached provider scope. Billing uses a
@@ -193,7 +235,7 @@ func resetYunwuProviderScopeCache() {
 	yunwuScopeMu.Lock()
 	yunwuScopeAt = time.Time{}
 	yunwuScopeByFamily = nil
-	yunwuTierGroupsByProv = nil
+	yunwuPricingScope = YunwuPricingScope{}
 	yunwuScopeMu.Unlock()
 }
 

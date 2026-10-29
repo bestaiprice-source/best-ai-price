@@ -434,6 +434,24 @@
           </div>
         </div>
         <p class="-mt-2 input-hint">{{ providerGroupsLoading ? t('ui.createAccountModal.groupOptionsLoading') : t('ui.createAccountModal.providerGroupHint') }}</p>
+        <!-- Reconciliation floor (option 2): price by what the provider is MEASURED
+             to charge, not only by the group selected above. Off by default. -->
+        <label class="flex cursor-pointer items-start gap-2 rounded-lg border border-gray-200 p-3 dark:border-dark-600">
+          <input
+            type="checkbox"
+            v-model="yunwuObservedRatioEnabled"
+            class="mt-0.5 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 dark:border-dark-500"
+          />
+          <span>
+            <span class="text-sm font-medium text-gray-800 dark:text-gray-200">
+              {{ t('ui.createAccountModal.observedRatioEnabled') }}
+            </span>
+            <span class="block text-[11px] text-gray-500 dark:text-gray-400">
+              {{ t('ui.createAccountModal.observedRatioHint') }}
+            </span>
+          </span>
+        </label>
+
 
         <!-- Custom Model Mapping -->
         <div class="rounded-lg border border-gray-200 bg-white/70 p-3.5 dark:border-dark-700 dark:bg-dark-900/40">
@@ -3444,6 +3462,8 @@ const yunwuSupportedFamilies = ref<string[]>(['claude', 'gpt', 'gemini', 'kimi',
 // billing tiers, so splitting it into fast/smart adds nothing. With this on the
 // node advertises both tiers and every request uses its one key.
 const yunwuTieringDisabled = ref(false)
+// Reconciliation floor (option 2) — off unless the node opts in.
+const yunwuObservedRatioEnabled = ref(false)
 // Provider billing groups the account's keys were issued in (prices the tier).
 // The options are the provider's OWN groups, loaded from its price list.
 const yunwuSmartGroupName = ref('')
@@ -4282,6 +4302,7 @@ const resetForm = () => {
   yunwuMinBalance.value = 20
   yunwuSupportedFamilies.value = ['claude', 'gpt', 'gemini', 'kimi', 'other']
   yunwuTieringDisabled.value = false
+  yunwuObservedRatioEnabled.value = false
   yunwuSmartGroupName.value = ''
   yunwuFastGroupName.value = ''
   yunwuModelMappings.value = []
@@ -4483,6 +4504,11 @@ const handleSubmit = async () => {
     // Only written when ON, so an untouched form keeps the previous extra shape.
     if (yunwuTieringDisabled.value) {
       extra.tiering_disabled = true
+    }
+    // Reconciliation floor (option 2): written only when ON, so an untouched form
+    // keeps billing exactly as before — strictly by the group selected above.
+    if (yunwuObservedRatioEnabled.value) {
+      extra.observed_ratio_enabled = true
     }
     // The real provider billing group of each key: the charged rate follows it
     // (a group the provider does not list bills at the official rate).

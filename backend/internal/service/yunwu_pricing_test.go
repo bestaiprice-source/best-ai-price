@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/runtime"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/yunwu"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -550,4 +551,65 @@ func TestYunwuPricingService_AppliesGroupRatio(t *testing.T) {
 	require.True(t, ok)
 	require.NotNil(t, p2)
 	assert.InDelta(t, 4.0, p2.InputPricePerToken*1e6, 1e-4)
+}
+
+// Tier defaults and the reconciliation floor, end-to-end through the pricing path
+// the catalog AND billing both use:
+//
+//	smart with an unknown group  -> official rate (1.0)
+//	fast  with an unknown group  -> official rate + safety margin (1.1)
+//	observed ratio               -> a FLOOR: it lifts a price, never lowers it
+//	a pinned discounted group    -> still discounted
+func TestGetModelPricingForProvider_TierDefaultsAndObservedFloor(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"data": []map[string]interface{}{
+				{"model_name": "claude-sonnet-5", "model_ratio": 1.5, "completion_ratio": 5.0,
+					"enable_groups": []string{"cheap"}},
+			},
+			"group_ratio": map[string]float64{"cheap": 0.1},
+		})
+	}))
+	defer ts.Close()
+
+	svc := NewYunwuPricingServiceWithClient(ts.URL, ts.Client())
+	ctx := context.Background()
+	per1M := func(ctx context.Context) float64 {
+		p, ok := svc.GetModelPricingForProvider(ctx, "openlux", "claude-sonnet-5")
+		require.True(t, ok)
+		require.NotNil(t, p)
+		return p.InputPricePerToken * 1e6
+	}
+
+	// model_ratio 1.5 -> official $3/1M
+	assert.InDelta(t, 3.0, per1M(ctx), 1e-4, "smart default = official rate")
+
+	fastCtx := runtime.ContextWithTier(ctx, runtime.TierFast)
+	assert.InDelta(t, 3.3, per1M(fastCtx), 1e-4, "fast default = official rate + safety margin")
+
+	// The provider charged 1.25x the official rate: both tiers are floored there.
+	floored := ContextWithYunwuPricingScope(ctx, YunwuPricingScope{
+		Observed: map[string]float64{"openlux": 1.25},
+	})
+	assert.InDelta(t, 3.75, per1M(floored), 1e-4, "the observed ratio lifts the smart price")
+	assert.InDelta(t, 4.125, per1M(runtime.ContextWithTier(floored, runtime.TierFast)), 1e-4,
+		"the correction multiplies the fast default")
+
+	// A pinned group is used as-is while the observation is BELOW it: a cheaper
+	// reading never lowers a price.
+	pinnedCheap := ContextWithYunwuPricingScope(ctx, YunwuPricingScope{
+		TierGroups: map[string]yunwu.TierGroupNames{"openlux": {Smart: "cheap"}},
+		Observed:   map[string]float64{"openlux": 0.05},
+	})
+	assert.InDelta(t, 0.3, per1M(pinnedCheap), 1e-4, "the pinned discounted group stands")
+
+	// A correction ≥ 1 likewise multiplies a pinned group's own rate, so a pin that
+	// turned out too optimistic is lifted instead of trusted.
+	pinnedCheapCostlier := ContextWithYunwuPricingScope(ctx, YunwuPricingScope{
+		TierGroups: map[string]yunwu.TierGroupNames{"openlux": {Smart: "cheap"}},
+		Observed:   map[string]float64{"openlux": 2.0},
+	})
+	assert.InDelta(t, 0.6, per1M(pinnedCheapCostlier), 1e-4,
+		"a measured 2x over the pinned group doubles its rate")
 }

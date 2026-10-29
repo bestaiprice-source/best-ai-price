@@ -72,31 +72,68 @@ func TestTierGroupName(t *testing.T) {
 	}
 }
 
-// The tier's group is resolved from the pinned/detected group, and a group the
-// provider does not list is billed at the official rate (1.0) — the same rule
-// One-API/New-API apply — so a request is never priced below the official rate
-// by accident.
+// The tier's group is resolved from the pinned/detected group; a group the
+// provider does not list falls back to the tier default — the official rate for
+// smart, the official rate plus the fast safety margin for fast (1.0 / 1.1) — so
+// a request is never priced below the official rate by accident.
 func TestResolveTierGroupRatioForGroupDefaultsAndPins(t *testing.T) {
 	ratios := map[string]float64{"Azure-Gpt-1": 0.044, "Azure-Gpt-6": 0.9}
 
-	// A group the provider lists wins.
-	if r := ResolveTierGroupRatioForGroup(ratios, "Azure-Gpt-6"); r != 0.9 {
+	// A group the provider lists wins for whichever tier asks (the smart tier is
+	// the default when no tier is in the context).
+	if r := ResolveTierGroupRatioForGroup(ratios, runtime.TierSmart, "Azure-Gpt-6"); r != 0.9 {
 		t.Fatalf("listed group ratio = %v, want 0.9", r)
 	}
-	// The default group is not listed -> official rate.
-	if r := ResolveTierGroupRatioForGroup(ratios, DefaultProviderGroupName); r != 1.0 {
-		t.Fatalf("default group ratio = %v, want 1.0 (official)", r)
+	if r := ResolveTierGroupRatioForGroup(ratios, runtime.TierFast, "Azure-Gpt-1"); r != 0.044 {
+		t.Fatalf("listed group ratio for fast = %v, want 0.044", r)
 	}
-	if r := ResolveTierGroupRatioForGroup(ratios, "some-unknown-group"); r != 1.0 {
-		t.Fatalf("unlisted group ratio = %v, want 1.0 (official)", r)
+	// The default group is not listed -> tier defaults.
+	if r := ResolveTierGroupRatioForGroup(ratios, runtime.TierSmart, DefaultProviderGroupName); r != DefaultSmartGroupRatio {
+		t.Fatalf("smart default group ratio = %v, want %v", r, DefaultSmartGroupRatio)
 	}
-	// Nothing pinned at all -> the default group.
-	if r := ResolveTierGroupRatioForGroup(ratios, ""); r != 1.0 {
-		t.Fatalf("empty group ratio = %v, want 1.0 (official)", r)
+	if r := ResolveTierGroupRatioForGroup(ratios, runtime.TierFast, DefaultProviderGroupName); r != DefaultFastGroupRatio {
+		t.Fatalf("fast default group ratio = %v, want %v", r, DefaultFastGroupRatio)
 	}
-	// The provider does not price per group: the caller uses its single rate.
-	if r := ResolveTierGroupRatioForGroup(nil, DefaultProviderGroupName); r != 1.0 {
-		t.Fatalf("no group pricing ratio = %v, want 1.0", r)
+	if r := ResolveTierGroupRatioForGroup(ratios, runtime.TierFast, "some-unknown-group"); r != DefaultFastGroupRatio {
+		t.Fatalf("unlisted fast group ratio = %v, want %v", r, DefaultFastGroupRatio)
+	}
+	// No group name and no group pricing at all: still the tier default.
+	if r := ResolveTierGroupRatioForGroup(nil, runtime.TierSmart, ""); r != DefaultSmartGroupRatio {
+		t.Fatalf("empty group ratio = %v, want %v", r, DefaultSmartGroupRatio)
+	}
+	if r := ResolveTierGroupRatioForGroup(nil, runtime.TierFast, ""); r != DefaultFastGroupRatio {
+		t.Fatalf("empty fast group ratio = %v, want %v", r, DefaultFastGroupRatio)
+	}
+}
+
+// The reconciliation floor (option 2) guarantees we never charge below what the
+// provider actually charged, and never lowers a price on its own.
+func TestObservedGroupRatioAndFloor(t *testing.T) {
+	// The provider charged 1.1x what the official rate would cost us.
+	ratio, ok := ObservedGroupRatio(10.0, 21.0, 10.0)
+	if !ok || ratio != 1.1 {
+		t.Fatalf("observed ratio = %v/%v, want 1.1/true", ratio, ok)
+	}
+	// Readings that cannot be trusted are refused instead of pricing anything.
+	if _, ok := ObservedGroupRatio(10, 21, 0); ok {
+		t.Fatal("a zero cost basis must not produce a ratio")
+	}
+	if _, ok := ObservedGroupRatio(10, 10, 5); ok {
+		t.Fatal("no provider spend must not produce a ratio")
+	}
+	if _, ok := ObservedGroupRatio(0, 1000, 1); ok {
+		t.Fatal("an absurd ratio must be refused")
+	}
+
+	// The floor lifts a price to the observed cost and never lowers it.
+	if got := ApplyObservedFloor(1.0, 1.15); got != 1.15 {
+		t.Fatalf("floor must lift 1.0 to 1.15, got %v", got)
+	}
+	if got := ApplyObservedFloor(1.1, 0.5); got != 1.1 {
+		t.Fatalf("floor must not lower a price, got %v", got)
+	}
+	if got := ApplyObservedFloor(1.1, 0); got != 1.1 {
+		t.Fatalf("no observation must leave the price alone, got %v", got)
 	}
 }
 

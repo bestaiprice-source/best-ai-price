@@ -3,6 +3,7 @@ package yunwu
 import (
 	"context"
 	"errors"
+	"math"
 	"strings"
 
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/runtime"
@@ -87,7 +88,92 @@ const (
 	ExtraSmartGroupName    = "smart_group_name"
 	ExtraFastGroupName     = "fast_group_name"
 	ExtraDetectedGroupName = "detected_group_name"
+	// ExtraObservedGroupRatio stores the CORRECTION FACTOR the provider's own
+	// accounting implies for an account (its spend ÷ the cost basis we billed at),
+	// measured by the reconciliation in the balance sync. It is a FLOOR on the
+	// price: whichever group the provider actually routed to, we never charge below
+	// what it charged us.
+	ExtraObservedGroupRatio = "observed_group_ratio"
 )
+
+// Fallback multipliers used when the group a key bills in is not known.
+//
+// Smart is the official rate — the group such keys are issued in by default
+// (`default`), which One-API/New-API bill at 1.0. Fast carries a safety margin:
+// its key may be routed to a more expensive channel, so it is priced above the
+// official rate instead of at it. Both are corrected upward by the observed
+// ratio when reality turns out to be dearer.
+const (
+	DefaultSmartGroupRatio = 1.0
+	DefaultFastGroupRatio  = 1.1
+)
+
+// TierDefaultGroupRatio returns the multiplier charged when a tier's billing
+// group is unknown (nothing pinned, nothing detected): 1.0 for smart, 1.1 for
+// fast.
+func TierDefaultGroupRatio(tier string) float64 {
+	if runtime.NormalizeTier(tier) == runtime.TierFast {
+		return DefaultFastGroupRatio
+	}
+	return DefaultSmartGroupRatio
+}
+
+// ObservedGroupRatio derives the effective multiplier a provider charged over an
+// interval from two readings of ITS OWN cumulative usage counter (in USD) plus
+// our cost at the official rate for the same interval.
+//
+// It exists because a provider may route requests across groups on its own
+// (OpenLux "smart routing" ignores the token's group when picking a channel), so
+// the group a key is issued in is not always what the provider bills. ok=false
+// means "no usable sample": nothing was spent, we have no cost to compare with,
+// or the ratio is outside a sane range (0.01..10) — a garbage reading must never
+// set a price.
+func ObservedGroupRatio(providerUsedUSDStart, providerUsedUSDEnd, ourOfficialCostUSD float64) (float64, bool) {
+	if ourOfficialCostUSD <= 0 {
+		return 0, false
+	}
+	providerDelta := providerUsedUSDEnd - providerUsedUSDStart
+	if providerDelta <= 0 {
+		return 0, false
+	}
+	ratio := providerDelta / ourOfficialCostUSD
+	if ratio < 0.01 || ratio > 10 {
+		return 0, false
+	}
+	return ratio, true
+}
+
+// ApplyObservedFloor applies the measured correction factor on top of a resolved
+// group ratio. The factor is defined against the cost basis we billed at, so the
+// corrected price is `ratio × correction` — and it only ever LIFTS: a correction
+// at or below 1 (nothing measured, or a cheaper reading) leaves the price alone,
+// because never selling below the observed cost is the point, not chasing a
+// cheaper number.
+func ApplyObservedFloor(ratio, correction float64) float64 {
+	if correction <= 1 || correction > MaxObservedCorrection || math.IsNaN(correction) || math.IsInf(correction, 0) {
+		return ratio
+	}
+	if ratio <= 0 {
+		return ratio
+	}
+	return ratio * correction
+}
+
+// ObservedGroupRatioFromExtra reads the reconciliation floor stored on an account.
+func ObservedGroupRatioFromExtra(extra map[string]any) float64 {
+	if len(extra) == 0 {
+		return 0
+	}
+	switch v := extra[ExtraObservedGroupRatio].(type) {
+	case float64:
+		return v
+	case int:
+		return float64(v)
+	case int64:
+		return float64(v)
+	}
+	return 0
+}
 
 // DefaultProviderGroupName is the group a provider puts a key in when none was
 // chosen, and the name we assume when nothing is pinned. One-API/New-API bill a
@@ -226,19 +312,20 @@ func extraString(extra map[string]any, key string) string {
 // It never returns "unpriced": a request is always priced at least at the
 // official rate, so a key whose group differs from our assumption can only be
 // charged MORE than our estimate, never less.
-func ResolveTierGroupRatioForGroup(groupRatios map[string]float64, groupName string) float64 {
+func ResolveTierGroupRatioForGroup(groupRatios map[string]float64, tier, groupName string) float64 {
 	groupName = strings.TrimSpace(groupName)
 	if groupName == "" {
 		groupName = DefaultProviderGroupName
 	}
-	if len(groupRatios) == 0 {
-		return 1.0
+	if len(groupRatios) > 0 {
+		if ratio, ok := groupRatios[groupName]; ok && ratio > 0 {
+			return ratio
+		}
 	}
-	if ratio, ok := groupRatios[groupName]; ok && ratio > 0 {
-		return ratio
-	}
-	// Not listed: the provider bills this group at the official rate.
-	return 1.0
+	// The provider does not list this group (or does not price per group at all):
+	// fall back to the tier's default multiplier — the official rate for smart,
+	// the official rate plus the fast safety margin for fast.
+	return TierDefaultGroupRatio(tier)
 }
 
 // TierFromContext returns the billing tier of the current request (default

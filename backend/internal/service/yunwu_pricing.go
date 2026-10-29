@@ -735,7 +735,13 @@ func (s *YunwuPricingService) GetModelPricingForProvider(ctx context.Context, pr
 	// rate.
 	tier := yunwu.TierFromContext(ctx)
 	groupName := yunwuTierGroupForProvider(ctx, provider, tier)
-	groupRatio := yunwu.ResolveTierGroupRatioForGroup(item.GroupRatios, groupName)
+	// The group the key bills in decides the rate; when that group is unknown the
+	// tier default applies (1.0 smart / 1.1 fast), floored at what the provider's
+	// own accounting shows it charges us (never sell below the observed cost).
+	groupRatio := yunwu.ApplyObservedFloor(
+		yunwu.ResolveTierGroupRatioForGroup(item.GroupRatios, tier, groupName),
+		yunwuObservedRatioForProvider(ctx, provider),
+	)
 
 	if item.ModelPrice > 0 {
 		// Fixed price per unit (e.g. image generation, video generation);

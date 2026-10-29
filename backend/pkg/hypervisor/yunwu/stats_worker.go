@@ -228,12 +228,78 @@ func (w *StatsWorker) saveSnapshot(ctx context.Context, node *health.ExecutionNo
 					extra[ExtraDetectedGroupName] = group
 					extra["detected_group_at"] = now.Format(time.RFC3339)
 				}
+				// Option 2: reconcile the assumed billing group with what the provider
+				// actually charged us since the last checkpoint, and store the result as
+				// a price FLOOR (it can only lift a price, never cut one).
+				extra = w.reconcileObservedRatio(ctx, accID, extra, grants.TotalUsed, now)
 				_ = w.store.DB().Account.UpdateOneID(accID).SetExtra(extra).Exec(ctx)
 			}
 		}
 	}
 
 	return err
+}
+
+// reconcileObservedRatio measures the correction factor between what the provider
+// charged us and the cost basis we billed at, and stores it in extra as the price
+// floor. It is deliberately conservative:
+//
+//   - the interval is the span between two balance syncs, so both numbers cover
+//     the same requests;
+//   - a window whose cost basis is below MinObservedSampleCostUSD is skipped
+//     (rounding noise must not become a price) and the checkpoint stays, so the
+//     next window is measured over a bigger sample;
+//   - a reading outside a sane range is refused rather than applied;
+//   - the checkpoint advances only on a usable sample (or when the provider
+//     reported no spend at all), so a skipped window is not silently dropped from
+//     the next measurement.
+func (w *StatsWorker) reconcileObservedRatio(ctx context.Context, accountID int64, extra map[string]any, providerUsedUSD float64, now time.Time) map[string]any {
+	if extra == nil || w.store == nil || w.store.DB() == nil || providerUsedUSD <= 0 {
+		return extra
+	}
+	// Opt-in per node: without the flag nothing is measured and nothing is stored,
+	// so billing stays exactly as before (the group selected for the node).
+	if !ObservedRatioEnabled(extra) {
+		return extra
+	}
+	start, okStart := extraFloat(extra, ExtraObservedGroupRatioProviderUsedUSD)
+	since, okSince := extraTime(extra, ExtraObservedGroupRatioAt)
+
+	// No checkpoint yet (or the provider's counter went backwards): this sync only
+	// establishes the baseline.
+	if !okStart || !okSince || since.IsZero() || providerUsedUSD <= start {
+		extra[ExtraObservedGroupRatioProviderUsedUSD] = providerUsedUSD
+		extra[ExtraObservedGroupRatioAt] = now.Format(time.RFC3339)
+		return extra
+	}
+
+	basis, err := SumAccountCostBasisSince(ctx, w.store.DB(), accountID, since)
+	if err != nil {
+		slog.Warn("[YunwuStats] observed ratio: cost basis lookup failed", "account_id", accountID, "error", err)
+		return extra
+	}
+	if basis < MinObservedSampleCostUSD {
+		// Too small to be evidence: keep the checkpoint so the next window covers it.
+		return extra
+	}
+	correction, ok := MeasureObservedCorrection(start, providerUsedUSD, basis)
+	if !ok {
+		slog.Warn("[YunwuStats] observed ratio: unusable sample",
+			"account_id", accountID, "provider_delta_usd", providerUsedUSD-start, "cost_basis_usd", basis)
+		extra[ExtraObservedGroupRatioProviderUsedUSD] = providerUsedUSD
+		extra[ExtraObservedGroupRatioAt] = now.Format(time.RFC3339)
+		return extra
+	}
+
+	extra[ExtraObservedGroupRatio] = correction
+	extra[ExtraObservedGroupRatioBasisUSD] = basis
+	extra[ExtraObservedGroupRatioMeasuredAt] = now.Format(time.RFC3339)
+	extra[ExtraObservedGroupRatioProviderUsedUSD] = providerUsedUSD
+	extra[ExtraObservedGroupRatioAt] = now.Format(time.RFC3339)
+
+	slog.Info("[YunwuStats] observed billing ratio measured", "account_id", accountID,
+		"correction", correction, "provider_delta_usd", providerUsedUSD-start, "cost_basis_usd", basis)
+	return extra
 }
 
 // SyncNodeStats fetches the latest credit balance and usage stats from Yunwu API for a specific node
