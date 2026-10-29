@@ -219,7 +219,7 @@ func (h *GatewayHandler) handleHypervisorMessages(c *gin.Context) {
 
 	meta, err := h.hypervisorEngine.HandleRequest(requestCtx, ownerID, conversationID, body, c.Writer, platform)
 	if err != nil {
-		if errors.Is(err, yunwu.ErrNoPricingAvailable) || errors.Is(err, yunwu.ErrNoCompatibleNodes) {
+		if errors.Is(err, yunwu.ErrNoPricingAvailable) || errors.Is(err, yunwu.ErrNoCompatibleNodes) || errors.Is(err, yunwu.ErrTierNotConfigured) {
 			h.errorResponseGateway(transportCtx, http.StatusBadRequest, "invalid_request_error", err.Error())
 			return
 		}

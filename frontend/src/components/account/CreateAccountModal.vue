@@ -320,6 +320,16 @@
           <p class="input-hint">{{ t('ui.createAccountModal.yourAPIKeyBearer') }}</p>
         </div>
         <div>
+          <label class="input-label">{{ t('ui.createAccountModal.fastApiKeyLabel') }}</label>
+          <input
+            v-model="yunwuApiKeyFast"
+            type="password"
+            class="input font-mono"
+            :placeholder="t('ui.createAccountModal.skyunwu')"
+          />
+          <p class="input-hint">{{ t('ui.createAccountModal.fastApiKeyHint') }}</p>
+        </div>
+        <div>
           <label class="input-label">{{ t('ui.createAccountModal.protocol') }}</label>
           <select v-model="yunwuProtocol" class="input">
             <option value="openai">{{ t('ui.createAccountModal.openAICompatiblestandardv1') }}</option>
@@ -3378,6 +3388,7 @@ const upstreamBaseUrl = ref('') // For upstream type: base URL
 const upstreamApiKey = ref('') // For upstream type: API key
 const yunwuBaseUrl = ref('https://api.openlux.ai/v1') // For Yunwu type: base URL
 const yunwuApiKey = ref('') // For Yunwu type: API key
+const yunwuApiKeyFast = ref('') // For Yunwu type: fast-tier API key (provider's "fast" group)
 const yunwuProvider = ref('openlux')
 const yunwuCustomProvider = ref('')
 const yunwuProtocol = ref('openai')
@@ -4184,6 +4195,7 @@ const resetForm = () => {
   upstreamApiKey.value = ''
   yunwuBaseUrl.value = 'https://api.openlux.ai/v1'
   yunwuApiKey.value = ''
+  yunwuApiKeyFast.value = ''
   yunwuProvider.value = 'openlux'
   yunwuCustomProvider.value = ''
   yunwuProtocol.value = 'openai'
@@ -4365,6 +4377,13 @@ const handleSubmit = async () => {
     const credentials: Record<string, unknown> = {
       base_url: yunwuBaseUrl.value.trim() || defaultUrl,
       api_key: yunwuApiKey.value.trim()
+    }
+    // Fast-tier key: the provider issues a separate key inside its "fast" billing
+    // group, which is priced differently from the smart one. Only stored when
+    // configured, so a node without a fast key stays smart-only.
+    const yunwuApiKeyFastValue = yunwuApiKeyFast.value.trim()
+    if (yunwuApiKeyFastValue) {
+      credentials.api_key_fast = yunwuApiKeyFastValue
     }
     const extra: Record<string, unknown> = {
       provider: finalProvider,

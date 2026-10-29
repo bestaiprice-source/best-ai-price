@@ -222,6 +222,22 @@ func setAPIKeyAuthContextValues(c gatewayctx.GatewayContext, apiKey *service.API
 	})
 	c.SetValue(string(ContextKeyUserRole), apiKey.User.Role)
 	setGroupContextGateway(c, apiKey.Group)
+	setTierContextGateway(c, apiKey)
+}
+
+// setTierContextGateway resolves the unofficial-provider billing tier (smart /
+// fast) from the API key's groups and attaches it to the request context, so the
+// Yunwu engine keeps only nodes holding a key for that tier and the runtime uses
+// that tier's provider key. Doing it once here means every Yunwu route
+// (messages, chat completions, responses, Gemini, images, Sora) inherits it. A
+// key with no tier group — every key today — stays on smart, so nothing changes
+// until fast keys/groups exist.
+func setTierContextGateway(c gatewayctx.GatewayContext, apiKey *service.APIKey) {
+	if c == nil || c.Request() == nil || apiKey == nil {
+		return
+	}
+	ctx := service.WithYunwuTier(c.Request().Context(), apiKey)
+	c.SetRequest(c.Request().WithContext(ctx))
 }
 
 func abortWithErrorContext(c gatewayctx.GatewayContext, statusCode int, code, message string) {

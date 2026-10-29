@@ -168,6 +168,21 @@
             />
           </div>
 
+          <div>
+            <label class="input-label">{{ t('ui.editAccountModal.fastApiKeyLabel') }}</label>
+            <input
+              v-model="editYunwuApiKeyFast"
+              type="password"
+              class="input font-mono"
+              placeholder="sk-fast-..."
+            />
+            <p class="input-hint">
+              {{ yunwuFastKeyConfigured
+                ? t('ui.editAccountModal.fastApiKeyConfigured')
+                : t('ui.editAccountModal.fastApiKeyHint') }}
+            </p>
+          </div>
+
           <!-- Protocol & Alert Threshold -->
           <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
@@ -1962,6 +1977,13 @@ interface TempUnschedRuleForm {
 const submitting = ref(false)
 const editBaseUrl = ref('https://api.anthropic.com')
 const editApiKey = ref('')
+// Yunwu fast-tier API key. Empty keeps the stored one (like editApiKey).
+const editYunwuApiKeyFast = ref('')
+// Whether the node already carries a fast-tier key (values come back masked, so
+// only its presence can be shown).
+const yunwuFastKeyConfigured = computed(
+  () => !!(props.account?.credentials as Record<string, unknown> | undefined)?.api_key_fast
+)
 // Bedrock credentials
 const editBedrockAccessKeyId = ref('')
 const editBedrockSecretAccessKey = ref('')
@@ -2556,6 +2578,7 @@ const syncFormFromAccount = (newAccount: Account | null) => {
     selectedErrorCodes.value = []
   }
   editApiKey.value = ''
+  editYunwuApiKeyFast.value = ''
 }
 
 watch(
@@ -3022,6 +3045,12 @@ const handleSubmit = async () => {
       } else {
         appStore.showError(t('admin.accounts.apiKeyIsRequired'))
         return
+      }
+
+      // Fast-tier key (yunwu only): a non-empty value replaces the stored one,
+      // an empty value keeps it (the spread above already carried it over).
+      if (props.account.platform === 'yunwu' && editYunwuApiKeyFast.value.trim()) {
+        newCredentials.api_key_fast = editYunwuApiKeyFast.value.trim()
       }
 
       // Add model mapping if configured（OpenAI 开启自动透传时保留现有映射，不再编辑）

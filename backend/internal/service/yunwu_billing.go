@@ -295,6 +295,36 @@ func WithYunwuModelRouting(ctx context.Context, group *Group, model string) cont
 	return ctx
 }
 
+// apiKeyGroupNames collects the names of every group an API key belongs to,
+// primary group first, preserving order so the tier resolution is deterministic.
+func apiKeyGroupNames(apiKey *APIKey) []string {
+	if apiKey == nil {
+		return nil
+	}
+	names := make([]string, 0, 1+len(apiKey.Groups))
+	if apiKey.Group != nil {
+		names = append(names, apiKey.Group.Name)
+	}
+	for _, g := range apiKey.Groups {
+		if g != nil {
+			names = append(names, g.Name)
+		}
+	}
+	return names
+}
+
+// WithYunwuTier resolves the billing tier (smart/fast) from the groups the API
+// key is bound to and attaches it to the context. The Yunwu engine then keeps
+// only nodes holding a key for that tier and the runtime uses that tier's
+// provider key — so a fast request is never served or billed with the cheaper
+// smart key. A key with no tier group (every key today) stays on smart.
+func WithYunwuTier(ctx context.Context, apiKey *APIKey) context.Context {
+	if ctx == nil || apiKey == nil {
+		return ctx
+	}
+	return yunwu.ContextWithTier(ctx, yunwu.TierFromGroupNames(apiKeyGroupNames(apiKey)))
+}
+
 // RecordYunwuMediaUsageInput carries the information needed to bill a completed
 // Unofficial-provider media request (image / video / audio) that has no token
 // usage to bill against.

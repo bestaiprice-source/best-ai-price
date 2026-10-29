@@ -35,6 +35,15 @@ type ProviderModelPrice struct {
 	InputPricePer1k  float64 `json:"input_price_per_1k"`
 	OutputPricePer1k float64 `json:"output_price_per_1k"`
 	Available        bool    `json:"available"`
+	// Base (group-discount-free) per-1k rates plus the provider's group_ratio map.
+	// Kept so the price can be recomputed for the request's billing tier group
+	// (fast/smart) at query time instead of being frozen to the cheapest group at
+	// parse time. An empty GroupRatios means the provider does not price per
+	// group, so both tiers share the single price.
+	BaseInputPricePer1k  float64            `json:"-"`
+	BaseOutputPricePer1k float64            `json:"-"`
+	GroupRatios          map[string]float64 `json:"-"`
+	CheapestGroupRatio   float64            `json:"-"`
 }
 
 // effectiveGroupRatio resolves the discount multiplier for a model from a
@@ -271,19 +280,21 @@ func (ppm *ProviderPriceManager) fetchProviderPrices(ctx context.Context, endpoi
 				// real price is ratio × group_ratio of the enabled group.
 				groupRatio := effectiveGroupRatio(item.EnableGroups, payload.GroupRatio)
 
-				var inputPrice, outputPrice float64
+				var baseInput, baseOutput float64
 				if item.ModelPrice > 0 {
-					inputPrice = item.ModelPrice * groupRatio
-					outputPrice = item.ModelPrice * groupRatio
+					baseInput = item.ModelPrice
+					baseOutput = item.ModelPrice
 				} else {
 					baseRatePer1k := 0.002
-					inputPrice = item.ModelRatio * baseRatePer1k * groupRatio
 					compRatio := item.CompletionRatio
 					if compRatio <= 0 {
 						compRatio = 1.0
 					}
-					outputPrice = item.ModelRatio * compRatio * baseRatePer1k * groupRatio
+					baseInput = item.ModelRatio * baseRatePer1k
+					baseOutput = item.ModelRatio * compRatio * baseRatePer1k
 				}
+				inputPrice := baseInput * groupRatio
+				outputPrice := baseOutput * groupRatio
 
 				if inputPrice < 0 || math.IsNaN(inputPrice) || math.IsInf(inputPrice, 0) {
 					inputPrice = 0
@@ -293,9 +304,13 @@ func (ppm *ProviderPriceManager) fetchProviderPrices(ctx context.Context, endpoi
 				}
 
 				prices[k] = ProviderModelPrice{
-					InputPricePer1k:  inputPrice,
-					OutputPricePer1k: outputPrice,
-					Available:        item.Available || item.ModelRatio > 0 || item.ModelPrice > 0,
+					InputPricePer1k:      inputPrice,
+					OutputPricePer1k:     outputPrice,
+					Available:            item.Available || item.ModelRatio > 0 || item.ModelPrice > 0,
+					BaseInputPricePer1k:  baseInput,
+					BaseOutputPricePer1k: baseOutput,
+					GroupRatios:          payload.GroupRatio,
+					CheapestGroupRatio:   groupRatio,
 				}
 			}
 			return prices, nil
@@ -431,6 +446,23 @@ func (ppm *ProviderPriceManager) fetchProviderPrices(ctx context.Context, endpoi
 	return res.(map[string]ProviderModelPrice), nil
 }
 
+// priceForTier resolves a parsed provider price for the request's billing tier.
+// The provider charges per key group, so a fast request must be priced with the
+// fast group's rate. Returns ok=false when the provider prices per group but has
+// no rate for this tier's group (fail closed, never another group's rate).
+func (ppm *ProviderPriceManager) priceForTier(ctx context.Context, p ProviderModelPrice) (float64, float64, bool) {
+	ratio, ok := ResolveTierGroupRatio(p.GroupRatios, p.CheapestGroupRatio, TierFromContext(ctx))
+	if !ok {
+		return 0, 0, false
+	}
+	if len(p.GroupRatios) == 0 {
+		// The provider does not price per group: the stored price already is the
+		// only (and therefore tier-independent) price.
+		return p.InputPricePer1k, p.OutputPricePer1k, true
+	}
+	return p.BaseInputPricePer1k * ratio, p.BaseOutputPricePer1k * ratio, true
+}
+
 func (ppm *ProviderPriceManager) ResolveNodePrice(ctx context.Context, node *health.ExecutionNode, model string) (float64, float64, bool) {
 	if node == nil || model == "" {
 		return 0, 0, false
@@ -459,7 +491,7 @@ func (ppm *ProviderPriceManager) ResolveNodePrice(ctx context.Context, node *hea
 			if !hasExp || time.Now().Before(exp) {
 				if p, found := ppm.lookupModelInPrices(prices, model); found {
 					ppm.mu.RUnlock()
-					return p.InputPricePer1k, p.OutputPricePer1k, true
+					return ppm.priceForTier(ctx, p)
 				}
 			}
 		}
@@ -541,7 +573,7 @@ func (ppm *ProviderPriceManager) ResolveNodePrice(ctx context.Context, node *hea
 			if !hasExp || time.Now().Before(exp) {
 				ppm.mu.RUnlock()
 				if p, found := ppm.lookupModelInPrices(prices, model); found {
-					return p.InputPricePer1k, p.OutputPricePer1k, true
+					return ppm.priceForTier(ctx, p)
 				}
 				return 0, 0, false
 			}
@@ -566,7 +598,7 @@ func (ppm *ProviderPriceManager) ResolveNodePrice(ctx context.Context, node *hea
 			ppm.mu.Unlock()
 
 			if p, found := ppm.lookupModelInPrices(fetchedPrices, model); found {
-				return p.InputPricePer1k, p.OutputPricePer1k, true
+				return ppm.priceForTier(ctx, p)
 			}
 			return 0, 0, false
 		}
@@ -577,7 +609,7 @@ func (ppm *ProviderPriceManager) ResolveNodePrice(ctx context.Context, node *hea
 		if prices, ok := ppm.cache[pricingURL]; ok {
 			ppm.mu.RUnlock()
 			if p, found := ppm.lookupModelInPrices(prices, model); found {
-				return p.InputPricePer1k, p.OutputPricePer1k, true
+				return ppm.priceForTier(ctx, p)
 			}
 		} else {
 			ppm.mu.RUnlock()
@@ -593,7 +625,7 @@ func (ppm *ProviderPriceManager) ResolveNodePrice(ctx context.Context, node *hea
 			if !hasExp || time.Now().Before(exp) {
 				if p, found := ppm.lookupModelInPrices(prices, model); found {
 					ppm.mu.RUnlock()
-					return p.InputPricePer1k, p.OutputPricePer1k, true
+					return ppm.priceForTier(ctx, p)
 				}
 			}
 		}

@@ -290,13 +290,23 @@ func (yh *YunwuHypervisor) HandleRequest(
 		return nil, err
 	}
 
-	// 4.1 Filter nodes by requested model family AND pricing availability
+	// 4.1 Filter nodes by requested billing tier, model family AND pricing
+	// availability. The billing tier (smart/fast) decides which provider key a
+	// node will use, and since the two keys are priced differently a node without
+	// a key for the requested tier must never serve it — the engine fails
+	// explicitly (ErrTierNotConfigured) instead of downgrading to a smart key.
+	requestedTier := runtime.TierFromContext(ctx)
 	requestedFamily := ClassifyModelFamily(requestedModel)
 	var compatibleNodes []health.ExecutionNode
+	tierMatchedNodes := 0
 	familyMatchedNodes := 0
 	nodePrices := make(map[string]float64)
 
 	for _, node := range nodes {
+		if !NodeSupportsBillingTier(node.Tiers, requestedTier) {
+			continue
+		}
+		tierMatchedNodes++
 		if !NodeSupportsFamily(node.Capabilities, requestedFamily) {
 			continue
 		}
@@ -317,6 +327,14 @@ func (yh *YunwuHypervisor) HandleRequest(
 	}
 
 	if len(compatibleNodes) == 0 {
+		if tierMatchedNodes == 0 {
+			slog.Warn("[YunwuHypervisor] No candidate node is provisioned for the requested billing tier",
+				"requested_model", requestedModel,
+				"tier", requestedTier,
+				"total_nodes", len(nodes),
+			)
+			return nil, ErrTierNotConfigured
+		}
 		if notifier := yh.Notifier(); notifier != nil {
 			reason := "No available nodes with pricing in the pool"
 			if familyMatchedNodes == 0 {
@@ -1430,6 +1448,7 @@ func (yh *YunwuHypervisor) getAllYunwuNodes(ctx context.Context) ([]health.Execu
 		node, err := yh.nm.GetNode(ctx, nodeID)
 		families := ParseNodeModelFamilies(acc.Extra)
 		provider := ParseNodeProvider(acc.Extra)
+		tiers := SupportedTiersForCredentials(acc.Credentials)
 		if err != nil || node == nil {
 			node = &health.ExecutionNode{
 				NodeID:       nodeID,
@@ -1437,6 +1456,7 @@ func (yh *YunwuHypervisor) getAllYunwuNodes(ctx context.Context) ([]health.Execu
 				Provider:     provider,
 				State:        "healthy",
 				Capabilities: families,
+				Tiers:        tiers,
 				Priority:     acc.Priority,
 				UpdatedAt:    time.Now(),
 			}
@@ -1445,6 +1465,7 @@ func (yh *YunwuHypervisor) getAllYunwuNodes(ctx context.Context) ([]health.Execu
 			node.AccountName = acc.Name
 			node.Capabilities = families
 			node.Provider = provider
+			node.Tiers = tiers
 			node.Priority = acc.Priority
 		}
 		list = append(list, *node)

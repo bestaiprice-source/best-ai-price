@@ -15,6 +15,7 @@ type ExecutionNode struct {
 	Provider     string    `json:"provider"`
 	State        string    `json:"state"` // healthy, busy, limited, unavailable, cooldown
 	Capabilities []string  `json:"capabilities"`
+	Tiers        []string  `json:"tiers,omitempty"` // billing tiers the node holds a key for (smart/fast)
 	Priority     int       `json:"priority"`
 	UpdatedAt    time.Time `json:"updated_at"`
 }

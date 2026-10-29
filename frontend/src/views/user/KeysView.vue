@@ -465,6 +465,27 @@
           <p class="input-hint">{{ t('keys.newQuantityHint') }}</p>
         </div>
 
+        <!-- Billing tier (unofficial providers): fast or smart. The key is bound
+             to the picked tier's group; smart is the default. -->
+        <div v-if="!isAdmin && !showEditModal && hasTierGroups">
+          <label class="input-label">{{ t('keys.tierLabel') }}</label>
+          <div class="flex gap-2">
+            <button
+              v-for="tier in tierGroups"
+              :key="tier"
+              type="button"
+              class="rounded-lg border px-3 py-2 text-sm font-medium transition-colors"
+              :class="userTier === tier
+                ? 'border-primary-500 bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300'
+                : 'border-gray-200 text-gray-600 hover:border-gray-300 dark:border-dark-600 dark:text-gray-300'"
+              @click="userTier = tier"
+            >
+              {{ t(tier === 'fast' ? 'keys.tierFast' : 'keys.tierSmart') }}
+            </button>
+          </div>
+          <p class="input-hint">{{ t('keys.tierHint') }}</p>
+        </div>
+
         <template v-if="isAdmin">
         <div>
           <label class="input-label">{{ t('keys.groupLabel') }}</label>
@@ -1952,9 +1973,13 @@ const handleCreateKeyClick = async () => {
     await loadGroups()
   }
   if (!showEditModal.value) {
-    // Regular users do not pick a group: bind the default (yunwu) group up front
-    // so the model allowlist can resolve the group's platforms.
-    formData.value.group_ids = isAdmin.value ? [] : (defaultUserGroupId.value ? [defaultUserGroupId.value] : [])
+    if (!isAdmin.value && hasTierGroups.value && !groups.value.some((g) => g.name.toLowerCase() === 'smart')) {
+      userTier.value = 'fast'
+    }
+    // Regular users do not pick an arbitrary group: they pick a billing tier and
+    // the key is bound to that tier's group (default: smart), so the model
+    // allowlist can resolve the group's platforms.
+    formData.value.group_ids = isAdmin.value ? [] : (selectedUserGroupId.value ? [selectedUserGroupId.value] : [])
   }
   showCreateModal.value = true
 }
@@ -1969,6 +1994,29 @@ const defaultUserGroupId = computed<number | null>(() => {
     groups.value.find((g) => g.name.toLowerCase().includes('yunwu')) ||
     groups.value[0]
   return yunwuGroup ? yunwuGroup.id : null
+})
+
+// Billing tiers for unofficial providers: the provider issues its keys inside two
+// groups — "fast" and "smart" — which differ in speed and price. A regular user
+// picks one at creation (smart by default); the key is bound to that group and
+// the gateway then uses the matching provider key and price.
+const TIER_GROUP_NAMES = ['smart', 'fast'] as const
+type UserTier = (typeof TIER_GROUP_NAMES)[number]
+const userTier = ref<UserTier>('smart')
+
+/** Tier groups the user may pick (admin-created groups literally named smart/fast). */
+const tierGroups = computed(() =>
+  TIER_GROUP_NAMES.filter((name) => groups.value.some((g) => g.name.toLowerCase() === name))
+)
+const hasTierGroups = computed(() => tierGroups.value.length > 0)
+
+/** Group the key will be bound to: the picked tier group, else the default group. */
+const selectedUserGroupId = computed<number | null>(() => {
+  if (!isAdmin.value && hasTierGroups.value) {
+    const match = groups.value.find((g) => g.name.toLowerCase() === userTier.value)
+    if (match) return match.id
+  }
+  return defaultUserGroupId.value
 })
 
 // Key management for regular users: label, expiration, batch quantity, quota
@@ -2015,7 +2063,7 @@ const submitUserKey = async () => {
       })
       appStore.showSuccess(t('keys.keyUpdatedSuccess'))
     } else {
-      const gid = defaultUserGroupId.value
+      const gid = selectedUserGroupId.value
       // Batch creation: 1..99 keys, each name gets a random suffix when >1.
       const quantity = Math.min(Math.max(Math.trunc(Number(formData.value.quantity)) || 1, 1), 99)
       const created: string[] = []

@@ -424,18 +424,21 @@ func (r *AnthropicRuntime) Execute(ctx context.Context, nodeID string, reqPayloa
 	// retain an old access_token after being edited in the admin UI; that token
 	// must never shadow the configured api_key.  OAuth and setup-token accounts
 	// intentionally keep access_token first.
-	var apiKey string
-	keysToTry := []string{"api_key", "key", "token", "access_token", "setup_token", "session_key"}
-	if acc.Type == "oauth" || acc.Type == "setup-token" {
-		keysToTry = []string{"access_token", "setup_token", "api_key", "key", "token", "session_key"}
-	}
-	for _, k := range keysToTry {
-		if val, ok := accountCredentials[k].(string); ok && strings.TrimSpace(val) != "" {
-			apiKey = strings.TrimSpace(val)
-			break
-		}
+	//
+	// Unofficial (yunwu) nodes carry one key PER BILLING TIER: a fast request must
+	// use the dedicated fast credential and must never fall back to the smart key,
+	// because the two keys are priced differently.
+	requestTier := TierFromContext(ctx)
+	credentialField := CredentialFieldForAccount(requestTier, acc.Type, acc.Platform, accountCredentials)
+	apiKey := ""
+	if credentialField != "" {
+		apiKey, _ = accountCredentials[credentialField].(string)
+		apiKey = strings.TrimSpace(apiKey)
 	}
 	if apiKey == "" {
+		if acc.Platform == "yunwu" && requestTier == TierFast {
+			return nil, fmt.Errorf("tier %q key is not configured for node %s", TierFast, nodeID)
+		}
 		return nil, fmt.Errorf("empty api_key credentials for node %s", nodeID)
 	}
 

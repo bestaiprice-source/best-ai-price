@@ -75,6 +75,7 @@ func ApplyAPIKeyAuthWithSubscriptionGoogleContext(apiKeyService *service.APIKeyS
 		})
 		c.SetValue(string(ContextKeyUserRole), apiKey.User.Role)
 		setGroupContextGateway(c, apiKey.Group)
+		setTierContextGateway(c, apiKey)
 		_ = apiKeyService.TouchLastUsed(c.Request().Context(), apiKey.ID)
 		return true
 	}
@@ -129,6 +130,7 @@ func ApplyAPIKeyAuthWithSubscriptionGoogleContext(apiKeyService *service.APIKeyS
 	})
 	c.SetValue(string(ContextKeyUserRole), apiKey.User.Role)
 	setGroupContextGateway(c, apiKey.Group)
+	setTierContextGateway(c, apiKey)
 	_ = apiKeyService.TouchLastUsed(c.Request().Context(), apiKey.ID)
 	return true
 }
