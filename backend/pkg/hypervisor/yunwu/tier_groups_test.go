@@ -176,10 +176,19 @@ func TestNodeObservedRatioIsAPriceFloor(t *testing.T) {
 	assert.InDelta(t, 0.0025*1.4, in, 1e-9, "the observed ratio must raise the smart price")
 
 	fastCtx := runtime.ContextWithTier(ctx, runtime.TierFast)
+	// The measurement is PER KEY: the smart correction must not touch the fast price,
+	// whose own key has its own provider counter.
+	in, _, ok = yh.PriceManager().ResolveNodePrice(fastCtx, node, tierGroupTestModel)
+	require.True(t, ok)
+	assert.InDelta(t, 0.0025*DefaultFastGroupRatio, in, 1e-9,
+		"the fast tier is floored by the FAST key's own measurement only")
+
+	// With the fast key's own measurement the fast price is corrected as well.
+	node.ObservedGroupRatioFast = 1.4
 	in, _, ok = yh.PriceManager().ResolveNodePrice(fastCtx, node, tierGroupTestModel)
 	require.True(t, ok)
 	assert.InDelta(t, 0.0025*DefaultFastGroupRatio*1.4, in, 1e-9,
-		"the correction multiplies the fast default (it is defined against the basis we billed at)")
+		"the fast correction multiplies the fast default")
 }
 
 // A floor below the assumption changes nothing (we never lower a price from a

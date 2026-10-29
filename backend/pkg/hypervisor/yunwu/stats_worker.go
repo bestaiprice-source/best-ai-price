@@ -15,6 +15,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/config"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/health"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/observability"
+	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/runtime"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/storage"
 	"github.com/redis/go-redis/v9"
 )
@@ -193,7 +194,7 @@ func (w *StatsWorker) ReconcileReservation(ctx context.Context, nodeID, requestI
 	return reconcileScript.Run(ctx, w.store.Redis(), []string{reservationKey(requestID), reservedKey(nodeID), balanceKey(nodeID)}, billedMicroUSD).Int64()
 }
 
-func (w *StatsWorker) saveSnapshot(ctx context.Context, node *health.ExecutionNode, grants *YunwuCreditGrantsResponse, source string) error {
+func (w *StatsWorker) saveSnapshot(ctx context.Context, node *health.ExecutionNode, grants *YunwuCreditGrantsResponse, source string, fastUsedUSD ...float64) error {
 	now := time.Now().UTC()
 	previous, _ := w.Snapshot(ctx, node.NodeID, 100*365*24*time.Hour)
 	apiAvailable := int64(grants.TotalAvailable * 1_000_000)
@@ -230,8 +231,13 @@ func (w *StatsWorker) saveSnapshot(ctx context.Context, node *health.ExecutionNo
 				}
 				// Option 2: reconcile the assumed billing group with what the provider
 				// actually charged us since the last checkpoint, and store the result as
-				// a price FLOOR (it can only lift a price, never cut one).
-				extra = w.reconcileObservedRatio(ctx, accID, extra, grants.TotalUsed, now)
+				// a price FLOOR (it can only lift a price, never cut one). Smart and fast
+				// are measured SEPARATELY: each key has its own provider counter and its
+				// own cost basis, so one tier's measurement never describes the other.
+				extra = w.reconcileObservedRatio(ctx, accID, extra, runtime.TierSmart, grants.TotalUsed, now)
+				if len(fastUsedUSD) > 0 && fastUsedUSD[0] > 0 {
+					extra = w.reconcileObservedRatio(ctx, accID, extra, runtime.TierFast, fastUsedUSD[0], now)
+				}
 				_ = w.store.DB().Account.UpdateOneID(accID).SetExtra(extra).Exec(ctx)
 			}
 		}
@@ -253,7 +259,7 @@ func (w *StatsWorker) saveSnapshot(ctx context.Context, node *health.ExecutionNo
 //   - the checkpoint advances only on a usable sample (or when the provider
 //     reported no spend at all), so a skipped window is not silently dropped from
 //     the next measurement.
-func (w *StatsWorker) reconcileObservedRatio(ctx context.Context, accountID int64, extra map[string]any, providerUsedUSD float64, now time.Time) map[string]any {
+func (w *StatsWorker) reconcileObservedRatio(ctx context.Context, accountID int64, extra map[string]any, tier string, providerUsedUSD float64, now time.Time) map[string]any {
 	if extra == nil || w.store == nil || w.store.DB() == nil || providerUsedUSD <= 0 {
 		return extra
 	}
@@ -262,18 +268,21 @@ func (w *StatsWorker) reconcileObservedRatio(ctx context.Context, accountID int6
 	if !ObservedRatioEnabled(extra) {
 		return extra
 	}
-	start, okStart := extraFloat(extra, ExtraObservedGroupRatioProviderUsedUSD)
-	since, okSince := extraTime(extra, ExtraObservedGroupRatioAt)
+	// Every measurement is per KEY: smart and fast have their own provider counter
+	// and their own cost basis, so their corrections stay independent.
+	keys := observedExtraKeysForTier(tier)
+	start, okStart := extraFloat(extra, keys.ProviderUsed)
+	since, okSince := extraTime(extra, keys.At)
 
 	// No checkpoint yet (or the provider's counter went backwards): this sync only
 	// establishes the baseline.
 	if !okStart || !okSince || since.IsZero() || providerUsedUSD <= start {
-		extra[ExtraObservedGroupRatioProviderUsedUSD] = providerUsedUSD
-		extra[ExtraObservedGroupRatioAt] = now.Format(time.RFC3339)
+		extra[keys.ProviderUsed] = providerUsedUSD
+		extra[keys.At] = now.Format(time.RFC3339)
 		return extra
 	}
 
-	basis, err := SumAccountCostBasisSince(ctx, w.store.DB(), accountID, since)
+	basis, err := SumAccountCostBasisSince(ctx, w.store.DB(), accountID, since, tier)
 	if err != nil {
 		slog.Warn("[YunwuStats] observed ratio: cost basis lookup failed", "account_id", accountID, "error", err)
 		return extra
@@ -285,25 +294,25 @@ func (w *StatsWorker) reconcileObservedRatio(ctx context.Context, accountID int6
 	correction, ok := MeasureObservedCorrection(start, providerUsedUSD, basis)
 	if !ok {
 		slog.Warn("[YunwuStats] observed ratio: unusable sample",
-			"account_id", accountID, "provider_delta_usd", providerUsedUSD-start, "cost_basis_usd", basis)
-		extra[ExtraObservedGroupRatioProviderUsedUSD] = providerUsedUSD
-		extra[ExtraObservedGroupRatioAt] = now.Format(time.RFC3339)
+			"account_id", accountID, "tier", tier, "provider_delta_usd", providerUsedUSD-start, "cost_basis_usd", basis)
+		extra[keys.ProviderUsed] = providerUsedUSD
+		extra[keys.At] = now.Format(time.RFC3339)
 		return extra
 	}
 
-	extra[ExtraObservedGroupRatio] = correction
-	extra[ExtraObservedGroupRatioBasisUSD] = basis
-	extra[ExtraObservedGroupRatioMeasuredAt] = now.Format(time.RFC3339)
-	extra[ExtraObservedGroupRatioProviderUsedUSD] = providerUsedUSD
-	extra[ExtraObservedGroupRatioAt] = now.Format(time.RFC3339)
+	extra[keys.Ratio] = correction
+	extra[keys.Basis] = basis
+	extra[keys.MeasuredAt] = now.Format(time.RFC3339)
+	extra[keys.ProviderUsed] = providerUsedUSD
+	extra[keys.At] = now.Format(time.RFC3339)
 
-	slog.Info("[YunwuStats] observed billing ratio measured", "account_id", accountID,
+	slog.Info("[YunwuStats] observed billing ratio measured", "account_id", accountID, "tier", tier,
 		"correction", correction, "provider_delta_usd", providerUsedUSD-start, "cost_basis_usd", basis)
 	return extra
 }
 
 // SyncNodeStats fetches the latest credit balance and usage stats from Yunwu API for a specific node
-func (w *StatsWorker) SyncNodeStats(ctx context.Context, node *health.ExecutionNode, apiKey string, baseURL string) (*YunwuCreditGrantsResponse, error) {
+func (w *StatsWorker) SyncNodeStats(ctx context.Context, node *health.ExecutionNode, apiKey string, baseURL string, fastApiKeys ...string) (*YunwuCreditGrantsResponse, error) {
 	origin, apiPrefix, err := normalizeBillingBaseURL(baseURL)
 	if err != nil {
 		return nil, err
@@ -323,12 +332,28 @@ func (w *StatsWorker) SyncNodeStats(ctx context.Context, node *health.ExecutionN
 		provider = CanonicalProvider(node.Provider)
 	}
 
+	// A two-key node is measured PER KEY. The fast key's OWN cumulative counter is
+	// read once here (cheaply, from the token usage endpoint) so its correction is
+	// derived from the traffic that key served, never from the smart key's numbers.
+	// A single-key node (or a provider without the endpoint) simply has no value.
+	fastUsedUSD := 0.0
+	if len(fastApiKeys) > 0 {
+		if fastKey := strings.TrimSpace(fastApiKeys[0]); fastKey != "" && fastKey != apiKey &&
+			!strings.Contains(strings.ToLower(baseURL), "portdan") {
+			if fastGrants, fastErr := w.syncNewAPITokenUsage(ctx, origin, apiPrefix, fastKey); fastErr == nil && fastGrants != nil {
+				fastUsedUSD = fastGrants.TotalUsed
+			} else if fastErr != nil {
+				slog.Debug("[YunwuStats] fast key usage unavailable", "node_id", node.NodeID, "error", fastErr)
+			}
+		}
+	}
+
 	// Strategy Priority:
 	// For Portdan / sub2api architecture, prioritize sub2api usage endpoint (/v1/usage)
 	if provider == ProviderPortdan || strings.Contains(strings.ToLower(baseURL), "portdan") {
 		sub2Grants, errSub2 := w.syncSub2APIUsage(ctx, origin, apiPrefix, apiKey)
 		if errSub2 == nil && sub2Grants != nil {
-			w.recordSyncedSnapshotWithGroup(ctx, node, sub2Grants, "sub2api_usage", detectedGroup)
+			w.recordSyncedSnapshotWithGroup(ctx, node, sub2Grants, "sub2api_usage", detectedGroup, fastUsedUSD)
 			return sub2Grants, nil
 		}
 	}
@@ -336,14 +361,14 @@ func (w *StatsWorker) SyncNodeStats(ctx context.Context, node *health.ExecutionN
 	// Strategy 1: Primary OpenAI / DeepSeek credit_grants endpoint
 	grants, errGrants := w.syncCreditGrants(ctx, origin, apiPrefix, apiKey)
 	if errGrants == nil && grants != nil && (grants.TotalAvailable > 0 || grants.TotalGranted > 0) {
-		w.recordSyncedSnapshotWithGroup(ctx, node, grants, "credit_grants", detectedGroup)
+		w.recordSyncedSnapshotWithGroup(ctx, node, grants, "credit_grants", detectedGroup, fastUsedUSD)
 		return grants, nil
 	}
 
 	// Strategy 2: Direct subscription available balance (e.g. OpenLux / OpenAI with explicit total_available)
 	subGrants, errSub := w.syncSubscriptionUsage(ctx, origin, apiPrefix, apiKey)
 	if errSub == nil && subGrants != nil && subGrants.Object == "subscription_direct" && subGrants.TotalAvailable > 0 {
-		w.recordSyncedSnapshotWithGroup(ctx, node, subGrants, "subscription", detectedGroup)
+		w.recordSyncedSnapshotWithGroup(ctx, node, subGrants, "subscription", detectedGroup, fastUsedUSD)
 		return subGrants, nil
 	}
 
@@ -353,7 +378,7 @@ func (w *StatsWorker) SyncNodeStats(ctx context.Context, node *health.ExecutionN
 	// If the token has a limited quota (even if 0 balance), it is authoritative.
 	tokenGrants, errToken := w.syncNewAPITokenUsage(ctx, origin, apiPrefix, apiKey)
 	if errToken == nil && tokenGrants != nil {
-		w.recordSyncedSnapshotWithGroup(ctx, node, tokenGrants, "token_usage", detectedGroup)
+		w.recordSyncedSnapshotWithGroup(ctx, node, tokenGrants, "token_usage", detectedGroup, fastUsedUSD)
 		return tokenGrants, nil
 	}
 
@@ -362,53 +387,53 @@ func (w *StatsWorker) SyncNodeStats(ctx context.Context, node *health.ExecutionN
 	// before relying on unverified hard limits.
 	userGrants, errUser := w.syncUserSelf(ctx, origin, apiPrefix, apiKey)
 	if errUser == nil && userGrants != nil && (userGrants.TotalAvailable > 0 || userGrants.TotalGranted > 0) {
-		w.recordSyncedSnapshotWithGroup(ctx, node, userGrants, "user_self", detectedGroup)
+		w.recordSyncedSnapshotWithGroup(ctx, node, userGrants, "user_self", detectedGroup, fastUsedUSD)
 		return userGrants, nil
 	}
 
 	// Strategy 5: Subscription with usage subtraction calculation (when total_available wasn't direct)
 	if errSub == nil && subGrants != nil && (subGrants.TotalAvailable > 0 || subGrants.TotalGranted > 0) {
-		w.recordSyncedSnapshotWithGroup(ctx, node, subGrants, "subscription", detectedGroup)
+		w.recordSyncedSnapshotWithGroup(ctx, node, subGrants, "subscription", detectedGroup, fastUsedUSD)
 		return subGrants, nil
 	}
 
 	// Strategy 6: Gateway usage endpoint (/v1/usage, /usage)
 	sub2Grants, errSub2 := w.syncSub2APIUsage(ctx, origin, apiPrefix, apiKey)
 	if errSub2 == nil && sub2Grants != nil && (sub2Grants.TotalAvailable > 0 || sub2Grants.TotalGranted > 0) {
-		w.recordSyncedSnapshotWithGroup(ctx, node, sub2Grants, "sub2api_usage", detectedGroup)
+		w.recordSyncedSnapshotWithGroup(ctx, node, sub2Grants, "sub2api_usage", detectedGroup, fastUsedUSD)
 		return sub2Grants, nil
 	}
 
 	// Strategy 7: Fallback endpoint scanner (token list, simple balance, etc.)
 	fallbackGrants, errFallback := w.syncNodeStatsFallback(ctx, node, apiKey, origin)
 	if errFallback == nil && fallbackGrants != nil && (fallbackGrants.TotalAvailable > 0 || fallbackGrants.TotalGranted > 0) {
-		w.recordSyncedSnapshotWithGroup(ctx, node, fallbackGrants, "fallback", detectedGroup)
+		w.recordSyncedSnapshotWithGroup(ctx, node, fallbackGrants, "fallback", detectedGroup, fastUsedUSD)
 		return fallbackGrants, nil
 	}
 
 	// If we got a valid response even if 0 available balance
 	if tokenGrants != nil {
-		w.recordSyncedSnapshotWithGroup(ctx, node, tokenGrants, "token_usage_zero", detectedGroup)
+		w.recordSyncedSnapshotWithGroup(ctx, node, tokenGrants, "token_usage_zero", detectedGroup, fastUsedUSD)
 		return tokenGrants, nil
 	}
 	if userGrants != nil {
-		w.recordSyncedSnapshotWithGroup(ctx, node, userGrants, "user_self_zero", detectedGroup)
+		w.recordSyncedSnapshotWithGroup(ctx, node, userGrants, "user_self_zero", detectedGroup, fastUsedUSD)
 		return userGrants, nil
 	}
 	if sub2Grants != nil {
-		w.recordSyncedSnapshotWithGroup(ctx, node, sub2Grants, "sub2api_usage_zero", detectedGroup)
+		w.recordSyncedSnapshotWithGroup(ctx, node, sub2Grants, "sub2api_usage_zero", detectedGroup, fastUsedUSD)
 		return sub2Grants, nil
 	}
 	if fallbackGrants != nil {
-		w.recordSyncedSnapshotWithGroup(ctx, node, fallbackGrants, "fallback_zero", detectedGroup)
+		w.recordSyncedSnapshotWithGroup(ctx, node, fallbackGrants, "fallback_zero", detectedGroup, fastUsedUSD)
 		return fallbackGrants, nil
 	}
 	if subGrants != nil {
-		w.recordSyncedSnapshotWithGroup(ctx, node, subGrants, "subscription_zero", detectedGroup)
+		w.recordSyncedSnapshotWithGroup(ctx, node, subGrants, "subscription_zero", detectedGroup, fastUsedUSD)
 		return subGrants, nil
 	}
 	if grants != nil {
-		w.recordSyncedSnapshotWithGroup(ctx, node, grants, "credit_grants_zero", detectedGroup)
+		w.recordSyncedSnapshotWithGroup(ctx, node, grants, "credit_grants_zero", detectedGroup, fastUsedUSD)
 		return grants, nil
 	}
 
@@ -1149,11 +1174,11 @@ func maxFloat64(a, b float64) float64 {
 // recordSyncedSnapshotWithGroup records a synced snapshot, attaching the key's
 // detected billing group when the balance source that answered did not report one
 // itself (only /api/usage/token and /api/user/self expose a group).
-func (w *StatsWorker) recordSyncedSnapshotWithGroup(ctx context.Context, node *health.ExecutionNode, grants *YunwuCreditGrantsResponse, source, detectedGroup string) {
+func (w *StatsWorker) recordSyncedSnapshotWithGroup(ctx context.Context, node *health.ExecutionNode, grants *YunwuCreditGrantsResponse, source, detectedGroup string, fastUsedUSD ...float64) {
 	if grants != nil && strings.TrimSpace(grants.Group) == "" && detectedGroup != "" {
 		grants.Group = detectedGroup
 	}
-	w.recordSyncedSnapshot(ctx, node, grants, source)
+	w.saveSnapshot(ctx, node, grants, source, fastUsedUSD...)
 }
 
 // detectKeyGroup asks the provider which billing group OUR KEY belongs to. The
@@ -1233,7 +1258,7 @@ func (w *StatsWorker) fetchGroupFrom(ctx context.Context, url, apiKey string) st
 	return strings.TrimSpace(envelope.Group)
 }
 
-func (w *StatsWorker) recordSyncedSnapshot(ctx context.Context, node *health.ExecutionNode, grants *YunwuCreditGrantsResponse, source string) {
+func (w *StatsWorker) recordSyncedSnapshot(ctx context.Context, node *health.ExecutionNode, grants *YunwuCreditGrantsResponse, source string, fastUsedUSD ...float64) {
 	// Update node runtime state in Redis
 	state, _ := w.nm.GetNodeRuntimeState(ctx, node.NodeID)
 	if state == nil {
@@ -1245,7 +1270,7 @@ func (w *StatsWorker) recordSyncedSnapshot(ctx context.Context, node *health.Exe
 	_ = w.nm.SaveNodeRuntimeState(ctx, state)
 
 	// Save the authoritative API balance snapshot
-	_ = w.saveSnapshot(ctx, node, grants, source)
+	_ = w.saveSnapshot(ctx, node, grants, source, fastUsedUSD...)
 	observability.Default.YunwuBalanceSynced()
 
 	slog.Info("[YunwuStatsWorker] Synced Yunwu node credit balance",

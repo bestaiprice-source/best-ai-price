@@ -740,7 +740,7 @@ func (s *YunwuPricingService) GetModelPricingForProvider(ctx context.Context, pr
 	// own accounting shows it charges us (never sell below the observed cost).
 	groupRatio := yunwu.ApplyObservedFloor(
 		yunwu.ResolveTierGroupRatioForGroup(item.GroupRatios, tier, groupName),
-		yunwuObservedRatioForProvider(ctx, provider),
+		yunwuObservedRatioForProvider(ctx, provider, tier),
 	)
 
 	if item.ModelPrice > 0 {

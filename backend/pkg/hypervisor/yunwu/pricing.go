@@ -17,6 +17,7 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/credentials"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/health"
+	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/runtime"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/storage"
 	"golang.org/x/sync/singleflight"
 )
@@ -444,9 +445,14 @@ func (ppm *ProviderPriceManager) priceForTier(ctx context.Context, p ProviderMod
 	var observed float64
 	if node != nil {
 		groups = node.TierGroups
+		// Each key carries its own measured correction: a fast request is floored by
+		// what the provider is known to charge for the FAST key, not the smart one.
 		observed = node.ObservedGroupRatio
+		if tier == runtime.TierFast {
+			observed = node.ObservedGroupRatioFast
+		}
 	}
-	// Priced by the group this key bills in, then floored at what the provider is
+	// Priced by the group this key bills in, then corrected by what the provider is
 	// known to charge (option 2: never sell below the observed cost).
 	ratio := ApplyObservedFloor(ResolveTierGroupRatioForGroup(p.GroupRatios, tier, GroupNameForTier(groups, tier)), observed)
 	if len(p.GroupRatios) == 0 {

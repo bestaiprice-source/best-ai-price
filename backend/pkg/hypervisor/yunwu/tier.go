@@ -108,6 +108,13 @@ const (
 	DefaultFastGroupRatio  = 1.1
 )
 
+// Tier names as they appear in an account's extra keys (and in the per-tier
+// measurement slots).
+const (
+	TierSmartName = runtime.TierSmart
+	TierFastName  = runtime.TierFast
+)
+
 // TierDefaultGroupRatio returns the multiplier charged when a tier's billing
 // group is unknown (nothing pinned, nothing detected): 1.0 for smart, 1.1 for
 // fast.

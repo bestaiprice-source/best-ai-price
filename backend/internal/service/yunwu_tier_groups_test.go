@@ -87,7 +87,9 @@ func TestComputeYunwuScopeCollectsTheObservedRatioFloor(t *testing.T) {
 	}}
 
 	_, pricing := computeYunwuScope(context.Background(), repo)
-	require.InDelta(t, 1.4, pricing.Observed["openlux"], 1e-9)
+	require.InDelta(t, 1.4, pricing.Observed["openlux"]["smart"], 1e-9)
+	require.Zero(t, pricing.Observed["openlux"]["fast"],
+		"a fast correction is only used when it was measured on the fast key")
 
 	// A node that did NOT opt in contributes nothing, even with a value stored.
 	repoOff := &mockAccountRepoForPricing{schedulable: []Account{
@@ -101,9 +103,10 @@ func TestComputeYunwuScopeCollectsTheObservedRatioFloor(t *testing.T) {
 	require.Empty(t, off.Observed, "the reconciliation is opt-in per node")
 
 	ctx := ContextWithYunwuPricingScope(context.Background(), pricing)
-	require.InDelta(t, 1.4, yunwuObservedRatioForProvider(ctx, "openlux"), 1e-9)
-	require.InDelta(t, 0.0, yunwuObservedRatioForProvider(ctx, "api-top"), 1e-9)
-	require.InDelta(t, 0.0, yunwuObservedRatioForProvider(context.Background(), "openlux"), 1e-9)
+	require.InDelta(t, 1.4, yunwuObservedRatioForProvider(ctx, "openlux", yunwu.TierSmartName), 1e-9)
+	require.InDelta(t, 0.0, yunwuObservedRatioForProvider(ctx, "openlux", yunwu.TierFastName), 1e-9)
+	require.InDelta(t, 0.0, yunwuObservedRatioForProvider(ctx, "api-top", yunwu.TierSmartName), 1e-9)
+	require.InDelta(t, 0.0, yunwuObservedRatioForProvider(context.Background(), "openlux", yunwu.TierSmartName), 1e-9)
 }
 
 func TestWithYunwuProviderScopeCarriesThePinnedGroups(t *testing.T) {

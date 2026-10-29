@@ -590,7 +590,7 @@ func TestGetModelPricingForProvider_TierDefaultsAndObservedFloor(t *testing.T) {
 
 	// The provider charged 1.25x the official rate: both tiers are floored there.
 	floored := ContextWithYunwuPricingScope(ctx, YunwuPricingScope{
-		Observed: map[string]float64{"openlux": 1.25},
+		Observed: map[string]map[string]float64{"openlux": {"smart": 1.25, "fast": 1.25}},
 	})
 	assert.InDelta(t, 3.75, per1M(floored), 1e-4, "the observed ratio lifts the smart price")
 	assert.InDelta(t, 4.125, per1M(runtime.ContextWithTier(floored, runtime.TierFast)), 1e-4,
@@ -600,7 +600,7 @@ func TestGetModelPricingForProvider_TierDefaultsAndObservedFloor(t *testing.T) {
 	// reading never lowers a price.
 	pinnedCheap := ContextWithYunwuPricingScope(ctx, YunwuPricingScope{
 		TierGroups: map[string]yunwu.TierGroupNames{"openlux": {Smart: "cheap"}},
-		Observed:   map[string]float64{"openlux": 0.05},
+		Observed:   map[string]map[string]float64{"openlux": {"smart": 0.05}},
 	})
 	assert.InDelta(t, 0.3, per1M(pinnedCheap), 1e-4, "the pinned discounted group stands")
 
@@ -608,7 +608,7 @@ func TestGetModelPricingForProvider_TierDefaultsAndObservedFloor(t *testing.T) {
 	// turned out too optimistic is lifted instead of trusted.
 	pinnedCheapCostlier := ContextWithYunwuPricingScope(ctx, YunwuPricingScope{
 		TierGroups: map[string]yunwu.TierGroupNames{"openlux": {Smart: "cheap"}},
-		Observed:   map[string]float64{"openlux": 2.0},
+		Observed:   map[string]map[string]float64{"openlux": {"smart": 2.0}},
 	})
 	assert.InDelta(t, 0.6, per1M(pinnedCheapCostlier), 1e-4,
 		"a measured 2x over the pinned group doubles its rate")

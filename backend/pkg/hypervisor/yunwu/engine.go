@@ -1461,9 +1461,10 @@ func (yh *YunwuHypervisor) getAllYunwuNodes(ctx context.Context) ([]health.Execu
 		provider := ParseNodeProvider(acc.Extra)
 		tiers := SupportedTiersForAccount(acc.Credentials, acc.Extra)
 		tierGroups := NodeTierGroups(acc.Extra)
-		var observedRatio float64
+		var observedRatio, observedRatioFast float64
 		if ObservedRatioEnabled(acc.Extra) {
-			observedRatio = ObservedGroupRatioFromExtra(acc.Extra)
+			observedRatio = ObservedGroupRatioForTier(acc.Extra, runtime.TierSmart)
+			observedRatioFast = ObservedGroupRatioForTier(acc.Extra, runtime.TierFast)
 		}
 		if err != nil || node == nil {
 			node = &health.ExecutionNode{
@@ -1474,7 +1475,8 @@ func (yh *YunwuHypervisor) getAllYunwuNodes(ctx context.Context) ([]health.Execu
 				Capabilities:       families,
 				Tiers:              tiers,
 				TierGroups:         tierGroups,
-				ObservedGroupRatio: observedRatio,
+				ObservedGroupRatio:     observedRatio,
+				ObservedGroupRatioFast: observedRatioFast,
 				Priority:           acc.Priority,
 				UpdatedAt:          time.Now(),
 			}
@@ -1486,6 +1488,7 @@ func (yh *YunwuHypervisor) getAllYunwuNodes(ctx context.Context) ([]health.Execu
 			node.Tiers = tiers
 			node.TierGroups = tierGroups
 			node.ObservedGroupRatio = observedRatio
+			node.ObservedGroupRatioFast = observedRatioFast
 			node.Priority = acc.Priority
 		}
 		list = append(list, *node)
@@ -1575,7 +1578,8 @@ func (yh *YunwuHypervisor) startBalanceSync(ctx context.Context) {
 				continue
 			}
 			node := &health.ExecutionNode{NodeID: fmt.Sprint(acc.ID), AccountName: acc.Name, Provider: ParseNodeProvider(acc.Extra)}
-			if _, syncErr := yh.sw.SyncNodeStats(ctx, node, apiKey, baseURL); syncErr != nil {
+			fastApiKey, _ := creds["api_key_fast"].(string)
+			if _, syncErr := yh.sw.SyncNodeStats(ctx, node, apiKey, baseURL, fastApiKey); syncErr != nil {
 				observability.Default.YunwuBalanceSyncFailed()
 				slog.Warn("[YunwuStatsWorker] Yunwu balance sync failed",
 					"node_id", node.NodeID,
@@ -1801,7 +1805,8 @@ func (yh *YunwuHypervisor) SyncAllBalances(ctx context.Context, groupID ...int64
 			State:       "healthy",
 		}
 
-		grants, syncErr := yh.sw.SyncNodeStats(ctx, node, apiKey, baseURL)
+		fastApiKey, _ := creds["api_key_fast"].(string)
+		grants, syncErr := yh.sw.SyncNodeStats(ctx, node, apiKey, baseURL, fastApiKey)
 		if syncErr != nil {
 			observability.Default.YunwuBalanceSyncFailed()
 			resItem.Status = "error"

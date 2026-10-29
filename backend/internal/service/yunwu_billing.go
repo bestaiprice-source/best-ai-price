@@ -99,7 +99,7 @@ func computeYunwuScope(ctx context.Context, repo AccountRepository) (map[string]
 	}
 	scope := make(map[string][]string)
 	tierGroups := make(map[string]yunwu.TierGroupNames)
-	observed := make(map[string]float64)
+	observed := make(map[string]map[string]float64)
 	seen := make(map[string]map[string]bool)
 	add := func(family, provider string) {
 		if family == "" || provider == "" {
@@ -140,10 +140,22 @@ func computeYunwuScope(ctx context.Context, repo AccountRepository) (map[string]
 		// The observed multiplier is a FLOOR: when several accounts of one provider
 		// disagree, the highest (safest) reading wins so a cheap-looking account can
 		// never pull the price below what another account really pays.
-		if ratio := yunwu.ObservedGroupRatioFromExtra(acc.Extra); ratio > 0 && yunwu.ObservedRatioEnabled(acc.Extra) {
+		if yunwu.ObservedRatioEnabled(acc.Extra) {
 			canonical := CanonicalPricingProvider(provider)
-			if ratio > observed[canonical] {
-				observed[canonical] = ratio
+			for _, tier := range []string{yunwu.TierSmartName, yunwu.TierFastName} {
+				ratio := yunwu.ObservedGroupRatioForTier(acc.Extra, tier)
+				if ratio <= 0 {
+					continue
+				}
+				if observed[canonical] == nil {
+					observed[canonical] = make(map[string]float64, 2)
+				}
+				// The highest reading among a provider's accounts is the safest: a
+				// cheap-looking account can never pull a price below what another
+				// account of the same provider really pays.
+				if ratio > observed[canonical][tier] {
+					observed[canonical][tier] = ratio
+				}
 			}
 		}
 		// A node only prices models of the families it advertises.
@@ -177,7 +189,9 @@ type yunwuTierGroupsKey struct{}
 // FLOOR implied by the provider's own accounting (observed_group_ratio).
 type YunwuPricingScope struct {
 	TierGroups map[string]yunwu.TierGroupNames
-	Observed   map[string]float64
+	// Observed is provider → tier → measured correction factor. Both tiers are
+	// measured on their OWN key, so they are stored and read separately.
+	Observed map[string]map[string]float64
 }
 
 // ContextWithYunwuPricingScope attaches a provider pricing scope to a context.
@@ -221,12 +235,16 @@ func yunwuTierGroupForProvider(ctx context.Context, provider, tier string) strin
 
 // yunwuObservedRatioForProvider returns the pricing floor the provider's own
 // accounting implies (0 when nothing has been measured yet).
-func yunwuObservedRatioForProvider(ctx context.Context, provider string) float64 {
+func yunwuObservedRatioForProvider(ctx context.Context, provider, tier string) float64 {
 	scope, ok := yunwuPricingScopeFromContext(ctx)
 	if !ok || provider == "" {
 		return 0
 	}
-	return scope.Observed[CanonicalPricingProvider(provider)]
+	byTier := scope.Observed[CanonicalPricingProvider(provider)]
+	if len(byTier) == 0 {
+		return 0
+	}
+	return byTier[yunwu.NormalizeTier(tier)]
 }
 
 // resetYunwuProviderScopeCache clears the cached provider scope. Billing uses a

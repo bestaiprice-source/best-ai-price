@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/ent"
+	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/runtime"
 )
 
 // Reconciliation of the assumed billing group against what the provider actually
@@ -36,6 +37,9 @@ const (
 	ExtraObservedGroupRatioBasisUSD = "observed_group_ratio_basis_usd"
 	// ExtraObservedGroupRatioMeasuredAt is when the value was last written.
 	ExtraObservedGroupRatioMeasuredAt = "observed_group_ratio_measured_at"
+	// ExtraObservedGroupRatioFast is the FAST key's own measurement slot. A two-key
+	// node is measured per key, so the fast tier never reads the smart value.
+	ExtraObservedGroupRatioFast = "observed_group_ratio_fast"
 	// ExtraObservedRatioEnabled is the per-node opt-in for the whole reconciliation
 	// (checkbox in the account form). OFF — the default — keeps billing exactly as
 	// before: the group selected for the node, nothing else. ON — the price also
@@ -93,16 +97,77 @@ func MeasureObservedCorrection(providerUsedUSDStart, providerUsedUSDEnd, costBas
 	return ratio, true
 }
 
+// observedExtraKeys returns the extra-key set a tier's measurement lives under.
+// Smart keeps the unprefixed names; fast is measured INDEPENDENTLY of smart (its
+// own key has its own provider counter and its own cost basis), so it gets its own
+// slots. A single-key node has one key for both tiers, and its measurement is
+// shared (see ObservedGroupRatioForTier).
+type observedExtraKeys struct {
+	Ratio        string
+	At           string
+	ProviderUsed string
+	Basis        string
+	MeasuredAt   string
+}
+
+func observedExtraKeysForTier(tier string) observedExtraKeys {
+	suffix := ""
+	ratioKey := ExtraObservedGroupRatio
+	if runtime.NormalizeTier(tier) == runtime.TierFast {
+		suffix = "_fast"
+		ratioKey = ExtraObservedGroupRatioFast
+	}
+	return observedExtraKeys{
+		Ratio:        ratioKey,
+		At:           ExtraObservedGroupRatioAt + suffix,
+		ProviderUsed: ExtraObservedGroupRatioProviderUsedUSD + suffix,
+		Basis:        ExtraObservedGroupRatioBasisUSD + suffix,
+		MeasuredAt:   ExtraObservedGroupRatioMeasuredAt + suffix,
+	}
+}
+
+// ObservedGroupRatioForTier reads the correction measured for a tier. Fast never
+// borrows the smart measurement — except on a node that serves both tiers with its
+// ONE key (`tiering_disabled`), where there is only one measurement to share.
+func ObservedGroupRatioForTier(extra map[string]any, tier string) float64 {
+	if extra == nil {
+		return 0
+	}
+	fast := runtime.NormalizeTier(tier) == runtime.TierFast
+	keys := observedExtraKeysForTier(tier)
+	if ratio, ok := extraFloat(extra, keys.Ratio); ok && ratio > 0 {
+		return ratio
+	}
+	// One key for both tiers: the single measurement is shared.
+	if fast && runtime.TieringDisabled(extra) {
+		if ratio, ok := extraFloat(extra, ExtraObservedGroupRatio); ok {
+			return ratio
+		}
+	}
+	return 0
+}
+
 // SumAccountCostBasisSince sums the provider-cost basis (usage_logs.total_cost)
 // recorded for an execution account since a checkpoint — the denominator of the
 // correction factor. total_cost already carries the group ratio we billed at, so
 // the quotient is exactly "real multiplier ÷ assumed multiplier".
-func SumAccountCostBasisSince(ctx context.Context, client *ent.Client, accountID int64, since time.Time) (float64, error) {
+//
+// The tier filter keeps every measurement per KEY: smart covers the requests
+// served by the smart key (rows whose key has tier fast are excluded), fast covers
+// only fast rows. A key created before the tier column exists (tier ”) counts as
+// smart, which is exactly how it is served and priced.
+func SumAccountCostBasisSince(ctx context.Context, client *ent.Client, accountID int64, since time.Time, tier string) (float64, error) {
 	if client == nil || accountID <= 0 || since.IsZero() {
 		return 0, nil
 	}
+	filter := `COALESCE(k.tier, '') <> 'fast'`
+	if runtime.NormalizeTier(tier) == runtime.TierFast {
+		filter = `COALESCE(k.tier, '') = 'fast'`
+	}
 	rows, err := client.QueryContext(ctx,
-		`SELECT COALESCE(SUM(total_cost), 0)::float8 FROM usage_logs WHERE account_id = $1 AND created_at >= $2`,
+		`SELECT COALESCE(SUM(ul.total_cost), 0)::float8 FROM usage_logs ul
+		 LEFT JOIN api_keys k ON k.id = ul.api_key_id
+		 WHERE ul.account_id = $1 AND ul.created_at >= $2 AND `+filter,
 		accountID, since)
 	if err != nil {
 		return 0, err

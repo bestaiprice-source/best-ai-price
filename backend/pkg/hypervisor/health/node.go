@@ -24,9 +24,12 @@ type ExecutionNode struct {
 	TierGroups map[string]string `json:"tier_groups,omitempty"`
 	// ObservedGroupRatio is the pricing FLOOR the provider's own accounting implies
 	// for this node (account.Extra observed_group_ratio). 0 = nothing measured.
-	ObservedGroupRatio float64   `json:"observed_group_ratio,omitempty"`
-	Priority           int       `json:"priority"`
-	UpdatedAt          time.Time `json:"updated_at"`
+	ObservedGroupRatio float64 `json:"observed_group_ratio,omitempty"`
+	// ObservedGroupRatioFast is the same floor measured on the node's FAST key — a
+	// separate key has its own provider counter, so its correction is its own.
+	ObservedGroupRatioFast float64   `json:"observed_group_ratio_fast,omitempty"`
+	Priority               int       `json:"priority"`
+	UpdatedAt              time.Time `json:"updated_at"`
 }
 
 type NodeRuntimeState struct {
