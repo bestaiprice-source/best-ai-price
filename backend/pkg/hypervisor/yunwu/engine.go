@@ -1459,7 +1459,7 @@ func (yh *YunwuHypervisor) getAllYunwuNodes(ctx context.Context) ([]health.Execu
 		node, err := yh.nm.GetNode(ctx, nodeID)
 		families := ParseNodeModelFamilies(acc.Extra)
 		provider := ParseNodeProvider(acc.Extra)
-		tiers := SupportedTiersForCredentials(acc.Credentials)
+		tiers := SupportedTiersForAccount(acc.Credentials, acc.Extra)
 		if err != nil || node == nil {
 			node = &health.ExecutionNode{
 				NodeID:       nodeID,

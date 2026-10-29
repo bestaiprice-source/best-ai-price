@@ -230,6 +230,23 @@
               </label>
             </div>
           </div>
+
+          <!-- Billing tiers: two keys per node (fast + smart) or ONE key for both. -->
+          <label class="flex cursor-pointer items-start gap-2 rounded-lg border border-gray-200 p-3 dark:border-dark-600">
+            <input
+              type="checkbox"
+              v-model="yunwuTieringDisabled"
+              class="mt-0.5 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 dark:border-dark-500"
+            />
+            <span>
+              <span class="text-sm font-medium text-gray-800 dark:text-gray-200">
+                {{ t('ui.editAccountModal.singleKeyMode') }}
+              </span>
+              <span class="block text-[11px] text-gray-500 dark:text-gray-400">
+                {{ t('ui.editAccountModal.singleKeyModeHint') }}
+              </span>
+            </span>
+          </label>
         </div>
 
         <!-- Model Restriction Section (不适用于 Antigravity) -->
@@ -2019,6 +2036,9 @@ const yunwuProtocol = ref('openai')
 const yunwuMinBalance = ref<number | null>(20)
 const yunwuBalance = ref<number | null>(0)
 const yunwuSupportedFamilies = ref<string[]>(['claude', 'gpt', 'gemini', 'kimi', 'other'])
+// Single-key mode (see CreateAccountModal): the node serves both billing tiers
+// through its one key, so the tier stops influencing that node's routing.
+const yunwuTieringDisabled = ref(false)
 
 const YUNWU_PROVIDER_DEFAULTS: Record<string, string> = {
   openlux: 'https://api.openlux.ai/v1',
@@ -2305,6 +2325,7 @@ const syncFormFromAccount = (newAccount: Account | null) => {
     } else {
       yunwuSupportedFamilies.value = ['claude', 'gpt', 'gemini', 'kimi', 'other']
     }
+    yunwuTieringDisabled.value = extra?.tiering_disabled === true
   } else {
     yunwuProvider.value = 'openlux'
     yunwuCustomProvider.value = ''
@@ -2312,6 +2333,7 @@ const syncFormFromAccount = (newAccount: Account | null) => {
     yunwuMinBalance.value = 20
     yunwuBalance.value = 0
     yunwuSupportedFamilies.value = ['claude', 'gpt', 'gemini', 'kimi', 'other']
+    yunwuTieringDisabled.value = false
   }
 
   // Load OpenAI passthrough toggle (OpenAI OAuth/API Key)
@@ -3458,6 +3480,14 @@ const handleSubmit = async () => {
       newExtra.supported_model_families = yunwuSupportedFamilies.value.length > 0
         ? [...yunwuSupportedFamilies.value]
         : ['claude', 'gpt', 'gemini', 'kimi', 'other']
+      // Single-key mode: written only when ON so an untouched form keeps the
+      // previous extra shape, and explicitly removed when switched off (a
+      // lingering `true` would silently keep the node in single-key mode).
+      if (yunwuTieringDisabled.value) {
+        newExtra.tiering_disabled = true
+      } else {
+        delete newExtra.tiering_disabled
+      }
       updatePayload.extra = applyIgnorePauseSchedulingErrorsUpdate(newExtra)
     }
 

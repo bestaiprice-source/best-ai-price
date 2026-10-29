@@ -24,6 +24,35 @@ const (
 	CredentialKeyFast  = "api_key_fast"
 )
 
+// AccountExtraTieringDisabled is the account `extra` flag that puts a node back
+// into SINGLE-KEY mode.
+//
+// Two keys per node (fast + smart) is a per-provider arrangement, not a
+// universal one: some upstreams issue one key and price it identically for both
+// tiers, so splitting it adds nothing. With this flag set the tier stops
+// influencing that node's routing (`yunwu.SupportedTiersForAccount` advertises
+// both tiers) and every request uses the one key the node actually has.
+const AccountExtraTieringDisabled = "tiering_disabled"
+
+// TieringDisabled reports whether an account's `extra` turns the two-key
+// arrangement off. Accepts a real bool plus the string spellings an admin form
+// or a hand-edited JSON may produce.
+func TieringDisabled(extra map[string]any) bool {
+	if extra == nil {
+		return false
+	}
+	switch v := extra[AccountExtraTieringDisabled].(type) {
+	case bool:
+		return v
+	case string:
+		switch strings.ToLower(strings.TrimSpace(v)) {
+		case "true", "1", "yes", "on":
+			return true
+		}
+	}
+	return false
+}
+
 // smartCredentialFields mirrors the legacy runtime lookup order (see
 // AnthropicRuntime.Execute), so a node that stores its key under "key"/"token"/
 // "access_token" still counts as a smart node.
@@ -102,11 +131,23 @@ func NodeSupportsTier(credentials map[string]any, tier string) bool {
 //   - OAuth / setup-token accounts             -> access_token first;
 //   - everything else                          -> the legacy api_key-first list.
 func CredentialFieldForAccount(tier, accountType, platform string, credentials map[string]any) string {
+	return CredentialFieldForAccountTiered(tier, accountType, platform, credentials, false)
+}
+
+// CredentialFieldForAccountTiered is CredentialFieldForAccount plus the node's
+// single-key switch.
+//
+// With tiering disabled the request tier is ignored and the legacy smart lookup
+// is used, so a fast request is served by the node's ONE key instead of failing
+// with "tier fast key is not configured for node". The tier still travels with
+// the request (pricing is resolved from the primary provider, not from the
+// serving node), so only the credential choice changes.
+func CredentialFieldForAccountTiered(tier, accountType, platform string, credentials map[string]any, tieringDisabled bool) string {
 	fields := smartCredentialFields
 	if accountType == "oauth" || accountType == "setup-token" {
 		fields = []string{"access_token", "setup_token", "api_key", "key", "token", "session_key"}
 	}
-	if platform == "yunwu" && NormalizeTier(tier) == TierFast {
+	if !tieringDisabled && platform == "yunwu" && NormalizeTier(tier) == TierFast {
 		fields = fastCredentialFields
 	}
 	for _, field := range fields {

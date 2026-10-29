@@ -391,6 +391,24 @@
           </div>
         </div>
 
+        <!-- Billing tiers: two keys per node (fast + smart) or ONE key for both.
+             Some providers issue a single key priced the same for both tiers. -->
+        <label class="flex cursor-pointer items-start gap-2 rounded-lg border border-gray-200 p-3 dark:border-dark-600">
+          <input
+            type="checkbox"
+            v-model="yunwuTieringDisabled"
+            class="mt-0.5 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 dark:border-dark-500"
+          />
+          <span>
+            <span class="text-sm font-medium text-gray-800 dark:text-gray-200">
+              {{ t('ui.createAccountModal.singleKeyMode') }}
+            </span>
+            <span class="block text-[11px] text-gray-500 dark:text-gray-400">
+              {{ t('ui.createAccountModal.singleKeyModeHint') }}
+            </span>
+          </span>
+        </label>
+
         <!-- Custom Model Mapping -->
         <div class="rounded-lg border border-gray-200 bg-white/70 p-3.5 dark:border-dark-700 dark:bg-dark-900/40">
           <div class="flex items-center justify-between mb-2">
@@ -3395,6 +3413,10 @@ const yunwuProtocol = ref('openai')
 const yunwuInitialBalance = ref<number | null>(0)
 const yunwuMinBalance = ref<number | null>(20)
 const yunwuSupportedFamilies = ref<string[]>(['claude', 'gpt', 'gemini', 'kimi', 'other'])
+// Single-key mode: some providers issue ONE key, priced the same for both
+// billing tiers, so splitting it into fast/smart adds nothing. With this on the
+// node advertises both tiers and every request uses its one key.
+const yunwuTieringDisabled = ref(false)
 interface YunwuMappingRow {
   canonical: string
   upstream: string
@@ -4202,6 +4224,7 @@ const resetForm = () => {
   yunwuInitialBalance.value = 0
   yunwuMinBalance.value = 20
   yunwuSupportedFamilies.value = ['claude', 'gpt', 'gemini', 'kimi', 'other']
+  yunwuTieringDisabled.value = false
   yunwuModelMappings.value = []
   tempUnschedEnabled.value = false
   tempUnschedRules.value = []
@@ -4397,6 +4420,10 @@ const handleSubmit = async () => {
       deposit_baseline_tokens: 0,
       balance_source: 'manual',
       balance_updated_at: new Date().toISOString()
+    }
+    // Only written when ON, so an untouched form keeps the previous extra shape.
+    if (yunwuTieringDisabled.value) {
+      extra.tiering_disabled = true
     }
     const mappingObj: Record<string, string> = {}
     for (const row of yunwuModelMappings.value) {

@@ -429,7 +429,7 @@ func (r *AnthropicRuntime) Execute(ctx context.Context, nodeID string, reqPayloa
 	// use the dedicated fast credential and must never fall back to the smart key,
 	// because the two keys are priced differently.
 	requestTier := TierFromContext(ctx)
-	credentialField := CredentialFieldForAccount(requestTier, acc.Type, acc.Platform, accountCredentials)
+	credentialField := CredentialFieldForAccountTiered(requestTier, acc.Type, acc.Platform, accountCredentials, TieringDisabled(acc.Extra))
 	apiKey := ""
 	if credentialField != "" {
 		apiKey, _ = accountCredentials[credentialField].(string)

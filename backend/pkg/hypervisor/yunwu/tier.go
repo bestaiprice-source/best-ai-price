@@ -27,6 +27,24 @@ func SupportedTiersForCredentials(credentials map[string]any) []string {
 	return tiers
 }
 
+// SupportedTiersForAccount lists the billing tiers a node serves, honouring the
+// per-node single-key switch.
+//
+// With tiering disabled the node's ONE key serves BOTH tiers, so the scheduler
+// must not exclude it from either: a fast request is a legitimate candidate for
+// such a node, and the runtime resolves it to the same key. Without the flag the
+// tiers come from the credentials as before.
+//
+// This is the ONLY place the switch is applied to routing; the runtime applies
+// the same flag to the credential choice, so a node can never be advertised for
+// a tier it would then fail to serve.
+func SupportedTiersForAccount(credentials map[string]any, extra map[string]any) []string {
+	if runtime.TieringDisabled(extra) {
+		return []string{runtime.TierSmart, runtime.TierFast}
+	}
+	return SupportedTiersForCredentials(credentials)
+}
+
 // NodeSupportsBillingTier reports whether the node's advertised tiers cover the
 // requested tier. An empty tier means "no tier restriction".
 //

@@ -6280,6 +6280,9 @@ export default {
       refreshToken: 'Refresh-токен',
       region: 'Регион',
       selectwhichneuralnetwork: 'Выберите семейства нейросетей, которые будут направляться на этот узел:',
+      singleKeyMode: 'Режим одного ключа',
+      singleKeyModeHint:
+        'Этот провайдер выдаёт ОДИН ключ, одинаково оценённый для обоих тарифов. Тогда узел обслуживает и fast, и smart этим ключом, а тир перестаёт влиять на его маршрутизацию.',
       skyunwu: 'sk-yunwu-...',
       social: 'social',
       standard: 'Стандартный',
@@ -6354,6 +6357,9 @@ export default {
       refreshToken: 'Refresh-токен',
       region: 'Регион',
       selectwhichneuralnetwork: 'Выберите, какие семейства нейросетей направлять на этот узел:',
+      singleKeyMode: 'Режим одного ключа',
+      singleKeyModeHint:
+        'Этот провайдер выдаёт ОДИН ключ, одинаково оценённый для обоих тарифов. Тогда узел обслуживает и fast, и smart этим ключом, а тир перестаёт влиять на его маршрутизацию.',
       fastApiKeyLabel: 'Fast API-ключ',
       fastApiKeyHint: 'Ключ, выданный в группе "fast" у провайдера. Оставьте пустым для ноды только со smart; вставьте ключ, чтобы включить fast-тариф.',
       fastApiKeyConfigured: 'Fast-ключ настроен. Введите новое значение, чтобы заменить его.',

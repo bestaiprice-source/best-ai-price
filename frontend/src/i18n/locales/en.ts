@@ -6280,6 +6280,9 @@ export default {
       refreshToken: 'Refresh Token',
       region: 'Region',
       selectwhichneuralnetwork: 'Select which neural network families will be routed to this node:',
+      singleKeyMode: 'Single-key mode',
+      singleKeyModeHint:
+        'This provider issues ONE key, priced the same for both billing tiers. The node then serves fast and smart with that key, and the tier stops affecting its routing.',
       skyunwu: 'sk-yunwu-...',
       social: 'social',
       standard: 'Standard',
@@ -6354,6 +6357,9 @@ export default {
       refreshToken: 'Refresh Token',
       region: 'Region',
       selectwhichneuralnetwork: 'Select which neural network families route to this node:',
+      singleKeyMode: 'Single-key mode',
+      singleKeyModeHint:
+        'This provider issues ONE key, priced the same for both billing tiers. The node then serves fast and smart with that key, and the tier stops affecting its routing.',
       fastApiKeyLabel: 'Fast API Key',
       fastApiKeyHint: 'Key issued in the provider\'s "fast" billing group. Leave empty for a smart-only node; paste one to enable the fast tier.',
       fastApiKeyConfigured: 'A fast-tier key is configured. Enter a new value to replace it.',
