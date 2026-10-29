@@ -49,6 +49,10 @@ const (
 	FieldBodyOverrideMode = "body_override_mode"
 	// FieldBodyOverride holds the string denoting the body_override field in the database.
 	FieldBodyOverride = "body_override"
+	// FieldMaintenanceUntil holds the string denoting the maintenance_until field in the database.
+	FieldMaintenanceUntil = "maintenance_until"
+	// FieldMaintenanceNote holds the string denoting the maintenance_note field in the database.
+	FieldMaintenanceNote = "maintenance_note"
 	// EdgeHistory holds the string denoting the history edge name in mutations.
 	EdgeHistory = "history"
 	// EdgeDailyRollups holds the string denoting the daily_rollups edge name in mutations.
@@ -100,6 +104,8 @@ var Columns = []string{
 	FieldExtraHeaders,
 	FieldBodyOverrideMode,
 	FieldBodyOverride,
+	FieldMaintenanceUntil,
+	FieldMaintenanceNote,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -143,6 +149,10 @@ var (
 	DefaultBodyOverrideMode string
 	// BodyOverrideModeValidator is a validator for the "body_override_mode" field. It is called by the builders before save.
 	BodyOverrideModeValidator func(string) error
+	// DefaultMaintenanceNote holds the default value on creation for the "maintenance_note" field.
+	DefaultMaintenanceNote string
+	// MaintenanceNoteValidator is a validator for the "maintenance_note" field. It is called by the builders before save.
+	MaintenanceNoteValidator func(string) error
 )
 
 // Provider defines the type for the "provider" enum field.
@@ -245,6 +255,16 @@ func ByTemplateID(opts ...sql.OrderTermOption) OrderOption {
 // ByBodyOverrideMode orders the results by the body_override_mode field.
 func ByBodyOverrideMode(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldBodyOverrideMode, opts...).ToFunc()
+}
+
+// ByMaintenanceUntil orders the results by the maintenance_until field.
+func ByMaintenanceUntil(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldMaintenanceUntil, opts...).ToFunc()
+}
+
+// ByMaintenanceNote orders the results by the maintenance_note field.
+func ByMaintenanceNote(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldMaintenanceNote, opts...).ToFunc()
 }
 
 // ByHistoryCount orders the results by history count.

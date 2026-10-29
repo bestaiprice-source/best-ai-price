@@ -13140,6 +13140,8 @@ type ChannelMonitorMutation struct {
 	extra_headers           *map[string]string
 	body_override_mode      *string
 	body_override           *map[string]interface{}
+	maintenance_until       *time.Time
+	maintenance_note        *string
 	clearedFields           map[string]struct{}
 	history                 map[int64]struct{}
 	removedhistory          map[int64]struct{}
@@ -13971,6 +13973,104 @@ func (m *ChannelMonitorMutation) ResetBodyOverride() {
 	delete(m.clearedFields, channelmonitor.FieldBodyOverride)
 }
 
+// SetMaintenanceUntil sets the "maintenance_until" field.
+func (m *ChannelMonitorMutation) SetMaintenanceUntil(t time.Time) {
+	m.maintenance_until = &t
+}
+
+// MaintenanceUntil returns the value of the "maintenance_until" field in the mutation.
+func (m *ChannelMonitorMutation) MaintenanceUntil() (r time.Time, exists bool) {
+	v := m.maintenance_until
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldMaintenanceUntil returns the old "maintenance_until" field's value of the ChannelMonitor entity.
+// If the ChannelMonitor object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ChannelMonitorMutation) OldMaintenanceUntil(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldMaintenanceUntil is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldMaintenanceUntil requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldMaintenanceUntil: %w", err)
+	}
+	return oldValue.MaintenanceUntil, nil
+}
+
+// ClearMaintenanceUntil clears the value of the "maintenance_until" field.
+func (m *ChannelMonitorMutation) ClearMaintenanceUntil() {
+	m.maintenance_until = nil
+	m.clearedFields[channelmonitor.FieldMaintenanceUntil] = struct{}{}
+}
+
+// MaintenanceUntilCleared returns if the "maintenance_until" field was cleared in this mutation.
+func (m *ChannelMonitorMutation) MaintenanceUntilCleared() bool {
+	_, ok := m.clearedFields[channelmonitor.FieldMaintenanceUntil]
+	return ok
+}
+
+// ResetMaintenanceUntil resets all changes to the "maintenance_until" field.
+func (m *ChannelMonitorMutation) ResetMaintenanceUntil() {
+	m.maintenance_until = nil
+	delete(m.clearedFields, channelmonitor.FieldMaintenanceUntil)
+}
+
+// SetMaintenanceNote sets the "maintenance_note" field.
+func (m *ChannelMonitorMutation) SetMaintenanceNote(s string) {
+	m.maintenance_note = &s
+}
+
+// MaintenanceNote returns the value of the "maintenance_note" field in the mutation.
+func (m *ChannelMonitorMutation) MaintenanceNote() (r string, exists bool) {
+	v := m.maintenance_note
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldMaintenanceNote returns the old "maintenance_note" field's value of the ChannelMonitor entity.
+// If the ChannelMonitor object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ChannelMonitorMutation) OldMaintenanceNote(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldMaintenanceNote is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldMaintenanceNote requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldMaintenanceNote: %w", err)
+	}
+	return oldValue.MaintenanceNote, nil
+}
+
+// ClearMaintenanceNote clears the value of the "maintenance_note" field.
+func (m *ChannelMonitorMutation) ClearMaintenanceNote() {
+	m.maintenance_note = nil
+	m.clearedFields[channelmonitor.FieldMaintenanceNote] = struct{}{}
+}
+
+// MaintenanceNoteCleared returns if the "maintenance_note" field was cleared in this mutation.
+func (m *ChannelMonitorMutation) MaintenanceNoteCleared() bool {
+	_, ok := m.clearedFields[channelmonitor.FieldMaintenanceNote]
+	return ok
+}
+
+// ResetMaintenanceNote resets all changes to the "maintenance_note" field.
+func (m *ChannelMonitorMutation) ResetMaintenanceNote() {
+	m.maintenance_note = nil
+	delete(m.clearedFields, channelmonitor.FieldMaintenanceNote)
+}
+
 // AddHistoryIDs adds the "history" edge to the ChannelMonitorHistory entity by ids.
 func (m *ChannelMonitorMutation) AddHistoryIDs(ids ...int64) {
 	if m.history == nil {
@@ -14153,7 +14253,7 @@ func (m *ChannelMonitorMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ChannelMonitorMutation) Fields() []string {
-	fields := make([]string, 0, 17)
+	fields := make([]string, 0, 19)
 	if m.created_at != nil {
 		fields = append(fields, channelmonitor.FieldCreatedAt)
 	}
@@ -14205,6 +14305,12 @@ func (m *ChannelMonitorMutation) Fields() []string {
 	if m.body_override != nil {
 		fields = append(fields, channelmonitor.FieldBodyOverride)
 	}
+	if m.maintenance_until != nil {
+		fields = append(fields, channelmonitor.FieldMaintenanceUntil)
+	}
+	if m.maintenance_note != nil {
+		fields = append(fields, channelmonitor.FieldMaintenanceNote)
+	}
 	return fields
 }
 
@@ -14247,6 +14353,10 @@ func (m *ChannelMonitorMutation) Field(name string) (ent.Value, bool) {
 		return m.BodyOverrideMode()
 	case channelmonitor.FieldBodyOverride:
 		return m.BodyOverride()
+	case channelmonitor.FieldMaintenanceUntil:
+		return m.MaintenanceUntil()
+	case channelmonitor.FieldMaintenanceNote:
+		return m.MaintenanceNote()
 	}
 	return nil, false
 }
@@ -14290,6 +14400,10 @@ func (m *ChannelMonitorMutation) OldField(ctx context.Context, name string) (ent
 		return m.OldBodyOverrideMode(ctx)
 	case channelmonitor.FieldBodyOverride:
 		return m.OldBodyOverride(ctx)
+	case channelmonitor.FieldMaintenanceUntil:
+		return m.OldMaintenanceUntil(ctx)
+	case channelmonitor.FieldMaintenanceNote:
+		return m.OldMaintenanceNote(ctx)
 	}
 	return nil, fmt.Errorf("unknown ChannelMonitor field %s", name)
 }
@@ -14418,6 +14532,20 @@ func (m *ChannelMonitorMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetBodyOverride(v)
 		return nil
+	case channelmonitor.FieldMaintenanceUntil:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetMaintenanceUntil(v)
+		return nil
+	case channelmonitor.FieldMaintenanceNote:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetMaintenanceNote(v)
+		return nil
 	}
 	return fmt.Errorf("unknown ChannelMonitor field %s", name)
 }
@@ -14487,6 +14615,12 @@ func (m *ChannelMonitorMutation) ClearedFields() []string {
 	if m.FieldCleared(channelmonitor.FieldBodyOverride) {
 		fields = append(fields, channelmonitor.FieldBodyOverride)
 	}
+	if m.FieldCleared(channelmonitor.FieldMaintenanceUntil) {
+		fields = append(fields, channelmonitor.FieldMaintenanceUntil)
+	}
+	if m.FieldCleared(channelmonitor.FieldMaintenanceNote) {
+		fields = append(fields, channelmonitor.FieldMaintenanceNote)
+	}
 	return fields
 }
 
@@ -14512,6 +14646,12 @@ func (m *ChannelMonitorMutation) ClearField(name string) error {
 		return nil
 	case channelmonitor.FieldBodyOverride:
 		m.ClearBodyOverride()
+		return nil
+	case channelmonitor.FieldMaintenanceUntil:
+		m.ClearMaintenanceUntil()
+		return nil
+	case channelmonitor.FieldMaintenanceNote:
+		m.ClearMaintenanceNote()
 		return nil
 	}
 	return fmt.Errorf("unknown ChannelMonitor nullable field %s", name)
@@ -14571,6 +14711,12 @@ func (m *ChannelMonitorMutation) ResetField(name string) error {
 		return nil
 	case channelmonitor.FieldBodyOverride:
 		m.ResetBodyOverride()
+		return nil
+	case channelmonitor.FieldMaintenanceUntil:
+		m.ResetMaintenanceUntil()
+		return nil
+	case channelmonitor.FieldMaintenanceNote:
+		m.ResetMaintenanceNote()
 		return nil
 	}
 	return fmt.Errorf("unknown ChannelMonitor field %s", name)

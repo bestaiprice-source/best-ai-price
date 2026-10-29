@@ -268,6 +268,46 @@ func (_u *ChannelMonitorUpdate) ClearBodyOverride() *ChannelMonitorUpdate {
 	return _u
 }
 
+// SetMaintenanceUntil sets the "maintenance_until" field.
+func (_u *ChannelMonitorUpdate) SetMaintenanceUntil(v time.Time) *ChannelMonitorUpdate {
+	_u.mutation.SetMaintenanceUntil(v)
+	return _u
+}
+
+// SetNillableMaintenanceUntil sets the "maintenance_until" field if the given value is not nil.
+func (_u *ChannelMonitorUpdate) SetNillableMaintenanceUntil(v *time.Time) *ChannelMonitorUpdate {
+	if v != nil {
+		_u.SetMaintenanceUntil(*v)
+	}
+	return _u
+}
+
+// ClearMaintenanceUntil clears the value of the "maintenance_until" field.
+func (_u *ChannelMonitorUpdate) ClearMaintenanceUntil() *ChannelMonitorUpdate {
+	_u.mutation.ClearMaintenanceUntil()
+	return _u
+}
+
+// SetMaintenanceNote sets the "maintenance_note" field.
+func (_u *ChannelMonitorUpdate) SetMaintenanceNote(v string) *ChannelMonitorUpdate {
+	_u.mutation.SetMaintenanceNote(v)
+	return _u
+}
+
+// SetNillableMaintenanceNote sets the "maintenance_note" field if the given value is not nil.
+func (_u *ChannelMonitorUpdate) SetNillableMaintenanceNote(v *string) *ChannelMonitorUpdate {
+	if v != nil {
+		_u.SetMaintenanceNote(*v)
+	}
+	return _u
+}
+
+// ClearMaintenanceNote clears the value of the "maintenance_note" field.
+func (_u *ChannelMonitorUpdate) ClearMaintenanceNote() *ChannelMonitorUpdate {
+	_u.mutation.ClearMaintenanceNote()
+	return _u
+}
+
 // AddHistoryIDs adds the "history" edge to the ChannelMonitorHistory entity by IDs.
 func (_u *ChannelMonitorUpdate) AddHistoryIDs(ids ...int64) *ChannelMonitorUpdate {
 	_u.mutation.AddHistoryIDs(ids...)
@@ -448,6 +488,11 @@ func (_u *ChannelMonitorUpdate) check() error {
 			return &ValidationError{Name: "body_override_mode", err: fmt.Errorf(`ent: validator failed for field "ChannelMonitor.body_override_mode": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.MaintenanceNote(); ok {
+		if err := channelmonitor.MaintenanceNoteValidator(v); err != nil {
+			return &ValidationError{Name: "maintenance_note", err: fmt.Errorf(`ent: validator failed for field "ChannelMonitor.maintenance_note": %w`, err)}
+		}
+	}
 	return nil
 }
 
@@ -527,6 +572,18 @@ func (_u *ChannelMonitorUpdate) sqlSave(ctx context.Context) (_node int, err err
 	}
 	if _u.mutation.BodyOverrideCleared() {
 		_spec.ClearField(channelmonitor.FieldBodyOverride, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.MaintenanceUntil(); ok {
+		_spec.SetField(channelmonitor.FieldMaintenanceUntil, field.TypeTime, value)
+	}
+	if _u.mutation.MaintenanceUntilCleared() {
+		_spec.ClearField(channelmonitor.FieldMaintenanceUntil, field.TypeTime)
+	}
+	if value, ok := _u.mutation.MaintenanceNote(); ok {
+		_spec.SetField(channelmonitor.FieldMaintenanceNote, field.TypeString, value)
+	}
+	if _u.mutation.MaintenanceNoteCleared() {
+		_spec.ClearField(channelmonitor.FieldMaintenanceNote, field.TypeString)
 	}
 	if _u.mutation.HistoryCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -903,6 +960,46 @@ func (_u *ChannelMonitorUpdateOne) ClearBodyOverride() *ChannelMonitorUpdateOne 
 	return _u
 }
 
+// SetMaintenanceUntil sets the "maintenance_until" field.
+func (_u *ChannelMonitorUpdateOne) SetMaintenanceUntil(v time.Time) *ChannelMonitorUpdateOne {
+	_u.mutation.SetMaintenanceUntil(v)
+	return _u
+}
+
+// SetNillableMaintenanceUntil sets the "maintenance_until" field if the given value is not nil.
+func (_u *ChannelMonitorUpdateOne) SetNillableMaintenanceUntil(v *time.Time) *ChannelMonitorUpdateOne {
+	if v != nil {
+		_u.SetMaintenanceUntil(*v)
+	}
+	return _u
+}
+
+// ClearMaintenanceUntil clears the value of the "maintenance_until" field.
+func (_u *ChannelMonitorUpdateOne) ClearMaintenanceUntil() *ChannelMonitorUpdateOne {
+	_u.mutation.ClearMaintenanceUntil()
+	return _u
+}
+
+// SetMaintenanceNote sets the "maintenance_note" field.
+func (_u *ChannelMonitorUpdateOne) SetMaintenanceNote(v string) *ChannelMonitorUpdateOne {
+	_u.mutation.SetMaintenanceNote(v)
+	return _u
+}
+
+// SetNillableMaintenanceNote sets the "maintenance_note" field if the given value is not nil.
+func (_u *ChannelMonitorUpdateOne) SetNillableMaintenanceNote(v *string) *ChannelMonitorUpdateOne {
+	if v != nil {
+		_u.SetMaintenanceNote(*v)
+	}
+	return _u
+}
+
+// ClearMaintenanceNote clears the value of the "maintenance_note" field.
+func (_u *ChannelMonitorUpdateOne) ClearMaintenanceNote() *ChannelMonitorUpdateOne {
+	_u.mutation.ClearMaintenanceNote()
+	return _u
+}
+
 // AddHistoryIDs adds the "history" edge to the ChannelMonitorHistory entity by IDs.
 func (_u *ChannelMonitorUpdateOne) AddHistoryIDs(ids ...int64) *ChannelMonitorUpdateOne {
 	_u.mutation.AddHistoryIDs(ids...)
@@ -1096,6 +1193,11 @@ func (_u *ChannelMonitorUpdateOne) check() error {
 			return &ValidationError{Name: "body_override_mode", err: fmt.Errorf(`ent: validator failed for field "ChannelMonitor.body_override_mode": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.MaintenanceNote(); ok {
+		if err := channelmonitor.MaintenanceNoteValidator(v); err != nil {
+			return &ValidationError{Name: "maintenance_note", err: fmt.Errorf(`ent: validator failed for field "ChannelMonitor.maintenance_note": %w`, err)}
+		}
+	}
 	return nil
 }
 
@@ -1192,6 +1294,18 @@ func (_u *ChannelMonitorUpdateOne) sqlSave(ctx context.Context) (_node *ChannelM
 	}
 	if _u.mutation.BodyOverrideCleared() {
 		_spec.ClearField(channelmonitor.FieldBodyOverride, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.MaintenanceUntil(); ok {
+		_spec.SetField(channelmonitor.FieldMaintenanceUntil, field.TypeTime, value)
+	}
+	if _u.mutation.MaintenanceUntilCleared() {
+		_spec.ClearField(channelmonitor.FieldMaintenanceUntil, field.TypeTime)
+	}
+	if value, ok := _u.mutation.MaintenanceNote(); ok {
+		_spec.SetField(channelmonitor.FieldMaintenanceNote, field.TypeString, value)
+	}
+	if _u.mutation.MaintenanceNoteCleared() {
+		_spec.ClearField(channelmonitor.FieldMaintenanceNote, field.TypeString)
 	}
 	if _u.mutation.HistoryCleared() {
 		edge := &sqlgraph.EdgeSpec{

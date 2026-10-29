@@ -483,6 +483,22 @@ export default {
       details: 'Details'
     }
   },
+  // Model health (probe-measured uptime shown on the dashboard and on the
+  // model catalog cards; the legend wording follows the provider consoles).
+  modelHealth: {
+    title: 'Model health',
+    subtitle: 'Probe uptime over the last {window} days',
+    viewAll: 'All models',
+    moreModels: '+{count} more models',
+    uptime: 'uptime',
+    status: {
+      normal: 'Normal',
+      highLatency: 'High latency',
+      error: 'Error',
+      maintenance: 'Maintenance',
+      unknown: 'No data'
+    }
+  },
   modelsCatalog: {
     discountTitle: '-{percent}% from the official price',
     title: 'Models & Pricing',
@@ -1269,6 +1285,19 @@ export default {
 
   // Admin
   admin: {
+    // Planned-maintenance control on the channel-monitor editor.
+    //
+    // NOTE: the rest of `admin.channelMonitor.*` (form labels, the list screen)
+    // is still untranslated in this fork and renders as raw key paths — a
+    // pre-existing gap, not introduced here.
+    channelMonitor: {
+      maintenance: {
+        section: 'Planned maintenance',
+        until: 'Maintenance until',
+        notePlaceholder: 'Reason (optional)',
+        hint: 'While this window is active the monitor is shown to users as Maintenance and excluded from the uptime percentage. Probes keep running, so the history stays complete.'
+      }
+    },
     // Dashboard
     dashboard: {
       title: 'Admin Dashboard',

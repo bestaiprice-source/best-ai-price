@@ -60,6 +60,12 @@ func executableUserFeatureRoutes(h *handler.Handlers) []gatewayctx.RouteDef {
 				Handler:    h.ChannelMonitor.GetStatusGateway,
 				Middleware: mw,
 			},
+			gatewayctx.RouteDef{
+				Method:     http.MethodGet,
+				Path:       "/api/v1/model-health",
+				Handler:    h.ChannelMonitor.ModelHealthGateway,
+				Middleware: mw,
+			},
 		)
 	}
 	return out
@@ -85,5 +91,8 @@ func registerUserFeatureRoutes(authenticated *gin.RouterGroup, h *handler.Handle
 			monitors.GET("", h.ChannelMonitor.List)
 			monitors.GET("/:id/status", h.ChannelMonitor.GetStatus)
 		}
+		// 扁平「模型 → 健康」read model（仪表盘健康块 / 模型目录卡片共用）。
+		// 与 /channel-monitors 平级注册，避免与 :id 路由产生歧义。
+		authenticated.GET("/model-health", h.ChannelMonitor.ModelHealth)
 	}
 }

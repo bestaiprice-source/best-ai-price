@@ -43,6 +43,9 @@ export interface ChannelMonitor {
   extra_headers: Record<string, string>
   body_override_mode: BodyOverrideMode
   body_override: Record<string, unknown> | null
+  /** 计划维护窗口结束时间（RFC3339）；null = 不在维护中 */
+  maintenance_until?: string | null
+  maintenance_note?: string
 }
 
 export interface ExtraModelStatus {
@@ -86,6 +89,10 @@ export interface CreateParams {
 // Update request: api_key 空串 = 不修改；clear_template=true 时把 template_id 置空
 export type UpdateParams = Partial<CreateParams> & {
   clear_template?: boolean
+  /** RFC3339 维护窗口结束时间；与 clear_maintenance 二选一。 */
+  maintenance_until?: string | null
+  maintenance_note?: string
+  clear_maintenance?: boolean
 }
 
 export interface CheckResult {

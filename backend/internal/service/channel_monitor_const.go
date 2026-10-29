@@ -63,6 +63,14 @@ const (
 	MonitorStatusFailed      = "failed"
 	MonitorStatusError       = "error"
 
+	// MonitorStatusMaintenance 是管理员声明的计划维护状态。
+	//
+	// 它 **不是** 探针结果：channel_monitor_histories.status 的 ent 枚举里没有这个值，
+	// 任何检测都不会写入它。它是「监控级」的覆盖状态，由 maintenance_until 派生
+	// （见 ChannelMonitor.InMaintenance），在用户可见视图上替代探针状态显示，
+	// 并把该监控从可用率统计中排除。
+	MonitorStatusMaintenance = "maintenance"
+
 	// monitorAvailability7Days / 15 / 30 用于聚合查询窗口。
 	monitorAvailability7Days  = 7
 	monitorAvailability15Days = 15

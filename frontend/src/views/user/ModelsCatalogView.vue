@@ -74,6 +74,8 @@
         </div>
       </div>
 
+      <ModelHealthLegend v-if="hasHealth" class="mt-4" />
+
       <div class="mt-4 text-xs text-gray-500 dark:text-gray-400">
         <span>{{ t('modelsCatalog.modelsCount', { count: filtered.length }) }}</span>
       </div>
@@ -123,8 +125,15 @@
               >
                 <Icon name="copy" size="sm" />
               </button>
+              <!-- Probe health when a monitor covers this model, otherwise the
+                   catalog's own binary availability flag. -->
+              <ModelHealthBadge
+                v-if="healthOf(model)"
+                :status="healthOf(model)?.status"
+                :uptime="healthOf(model)?.availability_pct ?? null"
+              />
               <span
-                v-if="isAvailable(model)"
+                v-else-if="isAvailable(model)"
                 class="inline-block h-2 w-2 shrink-0 rounded-full bg-emerald-500"
                 :title="t('modelsCatalog.available')"
               ></span>
@@ -190,10 +199,28 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
+import ModelHealthBadge from '@/components/user/monitor/ModelHealthBadge.vue'
+import ModelHealthLegend from '@/components/user/monitor/ModelHealthLegend.vue'
 import { useClipboard } from '@/composables/useClipboard'
+import { useModelHealth } from '@/composables/useModelHealth'
 import { getPublicModels, type PublicModelPricing } from '@/api/publicModels'
 
 const { t } = useI18n()
+const { items: healthItems, load: loadHealth, resolve: resolveHealth } = useModelHealth()
+
+/**
+ * Probe-measured health for a catalog model.
+ *
+ * The catalog feed only carries a binary availability flag, so the uptime
+ * percentage and the Normal / High latency / Error / Maintenance status come
+ * from the channel monitors, joined on the gateway's own normalization keys
+ * (see useModelHealth). A model no monitor covers returns null and the card
+ * falls back to the catalog's own availability dot.
+ */
+const healthOf = (model: PublicModelPricing) =>
+  resolveHealth(model.canonical_model_id || model.model_id)
+
+const hasHealth = computed(() => healthItems.value.length > 0)
 
 const models = ref<PublicModelPricing[]>([])
 const loading = ref(true)
@@ -402,4 +429,9 @@ async function load() {
 }
 
 onMounted(load)
+// Health shares one request with the dashboard (module-level state) and never
+// blocks the catalog: a failure just leaves the cards on the binary dot.
+onMounted(() => {
+  void loadHealth()
+})
 </script>

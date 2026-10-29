@@ -855,6 +855,12 @@ func init() {
 	channelmonitor.DefaultBodyOverrideMode = channelmonitorDescBodyOverrideMode.Default.(string)
 	// channelmonitor.BodyOverrideModeValidator is a validator for the "body_override_mode" field. It is called by the builders before save.
 	channelmonitor.BodyOverrideModeValidator = channelmonitorDescBodyOverrideMode.Validators[0].(func(string) error)
+	// channelmonitorDescMaintenanceNote is the schema descriptor for maintenance_note field.
+	channelmonitorDescMaintenanceNote := channelmonitorFields[16].Descriptor()
+	// channelmonitor.DefaultMaintenanceNote holds the default value on creation for the maintenance_note field.
+	channelmonitor.DefaultMaintenanceNote = channelmonitorDescMaintenanceNote.Default.(string)
+	// channelmonitor.MaintenanceNoteValidator is a validator for the "maintenance_note" field. It is called by the builders before save.
+	channelmonitor.MaintenanceNoteValidator = channelmonitorDescMaintenanceNote.Validators[0].(func(string) error)
 	channelmonitordailyrollupFields := schema.ChannelMonitorDailyRollup{}.Fields()
 	_ = channelmonitordailyrollupFields
 	// channelmonitordailyrollupDescModel is the schema descriptor for model field.

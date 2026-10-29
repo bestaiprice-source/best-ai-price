@@ -188,6 +188,11 @@ type YunwuPricingRawItem struct {
 	// resolved at parse time from the provider's group_ratio map. 0 means "no
 	// group information" and is treated as 1.0.
 	GroupRatio float64 `json:"-"`
+	// GroupRatios is the provider's full group_ratio map (group name →
+	// multiplier). Kept so a request can be priced with the rate of the specific
+	// billing tier group its key belongs to (fast/smart) instead of the cheapest
+	// one — see yunwu.ResolveTierGroupRatio.
+	GroupRatios map[string]float64 `json:"-"`
 	// Official vendor list prices (per 1M tokens), when the source publishes
 	// them (BestAIPrice catalog records). Publish-only: never used for billing.
 	OfficialInputPriceUSDPer1M  float64 `json:"-"`
@@ -459,6 +464,7 @@ func (s *YunwuPricingService) FetchPricingForProvider(ctx context.Context, provi
 				// One-API reports the OFFICIAL ratio; the real price is
 				// ratio × group_ratio of the group the model is enabled for.
 				item.GroupRatio = effectiveGroupRatio(item.EnableGroups, payload.GroupRatio)
+				item.GroupRatios = payload.GroupRatio
 				pricingMap[key] = &item
 			}
 		} else {
@@ -621,6 +627,23 @@ func (s *YunwuPricingService) FetchPricing(ctx context.Context) (map[string]*Yun
 
 // ResolveModelCandidates generates prioritized candidate model names for upstream price lookups.
 func (s *YunwuPricingService) ResolveModelCandidates(modelName string) []string {
+	var aliases map[string]string
+	if s != nil && len(s.aliases) > 0 {
+		aliases = s.aliases
+	}
+	return ModelNameCandidates(modelName, aliases)
+}
+
+// ModelNameCandidates is the ONE normalization that turns an upstream model id
+// into the set of names it may be known by (vendor prefix stripped, date
+// snapshot stripped, dot/dash variants, aliases).
+//
+// It is a pure function because two independent callers must agree exactly:
+// pricing lookups (via ResolveModelCandidates) and the model-health read model,
+// which joins a monitored upstream id such as `claude-3-7-sonnet-20250219` onto
+// the catalog's `anthropic/claude-3-7-sonnet`. Duplicating this logic anywhere
+// else would silently split the join.
+func ModelNameCandidates(modelName string, aliases map[string]string) []string {
 	raw := strings.ToLower(strings.TrimSpace(modelName))
 	if raw == "" {
 		return nil
@@ -679,9 +702,8 @@ func (s *YunwuPricingService) ResolveModelCandidates(modelName string) []string 
 	}
 
 	// 4. Aliases
-	aliases := defaultAliases
-	if s != nil && len(s.aliases) > 0 {
-		aliases = s.aliases
+	if len(aliases) == 0 {
+		aliases = defaultAliases
 	}
 	aliasLen := len(candidates)
 	for i := 0; i < aliasLen; i++ {
@@ -727,13 +749,18 @@ func (s *YunwuPricingService) GetModelPricingForProvider(ctx context.Context, pr
 
 	pricing := &ModelPricing{}
 
+	// The price must follow the billing tier the request is on: a fast request
+	// uses the fast key, which the provider prices with its own group_ratio. When
+	// the tier's group is unknown the request is unpriced (fail closed) rather
+	// than sold at another group's rate.
+	groupRatio, tierPriced := yunwu.ResolveTierGroupRatio(item.GroupRatios, item.GroupRatio, yunwu.TierFromContext(ctx))
+	if !tierPriced {
+		return nil, false
+	}
+
 	if item.ModelPrice > 0 {
 		// Fixed price per unit (e.g. image generation, video generation);
 		// the provider's group discount applies to fixed prices as well.
-		groupRatio := item.GroupRatio
-		if groupRatio <= 0 {
-			groupRatio = 1.0
-		}
 		pricing.FixedPricePerRequest = item.ModelPrice * groupRatio
 		pricing.FixedPriceUnit = item.FixedPriceUnit
 		return pricing, true
@@ -742,10 +769,6 @@ func (s *YunwuPricingService) GetModelPricingForProvider(ctx context.Context, pr
 	// Token-based pricing:
 	// Base price in One API standard is $0.002 per 1,000 tokens ($0.000002 / token)
 	basePerToken := oneAPIBasePricePer1k / 1000.0 // 2e-6
-	groupRatio := item.GroupRatio
-	if groupRatio <= 0 {
-		groupRatio = 1.0
-	}
 	inputPerToken := item.ModelRatio * basePerToken * groupRatio
 
 	compRatio := item.CompletionRatio

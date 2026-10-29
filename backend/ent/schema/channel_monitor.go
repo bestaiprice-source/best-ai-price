@@ -82,6 +82,19 @@ func (ChannelMonitor) Fields() []ent.Field {
 		// body_override: 同 ChannelMonitorRequestTemplate.body_override
 		field.JSON("body_override", map[string]any{}).
 			Optional(),
+
+		// ---- 计划维护窗口 ----
+
+		// maintenance_until / maintenance_note: 管理员声明的计划维护窗口。
+		// until 在未来时，用户可见视图把该监控显示为 maintenance，并从可用率
+		// 统计中排除（探针继续记录，历史不丢）。
+		field.Time("maintenance_until").
+			Optional().
+			Nillable(),
+		field.String("maintenance_note").
+			Optional().
+			Default("").
+			MaxLen(200),
 	}
 }
 

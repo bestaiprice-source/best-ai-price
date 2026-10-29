@@ -68,6 +68,11 @@ type channelMonitorUpdateRequest struct {
 	ExtraHeaders     *map[string]string `json:"extra_headers"`
 	BodyOverrideMode *string            `json:"body_override_mode" binding:"omitempty,oneof=off merge replace"`
 	BodyOverride     *map[string]any    `json:"body_override"`
+	// 计划维护窗口：maintenance_until 用 RFC3339；clear_maintenance=true 时清空窗口
+	// （与 ClearTemplate 同一套三态语义）。两者都缺省即不修改。
+	MaintenanceUntil *string `json:"maintenance_until"`
+	MaintenanceNote  *string `json:"maintenance_note" binding:"omitempty,max=200"`
+	ClearMaintenance bool    `json:"clear_maintenance"`
 }
 
 type channelMonitorResponse struct {
@@ -95,6 +100,9 @@ type channelMonitorResponse struct {
 	ExtraHeaders     map[string]string `json:"extra_headers"`
 	BodyOverrideMode string            `json:"body_override_mode"`
 	BodyOverride     map[string]any    `json:"body_override"`
+	// 计划维护窗口（见 service.MonitorStatusMaintenance）。
+	MaintenanceUntil *string `json:"maintenance_until"`
+	MaintenanceNote  string  `json:"maintenance_note"`
 }
 
 type channelMonitorCheckResultResponse struct {
@@ -161,7 +169,25 @@ func channelMonitorToResponse(m *service.ChannelMonitor) *channelMonitorResponse
 		s := m.LastCheckedAt.UTC().Format(time.RFC3339)
 		resp.LastCheckedAt = &s
 	}
+	resp.MaintenanceNote = m.MaintenanceNote
+	if m.MaintenanceUntil != nil {
+		s := m.MaintenanceUntil.UTC().Format(time.RFC3339)
+		resp.MaintenanceUntil = &s
+	}
 	return resp
+}
+
+// parseMaintenanceUntil 解析 RFC3339 维护窗口结束时间。
+// nil / 空白都表示「不修改」；解析失败返回校验错误而不是静默忽略。
+func parseMaintenanceUntil(raw *string) (*time.Time, error) {
+	if raw == nil || strings.TrimSpace(*raw) == "" {
+		return nil, nil
+	}
+	parsed, err := time.Parse(time.RFC3339, strings.TrimSpace(*raw))
+	if err != nil {
+		return nil, infraerrors.BadRequest("VALIDATION_ERROR", "maintenance_until must be an RFC3339 timestamp")
+	}
+	return &parsed, nil
 }
 
 func checkResultToResponse(r *service.CheckResult) channelMonitorCheckResultResponse {
@@ -446,6 +472,12 @@ func (h *ChannelMonitorHandler) UpdateGateway(c gatewayctx.GatewayContext) {
 		return
 	}
 
+	maintenanceUntil, maintenanceErr := parseMaintenanceUntil(req.MaintenanceUntil)
+	if maintenanceErr != nil {
+		response.ErrorFromContext(gatewayJSONResponder{ctx: c}, maintenanceErr)
+		return
+	}
+
 	m, err := h.monitorService.Update(c.Request().Context(), id, service.ChannelMonitorUpdateParams{
 		Name:             req.Name,
 		Provider:         req.Provider,
@@ -461,6 +493,9 @@ func (h *ChannelMonitorHandler) UpdateGateway(c gatewayctx.GatewayContext) {
 		ExtraHeaders:     req.ExtraHeaders,
 		BodyOverrideMode: req.BodyOverrideMode,
 		BodyOverride:     req.BodyOverride,
+		MaintenanceUntil: maintenanceUntil,
+		MaintenanceNote:  req.MaintenanceNote,
+		ClearMaintenance: req.ClearMaintenance,
 	})
 	if err != nil {
 		response.ErrorFromContext(gatewayJSONResponder{ctx: c}, err)
@@ -481,6 +516,12 @@ func (h *ChannelMonitorHandler) UpdateLegacy(c *gin.Context) {
 		return
 	}
 
+	maintenanceUntil, maintenanceErr := parseMaintenanceUntil(req.MaintenanceUntil)
+	if maintenanceErr != nil {
+		response.ErrorFrom(c, maintenanceErr)
+		return
+	}
+
 	m, err := h.monitorService.Update(c.Request.Context(), id, service.ChannelMonitorUpdateParams{
 		Name:             req.Name,
 		Provider:         req.Provider,
@@ -496,6 +537,9 @@ func (h *ChannelMonitorHandler) UpdateLegacy(c *gin.Context) {
 		ExtraHeaders:     req.ExtraHeaders,
 		BodyOverrideMode: req.BodyOverrideMode,
 		BodyOverride:     req.BodyOverride,
+		MaintenanceUntil: maintenanceUntil,
+		MaintenanceNote:  req.MaintenanceNote,
+		ClearMaintenance: req.ClearMaintenance,
 	})
 	if err != nil {
 		response.ErrorFrom(c, err)

@@ -96,6 +96,30 @@
         <Toggle v-model="form.enabled" />
       </div>
 
+      <!-- Planned maintenance window. Only on an existing monitor: it is an
+           operational action, not part of the probe definition, and the create
+           endpoint does not carry it. While the window is live the monitor is
+           reported as "Maintenance" to users and excluded from uptime. -->
+      <div v-if="editing" class="rounded-lg border border-gray-200 p-3 dark:border-dark-700">
+        <label class="input-label">{{ t('admin.channelMonitor.maintenance.section') }}</label>
+        <div class="mt-2 grid gap-2 sm:grid-cols-2">
+          <input
+            v-model="form.maintenance_until_local"
+            type="datetime-local"
+            class="input"
+            :aria-label="t('admin.channelMonitor.maintenance.until')"
+          />
+          <input
+            v-model="form.maintenance_note"
+            type="text"
+            maxlength="200"
+            class="input"
+            :placeholder="t('admin.channelMonitor.maintenance.notePlaceholder')"
+          />
+        </div>
+        <p class="mt-1 text-xs text-gray-400">{{ t('admin.channelMonitor.maintenance.hint') }}</p>
+      </div>
+
       <!-- 高级设置区：请求模板 + 自定义 headers/body -->
       <details class="rounded-lg border border-gray-200 bg-gray-50/50 p-3 dark:border-dark-700 dark:bg-dark-900/30">
         <summary class="cursor-pointer text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -236,6 +260,26 @@ interface MonitorForm {
   extra_headers: Record<string, string>
   body_override_mode: BodyOverrideMode
   body_override: Record<string, unknown> | null
+  // 计划维护窗口：datetime-local 的本地字符串 + 说明（仅编辑时有意义）
+  maintenance_until_local: string
+  maintenance_note: string
+}
+
+/** RFC3339 → `<input type="datetime-local">` value, in the browser's timezone. */
+function toLocalInputValue(iso: string | null | undefined): string {
+  if (!iso) return ''
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return ''
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
+
+/** `<input type="datetime-local">` value → RFC3339, or null when empty/invalid. */
+function toRFC3339(local: string): string | null {
+  if (!local) return null
+  const date = new Date(local)
+  if (Number.isNaN(date.getTime())) return null
+  return date.toISOString()
 }
 
 const form = reactive<MonitorForm>({
@@ -252,6 +296,8 @@ const form = reactive<MonitorForm>({
   extra_headers: {},
   body_override_mode: 'off',
   body_override: null,
+  maintenance_until_local: '',
+  maintenance_note: '',
 })
 
 // 可用模板列表（进入 dialog 时一次性拉取 cache；按 provider 过滤）。
@@ -336,6 +382,8 @@ function resetForm() {
   form.extra_headers = {}
   form.body_override_mode = 'off'
   form.body_override = null
+  form.maintenance_until_local = ''
+  form.maintenance_note = ''
 }
 
 function loadFromMonitor(m: ChannelMonitor) {
@@ -352,6 +400,8 @@ function loadFromMonitor(m: ChannelMonitor) {
   form.extra_headers = { ...(m.extra_headers || {}) }
   form.body_override_mode = m.body_override_mode || 'off'
   form.body_override = m.body_override ? { ...m.body_override } : null
+  form.maintenance_until_local = toLocalInputValue(m.maintenance_until)
+  form.maintenance_note = m.maintenance_note || ''
 }
 
 // Re-sync form whenever the dialog is opened or the target monitor changes.
@@ -442,6 +492,15 @@ async function handleSubmit() {
         req.clear_template = true
         delete req.template_id
       }
+      // Maintenance window: an emptied input means "no window" and must be sent
+      // explicitly (clear_maintenance), otherwise a removed window would linger.
+      const maintenanceUntil = toRFC3339(form.maintenance_until_local)
+      if (maintenanceUntil) {
+        req.maintenance_until = maintenanceUntil
+      } else {
+        req.clear_maintenance = true
+      }
+      req.maintenance_note = form.maintenance_note.trim()
       await adminAPI.channelMonitor.update(target.id, req)
       appStore.showSuccess(t('admin.channelMonitor.updateSuccess'))
     } else {

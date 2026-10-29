@@ -2,6 +2,7 @@ package handler
 
 import (
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/handler/dto"
@@ -196,4 +197,84 @@ func parseChannelMonitorIDGateway(c gatewayctx.GatewayContext) (int64, bool) {
 		return 0, false
 	}
 	return id, true
+}
+
+// --- Model health (flat per-model read model) ---
+
+// modelHealthItem 一行 = 一个模型的健康快照。
+type modelHealthItem struct {
+	Model            string   `json:"model"`
+	Candidates       []string `json:"candidates"`
+	Status           string   `json:"status"`
+	AvailabilityPct  *float64 `json:"availability_pct"`
+	AvgLatencyMs     *int     `json:"avg_latency_ms"`
+	Provider         string   `json:"provider"`
+	MonitorID        int64    `json:"monitor_id"`
+	MonitorName      string   `json:"monitor_name"`
+	MaintenanceUntil *string  `json:"maintenance_until"`
+	MaintenanceNote  string   `json:"maintenance_note"`
+}
+
+type modelHealthResponse struct {
+	Items      []modelHealthItem `json:"items"`
+	WindowDays int               `json:"window_days"`
+}
+
+// allowedModelHealthWindows 是允许的可用率窗口，避免任意窗口绕过聚合缓存。
+var allowedModelHealthWindows = map[int]bool{7: true, 15: true, 30: true}
+
+// ModelHealth GET /api/v1/model-health?window_days=7
+//
+// 用户端只读：把每个启用监控的每个模型展开成一行，供仪表盘健康块与模型目录
+// 卡片共用。功能关闭时返回空列表（与 /channel-monitors 一致），而不是 404 —
+// 调用方是一个常驻的仪表盘区块，报错只会污染控制台。
+func (h *ChannelMonitorUserHandler) ModelHealth(c *gin.Context) {
+	h.ModelHealthGateway(gatewayctx.FromGin(c))
+}
+
+func (h *ChannelMonitorUserHandler) ModelHealthGateway(c gatewayctx.GatewayContext) {
+	windowDays := service.ModelHealthWindowDays
+	if raw := strings.TrimSpace(c.QueryValue("window_days")); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || !allowedModelHealthWindows[parsed] {
+			response.ErrorFromContext(gatewayJSONResponder{ctx: c}, infraerrors.BadRequest("INVALID_WINDOW", "window_days must be one of 7, 15, 30"))
+			return
+		}
+		windowDays = parsed
+	}
+
+	if !h.featureEnabledGateway(c) {
+		response.SuccessContext(gatewayJSONResponder{ctx: c}, modelHealthResponse{Items: []modelHealthItem{}, WindowDays: windowDays})
+		return
+	}
+
+	entries, err := h.monitorService.ListModelHealth(c.Request().Context(), windowDays)
+	if err != nil {
+		response.ErrorFromContext(gatewayJSONResponder{ctx: c}, err)
+		return
+	}
+
+	items := make([]modelHealthItem, 0, len(entries))
+	for _, e := range entries {
+		item := modelHealthItem{
+			Model:           e.Model,
+			Candidates:      e.Candidates,
+			Status:          e.Status,
+			AvailabilityPct: e.AvailabilityPct,
+			AvgLatencyMs:    e.AvgLatencyMs,
+			Provider:        e.Provider,
+			MonitorID:       e.MonitorID,
+			MonitorName:     e.MonitorName,
+			MaintenanceNote: e.MaintenanceNote,
+		}
+		if item.Candidates == nil {
+			item.Candidates = []string{}
+		}
+		if e.MaintenanceUntil != nil {
+			s := e.MaintenanceUntil.UTC().Format(time.RFC3339)
+			item.MaintenanceUntil = &s
+		}
+		items = append(items, item)
+	}
+	response.SuccessContext(gatewayJSONResponder{ctx: c}, modelHealthResponse{Items: items, WindowDays: windowDays})
 }

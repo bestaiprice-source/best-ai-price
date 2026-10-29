@@ -120,6 +120,16 @@ func BodyOverrideMode(v string) predicate.ChannelMonitor {
 	return predicate.ChannelMonitor(sql.FieldEQ(FieldBodyOverrideMode, v))
 }
 
+// MaintenanceUntil applies equality check predicate on the "maintenance_until" field. It's identical to MaintenanceUntilEQ.
+func MaintenanceUntil(v time.Time) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldEQ(FieldMaintenanceUntil, v))
+}
+
+// MaintenanceNote applies equality check predicate on the "maintenance_note" field. It's identical to MaintenanceNoteEQ.
+func MaintenanceNote(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldEQ(FieldMaintenanceNote, v))
+}
+
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.
 func CreatedAtEQ(v time.Time) predicate.ChannelMonitor {
 	return predicate.ChannelMonitor(sql.FieldEQ(FieldCreatedAt, v))
@@ -798,6 +808,131 @@ func BodyOverrideIsNil() predicate.ChannelMonitor {
 // BodyOverrideNotNil applies the NotNil predicate on the "body_override" field.
 func BodyOverrideNotNil() predicate.ChannelMonitor {
 	return predicate.ChannelMonitor(sql.FieldNotNull(FieldBodyOverride))
+}
+
+// MaintenanceUntilEQ applies the EQ predicate on the "maintenance_until" field.
+func MaintenanceUntilEQ(v time.Time) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldEQ(FieldMaintenanceUntil, v))
+}
+
+// MaintenanceUntilNEQ applies the NEQ predicate on the "maintenance_until" field.
+func MaintenanceUntilNEQ(v time.Time) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldNEQ(FieldMaintenanceUntil, v))
+}
+
+// MaintenanceUntilIn applies the In predicate on the "maintenance_until" field.
+func MaintenanceUntilIn(vs ...time.Time) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldIn(FieldMaintenanceUntil, vs...))
+}
+
+// MaintenanceUntilNotIn applies the NotIn predicate on the "maintenance_until" field.
+func MaintenanceUntilNotIn(vs ...time.Time) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldNotIn(FieldMaintenanceUntil, vs...))
+}
+
+// MaintenanceUntilGT applies the GT predicate on the "maintenance_until" field.
+func MaintenanceUntilGT(v time.Time) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldGT(FieldMaintenanceUntil, v))
+}
+
+// MaintenanceUntilGTE applies the GTE predicate on the "maintenance_until" field.
+func MaintenanceUntilGTE(v time.Time) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldGTE(FieldMaintenanceUntil, v))
+}
+
+// MaintenanceUntilLT applies the LT predicate on the "maintenance_until" field.
+func MaintenanceUntilLT(v time.Time) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldLT(FieldMaintenanceUntil, v))
+}
+
+// MaintenanceUntilLTE applies the LTE predicate on the "maintenance_until" field.
+func MaintenanceUntilLTE(v time.Time) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldLTE(FieldMaintenanceUntil, v))
+}
+
+// MaintenanceUntilIsNil applies the IsNil predicate on the "maintenance_until" field.
+func MaintenanceUntilIsNil() predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldIsNull(FieldMaintenanceUntil))
+}
+
+// MaintenanceUntilNotNil applies the NotNil predicate on the "maintenance_until" field.
+func MaintenanceUntilNotNil() predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldNotNull(FieldMaintenanceUntil))
+}
+
+// MaintenanceNoteEQ applies the EQ predicate on the "maintenance_note" field.
+func MaintenanceNoteEQ(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldEQ(FieldMaintenanceNote, v))
+}
+
+// MaintenanceNoteNEQ applies the NEQ predicate on the "maintenance_note" field.
+func MaintenanceNoteNEQ(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldNEQ(FieldMaintenanceNote, v))
+}
+
+// MaintenanceNoteIn applies the In predicate on the "maintenance_note" field.
+func MaintenanceNoteIn(vs ...string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldIn(FieldMaintenanceNote, vs...))
+}
+
+// MaintenanceNoteNotIn applies the NotIn predicate on the "maintenance_note" field.
+func MaintenanceNoteNotIn(vs ...string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldNotIn(FieldMaintenanceNote, vs...))
+}
+
+// MaintenanceNoteGT applies the GT predicate on the "maintenance_note" field.
+func MaintenanceNoteGT(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldGT(FieldMaintenanceNote, v))
+}
+
+// MaintenanceNoteGTE applies the GTE predicate on the "maintenance_note" field.
+func MaintenanceNoteGTE(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldGTE(FieldMaintenanceNote, v))
+}
+
+// MaintenanceNoteLT applies the LT predicate on the "maintenance_note" field.
+func MaintenanceNoteLT(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldLT(FieldMaintenanceNote, v))
+}
+
+// MaintenanceNoteLTE applies the LTE predicate on the "maintenance_note" field.
+func MaintenanceNoteLTE(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldLTE(FieldMaintenanceNote, v))
+}
+
+// MaintenanceNoteContains applies the Contains predicate on the "maintenance_note" field.
+func MaintenanceNoteContains(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldContains(FieldMaintenanceNote, v))
+}
+
+// MaintenanceNoteHasPrefix applies the HasPrefix predicate on the "maintenance_note" field.
+func MaintenanceNoteHasPrefix(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldHasPrefix(FieldMaintenanceNote, v))
+}
+
+// MaintenanceNoteHasSuffix applies the HasSuffix predicate on the "maintenance_note" field.
+func MaintenanceNoteHasSuffix(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldHasSuffix(FieldMaintenanceNote, v))
+}
+
+// MaintenanceNoteIsNil applies the IsNil predicate on the "maintenance_note" field.
+func MaintenanceNoteIsNil() predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldIsNull(FieldMaintenanceNote))
+}
+
+// MaintenanceNoteNotNil applies the NotNil predicate on the "maintenance_note" field.
+func MaintenanceNoteNotNil() predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldNotNull(FieldMaintenanceNote))
+}
+
+// MaintenanceNoteEqualFold applies the EqualFold predicate on the "maintenance_note" field.
+func MaintenanceNoteEqualFold(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldEqualFold(FieldMaintenanceNote, v))
+}
+
+// MaintenanceNoteContainsFold applies the ContainsFold predicate on the "maintenance_note" field.
+func MaintenanceNoteContainsFold(v string) predicate.ChannelMonitor {
+	return predicate.ChannelMonitor(sql.FieldContainsFold(FieldMaintenanceNote, v))
 }
 
 // HasHistory applies the HasEdge predicate on the "history" edge.

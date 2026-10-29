@@ -59,6 +59,9 @@
           :first-key="firstKey"
         />
 
+        <!-- Per-model probe health (channel monitors) — not gated on `stats`. -->
+        <UserDashboardModelHealth />
+
         <template v-if="stats">
           <!-- Core & Token Stats -->
           <UserDashboardStats
@@ -104,6 +107,7 @@ import { usageAPI, type UserDashboardStats as UserStatsType } from '@/api/usage'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import UserDashboardOnboarding from '@/components/user/dashboard/UserDashboardOnboarding.vue'
+import UserDashboardModelHealth from '@/components/user/dashboard/UserDashboardModelHealth.vue'
 import UserDashboardStats from '@/components/user/dashboard/UserDashboardStats.vue'
 import UserDashboardCharts from '@/components/user/dashboard/UserDashboardCharts.vue'
 import UserDashboardRecentUsage from '@/components/user/dashboard/UserDashboardRecentUsage.vue'

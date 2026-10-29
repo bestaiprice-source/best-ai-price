@@ -535,5 +535,35 @@ func applyMonitorAdvancedUpdate(existing *ChannelMonitor, p ChannelMonitorUpdate
 		existing.BodyOverrideMode = defaultBodyMode(newMode)
 		existing.BodyOverride = newBody
 	}
+	return applyMonitorMaintenanceUpdate(existing, p)
+}
+
+// applyMonitorMaintenanceUpdate 处理计划维护窗口字段。
+// ClearMaintenance 优先于 MaintenanceUntil（显式清除），与 template_id 的三态处理一致。
+func applyMonitorMaintenanceUpdate(existing *ChannelMonitor, p ChannelMonitorUpdateParams) error {
+	if p.ClearMaintenance {
+		existing.MaintenanceUntil = nil
+	} else if p.MaintenanceUntil != nil {
+		until := p.MaintenanceUntil.UTC()
+		existing.MaintenanceUntil = &until
+	}
+	if p.MaintenanceNote != nil {
+		existing.MaintenanceNote = clampMaintenanceNote(*p.MaintenanceNote)
+	}
 	return nil
+}
+
+// SetMaintenance 进入/退出计划维护窗口。
+//
+// until 为 nil 表示退出维护；note 会被裁剪到 monitorMessage 长度以内。
+// 复用通用 Update 路径（同一套校验 + 调度器重排），因此不新增仓储接口方法，
+// 也就不会打破任何手写的仓储 stub。
+func (s *ChannelMonitorService) SetMaintenance(ctx context.Context, id int64, until *time.Time, note string) (*ChannelMonitor, error) {
+	params := ChannelMonitorUpdateParams{MaintenanceNote: &note}
+	if until == nil {
+		params.ClearMaintenance = true
+	} else {
+		params.MaintenanceUntil = until
+	}
+	return s.Update(ctx, id, params)
 }

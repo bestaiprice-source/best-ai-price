@@ -41,6 +41,37 @@ type ChannelMonitor struct {
 	// APIKeyDecryptFailed 表示 APIKey 字段无法解密（密钥不一致或损坏）。
 	// 此时 APIKey 为空字符串，runner / RunCheck 必须跳过该监控并提示重填。
 	APIKeyDecryptFailed bool
+
+	// MaintenanceUntil / MaintenanceNote 是管理员声明的计划维护窗口。
+	// Until 在未来时该监控对外显示为 maintenance，并从可用率统计中排除
+	// （探针继续记录，窗口结束后历史完整）。Nil 表示不在维护中。
+	MaintenanceUntil *time.Time
+	MaintenanceNote  string
+}
+
+// InMaintenance 判断监控在给定时刻是否处于计划维护窗口内。
+func (m *ChannelMonitor) InMaintenance(now time.Time) bool {
+	return m != nil && m.MaintenanceUntil != nil && now.Before(*m.MaintenanceUntil)
+}
+
+// ModelHealthEntry 是「模型健康」read model 的单行：把监控测得的可用率/状态
+// 按模型展开，供用户端仪表盘健康块与模型目录卡片使用。
+//
+// AvailabilityPct 为指针：无历史或处于维护窗口时为 nil（前端此时只显示状态点，
+// 不显示一个会误导的 0%）。Candidates 是共享的规范化键集合，前端用它把这里
+// 的 upstream 模型 id（claude-3-7-sonnet-20250219）对到目录的 canonical id
+// （anthropic/claude-3-7-sonnet）。
+type ModelHealthEntry struct {
+	Model            string
+	Candidates       []string
+	Status           string // operational / degraded / failed / error / maintenance
+	AvailabilityPct  *float64
+	AvgLatencyMs     *int
+	Provider         string
+	MonitorID        int64
+	MonitorName      string
+	MaintenanceUntil *time.Time
+	MaintenanceNote  string
 }
 
 // ChannelMonitorListParams 列表查询过滤参数。
@@ -89,6 +120,12 @@ type ChannelMonitorUpdateParams struct {
 	ExtraHeaders     *map[string]string
 	BodyOverrideMode *string
 	BodyOverride     *map[string]any
+	// MaintenanceUntil 计划维护窗口结束时间；nil 表示不修改该字段。
+	// MaintenanceNote 维护说明；nil 表示不修改。
+	// ClearMaintenance 为 true 时忽略 MaintenanceUntil，直接清空维护窗口。
+	MaintenanceUntil *time.Time
+	MaintenanceNote  *string
+	ClearMaintenance bool
 }
 
 // CheckResult 单个模型一次检测的结果。

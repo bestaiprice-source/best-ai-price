@@ -53,6 +53,12 @@ func (r *channelMonitorRepository) Create(ctx context.Context, m *service.Channe
 	if m.BodyOverride != nil {
 		builder = builder.SetBodyOverride(m.BodyOverride)
 	}
+	if m.MaintenanceUntil != nil {
+		builder = builder.SetMaintenanceUntil(*m.MaintenanceUntil)
+	}
+	if m.MaintenanceNote != "" {
+		builder = builder.SetMaintenanceNote(m.MaintenanceNote)
+	}
 
 	created, err := builder.Save(ctx)
 	if err != nil {
@@ -98,6 +104,12 @@ func (r *channelMonitorRepository) Update(ctx context.Context, m *service.Channe
 	} else {
 		updater = updater.ClearBodyOverride()
 	}
+	if m.MaintenanceUntil != nil {
+		updater = updater.SetMaintenanceUntil(*m.MaintenanceUntil)
+	} else {
+		updater = updater.ClearMaintenanceUntil()
+	}
+	updater = updater.SetMaintenanceNote(m.MaintenanceNote)
 
 	updated, err := updater.Save(ctx)
 	if err != nil {
@@ -722,6 +734,8 @@ func entToServiceMonitor(row *dbent.ChannelMonitor) *service.ChannelMonitor {
 		ExtraHeaders:     headers,
 		BodyOverrideMode: row.BodyOverrideMode,
 		BodyOverride:     row.BodyOverride,
+		MaintenanceUntil: row.MaintenanceUntil,
+		MaintenanceNote:  row.MaintenanceNote,
 	}
 	if row.TemplateID != nil {
 		id := *row.TemplateID

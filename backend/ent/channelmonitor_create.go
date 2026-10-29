@@ -183,6 +183,34 @@ func (_c *ChannelMonitorCreate) SetBodyOverride(v map[string]interface{}) *Chann
 	return _c
 }
 
+// SetMaintenanceUntil sets the "maintenance_until" field.
+func (_c *ChannelMonitorCreate) SetMaintenanceUntil(v time.Time) *ChannelMonitorCreate {
+	_c.mutation.SetMaintenanceUntil(v)
+	return _c
+}
+
+// SetNillableMaintenanceUntil sets the "maintenance_until" field if the given value is not nil.
+func (_c *ChannelMonitorCreate) SetNillableMaintenanceUntil(v *time.Time) *ChannelMonitorCreate {
+	if v != nil {
+		_c.SetMaintenanceUntil(*v)
+	}
+	return _c
+}
+
+// SetMaintenanceNote sets the "maintenance_note" field.
+func (_c *ChannelMonitorCreate) SetMaintenanceNote(v string) *ChannelMonitorCreate {
+	_c.mutation.SetMaintenanceNote(v)
+	return _c
+}
+
+// SetNillableMaintenanceNote sets the "maintenance_note" field if the given value is not nil.
+func (_c *ChannelMonitorCreate) SetNillableMaintenanceNote(v *string) *ChannelMonitorCreate {
+	if v != nil {
+		_c.SetMaintenanceNote(*v)
+	}
+	return _c
+}
+
 // AddHistoryIDs adds the "history" edge to the ChannelMonitorHistory entity by IDs.
 func (_c *ChannelMonitorCreate) AddHistoryIDs(ids ...int64) *ChannelMonitorCreate {
 	_c.mutation.AddHistoryIDs(ids...)
@@ -295,6 +323,10 @@ func (_c *ChannelMonitorCreate) defaults() {
 		v := channelmonitor.DefaultBodyOverrideMode
 		_c.mutation.SetBodyOverrideMode(v)
 	}
+	if _, ok := _c.mutation.MaintenanceNote(); !ok {
+		v := channelmonitor.DefaultMaintenanceNote
+		_c.mutation.SetMaintenanceNote(v)
+	}
 }
 
 // check runs all checks and user-defined validators on the builder.
@@ -376,6 +408,11 @@ func (_c *ChannelMonitorCreate) check() error {
 	if v, ok := _c.mutation.BodyOverrideMode(); ok {
 		if err := channelmonitor.BodyOverrideModeValidator(v); err != nil {
 			return &ValidationError{Name: "body_override_mode", err: fmt.Errorf(`ent: validator failed for field "ChannelMonitor.body_override_mode": %w`, err)}
+		}
+	}
+	if v, ok := _c.mutation.MaintenanceNote(); ok {
+		if err := channelmonitor.MaintenanceNoteValidator(v); err != nil {
+			return &ValidationError{Name: "maintenance_note", err: fmt.Errorf(`ent: validator failed for field "ChannelMonitor.maintenance_note": %w`, err)}
 		}
 	}
 	return nil
@@ -468,6 +505,14 @@ func (_c *ChannelMonitorCreate) createSpec() (*ChannelMonitor, *sqlgraph.CreateS
 	if value, ok := _c.mutation.BodyOverride(); ok {
 		_spec.SetField(channelmonitor.FieldBodyOverride, field.TypeJSON, value)
 		_node.BodyOverride = value
+	}
+	if value, ok := _c.mutation.MaintenanceUntil(); ok {
+		_spec.SetField(channelmonitor.FieldMaintenanceUntil, field.TypeTime, value)
+		_node.MaintenanceUntil = &value
+	}
+	if value, ok := _c.mutation.MaintenanceNote(); ok {
+		_spec.SetField(channelmonitor.FieldMaintenanceNote, field.TypeString, value)
+		_node.MaintenanceNote = value
 	}
 	if nodes := _c.mutation.HistoryIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
@@ -798,6 +843,42 @@ func (u *ChannelMonitorUpsert) ClearBodyOverride() *ChannelMonitorUpsert {
 	return u
 }
 
+// SetMaintenanceUntil sets the "maintenance_until" field.
+func (u *ChannelMonitorUpsert) SetMaintenanceUntil(v time.Time) *ChannelMonitorUpsert {
+	u.Set(channelmonitor.FieldMaintenanceUntil, v)
+	return u
+}
+
+// UpdateMaintenanceUntil sets the "maintenance_until" field to the value that was provided on create.
+func (u *ChannelMonitorUpsert) UpdateMaintenanceUntil() *ChannelMonitorUpsert {
+	u.SetExcluded(channelmonitor.FieldMaintenanceUntil)
+	return u
+}
+
+// ClearMaintenanceUntil clears the value of the "maintenance_until" field.
+func (u *ChannelMonitorUpsert) ClearMaintenanceUntil() *ChannelMonitorUpsert {
+	u.SetNull(channelmonitor.FieldMaintenanceUntil)
+	return u
+}
+
+// SetMaintenanceNote sets the "maintenance_note" field.
+func (u *ChannelMonitorUpsert) SetMaintenanceNote(v string) *ChannelMonitorUpsert {
+	u.Set(channelmonitor.FieldMaintenanceNote, v)
+	return u
+}
+
+// UpdateMaintenanceNote sets the "maintenance_note" field to the value that was provided on create.
+func (u *ChannelMonitorUpsert) UpdateMaintenanceNote() *ChannelMonitorUpsert {
+	u.SetExcluded(channelmonitor.FieldMaintenanceNote)
+	return u
+}
+
+// ClearMaintenanceNote clears the value of the "maintenance_note" field.
+func (u *ChannelMonitorUpsert) ClearMaintenanceNote() *ChannelMonitorUpsert {
+	u.SetNull(channelmonitor.FieldMaintenanceNote)
+	return u
+}
+
 // UpdateNewValues updates the mutable fields using the new values that were set on create.
 // Using this option is equivalent to using:
 //
@@ -1106,6 +1187,48 @@ func (u *ChannelMonitorUpsertOne) UpdateBodyOverride() *ChannelMonitorUpsertOne 
 func (u *ChannelMonitorUpsertOne) ClearBodyOverride() *ChannelMonitorUpsertOne {
 	return u.Update(func(s *ChannelMonitorUpsert) {
 		s.ClearBodyOverride()
+	})
+}
+
+// SetMaintenanceUntil sets the "maintenance_until" field.
+func (u *ChannelMonitorUpsertOne) SetMaintenanceUntil(v time.Time) *ChannelMonitorUpsertOne {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.SetMaintenanceUntil(v)
+	})
+}
+
+// UpdateMaintenanceUntil sets the "maintenance_until" field to the value that was provided on create.
+func (u *ChannelMonitorUpsertOne) UpdateMaintenanceUntil() *ChannelMonitorUpsertOne {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.UpdateMaintenanceUntil()
+	})
+}
+
+// ClearMaintenanceUntil clears the value of the "maintenance_until" field.
+func (u *ChannelMonitorUpsertOne) ClearMaintenanceUntil() *ChannelMonitorUpsertOne {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.ClearMaintenanceUntil()
+	})
+}
+
+// SetMaintenanceNote sets the "maintenance_note" field.
+func (u *ChannelMonitorUpsertOne) SetMaintenanceNote(v string) *ChannelMonitorUpsertOne {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.SetMaintenanceNote(v)
+	})
+}
+
+// UpdateMaintenanceNote sets the "maintenance_note" field to the value that was provided on create.
+func (u *ChannelMonitorUpsertOne) UpdateMaintenanceNote() *ChannelMonitorUpsertOne {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.UpdateMaintenanceNote()
+	})
+}
+
+// ClearMaintenanceNote clears the value of the "maintenance_note" field.
+func (u *ChannelMonitorUpsertOne) ClearMaintenanceNote() *ChannelMonitorUpsertOne {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.ClearMaintenanceNote()
 	})
 }
 
@@ -1583,6 +1706,48 @@ func (u *ChannelMonitorUpsertBulk) UpdateBodyOverride() *ChannelMonitorUpsertBul
 func (u *ChannelMonitorUpsertBulk) ClearBodyOverride() *ChannelMonitorUpsertBulk {
 	return u.Update(func(s *ChannelMonitorUpsert) {
 		s.ClearBodyOverride()
+	})
+}
+
+// SetMaintenanceUntil sets the "maintenance_until" field.
+func (u *ChannelMonitorUpsertBulk) SetMaintenanceUntil(v time.Time) *ChannelMonitorUpsertBulk {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.SetMaintenanceUntil(v)
+	})
+}
+
+// UpdateMaintenanceUntil sets the "maintenance_until" field to the value that was provided on create.
+func (u *ChannelMonitorUpsertBulk) UpdateMaintenanceUntil() *ChannelMonitorUpsertBulk {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.UpdateMaintenanceUntil()
+	})
+}
+
+// ClearMaintenanceUntil clears the value of the "maintenance_until" field.
+func (u *ChannelMonitorUpsertBulk) ClearMaintenanceUntil() *ChannelMonitorUpsertBulk {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.ClearMaintenanceUntil()
+	})
+}
+
+// SetMaintenanceNote sets the "maintenance_note" field.
+func (u *ChannelMonitorUpsertBulk) SetMaintenanceNote(v string) *ChannelMonitorUpsertBulk {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.SetMaintenanceNote(v)
+	})
+}
+
+// UpdateMaintenanceNote sets the "maintenance_note" field to the value that was provided on create.
+func (u *ChannelMonitorUpsertBulk) UpdateMaintenanceNote() *ChannelMonitorUpsertBulk {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.UpdateMaintenanceNote()
+	})
+}
+
+// ClearMaintenanceNote clears the value of the "maintenance_note" field.
+func (u *ChannelMonitorUpsertBulk) ClearMaintenanceNote() *ChannelMonitorUpsertBulk {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.ClearMaintenanceNote()
 	})
 }
 

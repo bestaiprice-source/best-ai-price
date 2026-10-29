@@ -53,6 +53,10 @@ type ChannelMonitor struct {
 	BodyOverrideMode string `json:"body_override_mode,omitempty"`
 	// BodyOverride holds the value of the "body_override" field.
 	BodyOverride map[string]interface{} `json:"body_override,omitempty"`
+	// MaintenanceUntil holds the value of the "maintenance_until" field.
+	MaintenanceUntil *time.Time `json:"maintenance_until,omitempty"`
+	// MaintenanceNote holds the value of the "maintenance_note" field.
+	MaintenanceNote string `json:"maintenance_note,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the ChannelMonitorQuery when eager-loading is set.
 	Edges        ChannelMonitorEdges `json:"edges"`
@@ -112,9 +116,9 @@ func (*ChannelMonitor) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case channelmonitor.FieldID, channelmonitor.FieldIntervalSeconds, channelmonitor.FieldCreatedBy, channelmonitor.FieldTemplateID:
 			values[i] = new(sql.NullInt64)
-		case channelmonitor.FieldName, channelmonitor.FieldProvider, channelmonitor.FieldEndpoint, channelmonitor.FieldAPIKeyEncrypted, channelmonitor.FieldPrimaryModel, channelmonitor.FieldGroupName, channelmonitor.FieldBodyOverrideMode:
+		case channelmonitor.FieldName, channelmonitor.FieldProvider, channelmonitor.FieldEndpoint, channelmonitor.FieldAPIKeyEncrypted, channelmonitor.FieldPrimaryModel, channelmonitor.FieldGroupName, channelmonitor.FieldBodyOverrideMode, channelmonitor.FieldMaintenanceNote:
 			values[i] = new(sql.NullString)
-		case channelmonitor.FieldCreatedAt, channelmonitor.FieldUpdatedAt, channelmonitor.FieldLastCheckedAt:
+		case channelmonitor.FieldCreatedAt, channelmonitor.FieldUpdatedAt, channelmonitor.FieldLastCheckedAt, channelmonitor.FieldMaintenanceUntil:
 			values[i] = new(sql.NullTime)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -247,6 +251,19 @@ func (_m *ChannelMonitor) assignValues(columns []string, values []any) error {
 					return fmt.Errorf("unmarshal field body_override: %w", err)
 				}
 			}
+		case channelmonitor.FieldMaintenanceUntil:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field maintenance_until", values[i])
+			} else if value.Valid {
+				_m.MaintenanceUntil = new(time.Time)
+				*_m.MaintenanceUntil = value.Time
+			}
+		case channelmonitor.FieldMaintenanceNote:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field maintenance_note", values[i])
+			} else if value.Valid {
+				_m.MaintenanceNote = value.String
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -351,6 +368,14 @@ func (_m *ChannelMonitor) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("body_override=")
 	builder.WriteString(fmt.Sprintf("%v", _m.BodyOverride))
+	builder.WriteString(", ")
+	if v := _m.MaintenanceUntil; v != nil {
+		builder.WriteString("maintenance_until=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	builder.WriteString("maintenance_note=")
+	builder.WriteString(_m.MaintenanceNote)
 	builder.WriteByte(')')
 	return builder.String()
 }

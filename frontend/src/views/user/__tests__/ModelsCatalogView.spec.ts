@@ -55,6 +55,12 @@ vi.mock('@/composables/useClipboard', () => ({
   useClipboard: () => ({ copyToClipboard: vi.fn() })
 }))
 
+// Model health is fetched by its own module-level composable; keep this spec
+// offline and on the catalog's binary availability dot.
+vi.mock('@/api/modelHealth', () => ({
+  getModelHealth: vi.fn().mockResolvedValue({ items: [], window_days: 7 })
+}))
+
 vi.mock('@/components/icons/Icon.vue', () => ({
   default: { name: 'Icon', props: ['name'], template: '<i />' }
 }))
@@ -107,9 +113,9 @@ describe('ModelsCatalogView', () => {
     const namesButton = wrapper.findAll('button').find((b) => b.text() === 'modelsCatalog.viewNames')!
     await namesButton.trigger('click')
 
-    expect(wrapper.text()).toContain('anthropic')
-    expect(wrapper.text()).toContain('openai')
-    expect(wrapper.text()).toContain('google')
+    expect(wrapper.text()).toContain('Anthropic')
+    expect(wrapper.text()).toContain('OpenAI')
+    expect(wrapper.text()).toContain('Google')
     expect(wrapper.findAll('h3').length).toBe(3)
   })
 

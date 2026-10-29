@@ -483,6 +483,22 @@ export default {
       details: 'Подробности'
     }
   },
+  // Model health (probe-measured uptime shown on the dashboard and on the
+  // model catalog cards; the legend wording follows the provider consoles).
+  modelHealth: {
+    title: 'Состояние моделей',
+    subtitle: 'Доступность по пробам за последние {window} дн.',
+    viewAll: 'Все модели',
+    moreModels: '+{count} ещё моделей',
+    uptime: 'доступность',
+    status: {
+      normal: 'Норма',
+      highLatency: 'Высокая задержка',
+      error: 'Ошибка',
+      maintenance: 'Обслуживание',
+      unknown: 'Нет данных'
+    }
+  },
   modelsCatalog: {
     discountTitle: '-{percent}% от официальной цены',
     title: 'Модели и цены',
@@ -1269,6 +1285,19 @@ export default {
 
   // Admin
   admin: {
+    // Planned-maintenance control on the channel-monitor editor.
+    //
+    // NOTE: the rest of `admin.channelMonitor.*` (form labels, the list screen)
+    // is still untranslated in this fork and renders as raw key paths — a
+    // pre-existing gap, not introduced here.
+    channelMonitor: {
+      maintenance: {
+        section: 'Плановое обслуживание',
+        until: 'Обслуживание до',
+        notePlaceholder: 'Причина (необязательно)',
+        hint: 'Пока окно активно, пользователи видят монитор как «Обслуживание», и он исключается из процента доступности. Пробы продолжают идти, история не теряется.'
+      }
+    },
     // Dashboard
     dashboard: {
       title: 'Панель администратора',
