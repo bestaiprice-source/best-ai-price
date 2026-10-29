@@ -86,8 +86,8 @@ describe('getPublicApiBaseUrl', () => {
     setLocation('https://bestaiprice.com', '/gateway/keys')
     vi.stubEnv('BASE_URL', '/gateway/')
 
-    expect(getPublicApiBaseUrl('https://api.bestaiprice.com')).toBe('https://api.bestaiprice.com')
-    expect(getPublicApiBaseUrl('https://api.bestaiprice.com/')).toBe('https://api.bestaiprice.com')
+    expect(getPublicApiBaseUrl('https://bestaiprice.com/gateway')).toBe('https://bestaiprice.com/gateway')
+    expect(getPublicApiBaseUrl('https://bestaiprice.com/gateway/')).toBe('https://bestaiprice.com/gateway')
   })
 
   it('falls back to the app base INCLUDING the /gateway sub-path, never the bare origin', () => {
@@ -107,7 +107,7 @@ describe('getPublicApiBaseUrl', () => {
     vi.stubEnv('BASE_URL', '/gateway/')
 
     // The OpenAI base is built as `${base}/v1` everywhere.
-    expect(`${getPublicApiBaseUrl('https://api.bestaiprice.com/')}/v1`).toBe('https://api.bestaiprice.com/v1')
+    expect(`${getPublicApiBaseUrl('https://bestaiprice.com/gateway/')}/v1`).toBe('https://bestaiprice.com/gateway/v1')
   })
 })
 

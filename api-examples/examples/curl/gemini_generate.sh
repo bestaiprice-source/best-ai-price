@@ -8,7 +8,7 @@ if [ -z "$API_KEY" ]; then
   exit 1
 fi
 
-BASE_URL="${BESTAIPRICE_BASE_URL:-https://api.bestaiprice.com}"
+BASE_URL="${BESTAIPRICE_BASE_URL:-https://bestaiprice.com/gateway}"
 MODEL="${1:-gemini-2.5-flash}"
 
 echo "Sending Gemini generateContent to ${BASE_URL}/v1beta/models/${MODEL}:generateContent..."

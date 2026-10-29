@@ -487,10 +487,12 @@ export default {
   // model catalog cards; the legend wording follows the provider consoles).
   modelHealth: {
     title: 'Состояние моделей',
-    subtitle: 'Доступность по пробам за последние {window} дн.',
+    subtitle: 'Доступность за последние {window} дн. — по пробам, где они настроены, иначе по реальному трафику',
     viewAll: 'Все модели',
     moreModels: '+{count} ещё моделей',
     uptime: 'доступность',
+    sourceTraffic: 'измерено на реальном трафике',
+    trafficSample: '{count} запросов',
     status: {
       normal: 'Норма',
       highLatency: 'Высокая задержка',
@@ -537,7 +539,14 @@ export default {
     useKey: 'Использовать ключ',
     useKeyTitle: 'Перейдите в «API-ключи», чтобы создать или скопировать ключ для этой модели',
     available: 'Доступно',
-    unavailable: 'Недоступно'
+    unavailable: 'Недоступно',
+    availabilityAvailable: 'Доступна через API',
+    availabilityUnverified: 'Не подтверждена',
+    availabilityUnavailable: 'Недоступна',
+    availabilityAvailableTitle: 'Доступна через API: провайдер публикует эту модель в своём списке моделей, и у нас есть на неё цена.',
+    availabilityUnverifiedTitle: 'Не подтверждена: ни один список моделей провайдера её не показывает — известно только то, что для этого вендора есть пул. Вызов может завершиться ошибкой.',
+    availabilityUnavailableTitle: 'Сейчас недоступна через API.',
+    availabilityCheckedAt: 'список провайдера проверен {date}'
   },
   availableChannels: {
     columns: {

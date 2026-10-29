@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"log/slog"
 	"strconv"
 	"strings"
 	"time"
@@ -18,17 +19,24 @@ import (
 type ChannelMonitorUserHandler struct {
 	monitorService *service.ChannelMonitorService
 	settingService *service.SettingService
+	// trafficHealth supplies the per-model uptime measured from real traffic.
+	// Optional (nil in tests / minimal wiring): the model-health endpoint then
+	// serves probes only.
+	trafficHealth *service.ModelTrafficHealthService
 }
 
 // NewChannelMonitorUserHandler 创建 handler。
 // settingService 用于每次请求前读取功能开关；关闭时 List/GetStatus 直接返回空/404。
+// trafficHealth 让模型健康视图在没有任何监控时也有真实的可用率（来自用户流量）。
 func NewChannelMonitorUserHandler(
 	monitorService *service.ChannelMonitorService,
 	settingService *service.SettingService,
+	trafficHealth *service.ModelTrafficHealthService,
 ) *ChannelMonitorUserHandler {
 	return &ChannelMonitorUserHandler{
 		monitorService: monitorService,
 		settingService: settingService,
+		trafficHealth:  trafficHealth,
 	}
 }
 
@@ -213,6 +221,12 @@ type modelHealthItem struct {
 	MonitorName      string   `json:"monitor_name"`
 	MaintenanceUntil *string  `json:"maintenance_until"`
 	MaintenanceNote  string   `json:"maintenance_note"`
+	// Source: "probe" (a channel monitor measured the upstream itself) or
+	// "traffic" (measured from the requests users actually made). Probe rows
+	// always win for a model both cover.
+	Source string `json:"source"`
+	// Requests is the traffic sample behind AvailabilityPct (absent for probes).
+	Requests int64 `json:"requests,omitempty"`
 }
 
 type modelHealthResponse struct {
@@ -225,9 +239,15 @@ var allowedModelHealthWindows = map[int]bool{7: true, 15: true, 30: true}
 
 // ModelHealth GET /api/v1/model-health?window_days=7
 //
-// 用户端只读：把每个启用监控的每个模型展开成一行，供仪表盘健康块与模型目录
-// 卡片共用。功能关闭时返回空列表（与 /channel-monitors 一致），而不是 404 —
-// 调用方是一个常驻的仪表盘区块，报错只会污染控制台。
+// 用户端只读：一行 = 一个模型的可用率与状态，供仪表盘健康块与模型目录卡片共用。
+//
+// 两个数据源，优先级明确：
+//   - 探针（channel monitor）：独立发起请求，即使没人调用也能测到上游；
+//   - 流量（usage_logs + ops_error_logs）：用户真实请求的成败，零成本，
+//     但没有流量的模型不会出现。
+//
+// 探针功能关闭时不再直接返回空列表：流量来源与监控开关无关，否则用户永远看不到
+// 任何可用率（这正是目录卡片上只有一颗空心点的原因）。
 func (h *ChannelMonitorUserHandler) ModelHealth(c *gin.Context) {
 	h.ModelHealthGateway(gatewayctx.FromGin(c))
 }
@@ -243,15 +263,24 @@ func (h *ChannelMonitorUserHandler) ModelHealthGateway(c gatewayctx.GatewayConte
 		windowDays = parsed
 	}
 
-	if !h.featureEnabledGateway(c) {
-		response.SuccessContext(gatewayJSONResponder{ctx: c}, modelHealthResponse{Items: []modelHealthItem{}, WindowDays: windowDays})
-		return
+	entries := make([]service.ModelHealthEntry, 0, 16)
+	if h.featureEnabledGateway(c) {
+		probeEntries, err := h.monitorService.ListModelHealth(c.Request().Context(), windowDays)
+		if err != nil {
+			response.ErrorFromContext(gatewayJSONResponder{ctx: c}, err)
+			return
+		}
+		entries = append(entries, probeEntries...)
 	}
 
-	entries, err := h.monitorService.ListModelHealth(c.Request().Context(), windowDays)
-	if err != nil {
-		response.ErrorFromContext(gatewayJSONResponder{ctx: c}, err)
-		return
+	if h.trafficHealth != nil {
+		trafficEntries, err := h.trafficHealth.ListTrafficModelHealth(c.Request().Context(), windowDays)
+		if err != nil {
+			// 流量来源是尽力而为：聚合失败不能把仪表盘区块和目录页一起打挂。
+			slog.Warn("model health traffic aggregate failed", "window_days", windowDays, "error", err)
+		} else {
+			entries = service.MergeModelHealth(entries, trafficEntries)
+		}
 	}
 
 	items := make([]modelHealthItem, 0, len(entries))
@@ -266,6 +295,8 @@ func (h *ChannelMonitorUserHandler) ModelHealthGateway(c gatewayctx.GatewayConte
 			MonitorID:       e.MonitorID,
 			MonitorName:     e.MonitorName,
 			MaintenanceNote: e.MaintenanceNote,
+			Source:          e.Source,
+			Requests:        e.Successes + e.Failures,
 		}
 		if item.Candidates == nil {
 			item.Candidates = []string{}

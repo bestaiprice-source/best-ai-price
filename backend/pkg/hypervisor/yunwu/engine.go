@@ -453,6 +453,17 @@ func (yh *YunwuHypervisor) HandleRequest(
 			if st := states[n.NodeID]; st != nil && st.CooldownUntil != nil && time.Now().Before(*st.CooldownUntil) {
 				continue
 			}
+			// §6.1: a routed node with a failure history must prove a healthy streak
+			// before it takes traffic again, exactly like a pool candidate. Otherwise
+			// an administrator-routed Primary that just failed is re-selected at once
+			// and keeps absorbing requests it cannot serve.
+			if yh.sch != nil && yh.sch.ShouldDefer(states[n.NodeID]) {
+				slog.Info("[YunwuHypervisor] Deferring recovering routed node until it proves a healthy streak",
+					"node_id", n.NodeID,
+					"model", requestedModel,
+				)
+				continue
+			}
 			selectedNode = n
 			break
 		}
@@ -2003,6 +2014,44 @@ func toolCallsToString(toolCalls []session.ToolCall) string {
 	return result
 }
 
+// providerModelName picks the model id to send to a node's provider.
+//
+// ResolveUpstreamModelID knows the static canonical aliases; this adds the
+// provider's OWN spelling as the last word: when the node priced the request only
+// through a normalized variant (vendor prefix, dot/dash spelling, alias — e.g.
+// `xai/grok-4` priced as `grok-4`, or `google/gemini-2-5-flash` priced as
+// `gemini-2.5-flash`, the name the provider actually serves), dispatching the
+// client's spelling would fail upstream with model_not_found even though the
+// model is fully priced. An explicit account model_mapping still wins whenever it
+// resolves to a name the provider prices.
+func (yh *YunwuHypervisor) providerModelName(ctx context.Context, node *health.ExecutionNode, resolved, requested string) string {
+	if node == nil {
+		return resolved
+	}
+	ppm := yh.PriceManager()
+	if ppm == nil {
+		return resolved
+	}
+	// 1. The resolved id is already a price-table key of this provider → the
+	// static alias / explicit model_mapping is exactly what the provider lists.
+	if resolved != "" {
+		if key, ok := ppm.MatchNodeModelPrice(ctx, node, resolved); ok && strings.EqualFold(key, resolved) {
+			return resolved
+		}
+	}
+	// 2. Otherwise dispatch the name the node priced the request under.
+	if key, ok := ppm.MatchNodeModelPrice(ctx, node, requested); ok && key != "" {
+		return key
+	}
+	// 3. The resolved id is only priceable through a variant → use that variant.
+	if resolved != "" {
+		if key, ok := ppm.MatchNodeModelPrice(ctx, node, resolved); ok && key != "" {
+			return key
+		}
+	}
+	return resolved
+}
+
 // prepareNodePayload rewrites the model field in the request payload from canonical ID / alias
 // to the upstream model ID appropriate for the selected execution node's provider.
 func (yh *YunwuHypervisor) prepareNodePayload(ctx context.Context, node *health.ExecutionNode, payload []byte) []byte {
@@ -2032,6 +2081,7 @@ func (yh *YunwuHypervisor) prepareNodePayload(ctx context.Context, node *health.
 	}
 
 	upstreamModel := ResolveUpstreamModelID(node.Provider, modelStr, accountMapping)
+	upstreamModel = yh.providerModelName(ctx, node, upstreamModel, modelStr)
 	if upstreamModel != "" && upstreamModel != modelStr {
 		bodyMap["model"] = upstreamModel
 		if updated, err := json.Marshal(bodyMap); err == nil {

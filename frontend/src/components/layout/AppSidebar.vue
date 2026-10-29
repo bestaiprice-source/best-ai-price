@@ -41,9 +41,7 @@
                 ? 'sidebar-channel-manage'
                 : item.path === '/admin/groups'
                   ? 'sidebar-group-manage'
-                  : item.path === '/admin/redeem'
-                    ? 'sidebar-wallet'
-                    : undefined
+                  : undefined
             "
             @click="handleMenuItemClick(item.path)"
           >
@@ -444,21 +442,6 @@ const BellIcon = {
     )
 }
 
-const TicketIcon = {
-  render: () =>
-    h(
-      'svg',
-      { fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor', 'stroke-width': '1.5' },
-      [
-        h('path', {
-          'stroke-linecap': 'round',
-          'stroke-linejoin': 'round',
-          d: 'M16.5 6v.75m0 3v.75m0 3v.75m0 3V18m-9-5.25h5.25M7.5 15h3M3.375 5.25c-.621 0-1.125.504-1.125 1.125v3.026a2.999 2.999 0 010 5.198v3.026c0 .621.504 1.125 1.125 1.125h17.25c.621 0 1.125-.504 1.125-1.125v-3.026a2.999 2.999 0 010-5.198V6.375c0-.621-.504-1.125-1.125-1.125H3.375z'
-        })
-      ]
-    )
-}
-
 const LightbulbIcon = {
   render: () =>
     h(
@@ -744,7 +727,6 @@ const adminNavItems = computed((): NavItem[] => {
     { path: '/admin/accounts', label: t('nav.accounts'), icon: GlobeIcon },
     { path: '/admin/announcements', label: t('nav.announcements'), icon: BellIcon },
     { path: '/admin/proxies', label: t('nav.proxies'), icon: ServerIcon },
-    { path: '/admin/redeem', label: t('nav.redeemCodes'), icon: TicketIcon, hideInSimpleMode: true },
     { path: '/admin/orders', label: t('nav.orderManagement'), icon: OrderListIcon, hideInSimpleMode: true },
     { path: '/admin/orders/dashboard', label: t('nav.paymentDashboard'), icon: ChartIcon, hideInSimpleMode: true },
     { path: '/admin/nowpayments', label: t('nav.nowpayments'), icon: CreditCardIcon, hideInSimpleMode: true },

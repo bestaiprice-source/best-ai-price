@@ -13,14 +13,14 @@ if not api_key:
     print("Error: BESTAIPRICE_API_KEY environment variable is required.", file=sys.stderr)
     sys.exit(1)
 
-base_url = os.environ.get("BESTAIPRICE_BASE_URL", "https://api.bestaiprice.com").rstrip("/")
+base_url = os.environ.get("BESTAIPRICE_BASE_URL", "https://bestaiprice.com/gateway").rstrip("/")
 
 client = Anthropic(
     api_key=api_key,
     base_url=base_url,
 )
 
-model = os.environ.get("MODEL", "claude-3-7-sonnet")
+model = os.environ.get("MODEL", "claude-sonnet-5")
 
 print(f"Connecting to BestAIPrice via Anthropic SDK at {base_url} with model {model}...")
 

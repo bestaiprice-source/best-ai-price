@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"testing"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/health"
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/quota"
@@ -148,4 +149,63 @@ func TestYunwuPriceBasedPrimaryBackup(t *testing.T) {
 	_, err = yh.HandleRequest(ctx, "price-route-user", "conv-backup", payload, io.Discard, "yunwu")
 	require.NoError(t, err)
 	assert.Equal(t, "203", rt.lastNodeID, "failover must go to Backup (next cheapest)")
+}
+
+// TestYunwuExplicitRoutingRespectsRecoveryStreak — §6.1 applies to the explicit
+// administrator route too: a configured Primary that just failed and has not yet
+// proven a healthy streak must be deferred to the Backup instead of being
+// re-selected immediately (pool scheduling already defers such nodes).
+func TestYunwuExplicitRoutingRespectsRecoveryStreak(t *testing.T) {
+	t.Setenv("ASH_YUNWU_TEST_MODE", "true")
+	t.Setenv("ASH_YUNWU_REQUIRED_HEALTHY_STREAK", "2")
+
+	store := setupTestYunwuStore(t)
+	rt := &mockYunwuRuntime{}
+	yh := NewYunwuHypervisor(store, rt)
+	nm := health.NewNodeManager(store)
+	ctx := context.Background()
+
+	for _, id := range []string{"111", "112"} {
+		require.NoError(t, nm.SaveNode(ctx, &health.ExecutionNode{
+			NodeID:       id,
+			AccountName:  "node-" + id,
+			Provider:     "openlux",
+			State:        "healthy",
+			Capabilities: []string{FamilyClaude},
+		}))
+		require.NoError(t, store.Redis().SAdd(ctx, "ash:yunwu:nodes", id).Err())
+		setTestBalance(t, store, id, 10_000_000)
+	}
+	ppm := yh.PriceManager()
+	require.NotNil(t, ppm)
+	for _, id := range []string{"111", "112"} {
+		ppm.SetProviderPrices(id, map[string]ProviderModelPrice{
+			"claude-3-7-sonnet": {InputPricePer1k: 0.003, OutputPricePer1k: 0.015, Available: true},
+		})
+	}
+
+	// 111 is the configured Primary, but it just failed and its success streak is 0.
+	failedAt := time.Now()
+	require.NoError(t, nm.SaveNodeRuntimeState(ctx, &health.NodeRuntimeState{
+		NodeID:               "111",
+		LastErrorAt:          &failedAt,
+		ConsecutiveSuccesses: 0,
+		TotalRequests:        1,
+		SuccessRate:          0,
+	}))
+
+	require.NoError(t, yh.qm.SaveUserAccess(ctx, &quota.UserAccess{
+		OwnerID:      "streak-user",
+		PlanID:       "basic",
+		MonthlyLimit: 1_000_000,
+		Priority:     1,
+		IsActive:     true,
+	}, "yunwu"))
+
+	payload := []byte(`{"model": "claude-3-7-sonnet", "messages": [{"role": "user", "content": "hi"}]}`)
+	routed := ContextWithModelRouting(ctx, []int64{111, 112})
+	_, err := yh.HandleRequest(routed, "streak-user", "conv-streak", payload, io.Discard, "yunwu")
+	require.NoError(t, err)
+	assert.Equal(t, "112", rt.lastNodeID,
+		"a recovering Primary must be deferred to the Backup even on an explicit route")
 }

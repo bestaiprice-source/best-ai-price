@@ -372,15 +372,14 @@ func (h *APIKeyHandler) GetAvailableGroupsGateway(c gatewayctx.GatewayContext) {
 	out := make([]dto.Group, 0, len(groups))
 	for i := range groups {
 		g := dto.GroupFromService(&groups[i])
-		// The pooled unofficial-provider platform ("yunwu") is an internal label:
-		// it names the upstream capacity pool, not anything the user chose. Hide
-		// it from the user-facing group list (the group NAME still shows, so the
-		// picker stays usable) — exposing it leaks our infrastructure naming to
-		// every signed-in user through /api/v1/groups/available.
-		if g != nil && strings.EqualFold(strings.TrimSpace(g.Platform), service.PlatformYunwu) {
-			g.Platform = ""
-		}
 		if g != nil {
+			// The pooled unofficial-provider platform ("yunwu") is an internal
+			// label: it names the upstream capacity pool, not anything the user
+			// chose. Publish a neutral platform label — and a neutral name when
+			// the stored one names the pool — so /api/v1/groups/available never
+			// leaks our infrastructure naming. See public_group_view.go.
+			g.Platform = publicGroupPlatform(g.Platform)
+			g.Name = publicGroupName(groups[i].Platform, g.Name)
 			out = append(out, *g)
 		}
 	}

@@ -19,13 +19,23 @@ vi.mock('@/api/publicModels', () => ({
       available: true
     },
     {
-      // No monitor covers this one: the card must fall back to the catalog's
-      // binary availability dot.
+      // Priced with no monitor of its own: the uptime comes from real traffic.
+      canonical_model_id: 'google/gemini-3.1-pro',
+      model_id: 'gemini-3.1-pro',
+      input_price_per_1m: 0.4,
+      output_price_per_1m: 1.6,
+      available: true,
+      availability_verified: true
+    },
+    {
+      // No monitor and no traffic: the card must fall back to the catalog's own
+      // availability dot.
       canonical_model_id: 'openai/gpt-unmonitored',
       model_id: 'gpt-unmonitored',
       input_price_per_1m: 0.1,
       output_price_per_1m: 0.2,
-      available: true
+      available: true,
+      availability_verified: true
     }
   ])
 }))
@@ -46,7 +56,24 @@ vi.mock('@/api/modelHealth', () => ({
         monitor_id: 1,
         monitor_name: 'OpenLux Claude',
         maintenance_until: null,
-        maintenance_note: ''
+        maintenance_note: '',
+        source: 'probe'
+      },
+      {
+        // Measured on the requests users actually made: no monitor covers it,
+        // so the traffic row is what the card has to show.
+        model: 'gemini-3.1-pro',
+        candidates: ['gemini-3.1-pro', 'google/gemini-3.1-pro'],
+        status: 'operational',
+        availability_pct: 99.44,
+        avg_latency_ms: 900,
+        provider: '',
+        monitor_id: 0,
+        monitor_name: '',
+        maintenance_until: null,
+        maintenance_note: '',
+        source: 'traffic',
+        requests: 360
       }
     ]
   })
@@ -94,8 +121,21 @@ describe('ModelsCatalogView — model health on the cards', () => {
     const cards = wrapper.findAll('.model-card')
     const unmonitored = cards.find((card) => card.text().includes('gpt-unmonitored'))
     expect(unmonitored).toBeDefined()
-    // No uptime percentage on a card no monitor covers.
+    // No uptime percentage on a card no monitor and no traffic covers.
     expect(unmonitored!.text()).not.toContain('%')
     expect(unmonitored!.find('.bg-emerald-500').exists()).toBe(true)
+  })
+
+  it('shows a traffic-measured uptime when no monitor covers the model', async () => {
+    const wrapper = await mountView()
+    const card = wrapper.findAll('.model-card').find((c) => c.text().includes('gemini-3.1-pro'))!
+
+    // The provider-console number, on a model nobody configured a probe for.
+    expect(card.text()).toContain('99.44%')
+    const badge = card.find('span[title]')
+    expect(badge.attributes('title')).toContain('modelHealth.status.normal')
+    // The tooltip must not let the reader assume a continuous monitor.
+    expect(badge.attributes('title')).toContain('modelHealth.sourceTraffic')
+    expect(badge.attributes('title')).toContain('modelHealth.trafficSample')
   })
 })

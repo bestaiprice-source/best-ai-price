@@ -1986,13 +1986,17 @@ const handleCreateKeyClick = async () => {
 /** Short random suffix appended to each name when minting keys in batches. */
 const randomSuffix = (): string => Math.random().toString(36).slice(2, 6)
 
-// Default group used for regular-user key creation: the yunwu group when present.
+// Default group used for regular-user key creation: the pooled-provider group
+// the gateway publishes under its neutral "standard" label (see
+// backend/internal/handler/public_group_view.go — the user-facing API never
+// names the internal provider pool). Falls back to the first group the account
+// may bind.
 const defaultUserGroupId = computed<number | null>(() => {
-  const yunwuGroup =
-    groups.value.find((g) => g.name.toLowerCase() === 'yunwu') ||
-    groups.value.find((g) => g.name.toLowerCase().includes('yunwu')) ||
+  const standardGroup =
+    groups.value.find((g) => (g.platform ?? '').toLowerCase() === 'standard') ||
+    groups.value.find((g) => g.name.toLowerCase() === 'standard') ||
     groups.value[0]
-  return yunwuGroup ? yunwuGroup.id : null
+  return standardGroup ? standardGroup.id : null
 })
 
 // Billing tiers (fast / smart): a regular user picks one at creation and the key

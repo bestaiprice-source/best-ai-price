@@ -6,8 +6,8 @@ This folder contains tested shell scripts for querying BestAIPrice using standar
 Ensure `BESTAIPRICE_API_KEY` is exported:
 ```bash
 export BESTAIPRICE_API_KEY="sk-bestai-xxxxxxxxxxxxxxxx"
-# Optional custom base url (default: https://api.bestaiprice.com)
-export BESTAIPRICE_BASE_URL="https://api.bestaiprice.com"
+# Optional custom base url (default: https://bestaiprice.com/gateway)
+export BESTAIPRICE_BASE_URL="https://bestaiprice.com/gateway"
 ```
 
 ## Scripts

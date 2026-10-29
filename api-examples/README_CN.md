@@ -26,15 +26,15 @@ BestAIPrice 官方开发者示例仓库。本仓库为开发者和 AI Agent 提�
 BestAIPrice 按照标准协议提供统一入口：
 | 协议类型 | Base URL | 认证请求头 (Header) |
 |---|---|---|
-| **OpenAI 兼容** (Chat Completions, Embeddings) | `https://api.bestaiprice.com/v1` | `Authorization: Bearer $BESTAIPRICE_API_KEY` |
-| **Anthropic 兼容** (Messages API, Claude Code) | `https://api.bestaiprice.com` | `x-api-key: $BESTAIPRICE_API_KEY` |
-| **Google Gemini 兼容** (generateContent) | `https://api.bestaiprice.com` | `x-goog-api-key: $BESTAIPRICE_API_KEY` |
+| **OpenAI 兼容** (Chat Completions, Embeddings) | `https://bestaiprice.com/gateway/v1` | `Authorization: Bearer $BESTAIPRICE_API_KEY` |
+| **Anthropic 兼容** (Messages API, Claude Code) | `https://bestaiprice.com/gateway` | `x-api-key: $BESTAIPRICE_API_KEY` |
+| **Google Gemini 兼容** (generateContent) | `https://bestaiprice.com/gateway` | `x-goog-api-key: $BESTAIPRICE_API_KEY` |
 
 ### 3. 发送首个测试请求
 
 #### cURL (OpenAI 格式)
 ```bash
-curl https://api.bestaiprice.com/v1/chat/completions \
+curl https://bestaiprice.com/gateway/v1/chat/completions \
   -H "Authorization: Bearer $BESTAIPRICE_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -45,12 +45,12 @@ curl https://api.bestaiprice.com/v1/chat/completions \
 
 #### cURL (Claude Messages 格式)
 ```bash
-curl https://api.bestaiprice.com/v1/messages \
+curl https://bestaiprice.com/gateway/v1/messages \
   -H "x-api-key: $BESTAIPRICE_API_KEY" \
   -H "anthropic-version: 2023-06-01" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "claude-3-7-sonnet",
+    "model": "claude-sonnet-5",
     "max_tokens": 256,
     "messages": [{"role": "user", "content": "来自 Claude 的问候！"}]
   }'
@@ -62,17 +62,18 @@ curl https://api.bestaiprice.com/v1/messages \
 
 | 厂商 | 模型 ID (Model ID) | 说明 |
 |---|---|---|
-| **Anthropic** | `claude-3-7-sonnet` | 旗舰混合推理与编程模型 |
-| **Anthropic** | `claude-3-5-sonnet` | 经典高效编程模型 |
-| **Anthropic** | `claude-3-5-haiku` | 极速轻量模型 |
+| **Anthropic** | `claude-sonnet-5` | 均衡旗舰模型 |
+| **Anthropic** | `claude-opus-5` | 最强推理能力 |
+| **Anthropic** | `claude-haiku-5-5` | 极速轻量模型 |
 | **OpenAI** | `gpt-4o` | 全能多模态旗舰 |
 | **OpenAI** | `gpt-4o-mini` | 高性价比日常对话模型 |
 | **OpenAI** | `o3-mini` / `o1` | 深度思维链推理模型 |
-| **DeepSeek** | `deepseek-chat` | DeepSeek-V3 综合对话 |
-| **DeepSeek** | `deepseek-reasoner` | DeepSeek-R1 强化推理 |
-| **Google** | `gemini-2.5-pro` | 超长上下文旗舰模型 |
+| **DeepSeek** | `deepseek-v4-flash` | DeepSeek V4 Flash 综合对话 |
+| **DeepSeek** | `deepseek-v4-pro` | DeepSeek V4 Pro 强化推理 |
+| **Google** | `gemini-3.1-pro` | 超长上下文旗舰模型 |
 | **Google** | `gemini-2.5-flash` | 极速响应低延迟模型 |
-| **阿里 / 通义** | `qwen-2.5-coder-32b` | 开源编程模型标杆 |
+| **阿里 / 通义** | `qwen3.5-plus` | 多语言全能模型 |
+| **Moonshot / Kimi** | `kimi-k2.7-code` | 仓库级编程模型 |
 
 ---
 

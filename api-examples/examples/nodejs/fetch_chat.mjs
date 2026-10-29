@@ -9,7 +9,7 @@ if (!apiKey) {
   process.exit(1);
 }
 
-const rawBase = (process.env.BESTAIPRICE_BASE_URL || 'https://api.bestaiprice.com').replace(/\/+$/, '');
+const rawBase = (process.env.BESTAIPRICE_BASE_URL || 'https://bestaiprice.com/gateway').replace(/\/+$/, '');
 const endpoint = `${rawBase}/v1/chat/completions`;
 const model = process.env.MODEL || 'gpt-4o-mini';
 

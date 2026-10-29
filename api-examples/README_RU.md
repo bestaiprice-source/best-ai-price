@@ -25,15 +25,15 @@
 ### 2. Выбор Base URL и заголовка авторизации
 | Протокол / Инструмент | Base URL | Заголовок авторизации |
 |---|---|---|
-| **OpenAI Compatible** (Chat Completions, Embeddings, Codex) | `https://api.bestaiprice.com/v1` | `Authorization: Bearer $BESTAIPRICE_API_KEY` |
-| **Anthropic Compatible** (Messages API, Claude Code) | `https://api.bestaiprice.com` | `x-api-key: $BESTAIPRICE_API_KEY` |
-| **Google Gemini Compatible** (generateContent) | `https://api.bestaiprice.com` | `x-goog-api-key: $BESTAIPRICE_API_KEY` |
+| **OpenAI Compatible** (Chat Completions, Embeddings, Codex) | `https://bestaiprice.com/gateway/v1` | `Authorization: Bearer $BESTAIPRICE_API_KEY` |
+| **Anthropic Compatible** (Messages API, Claude Code) | `https://bestaiprice.com/gateway` | `x-api-key: $BESTAIPRICE_API_KEY` |
+| **Google Gemini Compatible** (generateContent) | `https://bestaiprice.com/gateway` | `x-goog-api-key: $BESTAIPRICE_API_KEY` |
 
 ### 3. Первый запрос
 
 #### cURL (OpenAI Chat Completions)
 ```bash
-curl https://api.bestaiprice.com/v1/chat/completions \
+curl https://bestaiprice.com/gateway/v1/chat/completions \
   -H "Authorization: Bearer $BESTAIPRICE_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -44,12 +44,12 @@ curl https://api.bestaiprice.com/v1/chat/completions \
 
 #### cURL (Anthropic Claude Messages)
 ```bash
-curl https://api.bestaiprice.com/v1/messages \
+curl https://bestaiprice.com/gateway/v1/messages \
   -H "x-api-key: $BESTAIPRICE_API_KEY" \
   -H "anthropic-version: 2023-06-01" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "claude-3-7-sonnet",
+    "model": "claude-sonnet-5",
     "max_tokens": 256,
     "messages": [{"role": "user", "content": "Привет от Claude!"}]
   }'
@@ -61,17 +61,18 @@ curl https://api.bestaiprice.com/v1/messages \
 
 | Провайдер | Model ID | Назначение |
 |---|---|---|
-| **Anthropic** | `claude-3-7-sonnet` | Флагман гибридного мышления и программирования |
-| **Anthropic** | `claude-3-5-sonnet` | Лидер кодогенерации |
-| **Anthropic** | `claude-3-5-haiku` | Быстрая и экономичная модель |
+| **Anthropic** | `claude-sonnet-5` | Сбалансированный флагман |
+| **Anthropic** | `claude-opus-5` | Максимальные рассуждения |
+| **Anthropic** | `claude-haiku-5-5` | Быстрая и экономичная модель |
 | **OpenAI** | `gpt-4o` | Мультимодальный флагман |
 | **OpenAI** | `gpt-4o-mini` | Оптимальная для повседневных задач |
 | **OpenAI** | `o3-mini` / `o1` | Глубокие рассуждения и логика (CoT) |
-| **DeepSeek** | `deepseek-chat` | DeepSeek-V3 для универсальных диалогов |
-| **DeepSeek** | `deepseek-reasoner` | DeepSeek-R1 рассуждающая модель |
-| **Google** | `gemini-2.5-pro` | Сверхдлинный контекст |
+| **DeepSeek** | `deepseek-v4-flash` | DeepSeek V4 Flash для универсальных диалогов |
+| **DeepSeek** | `deepseek-v4-pro` | DeepSeek V4 Pro — рассуждающая модель |
+| **Google** | `gemini-3.1-pro` | Сверхдлинный контекст |
 | **Google** | `gemini-2.5-flash` | Минимальная задержка и высокая скорость |
-| **Qwen / Alibaba** | `qwen-2.5-coder-32b` | Специализированный открытый кодер |
+| **Qwen / Alibaba** | `qwen3.5-plus` | Многоязычная универсальная модель |
+| **Moonshot / Kimi** | `kimi-k2.7-code` | Кодер для работы с целым репозиторием |
 
 ---
 

@@ -34,7 +34,7 @@ Yes. When editing or creating a key, you can configure model whitelists, IP rest
 ## 3. 🤖 Models & Compatibility (Модели и совместимость)
 
 ### Q: How are models routed?
-BestAIPrice acts as a smart gateway and session hypervisor. When you request a model like `claude-3-7-sonnet` or `gpt-4o`, the gateway automatically selects the lowest-latency, highest-capacity available node or upstream provider.
+BestAIPrice acts as a smart gateway and session hypervisor. When you request a model like `claude-sonnet-5` or `gpt-4o`, the gateway automatically selects the lowest-latency, highest-capacity available node or upstream provider.
 
 ### Q: Do I need separate keys for Claude, OpenAI, and Gemini?
 No. One single BestAIPrice API key works across all formats:

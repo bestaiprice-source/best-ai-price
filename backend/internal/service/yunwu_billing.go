@@ -93,6 +93,16 @@ func computeYunwuProviderScope(ctx context.Context, repo AccountRepository) map[
 		if !strings.EqualFold(acc.Platform, PlatformYunwu) {
 			continue
 		}
+		// The engine only ever routes to a yunwu account that is bound to a group
+		// (getAllYunwuNodes applies HasAccountGroups, and AccountService refuses to
+		// create/update an ungrouped yunwu account). An account the engine can never
+		// use must NOT pull the published/charged retail price down: the request
+		// would be served by a different, more expensive provider, so every such
+		// request would be sold below its own cost. Keep the scope no wider than
+		// the engine's candidate set in this direction.
+		if len(acc.AccountGroups) == 0 {
+			continue
+		}
 		provider := yunwu.ParseNodeProvider(acc.Extra)
 		// A node only prices models of the families it advertises.
 		for _, fam := range yunwu.ParseNodeModelFamilies(acc.Extra) {

@@ -12,7 +12,7 @@ Configure [Cursor IDE](https://www.cursor.com/) to route all agent suggestions, 
    - Turn **ON** `Override OpenAI Base URL`.
    - Set **Base URL**:
      ```text
-     https://api.bestaiprice.com/v1
+     https://bestaiprice.com/gateway/v1
      ```
    - Enter your **API Key**:
      ```text
@@ -20,11 +20,12 @@ Configure [Cursor IDE](https://www.cursor.com/) to route all agent suggestions, 
      ```
 4. Click **Verify**. Cursor will ping BestAIPrice's `/v1/models` and confirm connectivity.
 5. In the **Model Names** list, enable the models you wish to use:
-   - `claude-3-7-sonnet`
-   - `claude-3-5-sonnet`
+   - `claude-sonnet-5`
+   - `claude-opus-5`
    - `gpt-4o`
-   - `deepseek-chat`
-   - `deepseek-reasoner`
+   - `gpt-4o-mini`
+   - `deepseek-v4-flash`
+   - `deepseek-v4-pro`
 
 ---
 

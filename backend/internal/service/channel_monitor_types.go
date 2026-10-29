@@ -72,6 +72,16 @@ type ModelHealthEntry struct {
 	MonitorName      string
 	MaintenanceUntil *time.Time
 	MaintenanceNote  string
+	// Source is where this row came from: a channel-monitor probe or the
+	// measured user traffic (`ModelHealthSource*`). Probes win on merge.
+	Source string
+	// Successes / Failures are the traffic counters behind AvailabilityPct
+	// (zero for probe rows, which aggregate their own history).
+	Successes int64
+	Failures  int64
+	// CanonicalModel is the normalized id a traffic row was folded onto, so the
+	// catalog can join it without a second normalizer.
+	CanonicalModel string
 }
 
 // ChannelMonitorListParams 列表查询过滤参数。

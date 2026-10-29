@@ -6,9 +6,9 @@ if [ -z "${BESTAIPRICE_API_KEY:-}" ]; then
   echo "Please export BESTAIPRICE_API_KEY=\"sk-bestai-xxxx\" before sourcing."
 fi
 
-export ANTHROPIC_BASE_URL="${BESTAIPRICE_BASE_URL:-https://api.bestaiprice.com}"
+export ANTHROPIC_BASE_URL="${BESTAIPRICE_BASE_URL:-https://bestaiprice.com/gateway}"
 export ANTHROPIC_AUTH_TOKEN="${BESTAIPRICE_API_KEY:-}"
-export ANTHROPIC_MODEL="${ANTHROPIC_MODEL:-claude-3-7-sonnet}"
+export ANTHROPIC_MODEL="${ANTHROPIC_MODEL:-claude-sonnet-5}"
 
 echo "✅ Claude Code configured for BestAIPrice Gateway:"
 echo "   Endpoint: ${ANTHROPIC_BASE_URL}"

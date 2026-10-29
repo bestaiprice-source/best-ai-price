@@ -58,6 +58,14 @@ func (s *YunwuScheduler) isRecovering(state *health.NodeRuntimeState) bool {
 	return state.ConsecutiveSuccesses < s.requiredHealthyStreak
 }
 
+// ShouldDefer reports whether a node must still prove a healthy streak before it
+// takes traffic again (§6.1). Exported so the explicit Primary/Backup route path
+// applies exactly the same gate as pool scheduling — otherwise a configured
+// Primary that just failed would be re-selected immediately.
+func (s *YunwuScheduler) ShouldDefer(state *health.NodeRuntimeState) bool {
+	return s.isRecovering(state)
+}
+
 // SelectNode selects the best Yunwu execution node for a session based on Yunwu credit balance and health stats
 func (s *YunwuScheduler) SelectNode(
 	ctx context.Context,

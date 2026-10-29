@@ -1,0 +1,21 @@
+{
+  "note": "Model IDs used by the user-facing docs/examples. Every entry was priced AND available in the public catalog when generated; refresh with `python3 tools/doc_models.py --refresh`, verify with `make check-doc-models`.",
+  "generated_at": "2026-10-29T13:58:26Z",
+  "catalog_url": "https://bestaiprice.com/gateway/api/v1/models",
+  "models": [
+    "claude-haiku-5-5",
+    "claude-opus-5",
+    "claude-sonnet-5",
+    "deepseek-v4-flash",
+    "deepseek-v4-pro",
+    "gemini-1.5-flash",
+    "gemini-2.5-flash",
+    "gemini-3.1-pro",
+    "gpt-4o",
+    "gpt-4o-mini",
+    "kimi-k2.7-code",
+    "o1",
+    "o3-mini",
+    "qwen3.5-plus"
+  ]
+}

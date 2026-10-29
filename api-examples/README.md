@@ -28,17 +28,17 @@ This repository provides production-tested code samples, CLI configurations, and
 BestAIPrice provides unified protocol endpoints:
 | Protocol / Service | Base URL | Auth Header |
 |---|---|---|
-| **OpenAI Compatible** (Chat, Embeddings, Codex) | `https://api.bestaiprice.com/v1` | `Authorization: Bearer $BESTAIPRICE_API_KEY` |
-| **Anthropic Compatible** (Messages API, Claude Code) | `https://api.bestaiprice.com` | `x-api-key: $BESTAIPRICE_API_KEY` |
-| **Google Gemini Compatible** (generateContent) | `https://api.bestaiprice.com` | `x-goog-api-key: $BESTAIPRICE_API_KEY` |
+| **OpenAI Compatible** (Chat, Embeddings, Codex) | `https://bestaiprice.com/gateway/v1` | `Authorization: Bearer $BESTAIPRICE_API_KEY` |
+| **Anthropic Compatible** (Messages API, Claude Code) | `https://bestaiprice.com/gateway` | `x-api-key: $BESTAIPRICE_API_KEY` |
+| **Google Gemini Compatible** (generateContent) | `https://bestaiprice.com/gateway` | `x-goog-api-key: $BESTAIPRICE_API_KEY` |
 
-> *Self-hosted gateway users:* Replace `https://api.bestaiprice.com` with your self-hosted domain (e.g., `https://your-domain.com/gateway`).
+> *Self-hosted gateway users:* Replace `https://bestaiprice.com/gateway` with your self-hosted domain (e.g., `https://your-domain.com/gateway`).
 
 ### 3. Send Your First Request
 
 #### cURL (OpenAI Chat Completions)
 ```bash
-curl https://api.bestaiprice.com/v1/chat/completions \
+curl https://bestaiprice.com/gateway/v1/chat/completions \
   -H "Authorization: Bearer $BESTAIPRICE_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -49,12 +49,12 @@ curl https://api.bestaiprice.com/v1/chat/completions \
 
 #### cURL (Anthropic Claude Messages)
 ```bash
-curl https://api.bestaiprice.com/v1/messages \
+curl https://bestaiprice.com/gateway/v1/messages \
   -H "x-api-key: $BESTAIPRICE_API_KEY" \
   -H "anthropic-version: 2023-06-01" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "claude-3-7-sonnet",
+    "model": "claude-sonnet-5",
     "max_tokens": 256,
     "messages": [{"role": "user", "content": "Hello from Claude!"}]
   }'
@@ -64,25 +64,26 @@ curl https://api.bestaiprice.com/v1/messages \
 
 ## 🤖 Supported Models (Synchronized with Catalog)
 
-BestAIPrice routes across best-price upstream providers with zero vendor lock-in. Active model IDs include:
+BestAIPrice routes across best-price upstream providers with zero vendor lock-in. The IDs below are verified priced and available on the live gateway — treat `GET /v1/models` as the authoritative list; model IDs include:
 
 | Provider | Canonical Model ID | Description |
 |---|---|---|
-| **Anthropic** | `claude-3-7-sonnet` | Claude 3.7 Sonnet (Hybrid reasoning) |
-| **Anthropic** | `claude-3-5-sonnet` | Claude 3.5 Sonnet (Coding champion) |
-| **Anthropic** | `claude-3-5-haiku` | Claude 3.5 Haiku (Ultra-fast & economical) |
+| **Anthropic** | `claude-sonnet-5` | Claude Sonnet 5 — balanced flagship |
+| **Anthropic** | `claude-opus-5` | Claude Opus 5 — maximum reasoning |
+| **Anthropic** | `claude-haiku-5-5` | Claude Haiku — fast & economical |
 | **OpenAI** | `gpt-4o` | GPT-4o Flagship Multimodal |
 | **OpenAI** | `gpt-4o-mini` | Fast & lightweight model |
 | **OpenAI** | `o3-mini` / `o1` | High-tier reasoning models |
-| **DeepSeek** | `deepseek-chat` | DeepSeek-V3 General Chat |
-| **DeepSeek** | `deepseek-reasoner` | DeepSeek-R1 Chain-of-Thought Reasoning |
-| **Google** | `gemini-2.5-pro` | Gemini 2.5 Pro (Massive context) |
+| **DeepSeek** | `deepseek-v4-flash` | DeepSeek V4 Flash — general chat |
+| **DeepSeek** | `deepseek-v4-pro` | DeepSeek V4 Pro — chain-of-thought reasoning |
+| **Google** | `gemini-3.1-pro` | Gemini 3.1 Pro — long-context reasoning |
 | **Google** | `gemini-2.5-flash` | Gemini 2.5 Flash (Low latency) |
-| **Qwen / Alibaba** | `qwen-2.5-coder-32b` | Open-source code powerhouse |
+| **Qwen / Alibaba** | `qwen3.5-plus` | Qwen 3.5 Plus — multilingual all-rounder |
+| **Moonshot / Kimi** | `kimi-k2.7-code` | Kimi K2.7 Code — repo-scale coding |
 
 To query the live list of models and pricing programmatically:
 ```bash
-curl https://api.bestaiprice.com/v1/models \
+curl https://bestaiprice.com/gateway/v1/models \
   -H "Authorization: Bearer $BESTAIPRICE_API_KEY"
 ```
 

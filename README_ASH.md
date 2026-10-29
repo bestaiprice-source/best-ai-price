@@ -117,7 +117,7 @@ Sensitive upstream account credential fields (API keys, OAuth tokens, client sec
    curl -X POST http://localhost:8080/v1/messages \
      -H "Authorization: Bearer <your_user_api_key>" \
      -H "Content-Type: application/json" \
-     -d '{"model": "claude-3-5-sonnet", "messages": [{"role": "user", "content": "Hello!"}], "stream": true}'
+     -d '{"model": "claude-sonnet-5", "messages": [{"role": "user", "content": "Hello!"}], "stream": true}'
 
    # Test OpenAI format:
    curl -X POST http://localhost:8080/v1/chat/completions \

@@ -202,10 +202,18 @@ func buildPlatformSections(
 
 	sections := make([]userChannelPlatformSection, 0, len(platforms))
 	for _, platform := range platforms {
+		// Model filtering stays keyed on the STORED platform; only what leaves
+		// the process is projected (see public_group_view.go).
 		platformSet := map[string]struct{}{platform: {}}
+		sectionGroups := make([]userAvailableGroup, 0, len(groupsByPlatform[platform]))
+		for _, g := range groupsByPlatform[platform] {
+			g.Platform = publicGroupPlatform(g.Platform)
+			g.Name = publicGroupName(platform, g.Name)
+			sectionGroups = append(sectionGroups, g)
+		}
 		sections = append(sections, userChannelPlatformSection{
-			Platform:        platform,
-			Groups:          groupsByPlatform[platform],
+			Platform:        publicGroupPlatform(platform),
+			Groups:          sectionGroups,
 			SupportedModels: toUserSupportedModels(ch.SupportedModels, platformSet),
 		})
 	}
@@ -250,8 +258,10 @@ func toUserSupportedModels(
 			}
 		}
 		out = append(out, userSupportedModel{
-			Name:     m.Name,
-			Platform: m.Platform,
+			Name: m.Name,
+			// Same public projection as the group/section platform: the model
+			// rows must not name the internal capacity pool either.
+			Platform: publicGroupPlatform(m.Platform),
 			Pricing:  toUserPricing(m.Pricing),
 		})
 	}

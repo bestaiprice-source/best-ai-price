@@ -131,23 +131,7 @@ func NewProviderPriceManager(store *storage.Storage, decryptor credentials.Ciphe
 		cache:        make(map[string]map[string]ProviderModelPrice),
 		cacheExpiry:  make(map[string]time.Time),
 		noPriceUntil: make(map[string]time.Time),
-		aliases: map[string]string{
-			"gemini-3-pro":               "gemini-3-pro-preview",
-			"gemini-3.1-pro":             "gemini-3.1-pro-preview",
-			"gemini-3-flash":             "gemini-3-flash-preview",
-			"claude-3-5-sonnet":          "claude-3-5-sonnet-20241022",
-			"claude-3-7-sonnet":          "claude-3-7-sonnet-20250219",
-			"claude-3-opus":              "claude-3-opus-20240229",
-			"claude-3-haiku":             "claude-3-haiku-20240307",
-			"claude-3-5-sonnet-20241022": "claude-3-5-sonnet",
-			"claude-3-7-sonnet-20250219": "claude-3-7-sonnet",
-			"claude-3-opus-20240229":     "claude-3-opus",
-			"claude-3-haiku-20240307":    "claude-3-haiku",
-			"deepseek-chat":              "deepseek-v3",
-			"deepseek-v3":                "deepseek-chat",
-			"deepseek-reasoner":          "deepseek-r1",
-			"deepseek-r1":                "deepseek-reasoner",
-		},
+		aliases:      DefaultModelAliasesCopy(),
 	}
 }
 
@@ -186,35 +170,38 @@ func (ppm *ProviderPriceManager) IsNoPriceCooldown(key, model string) bool {
 }
 
 func (ppm *ProviderPriceManager) lookupModelInPrices(prices map[string]ProviderModelPrice, model string) (ProviderModelPrice, bool) {
-	norm := strings.ToLower(strings.TrimSpace(model))
-	if p, ok := prices[norm]; ok && (p.Available || p.InputPricePer1k > 0 || p.OutputPricePer1k > 0) {
-		return p, true
+	p, _, ok := ppm.lookupModelInPricesMatch(prices, model)
+	return p, ok
+}
+
+// lookupModelInPricesMatch resolves a requested model against ONE provider price
+// table and returns both the price and the provider-side model name it matched
+// under (the price-table key). Matching walks the same candidate set the gateway
+// catalog and billing use (vendor prefix, dot/dash spelling, date snapshot,
+// aliases), so a model the catalog priced is always priceable here too.
+func (ppm *ProviderPriceManager) lookupModelInPricesMatch(prices map[string]ProviderModelPrice, model string) (ProviderModelPrice, string, bool) {
+	if len(prices) == 0 {
+		return ProviderModelPrice{}, "", false
 	}
-	// Check prefix models/
-	if strings.HasPrefix(norm, "models/") {
-		trimmed := strings.TrimPrefix(norm, "models/")
-		if p, ok := prices[trimmed]; ok && (p.Available || p.InputPricePer1k > 0 || p.OutputPricePer1k > 0) {
-			return p, true
-		}
+	key, ok := MatchModelName(model, ppm.aliases, func(name string) bool {
+		p, found := prices[name]
+		return found && (p.Available || p.InputPricePer1k > 0 || p.OutputPricePer1k > 0)
+	})
+	if !ok {
+		return ProviderModelPrice{}, "", false
 	}
-	// Strip vendor prefix (e.g., "anthropic/claude-3-7-sonnet" -> "claude-3-7-sonnet")
-	if stripped := StripVendorPrefix(norm); stripped != norm {
-		if p, ok := prices[stripped]; ok && (p.Available || p.InputPricePer1k > 0 || p.OutputPricePer1k > 0) {
-			return p, true
-		}
-		if target, ok := ppm.aliases[stripped]; ok {
-			if p, ok := prices[strings.ToLower(target)]; ok && (p.Available || p.InputPricePer1k > 0 || p.OutputPricePer1k > 0) {
-				return p, true
-			}
-		}
+	return prices[key], key, true
+}
+
+// pricedForTier turns a matched price into the request's tier price plus the
+// provider-side model name, failing closed when the provider prices per group
+// but publishes no rate for the request's tier.
+func (ppm *ProviderPriceManager) pricedForTier(ctx context.Context, p ProviderModelPrice, matchedModel string) (float64, float64, string, bool) {
+	in, out, ok := ppm.priceForTier(ctx, p)
+	if !ok {
+		return 0, 0, "", false
 	}
-	// Check configured aliases
-	if target, ok := ppm.aliases[norm]; ok {
-		if p, ok := prices[strings.ToLower(target)]; ok && (p.Available || p.InputPricePer1k > 0 || p.OutputPricePer1k > 0) {
-			return p, true
-		}
-	}
-	return ProviderModelPrice{}, false
+	return in, out, matchedModel, true
 }
 
 func (ppm *ProviderPriceManager) fetchProviderPrices(ctx context.Context, endpointURL string, token ...string) (map[string]ProviderModelPrice, error) {
@@ -464,8 +451,31 @@ func (ppm *ProviderPriceManager) priceForTier(ctx context.Context, p ProviderMod
 }
 
 func (ppm *ProviderPriceManager) ResolveNodePrice(ctx context.Context, node *health.ExecutionNode, model string) (float64, float64, bool) {
+	in, out, _, ok := ppm.ResolveNodePriceMatch(ctx, node, model)
+	return in, out, ok
+}
+
+// MatchNodeModelPrice reports the provider-side model name the node prices this
+// model under — i.e. the name to send upstream. ok=false means the node has no
+// price for the model, so nothing may be dispatched to it.
+func (ppm *ProviderPriceManager) MatchNodeModelPrice(ctx context.Context, node *health.ExecutionNode, model string) (string, bool) {
+	_, _, matched, ok := ppm.ResolveNodePriceMatch(ctx, node, model)
+	if !ok || matched == "" {
+		return "", false
+	}
+	return matched, true
+}
+
+// ResolveNodePriceMatch resolves a model's price on a node and additionally
+// returns the provider-side model name the price was matched under — the name
+// the upstream provider lists (and therefore serves). The dispatch path uses it
+// as the upstream model id: when a request is priced through a normalized
+// variant (vendor prefix, dot/dash spelling, alias) sending the client's own
+// spelling upstream would fail with model_not_found even though the model is
+// perfectly priced.
+func (ppm *ProviderPriceManager) ResolveNodePriceMatch(ctx context.Context, node *health.ExecutionNode, model string) (float64, float64, string, bool) {
 	if node == nil || model == "" {
-		return 0, 0, false
+		return 0, 0, "", false
 	}
 
 	canonicalProv := CanonicalProvider(node.Provider)
@@ -480,7 +490,7 @@ func (ppm *ProviderPriceManager) ResolveNodePrice(ctx context.Context, node *hea
 	until, hasUntil := ppm.noPriceUntil[negKey]
 	ppm.mu.RUnlock()
 	if hasUntil && time.Now().Before(until) {
-		return 0, 0, false
+		return 0, 0, "", false
 	}
 
 	// 1. Check in-memory cached prices for this specific node first
@@ -489,9 +499,9 @@ func (ppm *ProviderPriceManager) ResolveNodePrice(ctx context.Context, node *hea
 		if prices, ok := ppm.cache[node.NodeID]; ok {
 			exp, hasExp := ppm.cacheExpiry[node.NodeID]
 			if !hasExp || time.Now().Before(exp) {
-				if p, found := ppm.lookupModelInPrices(prices, model); found {
+				if p, matched, found := ppm.lookupModelInPricesMatch(prices, model); found {
 					ppm.mu.RUnlock()
-					return ppm.priceForTier(ctx, p)
+					return ppm.pricedForTier(ctx, p, matched)
 				}
 			}
 		}
@@ -506,18 +516,18 @@ func (ppm *ProviderPriceManager) ResolveNodePrice(ctx context.Context, node *hea
 		hasCustom := len(ppm.cache) > 0
 		ppm.mu.RUnlock()
 		if hasCustom || canonicalProv == ProviderPortdan {
-			return 0, 0, false
+			return 0, 0, "", false
 		}
 		norm := strings.ToLower(strings.TrimSpace(model))
 		if strings.Contains(norm, "no-price") || strings.Contains(norm, "unpriced") {
-			return 0, 0, false
+			return 0, 0, "", false
 		}
 		if norm == "claude" || strings.HasPrefix(norm, "claude-") ||
 			norm == "gpt" || strings.HasPrefix(norm, "gpt-") ||
 			norm == "gemini" || strings.HasPrefix(norm, "gemini-") {
-			return 0.003, 0.015, true
+			return 0.003, 0.015, model, true
 		}
-		return 0, 0, false
+		return 0, 0, "", false
 	}
 
 	// 2. Check Database (ash_vendor_models and account extras) if DB is available.
@@ -535,7 +545,7 @@ func (ppm *ProviderPriceManager) ResolveNodePrice(ctx context.Context, node *hea
 						if rows, err := ppm.store.DB().QueryContext(ctx, `SELECT input_price,output_price FROM ash_vendor_models WHERE vendor_id=$1 AND model_name=$2 AND is_available=true`, vendorID, model); err == nil {
 							defer rows.Close()
 							if rows.Next() && rows.Scan(&in, &out) == nil {
-								return in, out, true
+								return in, out, model, true
 							}
 						}
 					}
@@ -554,7 +564,7 @@ func (ppm *ProviderPriceManager) ResolveNodePrice(ctx context.Context, node *hea
 						if rows, err := ppm.store.DB().QueryContext(ctx, `SELECT m.input_price,m.output_price FROM ash_vendor_models m JOIN ash_vendors v ON v.id=m.vendor_id WHERE rtrim(v.url,'/')=$1 AND m.model_name=$2 AND m.is_available=true`, baseURL, model); err == nil {
 							defer rows.Close()
 							if rows.Next() && rows.Scan(&in, &out) == nil {
-								return in, out, true
+								return in, out, model, true
 							}
 						}
 					}
@@ -572,10 +582,10 @@ func (ppm *ProviderPriceManager) ResolveNodePrice(ctx context.Context, node *hea
 			exp, hasExp := ppm.cacheExpiry[pricingURL]
 			if !hasExp || time.Now().Before(exp) {
 				ppm.mu.RUnlock()
-				if p, found := ppm.lookupModelInPrices(prices, model); found {
-					return ppm.priceForTier(ctx, p)
+				if p, matched, found := ppm.lookupModelInPricesMatch(prices, model); found {
+					return ppm.pricedForTier(ctx, p, matched)
 				}
-				return 0, 0, false
+				return 0, 0, "", false
 			}
 		}
 		ppm.mu.RUnlock()
@@ -597,10 +607,10 @@ func (ppm *ProviderPriceManager) ResolveNodePrice(ctx context.Context, node *hea
 			delete(ppm.noPriceUntil, negKey)
 			ppm.mu.Unlock()
 
-			if p, found := ppm.lookupModelInPrices(fetchedPrices, model); found {
-				return ppm.priceForTier(ctx, p)
+			if p, matched, found := ppm.lookupModelInPricesMatch(fetchedPrices, model); found {
+				return ppm.pricedForTier(ctx, p, matched)
 			}
-			return 0, 0, false
+			return 0, 0, "", false
 		}
 
 		// On network error or fetch failure: do not set an artificial cooldown lock.
@@ -608,8 +618,8 @@ func (ppm *ProviderPriceManager) ResolveNodePrice(ctx context.Context, node *hea
 		ppm.mu.RLock()
 		if prices, ok := ppm.cache[pricingURL]; ok {
 			ppm.mu.RUnlock()
-			if p, found := ppm.lookupModelInPrices(prices, model); found {
-				return ppm.priceForTier(ctx, p)
+			if p, matched, found := ppm.lookupModelInPricesMatch(prices, model); found {
+				return ppm.pricedForTier(ctx, p, matched)
 			}
 		} else {
 			ppm.mu.RUnlock()
@@ -623,14 +633,14 @@ func (ppm *ProviderPriceManager) ResolveNodePrice(ctx context.Context, node *hea
 		if prices, ok := ppm.cache[canonicalProv]; ok {
 			exp, hasExp := ppm.cacheExpiry[canonicalProv]
 			if !hasExp || time.Now().Before(exp) {
-				if p, found := ppm.lookupModelInPrices(prices, model); found {
+				if p, matched, found := ppm.lookupModelInPricesMatch(prices, model); found {
 					ppm.mu.RUnlock()
-					return ppm.priceForTier(ctx, p)
+					return ppm.pricedForTier(ctx, p, matched)
 				}
 			}
 		}
 		ppm.mu.RUnlock()
 	}
 
-	return 0, 0, false
+	return 0, 0, "", false
 }

@@ -107,9 +107,7 @@ function simulateGuard(
     const restrictedPaths = [
       '/admin/groups',
       '/admin/subscriptions',
-      '/admin/redeem',
       '/subscriptions',
-      '/redeem',
     ]
     if (restrictedPaths.some((path) => toPath.startsWith(path))) {
       return authState.isAdmin ? '/admin/dashboard' : '/dashboard'
@@ -264,17 +262,6 @@ describe('路由守卫逻辑', () => {
         backendModeEnabled: false,
       }
       const redirect = simulateGuard('/subscriptions', {}, authState)
-      expect(redirect).toBe('/dashboard')
-    })
-
-    it('普通用户简易模式访问 /redeem 重定向到 /dashboard', () => {
-      const authState: MockAuthState = {
-        isAuthenticated: true,
-        isAdmin: false,
-        isSimpleMode: true,
-        backendModeEnabled: false,
-      }
-      const redirect = simulateGuard('/redeem', {}, authState)
       expect(redirect).toBe('/dashboard')
     })
 

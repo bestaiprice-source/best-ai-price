@@ -8,8 +8,8 @@ if [ -z "$API_KEY" ]; then
   exit 1
 fi
 
-BASE_URL="${BESTAIPRICE_BASE_URL:-https://api.bestaiprice.com}"
-MODEL="${1:-claude-3-7-sonnet}"
+BASE_URL="${BESTAIPRICE_BASE_URL:-https://bestaiprice.com/gateway}"
+MODEL="${1:-claude-sonnet-5}"
 
 echo "Sending Anthropic Messages request to ${BASE_URL}/v1/messages (model: ${MODEL})..."
 

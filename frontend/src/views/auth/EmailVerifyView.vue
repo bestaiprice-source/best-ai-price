@@ -206,7 +206,6 @@ let countdownTimer: ReturnType<typeof setInterval> | null = null
 const email = ref<string>('')
 const password = ref<string>('')
 const initialTurnstileToken = ref<string>('')
-const promoCode = ref<string>('')
 const invitationCode = ref<string>('')
 const hasRegisterData = ref<boolean>(false)
 
@@ -237,7 +236,6 @@ onMounted(async () => {
       email.value = registerData.email || ''
       password.value = registerData.password || ''
       initialTurnstileToken.value = registerData.turnstile_token || ''
-      promoCode.value = registerData.promo_code || ''
       invitationCode.value = registerData.invitation_code || ''
       hasRegisterData.value = !!(email.value && password.value)
     } catch {
@@ -402,7 +400,6 @@ async function handleVerify(): Promise<void> {
       password: password.value,
       verify_code: verifyCode.value.trim(),
       turnstile_token: initialTurnstileToken.value || undefined,
-      promo_code: promoCode.value || undefined,
       invitation_code: invitationCode.value || undefined
     })
 

@@ -532,6 +532,12 @@ func ProvideChannelMonitorService(repo ChannelMonitorRepository, encryptor Secre
 	return NewChannelMonitorService(repo, encryptor)
 }
 
+// ProvideModelTrafficHealthService creates the per-model health service backed by
+// logged traffic (no upstream tokens are spent, unlike the probe path).
+func ProvideModelTrafficHealthService(repo ModelTrafficHealthRepository) *ModelTrafficHealthService {
+	return NewModelTrafficHealthService(repo)
+}
+
 // ProvideChannelMonitorRunner wires the monitor service to its scheduler and starts it.
 func ProvideChannelMonitorRunner(svc *ChannelMonitorService, settingService *SettingService) *ChannelMonitorRunner {
 	r := NewChannelMonitorRunner(svc, settingService)

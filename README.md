@@ -165,12 +165,12 @@ Clients communicate with the gateway using standard OpenAI or Anthropic protocol
 
 ### 1. Anthropic Messages Protocol
 ```bash
-curl -X POST https://api.bestaiprice.com/v1/messages \
+curl -X POST https://bestaiprice.com/gateway/v1/messages \
   -H "Authorization: Bearer <YOUR_API_KEY>" \
   -H "Content-Type: application/json" \
   -H "anthropic-version: 2023-06-01" \
   -d '{
-    "model": "claude-3-7-sonnet",
+    "model": "claude-sonnet-5",
     "max_tokens": 1024,
     "messages": [
       {"role": "user", "content": "Explain quantum computing in simple terms."}
@@ -180,7 +180,7 @@ curl -X POST https://api.bestaiprice.com/v1/messages \
 
 ### 2. OpenAI Chat Completions Protocol
 ```bash
-curl -X POST https://api.bestaiprice.com/v1/chat/completions \
+curl -X POST https://bestaiprice.com/gateway/v1/chat/completions \
   -H "Authorization: Bearer <YOUR_API_KEY>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -193,7 +193,7 @@ curl -X POST https://api.bestaiprice.com/v1/chat/completions \
 
 ### 3. Claude Code CLI Integration
 ```bash
-export ANTHROPIC_BASE_URL="https://api.bestaiprice.com"
+export ANTHROPIC_BASE_URL="https://bestaiprice.com/gateway"
 export ANTHROPIC_AUTH_TOKEN="<YOUR_API_KEY>"
 claude
 ```
@@ -202,7 +202,7 @@ claude
 Configure your `.cursorrules` or OpenAI client settings:
 ```json
 {
-  "openai.baseUrl": "https://api.bestaiprice.com/v1",
+  "openai.baseUrl": "https://bestaiprice.com/gateway/v1",
   "openai.apiKey": "<YOUR_API_KEY>"
 }
 ```

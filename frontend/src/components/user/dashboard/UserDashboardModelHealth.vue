@@ -30,11 +30,17 @@
           <p class="truncate text-xs font-medium text-gray-900 dark:text-white" :title="row.model">
             {{ row.model }}
           </p>
-          <p v-if="row.monitor_name || row.provider" class="truncate text-[11px] text-gray-400">
-            {{ row.monitor_name || row.provider }}
+          <p v-if="subtitleOf(row)" class="truncate text-[11px] text-gray-400">
+            {{ subtitleOf(row) }}
           </p>
         </div>
-        <ModelHealthBadge :status="row.status" :uptime="row.availability_pct" class="shrink-0" />
+        <ModelHealthBadge
+          :status="row.status"
+          :uptime="row.availability_pct"
+          :source="row.source ?? null"
+          :requests="row.requests ?? null"
+          class="shrink-0"
+        />
       </li>
     </ul>
 
@@ -50,6 +56,7 @@ import { useI18n } from 'vue-i18n'
 import ModelHealthBadge from '@/components/user/monitor/ModelHealthBadge.vue'
 import ModelHealthLegend from '@/components/user/monitor/ModelHealthLegend.vue'
 import { useModelHealth } from '@/composables/useModelHealth'
+import type { ModelHealthItem } from '@/api/modelHealth'
 
 /**
  * Model health block on the dashboard — the operational answer the static
@@ -84,4 +91,15 @@ const rows = computed(() =>
 
 const visibleRows = computed(() => rows.value.slice(0, MAX_ROWS))
 const hiddenCount = computed(() => Math.max(rows.value.length - MAX_ROWS, 0))
+
+/**
+ * Sub-line of a row: the monitor that measured it, or — for a traffic-derived
+ * row — the fact that the number comes from live requests rather than a probe.
+ * Silence there would read as a monitor that never ran.
+ */
+function subtitleOf(row: ModelHealthItem): string {
+  if (row.monitor_name) return row.monitor_name
+  if (row.source === 'traffic') return t('modelHealth.sourceTraffic')
+  return row.provider || ''
+}
 </script>

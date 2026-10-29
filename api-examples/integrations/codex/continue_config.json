@@ -4,29 +4,29 @@
       "title": "BestAIPrice GPT-4o",
       "provider": "openai",
       "model": "gpt-4o",
-      "apiBase": "https://api.bestaiprice.com/v1",
+      "apiBase": "https://bestaiprice.com/gateway/v1",
       "apiKey": "${BESTAIPRICE_API_KEY}"
     },
     {
-      "title": "BestAIPrice Claude 3.7 Sonnet",
+      "title": "BestAIPrice Claude Sonnet 5",
       "provider": "openai",
-      "model": "claude-3-7-sonnet",
-      "apiBase": "https://api.bestaiprice.com/v1",
+      "model": "claude-sonnet-5",
+      "apiBase": "https://bestaiprice.com/gateway/v1",
       "apiKey": "${BESTAIPRICE_API_KEY}"
     },
     {
-      "title": "BestAIPrice DeepSeek R1",
+      "title": "BestAIPrice DeepSeek V4 Pro",
       "provider": "openai",
-      "model": "deepseek-reasoner",
-      "apiBase": "https://api.bestaiprice.com/v1",
+      "model": "deepseek-v4-pro",
+      "apiBase": "https://bestaiprice.com/gateway/v1",
       "apiKey": "${BESTAIPRICE_API_KEY}"
     }
   ],
   "tabAutocompleteModel": {
-    "title": "BestAIPrice Qwen Coder",
+    "title": "BestAIPrice Kimi K2.7 Code",
     "provider": "openai",
-    "model": "qwen-2.5-coder-32b",
-    "apiBase": "https://api.bestaiprice.com/v1",
+    "model": "kimi-k2.7-code",
+    "apiBase": "https://bestaiprice.com/gateway/v1",
     "apiKey": "${BESTAIPRICE_API_KEY}"
   }
 }

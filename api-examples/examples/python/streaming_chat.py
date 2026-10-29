@@ -12,14 +12,14 @@ if not api_key:
     print("Error: BESTAIPRICE_API_KEY environment variable is required.", file=sys.stderr)
     sys.exit(1)
 
-base_url = os.environ.get("BESTAIPRICE_BASE_URL", "https://api.bestaiprice.com").rstrip("/") + "/v1"
+base_url = os.environ.get("BESTAIPRICE_BASE_URL", "https://bestaiprice.com/gateway").rstrip("/") + "/v1"
 
 client = OpenAI(
     api_key=api_key,
     base_url=base_url,
 )
 
-model = os.environ.get("MODEL", "deepseek-chat")
+model = os.environ.get("MODEL", "deepseek-v4-flash")
 print(f"Streaming from BestAIPrice using {model}...")
 
 stream = client.chat.completions.create(

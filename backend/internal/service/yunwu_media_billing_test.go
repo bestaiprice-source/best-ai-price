@@ -260,7 +260,7 @@ func TestCatalogUsesAccountScopedPrimary(t *testing.T) {
 
 	repo := &mockAccountRepoForPricing{
 		schedulable: []Account{
-			{Platform: PlatformYunwu, Extra: map[string]any{"provider": "portdan"}},
+			{Platform: PlatformYunwu, AccountGroups: []AccountGroup{{AccountID: 1, GroupID: 7}}, Extra: map[string]any{"provider": "portdan"}},
 		},
 	}
 	svc := &GatewayService{billingService: billingSvc, accountRepo: repo}
@@ -303,7 +303,7 @@ func TestProviderScopeIsFamilyAware(t *testing.T) {
 	// Only a portdan account, and it supports ONLY the gpt family.
 	repo := &mockAccountRepoForPricing{
 		schedulable: []Account{
-			{Platform: PlatformYunwu, Extra: map[string]any{
+			{Platform: PlatformYunwu, AccountGroups: []AccountGroup{{AccountID: 1, GroupID: 7}}, Extra: map[string]any{
 				"provider":                 "portdan",
 				"supported_model_families": []any{"gpt"},
 			}},
@@ -353,7 +353,7 @@ func TestProviderScopeMapsVendorFamilyAliases(t *testing.T) {
 	billingSvc := NewBillingService(nil, nil, yw)
 
 	repo := &mockAccountRepoForPricing{schedulable: []Account{
-		{Platform: PlatformYunwu, Extra: map[string]any{
+		{Platform: PlatformYunwu, AccountGroups: []AccountGroup{{AccountID: 1, GroupID: 7}}, Extra: map[string]any{
 			"provider":                 "openlux",
 			"supported_model_families": []any{"deepseek"},
 		}},
@@ -362,4 +362,47 @@ func TestProviderScopeMapsVendorFamilyAliases(t *testing.T) {
 	p, err := billingSvc.GetYunwuPrimaryModelPricing(ctx, "deepseek/deepseek-v3")
 	require.NoError(t, err, "\"deepseek\" alias must map to the other family")
 	require.NotNil(t, p)
+}
+
+// An ungrouped yunwu account can never be routed to (the engine requires
+// HasAccountGroups), so it must not widen the price scope either: a cheaper
+// provider we cannot serve from would otherwise set the published AND charged
+// price while the request is actually served by a pricier provider — a loss on
+// every request.
+func TestProviderScopeExcludesUngroupedAccounts(t *testing.T) {
+	resetYunwuProviderScopeCache()
+	t.Cleanup(resetYunwuProviderScopeCache)
+
+	yw := NewYunwuPricingService()
+	yw.providerURLs = map[string]string{"openlux": "m1", "portdan": "m2"}
+	yw.providerPricing = map[string]map[string]*YunwuPricingRawItem{
+		"openlux": {"claude-sonnet-5": {ModelRatio: 1.0, CompletionRatio: 5.0, Available: true}},
+		"portdan": {"claude-sonnet-5": {ModelRatio: 2.0, CompletionRatio: 5.0, Available: true}},
+	}
+	yw.providerUpdated = map[string]time.Time{"openlux": time.Now(), "portdan": time.Now()}
+	billingSvc := NewBillingService(nil, nil, yw)
+
+	// A grouped portdan account we can serve from, plus a cheaper openlux account
+	// that is not bound to any group (legacy / degrouped row).
+	repo := &mockAccountRepoForPricing{schedulable: []Account{
+		{Platform: PlatformYunwu, AccountGroups: []AccountGroup{{AccountID: 1, GroupID: 7}}, Extra: map[string]any{"provider": "portdan"}},
+		{Platform: PlatformYunwu, Extra: map[string]any{"provider": "openlux"}},
+	}}
+
+	ctx := withYunwuProviderScope(context.Background(), repo)
+	p, err := billingSvc.GetYunwuPrimaryModelPricing(ctx, "claude-sonnet-5")
+	require.NoError(t, err)
+	require.NotNil(t, p)
+	assert.InDelta(t, 2.0*2e-6, p.InputPricePerToken, 1e-12,
+		"the ungrouped openlux account must not pull the price down")
+
+	// The same scope drives the public catalog.
+	svc := &GatewayService{billingService: billingSvc, accountRepo: repo}
+	for _, it := range svc.GetPublicModelsPricing(context.Background()) {
+		if it.CanonicalModelID == "anthropic/claude-sonnet-5" {
+			require.NotNil(t, it.InputPricePer1M)
+			assert.InDelta(t, 4.4, *it.InputPricePer1M, 1e-4,
+				"catalog must publish the grouped provider's price")
+		}
+	}
 }

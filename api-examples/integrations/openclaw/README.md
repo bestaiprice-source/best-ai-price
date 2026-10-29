@@ -17,24 +17,24 @@ upstreams:
   - id: "bestaiprice-openai"
     name: "BestAIPrice Gateway (OpenAI)"
     protocol: "openai"
-    base_url: "https://api.bestaiprice.com/v1"
+    base_url: "https://bestaiprice.com/gateway/v1"
     api_key: "${BESTAIPRICE_API_KEY}"
     models:
       - "gpt-4o"
       - "gpt-4o-mini"
-      - "deepseek-chat"
-      - "deepseek-reasoner"
-      - "qwen-2.5-coder-32b"
+      - "deepseek-v4-flash"
+      - "deepseek-v4-pro"
+      - "kimi-k2.7-code"
 
   - id: "bestaiprice-anthropic"
     name: "BestAIPrice Gateway (Claude)"
     protocol: "anthropic"
-    base_url: "https://api.bestaiprice.com"
+    base_url: "https://bestaiprice.com/gateway"
     api_key: "${BESTAIPRICE_API_KEY}"
     models:
-      - "claude-3-7-sonnet"
-      - "claude-3-5-sonnet"
-      - "claude-3-5-haiku"
+      - "claude-sonnet-5"
+      - "claude-opus-5"
+      - "claude-haiku-5-5"
 
 routes:
   - path: "/v1/chat/completions"

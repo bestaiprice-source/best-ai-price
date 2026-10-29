@@ -12,6 +12,18 @@ export interface PublicModelPricing {
   model_id?: string
   available?: boolean
   status?: string
+  /**
+   * Why the feed claims the model is usable, and whether that claim proves the
+   * model itself is routable:
+   *   models  — the id is in a live upstream model list we fetched (strongest)
+   *   mapping — an operator declared the id in a node's model_mapping
+   *   vendor  — only a pool for the vendor exists; nothing confirms this model
+   * `availability_checked_at` is when the supporting list was fetched (absent
+   * for mappings and vendor guesses).
+   */
+  availability_source?: 'models' | 'mapping' | 'vendor' | string
+  availability_verified?: boolean
+  availability_checked_at?: string | null
   /** Retail (charged) prices, USD per 1M tokens — already include the markup. */
   input_price_per_1m?: number | null
   output_price_per_1m?: number | null

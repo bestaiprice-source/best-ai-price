@@ -66,6 +66,7 @@ func (s *ChannelMonitorService) ListModelHealth(ctx context.Context, windowDays 
 				MonitorName:      m.Name,
 				MaintenanceUntil: m.MaintenanceUntil,
 				MaintenanceNote:  m.MaintenanceNote,
+				Source:           ModelHealthSourceProbe,
 			}
 			if row := latest[model]; row != nil {
 				entry.Status = row.Status

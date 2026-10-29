@@ -12,7 +12,7 @@ if not api_key:
     print("Error: BESTAIPRICE_API_KEY environment variable is required.", file=sys.stderr)
     sys.exit(1)
 
-base_url = os.environ.get("BESTAIPRICE_BASE_URL", "https://api.bestaiprice.com").rstrip("/")
+base_url = os.environ.get("BESTAIPRICE_BASE_URL", "https://bestaiprice.com/gateway").rstrip("/")
 model = os.environ.get("MODEL", "gemini-2.5-flash")
 
 url = f"{base_url}/v1beta/models/{model}:generateContent"

@@ -69,9 +69,9 @@ describe('ModelsCatalogView provider chips', () => {
     const wrapper = await mountView()
 
     expect(chips(wrapper)).toEqual([
-      'Anthropic (1)',
-      'OpenAI (3)',
-      'Google (2)',
+      'Claude (1)',
+      'GPT (3)',
+      'Gemini (2)',
       'Other (1)'
     ])
   })
@@ -83,7 +83,7 @@ describe('ModelsCatalogView provider chips', () => {
 
     // Only google still has a model, so only its chip is offered — and the list
     // shows exactly the one model the chip promises.
-    expect(chips(wrapper)).toEqual(['Google (1)'])
+    expect(chips(wrapper)).toEqual(['Gemini (1)'])
     expect(cardsOf(wrapper).length).toBe(1)
     expect(wrapper.text()).toContain('gemini-2.5-flash-image')
   })
@@ -93,27 +93,27 @@ describe('ModelsCatalogView provider chips', () => {
 
     await wrapper.find('input[type="text"]').setValue('gpt')
 
-    expect(chips(wrapper)).toEqual(['OpenAI (2)'])
+    expect(chips(wrapper)).toEqual(['GPT (2)'])
     expect(cardsOf(wrapper).length).toBe(2)
   })
 
   it('keeps the selected provider chip visible even when the filter empties it', async () => {
     const wrapper = await mountView()
 
-    await buttonByText(wrapper, 'OpenAI (3)').trigger('click')
+    await buttonByText(wrapper, 'GPT (3)').trigger('click')
     expect(cardsOf(wrapper).length).toBe(3)
 
     // openai has no image model: its chip must survive so the filter can be
     // cleared again.
     await buttonByText(wrapper, 'modelsCatalog.typeImage').trigger('click')
-    expect(chips(wrapper)).toEqual(['OpenAI (0)', 'Google (1)'])
+    expect(chips(wrapper)).toEqual(['GPT (0)', 'Gemini (1)'])
 
     // Clearing the type filter brings the other providers back.
     await buttonByText(wrapper, 'modelsCatalog.typeAll').trigger('click')
     expect(chips(wrapper)).toEqual([
-      'Anthropic (1)',
-      'OpenAI (3)',
-      'Google (2)',
+      'Claude (1)',
+      'GPT (3)',
+      'Gemini (2)',
       'Other (1)'
     ])
   })

@@ -21,16 +21,25 @@ import { modelHealthStatusMeta } from '@/constants/modelHealth'
  * `uptime` is nullable because the backend deliberately omits it for models
  * under planned maintenance and for models with no probe history — showing a
  * `0.00%` there would read as a total outage.
+ *
+ * `source` says how the number was obtained. A probe measures the upstream
+ * itself; `traffic` is measured on the requests users actually made, so the
+ * tooltip spells that out (and how many requests it rests on) instead of
+ * letting the reader assume a continuous monitor.
  */
 const props = withDefaults(
   defineProps<{
     status: string | null | undefined
     uptime?: number | null
     showLabel?: boolean
+    source?: string | null
+    requests?: number | null
   }>(),
   {
     uptime: null,
-    showLabel: false
+    showLabel: false,
+    source: null,
+    requests: null
   }
 )
 
@@ -41,7 +50,20 @@ const meta = computed(() => modelHealthStatusMeta(props.status))
 const formatUptime = (value: number) => `${Number(value).toFixed(2)}%`
 
 const tooltip = computed(() => {
-  if (props.uptime === null || props.uptime === undefined) return t(meta.value.labelKey)
-  return `${t(meta.value.labelKey)} · ${formatUptime(props.uptime)} ${t('modelHealth.uptime')}`
+  const parts: string[] = []
+  if (props.uptime === null || props.uptime === undefined) {
+    parts.push(t(meta.value.labelKey))
+  } else {
+    parts.push(`${t(meta.value.labelKey)} · ${formatUptime(props.uptime)} ${t('modelHealth.uptime')}`)
+  }
+  if (props.source === 'traffic') {
+    const count = Number(props.requests ?? 0)
+    parts.push(
+      count > 0
+        ? `${t('modelHealth.sourceTraffic')} · ${t('modelHealth.trafficSample', { count })}`
+        : t('modelHealth.sourceTraffic')
+    )
+  }
+  return parts.join(' · ')
 })
 </script>

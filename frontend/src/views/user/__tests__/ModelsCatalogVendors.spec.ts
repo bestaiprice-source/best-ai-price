@@ -65,31 +65,36 @@ const chips = (wrapper: any) =>
     .filter((text: string) => / \(\d+\)$/.test(text))
 
 describe('ModelsCatalogView vendor labels', () => {
-  it('shows real brand names, never the raw capitalized prefix', async () => {
+  it('shows the model brand, never the company and never the raw capitalized prefix', async () => {
     const wrapper = await mountView()
     const texts = chips(wrapper)
 
-    // Proper brand casing + the product name users recognise.
-    expect(texts).toContain('OpenAI (1)')
+    // The model the user buys, not the company that makes it.
+    expect(texts).toContain('GPT (1)')
+    expect(texts).toContain('Gemini (1)')
+    expect(texts).toContain('Grok (1)')
     expect(texts).toContain('GLM (1)')
     expect(texts).toContain('KIMI (1)')
-    expect(texts).toContain('xAI (1)')
-    expect(texts).toContain('BAAI (1)')
-    // Never the naive CSS-capitalize output.
+    expect(texts).toContain('BGE (1)')
+    // Never the parent company, and never the naive CSS-capitalize output.
+    expect(wrapper.text()).not.toContain('OpenAI')
     expect(wrapper.text()).not.toContain('Openai')
+    expect(wrapper.text()).not.toContain('Anthropic')
+    expect(wrapper.text()).not.toContain('xAI')
     expect(wrapper.text()).not.toContain('Zhipu')
     expect(wrapper.text()).not.toContain('Moonshot')
+    expect(wrapper.text()).not.toContain('BAAI')
   })
 
   it('splits the generic "other/" bucket into the real vendors', async () => {
     const wrapper = await mountView()
     const texts = chips(wrapper)
 
-    expect(texts).toContain('ByteDance (1)')
+    expect(texts).toContain('Doubao (1)')
     expect(texts).toContain('Midjourney (1)')
-    // speech-* and aigc-video-hailuo are MiniMax; veo_* is Google.
+    // speech-* and aigc-video-hailuo are MiniMax; veo_* is Google's Gemini.
     expect(texts).toContain('MiniMax (1)')
-    expect(texts).toContain('Google (1)')
+    expect(texts).toContain('Gemini (1)')
     // No leftover catch-all bucket.
     expect(texts.some((t: string) => t.startsWith('Other '))).toBe(false)
   })
@@ -99,27 +104,29 @@ describe('ModelsCatalogView vendor labels', () => {
     const texts = chips(wrapper)
 
     // `jev-*` is TypeSafe AI's System One; `hy4-preview` is Tencent's Hunyuan Hy4.
-    expect(texts).toContain('TypeSafe (1)')
-    expect(texts).toContain('Tencent (1)')
+    expect(texts).toContain('Jev (1)')
+    expect(texts).toContain('Hunyuan (1)')
     // The raw slug token must never be used as a label.
-    expect(wrapper.text()).not.toContain('Jev')
-    expect(wrapper.text()).not.toContain('Hy4')
+    expect(texts).not.toContain('jev (1)')
+    expect(texts).not.toContain('hy4 (1)')
+    expect(wrapper.text()).not.toContain('TypeSafe')
+    expect(wrapper.text()).not.toContain('Tencent')
   })
 
   it('orders the pinned vendors first, then the rest by count then name', async () => {
     const wrapper = await mountView()
 
     expect(chips(wrapper)).toEqual([
-      'OpenAI (1)',
-      'Google (1)',
-      'BAAI (1)',
-      'ByteDance (1)',
+      'GPT (1)',
+      'Gemini (1)',
+      'BGE (1)',
+      'Doubao (1)',
       'Midjourney (1)',
       'MiniMax (1)',
       'KIMI (1)',
-      'Tencent (1)',
-      'TypeSafe (1)',
-      'xAI (1)',
+      'Hunyuan (1)',
+      'Jev (1)',
+      'Grok (1)',
       'GLM (1)'
     ])
   })
@@ -132,7 +139,7 @@ describe('ModelsCatalogView vendor labels', () => {
     const headers = wrapper.findAll('h3').map((h: any) => h.text())
     expect(headers).toContain('GLM')
     expect(headers).toContain('KIMI')
-    expect(headers).toContain('ByteDance')
+    expect(headers).toContain('Doubao')
     expect(headers).toContain('Midjourney')
   })
 })

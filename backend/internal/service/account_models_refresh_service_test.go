@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -121,6 +122,62 @@ func TestAccountModelsRefreshService_RunOnceRefreshesOnlyDueSupportedAccounts(t 
 	require.NotNil(t, repo.accounts[1].Extra[AccountExtraFetchedModelsKey])
 	require.Nil(t, repo.accounts[2].Extra[AccountExtraFetchedModelsKey])
 	require.Nil(t, repo.accounts[3].Extra[AccountExtraFetchedModelsKey])
+}
+
+func TestShouldRefreshFetchedModels_DefaultsToHourlyForSupportedPlatforms(t *testing.T) {
+	now := time.Now().UTC()
+	fetchedAgo := func(d time.Duration) map[string]any {
+		return map[string]any{AccountExtraModelsFetchedAtKey: now.Add(-d).Format(time.RFC3339Nano)}
+	}
+
+	tests := []struct {
+		name    string
+		account Account
+		want    bool
+	}{
+		{
+			// The catalog's per-model evidence is built from this list, and the
+			// fetch is a free GET, so an unset interval must not opt an account
+			// out entirely.
+			name:    "yunwu without interval and never fetched",
+			account: Account{Platform: PlatformYunwu},
+			want:    true,
+		},
+		{
+			name:    "yunwu without interval, fetched 30 minutes ago",
+			account: Account{Platform: PlatformYunwu, Extra: fetchedAgo(30 * time.Minute)},
+			want:    false,
+		},
+		{
+			name:    "yunwu without interval, fetched two hours ago",
+			account: Account{Platform: PlatformYunwu, Extra: fetchedAgo(2 * time.Hour)},
+			want:    true,
+		},
+		{
+			name: "explicit interval still wins over the default",
+			account: Account{
+				Platform: PlatformYunwu,
+				Extra: map[string]any{
+					AccountExtraModelsRefreshIntervalSecKey: 60,
+					AccountExtraModelsFetchedAtKey:          now.Add(-30 * time.Minute).Format(time.RFC3339Nano),
+				},
+			},
+			want: true,
+		},
+		{
+			// Unsupported platform: stays opted out so we never write a refresh
+			// error for an account whose list cannot be fetched.
+			name:    "sora without interval",
+			account: Account{Platform: PlatformSora},
+			want:    false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, tt.account.ShouldRefreshFetchedModels(now))
+		})
+	}
 }
 
 func TestAccountModelsRefreshService_RunOnceSkipsConcurrentRun(t *testing.T) {

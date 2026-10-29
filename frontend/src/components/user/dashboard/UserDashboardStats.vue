@@ -28,9 +28,6 @@
       </div>
       <div class="mt-4 flex items-center justify-between border-t border-black/[0.04] pt-3 text-xs text-gray-500 dark:border-white/[0.06] dark:text-gray-400">
         <span>{{ t('dashboard.todayCost') }}: <span class="font-mono font-medium text-gray-900 dark:text-white">${{ formatCost(stats?.today_actual_cost || 0) }}</span></span>
-        <router-link to="/redeem" class="font-medium text-[#4791ff] hover:underline">
-          + {{ t('dashboard.redeemCode') }}
-        </router-link>
       </div>
     </div>
 

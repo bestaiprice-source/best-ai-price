@@ -276,6 +276,137 @@ func TestGetPublicModelsPricing_PlatformFallbackAndPricingTypes(t *testing.T) {
 	assert.True(t, hasOpenAIAvailable)
 }
 
+func TestGetPublicModelsPricing_VendorPoolFallbackIsUnverified(t *testing.T) {
+	// No account carries a fetched model list or a model_mapping, so the only
+	// thing we know is that a pool for the vendor exists. The catalog must still
+	// list such models (they are priced and usually work) but must NOT claim
+	// they were verified.
+	repo := &mockAccountRepoForPricing{
+		schedulable: []Account{
+			{Platform: "yunwu"},
+		},
+	}
+	raw := map[string]*YunwuPricingRawItem{
+		"gpt-4o": {
+			ModelRatio:      1.25,
+			CompletionRatio: 4.0,
+			Available:       true,
+		},
+	}
+	svc := &GatewayService{
+		accountRepo:    repo,
+		billingService: helperNewBillingWithYunwuPricing(raw),
+	}
+
+	byID := make(map[string]PublicModelPricingItem)
+	for _, item := range svc.GetPublicModelsPricing(context.Background()) {
+		byID[item.CanonicalModelID] = item
+	}
+
+	gpt4o, exists := byID["openai/gpt-4o"]
+	require.True(t, exists)
+	assert.True(t, gpt4o.Available)
+	assert.Equal(t, AvailabilitySourceVendor, gpt4o.AvailabilitySource)
+	assert.False(t, gpt4o.AvailabilityVerified)
+	assert.Nil(t, gpt4o.AvailabilityCheckedAt)
+}
+
+func TestGetPublicModelsPricing_FetchedListVerifiesModels(t *testing.T) {
+	fetchedAt := time.Date(2026, 3, 4, 5, 6, 7, 0, time.UTC)
+	repo := &mockAccountRepoForPricing{
+		schedulable: []Account{
+			{
+				Platform: "yunwu",
+				Extra: map[string]any{
+					AccountExtraFetchedModelsKey:   []any{"gpt-4o", "claude-3-5-sonnet-20241022"},
+					AccountExtraModelsFetchedAtKey: fetchedAt.Format(time.RFC3339Nano),
+				},
+			},
+		},
+	}
+	raw := map[string]*YunwuPricingRawItem{
+		"gpt-4o": {
+			ModelRatio:      1.25,
+			CompletionRatio: 4.0,
+			Available:       true,
+		},
+		"claude-3-5-sonnet": {
+			ModelRatio:      1.5,
+			CompletionRatio: 5.0,
+			Available:       true,
+		},
+	}
+	svc := &GatewayService{
+		accountRepo:    repo,
+		billingService: helperNewBillingWithYunwuPricing(raw),
+	}
+
+	byID := make(map[string]PublicModelPricingItem)
+	for _, item := range svc.GetPublicModelsPricing(context.Background()) {
+		byID[item.CanonicalModelID] = item
+	}
+
+	gpt4o, exists := byID["openai/gpt-4o"]
+	require.True(t, exists)
+	assert.True(t, gpt4o.Available)
+	assert.Equal(t, AvailabilitySourceModels, gpt4o.AvailabilitySource)
+	assert.True(t, gpt4o.AvailabilityVerified)
+	require.NotNil(t, gpt4o.AvailabilityCheckedAt)
+	assert.True(t, gpt4o.AvailabilityCheckedAt.Equal(fetchedAt))
+
+	// The upstream advertises the dated snapshot; the catalog publishes the
+	// date-stripped model, and the date-stripped evidence key must still confirm
+	// it (otherwise a dated list would leave the catalog unverified).
+	sonnet, exists := byID["anthropic/claude-3-5-sonnet"]
+	require.True(t, exists)
+	assert.Equal(t, AvailabilitySourceModels, sonnet.AvailabilitySource)
+	assert.True(t, sonnet.AvailabilityVerified)
+}
+
+func TestGetPublicModelsPricing_ModelMappingVerifiesWithoutTimestamp(t *testing.T) {
+	repo := &mockAccountRepoForPricing{
+		schedulable: []Account{
+			{
+				Platform: "yunwu",
+				Extra: map[string]any{
+					AccountExtraFetchedModelsKey: []any{"gpt-4o"},
+					AccountExtraModelsFetchedAtKey: time.Date(2026, 3, 4, 5, 6, 7, 0, time.UTC).
+						Format(time.RFC3339Nano),
+				},
+				Credentials: map[string]any{
+					"model_mapping": map[string]any{
+						"claude-3-5-sonnet": "claude-3-5-sonnet-20241022",
+					},
+				},
+			},
+		},
+	}
+	raw := map[string]*YunwuPricingRawItem{
+		"claude-3-5-sonnet": {
+			ModelRatio:      1.5,
+			CompletionRatio: 5.0,
+			Available:       true,
+		},
+	}
+	svc := &GatewayService{
+		accountRepo:    repo,
+		billingService: helperNewBillingWithYunwuPricing(raw),
+	}
+
+	byID := make(map[string]PublicModelPricingItem)
+	for _, item := range svc.GetPublicModelsPricing(context.Background()) {
+		byID[item.CanonicalModelID] = item
+	}
+
+	sonnet, exists := byID["anthropic/claude-3-5-sonnet"]
+	require.True(t, exists)
+	assert.True(t, sonnet.Available)
+	assert.Equal(t, AvailabilitySourceMapping, sonnet.AvailabilitySource)
+	assert.True(t, sonnet.AvailabilityVerified)
+	// A mapping is an operator declaration, not a fetch: no timestamp.
+	assert.Nil(t, sonnet.AvailabilityCheckedAt)
+}
+
 type mockGroupRepoForPricing struct {
 	GroupRepository
 	groupsByPlatform map[string][]Group
@@ -655,8 +786,8 @@ func TestFamilyScopeAndMarkupVerification(t *testing.T) {
 	billingSvc := NewBillingService(nil, nil, yw)
 
 	repo := &mockAccountRepoForPricing{schedulable: []Account{
-		{Platform: PlatformYunwu, Extra: map[string]any{"provider": "openlux", "supported_model_families": []any{"gpt"}}},
-		{Platform: PlatformYunwu, Extra: map[string]any{"provider": "portdan", "supported_model_families": []any{"claude"}}},
+		{Platform: PlatformYunwu, AccountGroups: []AccountGroup{{AccountID: 1, GroupID: 7}}, Extra: map[string]any{"provider": "openlux", "supported_model_families": []any{"gpt"}}},
+		{Platform: PlatformYunwu, AccountGroups: []AccountGroup{{AccountID: 2, GroupID: 7}}, Extra: map[string]any{"provider": "portdan", "supported_model_families": []any{"claude"}}},
 	}}
 	const mult = 1.5 // +50%
 	groupRepo := &mockGroupRepoForPricing{activeGroups: []Group{{Name: "yunwu", Platform: PlatformYunwu, RateMultiplier: mult}}}

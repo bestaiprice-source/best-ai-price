@@ -3,9 +3,10 @@ import { apiClient } from './client'
 /**
  * Model health — `GET /api/v1/model-health`.
  *
- * A flat per-model read model over the channel monitors. It is the ONLY source
- * of the uptime percentage shown to users: the public catalog feed carries just
- * a binary availability flag, so percentages have to come from the probes.
+ * A flat per-model read model with two sources: channel-monitor probes (an
+ * independent request, `source: 'probe'`) and the requests users actually made
+ * (`source: 'traffic'`). Probes win whenever both cover a model. A model with
+ * neither shows no number at all — never a fake one.
  */
 export interface ModelHealthItem {
   /** Upstream id as configured on the monitor, e.g. `claude-3-7-sonnet-20250219`. */
@@ -24,6 +25,10 @@ export interface ModelHealthItem {
   monitor_name: string
   maintenance_until: string | null
   maintenance_note: string
+  /** `probe` (measured upstream) or `traffic` (measured on live requests). */
+  source?: 'probe' | 'traffic' | string
+  /** Traffic sample behind `availability_pct`; absent for probe rows. */
+  requests?: number
 }
 
 export interface ModelHealthResponse {

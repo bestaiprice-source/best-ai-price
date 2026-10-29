@@ -1,4 +1,4 @@
-.PHONY: build build-backend build-frontend build-datamanagementd test test-backend test-frontend test-datamanagementd secret-scan docker-build docker-build-compat
+.PHONY: build build-backend build-frontend build-datamanagementd test test-backend test-frontend test-datamanagementd check-doc-models refresh-doc-models secret-scan docker-build docker-build-compat
 
 # 一键编译前后端
 build: build-backend build-frontend
@@ -15,8 +15,8 @@ build-frontend:
 build-datamanagementd:
 	@cd datamanagement && go build -o datamanagementd ./cmd/datamanagementd
 
-# 运行测试（后端 + 前端）
-test: test-backend test-frontend
+# 运行测试（后端 + 前端 + 文档模型 ID 校验）
+test: test-backend test-frontend check-doc-models
 
 test-backend:
 	@$(MAKE) -C backend test
@@ -24,6 +24,14 @@ test-backend:
 test-frontend:
 	@pnpm --dir frontend run lint:check
 	@pnpm --dir frontend run typecheck
+
+# 文档里的模型 ID 必须存在于线上目录（定价且可用），否则示例复制后直接 400
+check-doc-models:
+	@python3 tools/doc_models.py --check
+
+# 联网重新校验文档中的模型 ID 并刷新 tools/model-allowlist.json
+refresh-doc-models:
+	@python3 tools/doc_models.py --refresh
 
 test-datamanagementd:
 	@cd datamanagement && go test ./...

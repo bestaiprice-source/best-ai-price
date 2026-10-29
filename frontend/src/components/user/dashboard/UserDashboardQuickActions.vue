@@ -56,29 +56,6 @@
         />
       </button>
 
-      <!-- Redeem Code -->
-      <button
-        @click="router.push('/redeem')"
-        class="group flex w-full items-center gap-3.5 rounded-xl border border-black/[0.04] bg-white p-3.5 text-left shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-black/15 hover:shadow-md dark:border-white/[0.06] dark:bg-[#161b22] dark:hover:border-white/15"
-      >
-        <div class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-[#fef3c7] text-[#d97706] transition-transform group-hover:scale-110 dark:bg-[#d97706]/20 dark:text-[#fbbf24]">
-          <Icon name="gift" size="md" :stroke-width="2" />
-        </div>
-        <div class="min-w-0 flex-1">
-          <p class="text-xs font-semibold text-gray-900 dark:text-white">
-            {{ t('dashboard.redeemCode') }}
-          </p>
-          <p class="text-[11px] text-gray-400 dark:text-gray-500">
-            {{ t('dashboard.addBalanceWithCode') }}
-          </p>
-        </div>
-        <Icon
-          name="chevronRight"
-          size="sm"
-          class="text-gray-300 transition-all group-hover:translate-x-1 group-hover:text-amber-500 dark:text-gray-600"
-        />
-      </button>
-
       <!-- Subscriptions & Plans -->
       <button
         @click="router.push('/subscriptions')"

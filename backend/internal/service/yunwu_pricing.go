@@ -9,7 +9,6 @@ import (
 	"math"
 	"net/http"
 	"os"
-	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -241,34 +240,13 @@ type YunwuPricingService struct {
 	aliases         map[string]string
 }
 
-var defaultAliases = map[string]string{
-	"gemini-3-pro":             "gemini-3-pro-preview",
-	"gemini-3.1-pro":           "gemini-3.1-pro-preview",
-	"gemini-3-flash":           "gemini-3-flash-preview",
-	"gemini-1.5-flash":         "gemini-2.5-flash",
-	"gemini-1.5-pro":           "gemini-2.5-pro",
-	"gemini-2.0-flash":         "gemini-2.5-flash",
-	"deepseek-chat":            "deepseek-v3",
-	"deepseek-reasoner":        "deepseek-r1",
-	"deepseek-coder":           "deepseek-v3",
-	"claude-3-5-sonnet-latest": "claude-3-5-sonnet",
-	"claude-3-5-haiku-latest":  "claude-3-5-haiku",
-	"claude-3-opus-latest":     "claude-3-opus",
-	"gpt-4o-latest":            "chatgpt-4o-latest",
-}
-
-var (
-	modelDateSnapshotRegex = regexp.MustCompile(`-\d{8}$`)
-	modelVersionDashRegex  = regexp.MustCompile(`(\d+)-(\d+)`)
-	modelVersionDotRegex   = regexp.MustCompile(`(\d+)\.(\d+)`)
-)
+// defaultAliases is the alias table for model-name normalization. It lives in
+// pkg/hypervisor/yunwu so the catalog, the per-node price lookup and the upstream
+// dispatch all resolve a model to the same provider-side name.
+var defaultAliases = yunwu.DefaultModelAliases
 
 func copyDefaultAliases() map[string]string {
-	m := make(map[string]string, len(defaultAliases))
-	for k, v := range defaultAliases {
-		m[k] = v
-	}
-	return m
+	return yunwu.DefaultModelAliasesCopy()
 }
 
 // NewYunwuPricingService creates a new Yunwu pricing service
@@ -638,89 +616,14 @@ func (s *YunwuPricingService) ResolveModelCandidates(modelName string) []string 
 // into the set of names it may be known by (vendor prefix stripped, date
 // snapshot stripped, dot/dash variants, aliases).
 //
-// It is a pure function because two independent callers must agree exactly:
-// pricing lookups (via ResolveModelCandidates) and the model-health read model,
-// which joins a monitored upstream id such as `claude-3-7-sonnet-20250219` onto
-// the catalog's `anthropic/claude-3-7-sonnet`. Duplicating this logic anywhere
-// else would silently split the join.
+// The implementation lives in pkg/hypervisor/yunwu because the hypervisor's
+// per-node price lookup and the upstream dispatch must resolve a model to exactly
+// the same provider-side name — otherwise the catalog advertises a price for a
+// model the routing node cannot price and the request fails with HTTP 400
+// "model pricing is not available". It stays exported here because the
+// model-health read model joins monitored upstream ids onto catalog ids with it.
 func ModelNameCandidates(modelName string, aliases map[string]string) []string {
-	raw := strings.ToLower(strings.TrimSpace(modelName))
-	if raw == "" {
-		return nil
-	}
-
-	seen := make(map[string]bool)
-	var candidates []string
-
-	add := func(name string) {
-		name = strings.ToLower(strings.TrimSpace(name))
-		if name != "" && !seen[name] {
-			seen[name] = true
-			candidates = append(candidates, name)
-		}
-	}
-
-	// 1. Exact raw model
-	add(raw)
-
-	// 2. Strip slash prefixes (e.g. "google/gemini-2.5-flash" -> "gemini-2.5-flash", "models/gemini-1.5-pro" -> "gemini-1.5-pro")
-	if strings.Contains(raw, "/") {
-		parts := strings.Split(raw, "/")
-		add(parts[len(parts)-1])
-	}
-	prefixesToTrim := []string{
-		"models/",
-		"anthropic/", "openai/", "google/", "deepseek/",
-		"moonshot/", "zhipu/", "qwen/", "xai/", "minimax/",
-		"meta/", "mistral/", "bytedance/", "kuaishou/", "other/",
-	}
-	for _, p := range prefixesToTrim {
-		if strings.HasPrefix(raw, p) {
-			add(strings.TrimPrefix(raw, p))
-		}
-	}
-
-	// 3. Date snapshots, underscore replacements & dot/dash version variations
-	initialLen := len(candidates)
-	for i := 0; i < initialLen; i++ {
-		c := candidates[i]
-		if strings.Contains(c, "_") {
-			add(strings.ReplaceAll(c, "_", "-"))
-			add(strings.ReplaceAll(c, "_", "."))
-		}
-		if modelDateSnapshotRegex.MatchString(c) {
-			add(modelDateSnapshotRegex.ReplaceAllString(c, ""))
-		}
-		if modelVersionDashRegex.MatchString(c) {
-			add(modelVersionDashRegex.ReplaceAllString(c, "$1.$2"))
-		}
-		if modelVersionDotRegex.MatchString(c) {
-			add(modelVersionDotRegex.ReplaceAllString(c, "$1-$2"))
-		}
-		add(strings.ReplaceAll(c, "-", "."))
-		add(strings.ReplaceAll(c, ".", "-"))
-	}
-
-	// 4. Aliases
-	if len(aliases) == 0 {
-		aliases = defaultAliases
-	}
-	aliasLen := len(candidates)
-	for i := 0; i < aliasLen; i++ {
-		c := candidates[i]
-		if target, ok := aliases[c]; ok && target != "" {
-			tClean := strings.ToLower(strings.TrimSpace(target))
-			add(tClean)
-			if modelVersionDashRegex.MatchString(tClean) {
-				add(modelVersionDashRegex.ReplaceAllString(tClean, "$1.$2"))
-			}
-			if modelVersionDotRegex.MatchString(tClean) {
-				add(modelVersionDotRegex.ReplaceAllString(tClean, "$1-$2"))
-			}
-		}
-	}
-
-	return candidates
+	return yunwu.ModelNameCandidates(modelName, aliases)
 }
 
 // GetModelPricingForProvider resolves model pricing for a specific provider.

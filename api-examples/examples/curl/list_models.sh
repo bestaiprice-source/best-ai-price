@@ -8,7 +8,7 @@ if [ -z "$API_KEY" ]; then
   exit 1
 fi
 
-BASE_URL="${BESTAIPRICE_BASE_URL:-https://api.bestaiprice.com}"
+BASE_URL="${BESTAIPRICE_BASE_URL:-https://bestaiprice.com/gateway}"
 
 echo "Fetching active model catalog from ${BASE_URL}/v1/models..."
 

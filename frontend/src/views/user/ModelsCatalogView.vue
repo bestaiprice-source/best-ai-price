@@ -76,8 +76,22 @@
 
       <ModelHealthLegend v-if="hasHealth" class="mt-4" />
 
-      <div class="mt-4 text-xs text-gray-500 dark:text-gray-400">
+      <div class="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
         <span>{{ t('modelsCatalog.modelsCount', { count: filtered.length }) }}</span>
+        <!-- What the dots promise: a verified upstream listing, a vendor-pool
+             guess, or nothing at all. Without this the amber dot reads as a bug. -->
+        <span class="inline-flex items-center gap-1.5">
+          <span class="inline-block h-2 w-2 rounded-full bg-emerald-500"></span>
+          {{ t('modelsCatalog.availabilityAvailable') }}
+        </span>
+        <span class="inline-flex items-center gap-1.5">
+          <span class="inline-block h-2 w-2 rounded-full bg-amber-400"></span>
+          {{ t('modelsCatalog.availabilityUnverified') }}
+        </span>
+        <span class="inline-flex items-center gap-1.5">
+          <span class="inline-block h-2 w-2 rounded-full bg-gray-300"></span>
+          {{ t('modelsCatalog.availabilityUnavailable') }}
+        </span>
       </div>
 
       <!-- Loading -->
@@ -126,21 +140,20 @@
                 <Icon name="copy" size="sm" />
               </button>
               <!-- Probe health when a monitor covers this model, otherwise the
-                   catalog's own binary availability flag. -->
+                   availability evidence the public feed publishes (a live
+                   upstream list vs a vendor-pool guess). -->
               <ModelHealthBadge
                 v-if="healthOf(model)"
                 :status="healthOf(model)?.status"
                 :uptime="healthOf(model)?.availability_pct ?? null"
+                :source="healthOf(model)?.source ?? null"
+                :requests="healthOf(model)?.requests ?? null"
               />
               <span
-                v-else-if="isAvailable(model)"
-                class="inline-block h-2 w-2 shrink-0 rounded-full bg-emerald-500"
-                :title="t('modelsCatalog.available')"
-              ></span>
-              <span
                 v-else
-                class="inline-block h-2 w-2 shrink-0 rounded-full bg-gray-300"
-                :title="t('modelsCatalog.unavailable')"
+                class="inline-block h-2 w-2 shrink-0 rounded-full"
+                :class="availabilityDotClass(model)"
+                :title="availabilityTitle(model)"
               ></span>
             </div>
           </div>
@@ -260,41 +273,43 @@ function copyModelName(model: PublicModelPricing) {
 }
 
 /**
- * Human-readable vendor names. The chip / group key is the canonical prefix
- * (`anthropic/claude-…` -> `anthropic`); rendering that raw key relied on CSS
- * `text-transform: capitalize`, which prints brand names wrong ("Openai",
- * "Xai", "Zhipu"). Known vendors therefore get their real brand casing plus the
- * product name users recognise (Zhipu -> GLM, Moonshot -> KIMI, Kuaishou ->
- * Kling). Deliberately not translated: a brand name is a proper noun, same as a
+ * Chip / group labels. The KEY is the canonical model prefix
+ * (`anthropic/claude-…` -> `anthropic`), the LABEL is the model brand the user
+ * actually buys — never the parent company, and never the raw prefix (rendering
+ * that relied on CSS `text-transform: capitalize`, which printed "Openai",
+ * "Xai", "Zhipu"): OpenAI ships GPT, Anthropic ships Claude, Google ships
+ * Gemini, xAI ships Grok, Zhipu ships GLM, Moonshot ships Kimi, Kuaishou ships
+ * Kling, ByteDance ships Doubao, Meta ships Llama, Black Forest Labs ships
+ * FLUX. Deliberately not translated: a brand name is a proper noun, same as a
  * model id.
  */
 const VENDOR_LABELS: Record<string, string> = {
-  anthropic: 'Anthropic',
-  openai: 'OpenAI',
-  google: 'Google',
+  anthropic: 'Claude',
+  openai: 'GPT',
+  google: 'Gemini',
   qwen: 'Qwen',
   kuaishou: 'Kling',
   zhipu: 'GLM',
-  xai: 'xAI',
-  meta: 'Meta',
+  xai: 'Grok',
+  meta: 'Llama',
   deepseek: 'DeepSeek',
   moonshot: 'KIMI',
   minimax: 'MiniMax',
-  baai: 'BAAI',
-  'netease-youdao': 'Youdao',
+  baai: 'BGE',
+  'netease-youdao': 'BCE',
   // Vendors recovered from the gateway's generic `other/` bucket (see below).
-  bytedance: 'ByteDance',
+  bytedance: 'Doubao',
   midjourney: 'Midjourney',
   pixverse: 'PixVerse',
   happyhorse: 'HappyHorse',
   vidu: 'Vidu',
-  alibaba: 'Alibaba',
-  iflytek: 'iFlytek',
-  xiaomi: 'Xiaomi',
+  alibaba: 'Wan',
+  iflytek: 'Spark',
+  xiaomi: 'MiMo',
   suno: 'Suno',
-  tencent: 'Tencent',
-  typesafe: 'TypeSafe',
-  'black-forest': 'Black Forest',
+  tencent: 'Hunyuan',
+  typesafe: 'Jev',
+  'black-forest': 'FLUX',
   other: 'Other'
 }
 
@@ -374,6 +389,48 @@ function typeOf(model: PublicModelPricing): 'text' | 'image' | 'video' | 'audio'
 }
 
 const isAvailable = (model: PublicModelPricing) => model.available !== false && model.status !== 'unavailable'
+
+/**
+ * What the availability dot promises, from the public feed's evidence fields.
+ *
+ * `available` alone only means "we can price it and a pool for the vendor
+ * exists" — the feed's `availability_verified` says whether an upstream model
+ * list actually advertises this model. Anything unverified is painted amber so
+ * the dot answers the user's real question ("will my call work?") honestly.
+ */
+type AvailabilityState = 'available' | 'unverified' | 'unavailable'
+
+function availabilityState(model: PublicModelPricing): AvailabilityState {
+  if (!isAvailable(model)) return 'unavailable'
+  return model.availability_verified === true ? 'available' : 'unverified'
+}
+
+const AVAILABILITY_DOT_CLASS: Record<AvailabilityState, string> = {
+  available: 'bg-emerald-500',
+  unverified: 'bg-amber-400',
+  unavailable: 'bg-gray-300'
+}
+
+function availabilityDotClass(model: PublicModelPricing): string {
+  return AVAILABILITY_DOT_CLASS[availabilityState(model)]
+}
+
+/** `2026-03-04T05:06:07Z` -> the viewer's short date, or '' when unparsable. */
+function formatAvailabilityDate(value: string | null | undefined): string {
+  if (!value) return ''
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return ''
+  return parsed.toLocaleDateString()
+}
+
+function availabilityTitle(model: PublicModelPricing): string {
+  const state = availabilityState(model)
+  if (state === 'unavailable') return t('modelsCatalog.availabilityUnavailableTitle')
+  if (state === 'unverified') return t('modelsCatalog.availabilityUnverifiedTitle')
+  const checked = formatAvailabilityDate(model.availability_checked_at)
+  if (!checked) return t('modelsCatalog.availabilityAvailableTitle')
+  return `${t('modelsCatalog.availabilityAvailableTitle')} · ${t('modelsCatalog.availabilityCheckedAt', { date: checked })}`
+}
 
 /** A model is listed only when we can show what it costs — token or per-unit price. */
 function hasPrice(model: PublicModelPricing): boolean {

@@ -295,16 +295,21 @@ var ProviderUpstreamModelMapping = map[string]map[string]string{
 	},
 }
 
-// StripVendorPrefix removes standard provider/vendor prefixes such as "anthropic/", "openai/", "google/", "deepseek/", etc.
+// StripVendorPrefix removes provider/vendor prefixes such as "anthropic/",
+// "openai/", "google/", "xai/", "other/", … from a model id. The prefix list is
+// VendorPrefixes (shared with the price lookup) so the catalog's canonical ids
+// and the upstream dispatch agree on the provider-side model name.
 func StripVendorPrefix(model string) string {
 	m := strings.TrimSpace(model)
-	if idx := strings.Index(m, "/"); idx != -1 {
-		prefix := strings.ToLower(m[:idx])
-		switch prefix {
-		case "anthropic", "openai", "google", "deepseek", "moonshot", "meta-llama", "qwen", "mistral", "cohere", "minimax", "zhipu":
-			return m[idx+1:]
+	lower := strings.ToLower(m)
+	for _, p := range VendorPrefixes {
+		if strings.HasPrefix(lower, p) {
+			return m[len(p):]
 		}
 	}
+	// Unknown vendor prefixes are left in place: some aggregators list (and
+	// serve) vendor-prefixed names verbatim, and the price lookup falls back to
+	// the raw name anyway.
 	return m
 }
 

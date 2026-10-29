@@ -8,7 +8,7 @@ if [ -z "$API_KEY" ]; then
   exit 1
 fi
 
-BASE_URL="${BESTAIPRICE_BASE_URL:-https://api.bestaiprice.com}"
+BASE_URL="${BESTAIPRICE_BASE_URL:-https://bestaiprice.com/gateway}"
 MODEL="${1:-gpt-4o}"
 
 echo "Streaming OpenAI Chat Completion tokens from ${BASE_URL}/v1/chat/completions (model: ${MODEL})..."

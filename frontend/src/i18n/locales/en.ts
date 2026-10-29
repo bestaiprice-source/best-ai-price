@@ -487,10 +487,12 @@ export default {
   // model catalog cards; the legend wording follows the provider consoles).
   modelHealth: {
     title: 'Model health',
-    subtitle: 'Probe uptime over the last {window} days',
+    subtitle: 'Uptime over the last {window} days — measured probes where configured, otherwise on real traffic',
     viewAll: 'All models',
     moreModels: '+{count} more models',
     uptime: 'uptime',
+    sourceTraffic: 'measured on live traffic',
+    trafficSample: '{count} requests',
     status: {
       normal: 'Normal',
       highLatency: 'High latency',
@@ -537,7 +539,14 @@ export default {
     useKey: 'Use key',
     useKeyTitle: 'Go to API Keys to create or copy a key for this model',
     available: 'Available',
-    unavailable: 'Unavailable'
+    unavailable: 'Unavailable',
+    availabilityAvailable: 'Available via API',
+    availabilityUnverified: 'Not confirmed',
+    availabilityUnavailable: 'Unavailable',
+    availabilityAvailableTitle: 'Available through the API: the provider publishes this model in its model list and we price it.',
+    availabilityUnverifiedTitle: 'Not confirmed: no provider model list advertises this model, so we only know a pool for this vendor exists. The call may fail.',
+    availabilityUnavailableTitle: 'Not available through the API right now.',
+    availabilityCheckedAt: 'provider list checked {date}'
   },
   availableChannels: {
     columns: {

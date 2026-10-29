@@ -92,7 +92,6 @@ export function getPublicAppBaseUrl(): string {
     '/register',
     '/setup',
     '/settings',
-    '/redeem',
     '/orders',
   ]
   for (const prefix of knownPrefixes) {

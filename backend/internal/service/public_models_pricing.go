@@ -5,12 +5,102 @@ import (
 	"math"
 	"regexp"
 	"strings"
+	"time"
 )
 
 var (
 	versionDashRegex = regexp.MustCompile(`(\d+)-(\d+)`)
 	versionDotRegex  = regexp.MustCompile(`(\d+)\.(\d+)`)
 )
+
+// Availability evidence sources, strongest first.
+//
+// The catalog answers one question per model: can a user call this model
+// through our API? Without evidence all we know is that some pool for the
+// vendor exists, which is NOT proof the model is routable (an aggregator lists
+// plenty of models it cannot serve). The public feed therefore publishes where
+// the claim comes from, and the UI paints unverified models differently.
+const (
+	// AvailabilitySourceModels — the model id was listed by the live model
+	// catalogue of a schedulable upstream account (fetched via a free GET).
+	AvailabilitySourceModels = "models"
+	// AvailabilitySourceMapping — the model id is a key of a node's configured
+	// model_mapping (an operator explicitly declared it).
+	AvailabilitySourceMapping = "mapping"
+	// AvailabilitySourceVendor — only the vendor-level pool exists; nothing
+	// confirms this specific model.
+	AvailabilitySourceVendor = "vendor"
+)
+
+// modelAvailabilityEvidence records which upstream list advertised a model and
+// when that list was fetched.
+type modelAvailabilityEvidence struct {
+	source    string
+	checkedAt time.Time
+}
+
+func availabilitySourceRank(source string) int {
+	switch source {
+	case AvailabilitySourceModels:
+		return 0
+	case AvailabilitySourceMapping:
+		return 1
+	default:
+		return 2
+	}
+}
+
+// modelEvidenceKeys returns every lookup key a raw upstream model id should be
+// indexed under: the raw id, its canonical form, and the date-stripped form —
+// so an upstream snapshot id (`claude-3-7-sonnet-20250219`) also confirms the
+// catalog's date-stripped model (`anthropic/claude-3-7-sonnet`).
+func modelEvidenceKeys(rawModel string) []string {
+	clean := strings.ToLower(strings.TrimSpace(rawModel))
+	if clean == "" {
+		return nil
+	}
+	keys := []string{clean}
+	for _, candidate := range []string{clean, rawModelWithoutVersion(clean)} {
+		if canonical := ToCanonicalModelID(candidate); canonical != "" {
+			keys = append(keys, canonical)
+		}
+	}
+	return keys
+}
+
+// recordModelEvidence keeps the strongest (then newest) evidence per key.
+func recordModelEvidence(evidence map[string]modelAvailabilityEvidence, rawModel, source string, checkedAt time.Time) {
+	for _, key := range modelEvidenceKeys(rawModel) {
+		current, ok := evidence[key]
+		if ok {
+			if availabilitySourceRank(current.source) < availabilitySourceRank(source) {
+				continue
+			}
+			if current.source == source && !checkedAt.After(current.checkedAt) {
+				continue
+			}
+		}
+		evidence[key] = modelAvailabilityEvidence{source: source, checkedAt: checkedAt}
+	}
+}
+
+// lookupModelEvidence resolves the evidence for a catalog model, trying the
+// same normalization keys the availability set is matched on.
+func lookupModelEvidence(evidence map[string]modelAvailabilityEvidence, canonicalID, slug string) (modelAvailabilityEvidence, bool) {
+	for _, key := range []string{
+		strings.ToLower(canonicalID),
+		strings.ToLower(slug),
+		strings.ToLower(rawModelWithoutVersion(slug)),
+	} {
+		if key == "" {
+			continue
+		}
+		if entry, ok := evidence[key]; ok {
+			return entry, true
+		}
+	}
+	return modelAvailabilityEvidence{}, false
+}
 
 // PublicModelPricingItem represents an item in the public models pricing catalog (BestAIPrice format).
 type PublicModelPricingItem struct {
@@ -32,6 +122,12 @@ type PublicModelPricingItem struct {
 	NativePriceUnit          *string  `json:"native_price_unit"`
 	Available                bool     `json:"available"`
 	Status                   string   `json:"status,omitempty"`
+	// Why we claim the model is usable (publish-only, never read by billing).
+	// AvailabilityCheckedAt is when the supporting upstream model list was
+	// fetched; it is omitted for operator-declared mappings and vendor guesses.
+	AvailabilitySource    string     `json:"availability_source,omitempty"`
+	AvailabilityVerified  bool       `json:"availability_verified"`
+	AvailabilityCheckedAt *time.Time `json:"availability_checked_at,omitempty"`
 }
 
 // ToCanonicalModelID normalizes any model name or slug into "vendor/model-slug" format.
@@ -260,6 +356,9 @@ func (s *GatewayService) ResolveYunwuRateMultiplier(ctx context.Context) float64
 func (s *GatewayService) GetPublicModelsPricing(ctx context.Context) []PublicModelPricingItem {
 	availableSet := make(map[string]bool)
 	schedulablePlatforms := make(map[string]bool)
+	// Per-model availability evidence: which upstream list actually advertises
+	// the model. Empty evidence means we cannot confirm any specific model.
+	evidence := make(map[string]modelAvailabilityEvidence)
 	yunwuMultiplier := s.ResolveYunwuRateMultiplier(ctx)
 	if yunwuMultiplier <= 0 {
 		yunwuMultiplier = 1.0
@@ -285,15 +384,22 @@ func (s *GatewayService) GetPublicModelsPricing(ctx context.Context) []PublicMod
 			for _, acc := range accounts {
 				p := strings.ToLower(strings.TrimSpace(acc.Platform))
 				schedulablePlatforms[p] = true
+				fetchedAt := acc.GetModelsFetchedAt()
 				for _, m := range acc.GetFetchedModelIDs() {
 					mClean := strings.ToLower(strings.TrimSpace(m))
 					availableSet[mClean] = true
 					availableSet[ToCanonicalModelID(mClean)] = true
+					if fetchedAt != nil {
+						recordModelEvidence(evidence, m, AvailabilitySourceModels, *fetchedAt)
+					} else {
+						recordModelEvidence(evidence, m, AvailabilitySourceModels, time.Time{})
+					}
 				}
 				for m := range acc.GetModelMapping() {
 					mClean := strings.ToLower(strings.TrimSpace(m))
 					availableSet[mClean] = true
 					availableSet[ToCanonicalModelID(mClean)] = true
+					recordModelEvidence(evidence, m, AvailabilitySourceMapping, time.Time{})
 				}
 			}
 		}
@@ -351,8 +457,23 @@ func (s *GatewayService) GetPublicModelsPricing(ctx context.Context) []PublicMod
 		// marked unavailable even though a yunwu provider prices them.
 		yunwuPool := schedulablePlatforms["yunwu"] || schedulablePlatforms["openlux"] || schedulablePlatforms["kiro"]
 		isAvailable := false
-		if availableSet[cid] || availableSet[slug] || availableSet[strings.ToLower(rawModelWithoutVersion(slug))] {
+		// Where the availability claim comes from, and whether it proves that
+		// THIS model is routable (see the AvailabilitySource* constants).
+		availSource := ""
+		availVerified := false
+		var availCheckedAt *time.Time
+		if ev, ok := lookupModelEvidence(evidence, cid, slug); ok {
 			isAvailable = true
+			availSource = ev.source
+			availVerified = true
+			if !ev.checkedAt.IsZero() {
+				checked := ev.checkedAt
+				availCheckedAt = &checked
+			}
+		} else if availableSet[cid] || availableSet[slug] || availableSet[strings.ToLower(rawModelWithoutVersion(slug))] {
+			isAvailable = true
+			availSource = AvailabilitySourceModels
+			availVerified = true
 		} else if hasAnySchedulableAccounts && len(availableSet) == 0 {
 			switch vendor {
 			case "anthropic":
@@ -366,6 +487,11 @@ func (s *GatewayService) GetPublicModelsPricing(ctx context.Context) []PublicMod
 			default:
 				// Unknown vendor: a yunwu pool can still serve it.
 				isAvailable = yunwuPool
+			}
+			if isAvailable {
+				// Vendor-level guess only: a pool for this vendor exists, but no
+				// upstream list confirms this particular model.
+				availSource = AvailabilitySourceVendor
 			}
 		}
 
@@ -455,6 +581,12 @@ func (s *GatewayService) GetPublicModelsPricing(ctx context.Context) []PublicMod
 			item.Available = isAvailable
 			if isAvailable {
 				item.Status = "available"
+				// Publish the availability evidence so the catalog can tell
+				// "we can serve this model" apart from "we only have a pool for
+				// the vendor".
+				item.AvailabilitySource = availSource
+				item.AvailabilityVerified = availVerified
+				item.AvailabilityCheckedAt = availCheckedAt
 			} else {
 				item.Status = "unavailable"
 			}

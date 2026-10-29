@@ -10,8 +10,8 @@ if (!apiKey) {
   process.exit(1);
 }
 
-const baseURL = (process.env.BESTAIPRICE_BASE_URL || 'https://api.bestaiprice.com').replace(/\/+$/, '');
-const model = process.env.MODEL || 'claude-3-7-sonnet';
+const baseURL = (process.env.BESTAIPRICE_BASE_URL || 'https://bestaiprice.com/gateway').replace(/\/+$/, '');
+const model = process.env.MODEL || 'claude-sonnet-5';
 
 const anthropic = new Anthropic({
   apiKey,

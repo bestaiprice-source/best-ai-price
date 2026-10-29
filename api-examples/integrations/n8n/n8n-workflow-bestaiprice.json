@@ -12,7 +12,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://api.bestaiprice.com/v1/chat/completions",
+        "url": "https://bestaiprice.com/gateway/v1/chat/completions",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [

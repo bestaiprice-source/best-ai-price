@@ -19,13 +19,13 @@ export BESTAIPRICE_API_KEY="sk-bestai-xxxxxxxxxxxxxxxx"
 ## Available Scripts
 
 1. **`openai_sdk.py`**
-   Uses official `openai` SDK with `base_url="https://api.bestaiprice.com/v1"`.
+   Uses official `openai` SDK with `base_url="https://bestaiprice.com/gateway/v1"`.
    ```bash
    python openai_sdk.py
    ```
 
 2. **`anthropic_sdk.py`**
-   Uses official `anthropic` SDK with `base_url="https://api.bestaiprice.com"`.
+   Uses official `anthropic` SDK with `base_url="https://bestaiprice.com/gateway"`.
    ```bash
    python anthropic_sdk.py
    ```

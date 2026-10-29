@@ -7,12 +7,12 @@ import (
 )
 
 const (
-	AccountCredentialMaskedValue              = "[configured]"
-	AccountExtraFetchedModelsKey              = "fetched_models"
-	AccountExtraModelsFetchedAtKey            = "models_fetched_at"
-	AccountExtraModelsRefreshErrorKey         = "models_refresh_error"
-	AccountExtraModelsRefreshIntervalSecKey   = "models_refresh_interval_seconds"
-	AccountExtraModelsSourceKey               = "models_source"
+	AccountCredentialMaskedValue            = "[configured]"
+	AccountExtraFetchedModelsKey            = "fetched_models"
+	AccountExtraModelsFetchedAtKey          = "models_fetched_at"
+	AccountExtraModelsRefreshErrorKey       = "models_refresh_error"
+	AccountExtraModelsRefreshIntervalSecKey = "models_refresh_interval_seconds"
+	AccountExtraModelsSourceKey             = "models_source"
 )
 
 var sensitiveCredentialKeys = map[string]struct{}{
@@ -188,13 +188,28 @@ func (a *Account) GetModelsRefreshIntervalSeconds() int {
 	return a.getExtraInt(AccountExtraModelsRefreshIntervalSecKey)
 }
 
+// DefaultModelsRefreshIntervalSeconds is the refresh cadence used when an
+// account does not configure one explicitly.
+//
+// The refresh is a free GET of the provider's model catalogue (no tokens are
+// ever spent), and the public catalog builds its per-model availability
+// evidence from that list. Without a refresh all lists stay empty and every
+// model degrades to the vendor-pool guess, so refresh defaults to on.
+const DefaultModelsRefreshIntervalSeconds = 3600
+
 func (a *Account) ShouldRefreshFetchedModels(now time.Time) bool {
 	if a == nil {
 		return false
 	}
 	interval := a.GetModelsRefreshIntervalSeconds()
 	if interval <= 0 {
-		return false
+		// Unset means "default cadence" — but only for platforms whose model
+		// list can actually be fetched; anything else stays opted out so we
+		// never write a refresh error for an unsupported account.
+		if !supportsFetchedModelsRefresh(a) {
+			return false
+		}
+		interval = DefaultModelsRefreshIntervalSeconds
 	}
 	lastFetchedAt := a.GetModelsFetchedAt()
 	if lastFetchedAt == nil {

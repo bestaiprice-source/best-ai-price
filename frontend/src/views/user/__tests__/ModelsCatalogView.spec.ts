@@ -26,14 +26,21 @@ vi.mock('@/api/publicModels', () => ({
       input_price_per_1m: 0.1941,
       output_price_per_1m: 0.9706,
       discount_percent: 90,
-      available: true
+      available: true,
+      availability_source: 'models',
+      availability_verified: true,
+      availability_checked_at: '2026-03-04T05:06:07Z'
     },
     {
+      // Priced, but no upstream model list confirms it: the dot must NOT claim
+      // it is usable.
       canonical_model_id: 'openai/gpt-5.2',
       model_id: 'gpt-5.2',
       input_price_per_1m: 0.077,
       output_price_per_1m: 0.231,
-      available: true
+      available: true,
+      availability_source: 'vendor',
+      availability_verified: false
     },
     {
       canonical_model_id: 'google/gemini-2.5-flash-image',
@@ -113,9 +120,9 @@ describe('ModelsCatalogView', () => {
     const namesButton = wrapper.findAll('button').find((b) => b.text() === 'modelsCatalog.viewNames')!
     await namesButton.trigger('click')
 
-    expect(wrapper.text()).toContain('Anthropic')
-    expect(wrapper.text()).toContain('OpenAI')
-    expect(wrapper.text()).toContain('Google')
+    expect(wrapper.text()).toContain('Claude')
+    expect(wrapper.text()).toContain('GPT')
+    expect(wrapper.text()).toContain('Gemini')
     expect(wrapper.findAll('h3').length).toBe(3)
   })
 
@@ -128,6 +135,40 @@ describe('ModelsCatalogView', () => {
     expect(badge!.attributes('title')).toBe('modelsCatalog.discountTitle')
     // The percentage is interpolated, so the tooltip reads "−90% from the official price".
     expect(tCalls).toContainEqual(['modelsCatalog.discountTitle', { percent: 90 }])
+  })
+
+  it('promises usability only when an upstream model list confirms the model', async () => {
+    const wrapper = await mountView()
+
+    const dotFor = (modelId: string) => {
+      const card = cardsOf(wrapper).find((c: any) => c.text().includes(modelId))!
+      return card.find('span.inline-block.h-2.w-2')
+    }
+
+    // Verified by a live upstream list: green, and the tooltip says when the
+    // list was checked.
+    const verified = dotFor('claude-sonnet-5')
+    expect(verified.classes()).toContain('bg-emerald-500')
+    expect(verified.attributes('title')).toContain('modelsCatalog.availabilityAvailableTitle')
+    expect(verified.attributes('title')).toContain('modelsCatalog.availabilityCheckedAt')
+
+    // Priced but unconfirmed: amber, never green.
+    const unverified = dotFor('gpt-5.2')
+    expect(unverified.classes()).toContain('bg-amber-400')
+    expect(unverified.attributes('title')).toBe('modelsCatalog.availabilityUnverifiedTitle')
+
+    // Not available at all: grey.
+    const unavailable = dotFor('gemini-2.5-flash-image')
+    expect(unavailable.classes()).toContain('bg-gray-300')
+    expect(unavailable.attributes('title')).toBe('modelsCatalog.availabilityUnavailableTitle')
+  })
+
+  it('documents the dot colours in a legend', async () => {
+    const wrapper = await mountView()
+
+    expect(wrapper.text()).toContain('modelsCatalog.availabilityAvailable')
+    expect(wrapper.text()).toContain('modelsCatalog.availabilityUnverified')
+    expect(wrapper.text()).toContain('modelsCatalog.availabilityUnavailable')
   })
 
   it('filters by type and by free-text search', async () => {

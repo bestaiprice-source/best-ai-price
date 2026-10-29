@@ -13,7 +13,7 @@ if not api_key:
     print("Error: BESTAIPRICE_API_KEY environment variable is required.", file=sys.stderr)
     sys.exit(1)
 
-base_url = os.environ.get("BESTAIPRICE_BASE_URL", "https://api.bestaiprice.com").rstrip("/") + "/v1"
+base_url = os.environ.get("BESTAIPRICE_BASE_URL", "https://bestaiprice.com/gateway").rstrip("/") + "/v1"
 
 client = OpenAI(
     api_key=api_key,

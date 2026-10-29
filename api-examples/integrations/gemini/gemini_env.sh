@@ -2,7 +2,7 @@
 # BestAIPrice Gemini environment setup
 
 export GEMINI_API_KEY="${BESTAIPRICE_API_KEY:-}"
-export GEMINI_BASE_URL="${BESTAIPRICE_BASE_URL:-https://api.bestaiprice.com}"
+export GEMINI_BASE_URL="${BESTAIPRICE_BASE_URL:-https://bestaiprice.com/gateway}"
 
 echo "✅ Gemini CLI / SDK configured:"
 echo "   Base URL: ${GEMINI_BASE_URL}"
