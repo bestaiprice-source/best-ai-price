@@ -440,10 +440,7 @@ func (ppm *ProviderPriceManager) fetchProviderPrices(ctx context.Context, endpoi
 // the literal `fast` group for fast, fail closed when it is unknown).
 func (ppm *ProviderPriceManager) priceForTier(ctx context.Context, p ProviderModelPrice, groups map[string]string) (float64, float64, bool) {
 	tier := TierFromContext(ctx)
-	ratio, ok := ResolveTierGroupRatioForGroup(p.GroupRatios, p.CheapestGroupRatio, tier, GroupNameForTier(groups, tier))
-	if !ok {
-		return 0, 0, false
-	}
+	ratio := ResolveTierGroupRatioForGroup(p.GroupRatios, GroupNameForTier(groups, tier))
 	if len(p.GroupRatios) == 0 {
 		// The provider does not price per group: the stored price already is the
 		// only (and therefore tier-independent) price.

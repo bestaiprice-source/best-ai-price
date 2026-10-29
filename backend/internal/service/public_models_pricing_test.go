@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/yunwu"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -973,10 +974,20 @@ func TestGetPublicModelsPricing_PublishesCachePrices(t *testing.T) {
 
 // The catalog publishes a "discount vs official" reference computed on the same
 // paying basis as the advertised price (markup included).
+// The published price must reflect the group the account's key actually bills in:
+// the provider's `default` group (nothing pinned) is billed at the official rate,
+// so no discount is advertised — a wrong (cheaper) guess is exactly what made the
+// advertised price 20x lower than the real upstream cost. Pinning the real
+// discounted group brings the discount back.
 func TestGetPublicModelsPricing_PublishesDiscountVsOfficial(t *testing.T) {
-	// model_ratio 1.5 -> official $3/1M; group_ratio 0.1 -> cost $0.30/1M
+	// model_ratio 1.5 -> official $3/1M; the `promo` group is 0.1 -> cost $0.30/1M
 	raw := map[string]*YunwuPricingRawItem{
-		"claude-sonnet-5": {ModelRatio: 1.5, CompletionRatio: 5.0, GroupRatio: 0.1},
+		"claude-sonnet-5": {
+			ModelRatio:      1.5,
+			CompletionRatio: 5.0,
+			GroupRatio:      0.1,
+			GroupRatios:     map[string]float64{"promo": 0.1},
+		},
 	}
 	billingSvc := helperNewBillingWithYunwuPricing(raw)
 	groupRepo := &mockGroupRepoForPricing{
@@ -984,22 +995,39 @@ func TestGetPublicModelsPricing_PublishesDiscountVsOfficial(t *testing.T) {
 	}
 	svc := &GatewayService{billingService: billingSvc, groupRepo: groupRepo}
 
-	var item *PublicModelPricingItem
-	for _, it := range svc.GetPublicModelsPricing(context.Background()) {
-		if it.CanonicalModelID == "anthropic/claude-sonnet-5" {
-			c := it
-			item = &c
+	find := func(ctx context.Context) *PublicModelPricingItem {
+		for _, it := range svc.GetPublicModelsPricing(ctx) {
+			if it.CanonicalModelID == "anthropic/claude-sonnet-5" {
+				c := it
+				return &c
+			}
 		}
+		return nil
 	}
+
+	// Nothing pinned: the default group is not in the price list, so the official
+	// rate applies and there is no discount to advertise.
+	item := find(context.Background())
 	require.NotNil(t, item)
 	require.NotNil(t, item.InputPricePer1M)
 	require.NotNil(t, item.OfficialInputPricePer1M)
-	require.NotNil(t, item.DiscountPercent)
-
 	assert.InDelta(t, 3.0, *item.OfficialInputPricePer1M, 1e-4, "official list price")
-	assert.InDelta(t, 0.30*1.10, *item.InputPricePer1M, 1e-4, "retail = cost x markup")
+	assert.InDelta(t, 3.0*1.10, *item.InputPricePer1M, 1e-4, "retail = official cost x markup")
+	if item.DiscountPercent != nil {
+		assert.Equal(t, 0, *item.DiscountPercent, "no discount badge when selling at the official rate")
+	}
+
+	// Pinned to the discounted group the key lives in: the discount is real again.
+	pinned := ContextWithYunwuTierGroups(context.Background(), map[string]yunwu.TierGroupNames{
+		"openlux": {Smart: "promo"},
+	})
+	itemPinned := find(pinned)
+	require.NotNil(t, itemPinned)
+	require.NotNil(t, itemPinned.InputPricePer1M)
+	require.NotNil(t, itemPinned.DiscountPercent)
+	assert.InDelta(t, 0.30*1.10, *itemPinned.InputPricePer1M, 1e-4, "retail = pinned group cost x markup")
 	// 1 - (0.33 / 3.0) = 89%
-	assert.Equal(t, 89, *item.DiscountPercent)
+	assert.Equal(t, 89, *itemPinned.DiscountPercent)
 }
 
 func TestDiscountPercent(t *testing.T) {

@@ -72,36 +72,57 @@ func TestTierGroupName(t *testing.T) {
 	}
 }
 
-func TestResolveTierGroupRatio(t *testing.T) {
-	ratios := map[string]float64{"fast": 0.5, "smart": 0.1}
+// The tier's group is resolved from the pinned/detected group, and a group the
+// provider does not list is billed at the official rate (1.0) — the same rule
+// One-API/New-API apply — so a request is never priced below the official rate
+// by accident.
+func TestResolveTierGroupRatioForGroupDefaultsAndPins(t *testing.T) {
+	ratios := map[string]float64{"Azure-Gpt-1": 0.044, "Azure-Gpt-6": 0.9}
 
-	// A known tier group wins over the cheapest ratio.
-	if r, ok := ResolveTierGroupRatio(ratios, 0.1, runtime.TierFast); !ok || r != 0.5 {
-		t.Fatalf("fast ratio = %v/%v, want 0.5/true", r, ok)
+	// A group the provider lists wins.
+	if r := ResolveTierGroupRatioForGroup(ratios, "Azure-Gpt-6"); r != 0.9 {
+		t.Fatalf("listed group ratio = %v, want 0.9", r)
 	}
-	if r, ok := ResolveTierGroupRatio(ratios, 0.1, runtime.TierSmart); !ok || r != 0.1 {
-		t.Fatalf("smart ratio = %v/%v, want 0.1/true", r, ok)
+	// The default group is not listed -> official rate.
+	if r := ResolveTierGroupRatioForGroup(ratios, DefaultProviderGroupName); r != 1.0 {
+		t.Fatalf("default group ratio = %v, want 1.0 (official)", r)
 	}
+	if r := ResolveTierGroupRatioForGroup(ratios, "some-unknown-group"); r != 1.0 {
+		t.Fatalf("unlisted group ratio = %v, want 1.0 (official)", r)
+	}
+	// Nothing pinned at all -> the default group.
+	if r := ResolveTierGroupRatioForGroup(ratios, ""); r != 1.0 {
+		t.Fatalf("empty group ratio = %v, want 1.0 (official)", r)
+	}
+	// The provider does not price per group: the caller uses its single rate.
+	if r := ResolveTierGroupRatioForGroup(nil, DefaultProviderGroupName); r != 1.0 {
+		t.Fatalf("no group pricing ratio = %v, want 1.0", r)
+	}
+}
 
-	// Provider has no fast group: an EXPLICIT fast request has no price (fail
-	// closed) instead of being sold at the smart rate.
-	if r, ok := ResolveTierGroupRatio(map[string]float64{"smart": 0.1}, 0.1, runtime.TierFast); ok {
-		t.Fatalf("fast ratio without a fast group = %v/%v, want unpriced", r, ok)
+func TestTierGroupNamesForDefaults(t *testing.T) {
+	// Nothing pinned and nothing detected: the provider's default group.
+	if got := (TierGroupNames{}).For(runtime.TierSmart); got != DefaultProviderGroupName {
+		t.Fatalf("smart default group = %q, want %q", got, DefaultProviderGroupName)
 	}
-	// The DEFAULT (smart) tier keeps the legacy cheapest behaviour.
-	if r, ok := ResolveTierGroupRatio(map[string]float64{"promo": 0.05}, 0.05, runtime.TierSmart); !ok || r != 0.05 {
-		t.Fatalf("smart fallback ratio = %v/%v, want 0.05/true", r, ok)
+	if got := (TierGroupNames{}).For(runtime.TierFast); got != DefaultProviderGroupName {
+		t.Fatalf("fast default group = %q, want %q", got, DefaultProviderGroupName)
 	}
-	// No group info at all: both tiers are priced at the single rate.
-	if r, ok := ResolveTierGroupRatio(nil, 1.0, runtime.TierSmart); !ok || r != 1.0 {
-		t.Fatalf("no-group smart ratio = %v/%v, want 1.0/true", r, ok)
+	// A detected group (written by the balance sync) is used when nothing is pinned.
+	detected := TierGroupNames{Detected: "Azure-Gpt-6"}
+	if got := detected.For(runtime.TierSmart); got != "Azure-Gpt-6" {
+		t.Fatalf("detected group = %q, want Azure-Gpt-6", got)
 	}
-	if r, ok := ResolveTierGroupRatio(nil, 1.0, runtime.TierFast); !ok || r != 1.0 {
-		t.Fatalf("no-group fast ratio = %v/%v, want 1.0/true", r, ok)
+	// An explicit pin always wins over the detected value.
+	pinned := TierGroupNames{Smart: "Azure-Gpt-1", Detected: "Azure-Gpt-6"}
+	if got := pinned.For(runtime.TierSmart); got != "Azure-Gpt-1" {
+		t.Fatalf("pinned group = %q, want Azure-Gpt-1", got)
 	}
-	// The provider prices per group but has no rate for the fast group: unpriced.
-	if _, ok := ResolveTierGroupRatio(map[string]float64{"smart": 0.1}, 0.1, runtime.TierFast); ok {
-		t.Fatal("fast ratio on a group-priced provider without a fast group must be unpriced")
+	if got := pinned.For(runtime.TierFast); got != "Azure-Gpt-1" {
+		t.Fatalf("fast must inherit the smart pin, got %q", got)
+	}
+	if got := (TierGroupNames{Fast: "Azure-Gpt-6", Smart: "Azure-Gpt-1"}).For(runtime.TierFast); got != "Azure-Gpt-6" {
+		t.Fatalf("explicit fast pin = %q, want Azure-Gpt-6", got)
 	}
 }
 

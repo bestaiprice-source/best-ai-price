@@ -24,6 +24,12 @@ type YunwuCreditGrantsResponse struct {
 	TotalGranted   float64 `json:"total_granted"`
 	TotalUsed      float64 `json:"total_used"`
 	TotalAvailable float64 `json:"total_available"`
+	// Group is the provider billing group the key belongs to, when the provider
+	// reports it (`/api/user/self` -> data.group on One-API/New-API). It decides
+	// the rate the provider charges us, so it is persisted as
+	// extra.detected_group_name; an explicit smart_group_name/fast_group_name
+	// still overrides it.
+	Group string `json:"-"`
 }
 
 type BalanceSnapshot struct {
@@ -214,6 +220,14 @@ func (w *StatsWorker) saveSnapshot(ctx context.Context, node *health.ExecutionNo
 				extra["balance_usd"] = grants.TotalAvailable
 				extra["balance_updated_at"] = now.Format(time.RFC3339)
 				extra["balance_source"] = source
+				// The provider's own billing group for this key (when it reports one)
+				// decides the rate it charges us; the pricing resolver uses it until an
+				// admin pins the group explicitly. Written only when reported, so a
+				// response that omits it never clobbers an existing value.
+				if group := strings.TrimSpace(grants.Group); group != "" {
+					extra[ExtraDetectedGroupName] = group
+					extra["detected_group_at"] = now.Format(time.RFC3339)
+				}
 				_ = w.store.DB().Account.UpdateOneID(accID).SetExtra(extra).Exec(ctx)
 			}
 		}
@@ -823,6 +837,7 @@ func (w *StatsWorker) syncUserSelf(ctx context.Context, origin, apiPrefix, apiKe
 			Balance     float64 `json:"balance"`
 			RemainQuota float64 `json:"remain_quota"`
 			TotalQuota  float64 `json:"total_quota"`
+			Group       string  `json:"group"`
 		}
 
 		var envelope struct {
@@ -863,11 +878,16 @@ func (w *StatsWorker) syncUserSelf(ctx context.Context, origin, apiPrefix, apiKe
 			totalGrantedUSD = availUSD + usedUSD
 		}
 
+		group := strings.TrimSpace(ud.Group)
+		if group == "" {
+			group = strings.TrimSpace(envelope.Group)
+		}
 		return &YunwuCreditGrantsResponse{
 			Object:         "user_self",
 			TotalGranted:   totalGrantedUSD,
 			TotalUsed:      usedUSD,
 			TotalAvailable: availUSD,
+			Group:          group,
 		}, nil
 	}
 	return nil, lastErr

@@ -84,9 +84,16 @@ func TierGroupName(tier string) string {
 // in. They are account-level (`account.Extra`) settings, set in the admin panel
 // next to the fast key.
 const (
-	ExtraSmartGroupName = "smart_group_name"
-	ExtraFastGroupName  = "fast_group_name"
+	ExtraSmartGroupName    = "smart_group_name"
+	ExtraFastGroupName     = "fast_group_name"
+	ExtraDetectedGroupName = "detected_group_name"
 )
+
+// DefaultProviderGroupName is the group a provider puts a key in when none was
+// chosen, and the name we assume when nothing is pinned. One-API/New-API bill a
+// group that is missing from their price list at the OFFICIAL rate, so this
+// never understates the cost of a request.
+const DefaultProviderGroupName = "default"
 
 // TierGroupNames is the provider billing group each of an account's keys lives
 // in. Both fields are optional: an empty value keeps the legacy behaviour (the
@@ -102,13 +109,19 @@ const (
 type TierGroupNames struct {
 	Smart string
 	Fast  string
+	// Detected is the group discovered from the provider API for this account
+	// (`extra.detected_group_name`, written by the balance sync). It is only a
+	// best-effort enrichment: an explicit pin always wins, and it is ignored
+	// when empty.
+	Detected string
 }
 
 // ParseTierGroupNames reads the pinned groups from an account's extra map.
 func ParseTierGroupNames(extra map[string]any) TierGroupNames {
 	return TierGroupNames{
-		Smart: extraString(extra, ExtraSmartGroupName),
-		Fast:  extraString(extra, ExtraFastGroupName),
+		Smart:    extraString(extra, ExtraSmartGroupName),
+		Fast:     extraString(extra, ExtraFastGroupName),
+		Detected: extraString(extra, ExtraDetectedGroupName),
 	}
 }
 
@@ -120,14 +133,25 @@ func (g TierGroupNames) For(tier string) string {
 		if g.Fast != "" {
 			return g.Fast
 		}
+		if g.Smart != "" {
+			return g.Smart
+		}
+	} else if g.Smart != "" {
 		return g.Smart
 	}
-	return g.Smart
+	if g.Detected != "" {
+		return g.Detected
+	}
+	// Nothing is pinned: the provider's default group. One-API/New-API bill a
+	// group that is not in their price list at the official rate, so this is the
+	// honest (never cheaper than reality) assumption — pinning the real group
+	// lowers the price when the provider really does discount it.
+	return DefaultProviderGroupName
 }
 
 // IsZero reports whether nothing is pinned, i.e. the legacy derivation applies.
 func (g TierGroupNames) IsZero() bool {
-	return g.Smart == "" && g.Fast == ""
+	return g.Smart == "" && g.Fast == "" && g.Detected == ""
 }
 
 // Merge keeps the receiver's values and fills the gaps from other — used when
@@ -141,51 +165,36 @@ func (g TierGroupNames) Merge(other TierGroupNames) TierGroupNames {
 	if out.Fast == "" {
 		out.Fast = other.Fast
 	}
-	return out
-}
-
-// Map renders the pinned groups as a tier→group-name map, skipping empty ones.
-// The scheduler's node struct carries the groups this way.
-func (g TierGroupNames) Map() map[string]string {
-	out := make(map[string]string, 2)
-	if g.Smart != "" {
-		out[runtime.TierSmart] = g.Smart
-	}
-	if g.Fast != "" {
-		out[runtime.TierFast] = g.Fast
-	}
-	if len(out) == 0 {
-		return nil
+	if out.Detected == "" {
+		out.Detected = other.Detected
 	}
 	return out
 }
 
-// ParseTierGroupMap reads a node's tier→group-name map (empty string values are
-// dropped).
-func ParseTierGroupMap(raw map[string]string) TierGroupNames {
-	if len(raw) == 0 {
-		return TierGroupNames{}
+// NodeTierGroups renders the tier→group-name map a scheduler node carries: both
+// tiers resolved (explicit pin > auto-detected group > the provider default), so
+// the price lookup never has to guess again.
+func NodeTierGroups(extra map[string]any) map[string]string {
+	names := ParseTierGroupNames(extra)
+	return map[string]string{
+		runtime.TierSmart: names.For(runtime.TierSmart),
+		runtime.TierFast:  names.For(runtime.TierFast),
 	}
-	out := TierGroupNames{}
-	for tier, name := range raw {
-		name = strings.TrimSpace(name)
-		if name == "" {
-			continue
-		}
-		switch runtime.NormalizeTier(tier) {
-		case runtime.TierFast:
-			out.Fast = name
-		case runtime.TierSmart:
-			out.Smart = name
-		}
-	}
-	return out
 }
 
-// GroupNameForTier returns the pinned group for a tier out of a node's
-// tier→group-name map, with the fast→smart fallback of TierGroupNames.For.
+// GroupNameForTier returns the group a tier bills in from a node's resolved
+// tier→group-name map ("default" when the map has no entry for it).
 func GroupNameForTier(groups map[string]string, tier string) string {
-	return ParseTierGroupMap(groups).For(tier)
+	if len(groups) > 0 {
+		normalized := runtime.NormalizeTier(tier)
+		if normalized == "" {
+			normalized = runtime.TierSmart
+		}
+		if name := strings.TrimSpace(groups[normalized]); name != "" {
+			return name
+		}
+	}
+	return DefaultProviderGroupName
 }
 
 func extraString(extra map[string]any, key string) string {
@@ -202,75 +211,34 @@ func extraString(extra map[string]any, key string) string {
 	return ""
 }
 
-// ResolveTierGroupRatioForGroup resolves the discount multiplier for a tier,
-// honouring the provider group the account's key was pinned to.
+// ResolveTierGroupRatioForGroup resolves the discount multiplier for a tier from
+// the provider group the account's key lives in. It mirrors how the provider
+// itself bills that key:
 //
-// With a pinned group the answer mirrors how the provider itself bills that key:
+//   - the group's published ratio when the provider lists it (the real cost of
+//     the key we are about to use);
+//   - the OFFICIAL rate (1.0) when the group is not listed — that is what
+//     One-API/New-API charge for a group missing from `group_ratio`, which is
+//     what a group named `default` gets;
+//   - 1.0 when the provider does not price per group at all (the caller then
+//     uses its single stored rate instead of the ratio).
 //
-//   - the group's ratio when the provider publishes one;
-//   - the OFFICIAL rate (1.0) when the provider prices per group but does not
-//     list the pinned group — that is what One-API/New-API charge for a group
-//     missing from `group_ratio` (and what a group named `default` gets);
-//   - the provider's single rate when it does not price per group at all.
-//
-// Without a pinned group the legacy behaviour applies (see ResolveTierGroupRatio).
-func ResolveTierGroupRatioForGroup(groupRatios map[string]float64, cheapest float64, tier, groupName string) (float64, bool) {
+// It never returns "unpriced": a request is always priced at least at the
+// official rate, so a key whose group differs from our assumption can only be
+// charged MORE than our estimate, never less.
+func ResolveTierGroupRatioForGroup(groupRatios map[string]float64, groupName string) float64 {
 	groupName = strings.TrimSpace(groupName)
 	if groupName == "" {
-		return ResolveTierGroupRatio(groupRatios, cheapest, tier)
+		groupName = DefaultProviderGroupName
 	}
 	if len(groupRatios) == 0 {
-		// The provider does not price per group: its single rate already is the
-		// price of whatever key we hold.
-		if cheapest > 0 {
-			return cheapest, true
-		}
-		return 1.0, true
+		return 1.0
 	}
 	if ratio, ok := groupRatios[groupName]; ok && ratio > 0 {
-		return ratio, true
+		return ratio
 	}
-	// Pinned group is not listed: the provider bills it at the official rate.
-	return 1.0, true
-}
-
-// ResolveTierGroupRatio picks the discount multiplier (group_ratio) a request
-// must be priced with:
-//
-//   - when the provider exposes a ratio for the tier's group, that ratio is the
-//     real cost of the key we are about to use, so it wins;
-//   - otherwise the DEFAULT (smart) tier keeps the legacy cheapest-enabled-group
-//     behaviour, so existing traffic is priced exactly as before;
-//   - an EXPLICIT non-default tier (fast) with no known ratio for its group
-//     yields no price at all (ok=false): the model is then treated as
-//     unavailable for that tier, and the engine fails / the catalog omits it —
-//     a fast request is never silently sold at a smart rate.
-func ResolveTierGroupRatio(groupRatios map[string]float64, cheapest float64, tier string) (float64, bool) {
-	normalized := runtime.NormalizeTier(tier)
-	if normalized == "" {
-		normalized = runtime.TierSmart
-	}
-	// The provider does not price per group at all (BestAIPrice / channels
-	// formats): both tiers share the single rate, so any tier can be priced.
-	if len(groupRatios) == 0 {
-		if cheapest > 0 {
-			return cheapest, true
-		}
-		return 1.0, true
-	}
-	if r, ok := groupRatios[TierGroupName(normalized)]; ok && r > 0 {
-		return r, true
-	}
-	if normalized == runtime.TierSmart {
-		// Legacy/default fallback: cheapest enabled group.
-		if cheapest > 0 {
-			return cheapest, true
-		}
-		return 1.0, true
-	}
-	// The provider prices per group but exposes no rate for this tier's group:
-	// no price (fail closed) instead of another group's rate.
-	return 0, false
+	// Not listed: the provider bills this group at the official rate.
+	return 1.0
 }
 
 // TierFromContext returns the billing tier of the current request (default

@@ -575,6 +575,50 @@ func TestSyncUserSelf(t *testing.T) {
 		assert.Equal(t, "user_self", grants.Object)
 		assert.InDelta(t, 3.0, grants.TotalAvailable, 0.001)
 	})
+
+	// The provider reports which billing group the key lives in; it decides the
+	// rate the provider charges us, so it is carried out of the sync (and later
+	// persisted as extra.detected_group_name).
+	t.Run("reports the key's billing group", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"success": true,
+				"data": map[string]any{
+					"quota": 500000.0,
+					"group": "Azure-Gpt-6",
+				},
+			})
+		}))
+		defer server.Close()
+
+		sw := NewStatsWorker(nil)
+		sw.httpClient = server.Client()
+
+		grants, err := sw.syncUserSelf(ctx, server.URL, "", "sk-test-key")
+		require.NoError(t, err)
+		require.NotNil(t, grants)
+		assert.Equal(t, "Azure-Gpt-6", grants.Group)
+	})
+
+	t.Run("no group reported stays empty", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"success": true,
+				"data":    map[string]any{"balance": 3.0},
+			})
+		}))
+		defer server.Close()
+
+		sw := NewStatsWorker(nil)
+		sw.httpClient = server.Client()
+
+		grants, err := sw.syncUserSelf(ctx, server.URL, "", "sk-test-key")
+		require.NoError(t, err)
+		require.NotNil(t, grants)
+		assert.Equal(t, "", grants.Group)
+	})
 }
 
 func TestSyncSubscriptionUsageSubtraction(t *testing.T) {

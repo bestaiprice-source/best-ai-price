@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/yunwu"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -525,14 +526,26 @@ func TestYunwuPricingService_AppliesGroupRatio(t *testing.T) {
 	require.NotNil(t, raw["claude-sonnet-5"])
 	assert.InDelta(t, 0.08824, raw["claude-sonnet-5"].GroupRatio, 1e-6)
 
-	// Effective = model_ratio(1.0) x base(2e-6) x cheapest enabled group(0.08824)
+	// Nothing is pinned, so the request is priced for the provider's `default`
+	// group: it IS listed here (1.0), so the official rate applies.
 	p, ok := svc.GetModelPricingForProvider(ctx, "openlux", "claude-sonnet-5")
 	require.True(t, ok)
 	require.NotNil(t, p)
-	assert.InDelta(t, 0.17648, p.InputPricePerToken*1e6, 1e-4)
-	assert.InDelta(t, 0.8824, p.OutputPricePerToken*1e6, 1e-4)
+	assert.InDelta(t, 2.0, p.InputPricePerToken*1e6, 1e-4)
+	assert.InDelta(t, 10.0, p.OutputPricePerToken*1e6, 1e-4)
 
-	// Without enable_groups the ratio must NOT be discounted.
+	// With the key pinned to a discounted group, that group's rate is charged.
+	pinned := ContextWithYunwuTierGroups(ctx, map[string]yunwu.TierGroupNames{
+		"openlux": {Smart: "Kiro-Claude-1"},
+	})
+	p3, ok := svc.GetModelPricingForProvider(pinned, "openlux", "claude-sonnet-5")
+	require.True(t, ok)
+	require.NotNil(t, p3)
+	assert.InDelta(t, 0.17648, p3.InputPricePerToken*1e6, 1e-4)
+	assert.InDelta(t, 0.8824, p3.OutputPricePerToken*1e6, 1e-4)
+
+	// A model without enable_groups cannot be discounted either: it bills at the
+	// official rate (model_ratio x base).
 	p2, ok := svc.GetModelPricingForProvider(ctx, "openlux", "no-groups-model")
 	require.True(t, ok)
 	require.NotNil(t, p2)

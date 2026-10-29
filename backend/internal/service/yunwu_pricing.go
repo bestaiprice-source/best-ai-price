@@ -661,10 +661,7 @@ func (s *YunwuPricingService) GetModelPricingForProvider(ctx context.Context, pr
 	// rate.
 	tier := yunwu.TierFromContext(ctx)
 	groupName := yunwuTierGroupForProvider(ctx, provider, tier)
-	groupRatio, tierPriced := yunwu.ResolveTierGroupRatioForGroup(item.GroupRatios, item.GroupRatio, tier, groupName)
-	if !tierPriced {
-		return nil, false
-	}
+	groupRatio := yunwu.ResolveTierGroupRatioForGroup(item.GroupRatios, groupName)
 
 	if item.ModelPrice > 0 {
 		// Fixed price per unit (e.g. image generation, video generation);

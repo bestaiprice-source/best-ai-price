@@ -14,16 +14,19 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Pinned provider billing groups (account.Extra smart_group_name / fast_group_name)
+// The provider billing group a key lives in
+// (account.Extra smart_group_name / fast_group_name / detected_group_name)
 // ---------------------------------------------------------------------------
 
 func TestParseTierGroupNames(t *testing.T) {
 	groups := ParseTierGroupNames(map[string]any{
-		ExtraSmartGroupName: "  default ",
-		ExtraFastGroupName:  "Azure-Gpt-6",
+		ExtraSmartGroupName:    "  default ",
+		ExtraFastGroupName:     "Azure-Gpt-6",
+		ExtraDetectedGroupName: "Azure-Gpt-1",
 	})
 	assert.Equal(t, "default", groups.Smart)
 	assert.Equal(t, "Azure-Gpt-6", groups.Fast)
+	assert.Equal(t, "Azure-Gpt-1", groups.Detected)
 	assert.False(t, groups.IsZero())
 
 	empty := ParseTierGroupNames(nil)
@@ -35,70 +38,52 @@ func TestParseTierGroupNames(t *testing.T) {
 }
 
 func TestTierGroupNamesForAndMerge(t *testing.T) {
-	same := TierGroupNames{Smart: "default"}
 	// Both keys are commonly issued inside the same group: configuring the smart
 	// group is enough for fast too.
-	assert.Equal(t, "default", same.For(runtime.TierSmart))
-	assert.Equal(t, "default", same.For(runtime.TierFast))
+	same := TierGroupNames{Smart: "Azure-Gpt-1"}
+	assert.Equal(t, "Azure-Gpt-1", same.For(runtime.TierSmart))
+	assert.Equal(t, "Azure-Gpt-1", same.For(runtime.TierFast))
 
 	both := TierGroupNames{Smart: "Azure-Gpt-1", Fast: "Azure-Gpt-6"}
 	assert.Equal(t, "Azure-Gpt-1", both.For(runtime.TierSmart))
 	assert.Equal(t, "Azure-Gpt-6", both.For(runtime.TierFast))
-	assert.Equal(t, "", TierGroupNames{}.For(runtime.TierFast))
 
 	merged := TierGroupNames{Fast: "f"}.Merge(TierGroupNames{Smart: "s", Fast: "other"})
 	assert.Equal(t, "s", merged.Smart)
 	assert.Equal(t, "f", merged.Fast, "the first configured value wins")
 }
 
-func TestTierGroupMapRoundTrip(t *testing.T) {
-	groups := TierGroupNames{Smart: "default", Fast: "Azure-Gpt-6"}
-	mapped := groups.Map()
-	assert.Equal(t, map[string]string{"smart": "default", "fast": "Azure-Gpt-6"}, mapped)
-	assert.True(t, TierGroupNames{}.Map() == nil)
+func TestNodeTierGroupsAreAlwaysResolved(t *testing.T) {
+	// Nothing configured: both tiers fall back to the provider default group,
+	// which One-API/New-API bill at the official rate.
+	plain := NodeTierGroups(nil)
+	assert.Equal(t, map[string]string{"smart": "default", "fast": "default"}, plain)
+	assert.Equal(t, "default", GroupNameForTier(plain, runtime.TierSmart))
+	assert.Equal(t, "default", GroupNameForTier(plain, runtime.TierFast))
+	assert.Equal(t, "default", GroupNameForTier(nil, runtime.TierFast))
 
-	assert.Equal(t, groups, ParseTierGroupMap(mapped))
-	assert.Equal(t, "default", GroupNameForTier(mapped, runtime.TierSmart))
-	assert.Equal(t, "", GroupNameForTier(nil, runtime.TierFast))
-	// The fast→smart fallback also applies to the node-side map.
-	assert.Equal(t, "default", GroupNameForTier(map[string]string{"smart": "default"}, runtime.TierFast))
-}
+	// A detected group is used until an admin pins the real one.
+	detected := NodeTierGroups(map[string]any{ExtraDetectedGroupName: "Azure-Gpt-6"})
+	assert.Equal(t, "Azure-Gpt-6", GroupNameForTier(detected, runtime.TierSmart))
 
-func TestResolveTierGroupRatioForGroup(t *testing.T) {
-	ratios := map[string]float64{"Azure-Gpt-1": 0.044, "Azure-Gpt-6": 0.9}
-
-	// A pinned group that the provider publishes wins.
-	r, ok := ResolveTierGroupRatioForGroup(ratios, 0.044, runtime.TierFast, "Azure-Gpt-6")
-	require.True(t, ok)
-	assert.InDelta(t, 0.9, r, 1e-9)
-
-	// The pinned group is not published (e.g. `default`, which providers bill at
-	// the official rate): the request is priced at the official rate instead of
-	// failing closed or borrowing the cheapest group's rate.
-	r, ok = ResolveTierGroupRatioForGroup(ratios, 0.044, runtime.TierSmart, "default")
-	require.True(t, ok)
-	assert.InDelta(t, 1.0, r, 1e-9)
-
-	// A provider that does not price per group keeps its single rate.
-	r, ok = ResolveTierGroupRatioForGroup(nil, 0.25, runtime.TierFast, "whatever")
-	require.True(t, ok)
-	assert.InDelta(t, 0.25, r, 1e-9)
-
-	// With nothing pinned the legacy derivation applies: smart → cheapest group,
-	// fast → the literal `fast` group, which this provider does not have.
-	r, ok = ResolveTierGroupRatioForGroup(ratios, 0.044, runtime.TierSmart, "")
-	require.True(t, ok)
-	assert.InDelta(t, 0.044, r, 1e-9)
-	if _, ok := ResolveTierGroupRatioForGroup(ratios, 0.044, runtime.TierFast, ""); ok {
-		t.Fatal("an unpinned fast tier with no `fast` group must stay unpriced")
-	}
+	pinned := NodeTierGroups(map[string]any{
+		ExtraSmartGroupName:    "Azure-Gpt-1",
+		ExtraDetectedGroupName: "Azure-Gpt-6",
+	})
+	assert.Equal(t, "Azure-Gpt-1", GroupNameForTier(pinned, runtime.TierSmart))
+	assert.Equal(t, "Azure-Gpt-1", GroupNameForTier(pinned, runtime.TierFast),
+		"fast inherits the smart group when it has none of its own")
 }
 
 // ---------------------------------------------------------------------------
-// The engine prices a candidate node with the node's OWN pinned groups
+// The engine prices a candidate node with the node's OWN group
 // ---------------------------------------------------------------------------
 
 const tierGroupTestModel = "gpt-4o"
+
+// providerGroupRatios is OpenLux-shaped: the provider publishes discounts for its
+// named groups, and the `default` group our keys live in is not listed at all.
+var providerGroupRatios = map[string]float64{"Azure-Gpt-1": 0.044, "Azure-Gpt-6": 0.9}
 
 func seedTierGroupTestPool(t *testing.T, node *health.ExecutionNode, ownerID string) (*YunwuHypervisor, *mockYunwuRuntime) {
 	t.Helper()
@@ -123,8 +108,6 @@ func seedTierGroupTestPool(t *testing.T, node *health.ExecutionNode, ownerID str
 		OwnerID: ownerID, MonthlyLimit: 1_000_000, Priority: 1, IsActive: true,
 	}, "yunwu"))
 
-	// The provider prices per group and does NOT list the group our OpenLux-style
-	// account pinned (`default`) — only the premium groups it advertises.
 	require.NotNil(t, yh.PriceManager())
 	yh.PriceManager().SetProviderPrices(copied.NodeID, map[string]ProviderModelPrice{
 		tierGroupTestModel: {
@@ -133,41 +116,66 @@ func seedTierGroupTestPool(t *testing.T, node *health.ExecutionNode, ownerID str
 			BaseInputPricePer1k:  0.0025,
 			BaseOutputPricePer1k: 0.01,
 			CheapestGroupRatio:   0.044,
-			GroupRatios:          map[string]float64{"Azure-Gpt-1": 0.044, "Azure-Gpt-6": 0.9},
+			GroupRatios:          providerGroupRatios,
 			Available:            true,
 		},
 	})
 	return yh, rt
 }
 
-// TestNodePinnedBillingGroupPricesBothTiers is the regression guard for the real
-// install: the account's keys live in a group the provider's pricing payload does
-// not list (`default`), so the legacy derivation priced smart at the cheapest
-// advertised group (a fraction of the real cost) and left fast completely
-// unpriced — every fast request failed with ErrNoPricingAvailable.
-func TestNodePinnedBillingGroupPricesBothTiers(t *testing.T) {
-	owner := "tier-group-owner"
+// TestNodeWithoutGroupFallsBackToTheOfficialRate: with nothing configured a
+// request is priced at the provider's OFFICIAL rate (its `default` group), never
+// at the cheapest advertised group — understating the cost is what made the
+// published price 20x below what the provider actually charges.
+func TestNodeWithoutGroupFallsBackToTheOfficialRate(t *testing.T) {
+	owner := "tier-group-owner-default"
 	node := &health.ExecutionNode{
-		NodeID:     "111",
+		NodeID:     "110",
 		Provider:   "openlux",
 		State:      "healthy",
-		TierGroups: TierGroupNames{Smart: "default"}.Map(),
+		TierGroups: NodeTierGroups(nil),
 	}
 	yh, rt := seedTierGroupTestPool(t, node, owner)
 	ctx := context.Background()
 
-	// Smart is priced at the pinned group's rate — the official rate here, since
-	// the provider does not advertise `default` — not at the cheapest group.
 	in, _, ok := yh.PriceManager().ResolveNodePrice(ctx, node, tierGroupTestModel)
 	require.True(t, ok)
-	assert.InDelta(t, 0.0025, in, 1e-9, "smart must use the pinned group, not the cheapest advertised one")
+	assert.InDelta(t, 0.0025, in, 1e-9, "the unlisted default group must bill at the official rate")
 
-	// Fast is priceable too (the pinned group applies to it as well) and is
-	// actually served by the node.
+	// Fast is priceable as well (same default group) — no more 400 on a fast key.
 	fastCtx := runtime.ContextWithTier(ctx, runtime.TierFast)
 	in, _, ok = yh.PriceManager().ResolveNodePrice(fastCtx, node, tierGroupTestModel)
-	require.True(t, ok, "a fast request must be priceable once the group is pinned")
+	require.True(t, ok)
 	assert.InDelta(t, 0.0025, in, 1e-9)
+
+	payload := []byte(`{"model":"` + tierGroupTestModel + `"}`)
+	_, err := yh.HandleRequest(fastCtx, owner, "conv-default-fast", payload, io.Discard, "openai")
+	require.NoError(t, err)
+	assert.Equal(t, "110", rt.lastNodeID)
+}
+
+// TestNodePinnedGroupWinsOverTheCheapestAdvertisedGroup: pinning the real
+// discounted group prices the request at that group's rate (this is how an
+// account whose key really is in a discounted group gets the lower price).
+func TestNodePinnedGroupWinsOverTheCheapestAdvertisedGroup(t *testing.T) {
+	owner := "tier-group-owner-pinned"
+	node := &health.ExecutionNode{
+		NodeID:     "111",
+		Provider:   "openlux",
+		State:      "healthy",
+		TierGroups: NodeTierGroups(map[string]any{ExtraSmartGroupName: "Azure-Gpt-6"}),
+	}
+	yh, rt := seedTierGroupTestPool(t, node, owner)
+	ctx := context.Background()
+
+	in, _, ok := yh.PriceManager().ResolveNodePrice(ctx, node, tierGroupTestModel)
+	require.True(t, ok)
+	assert.InDelta(t, 0.0025*0.9, in, 1e-9, "a pinned group must use that group's ratio")
+
+	fastCtx := runtime.ContextWithTier(ctx, runtime.TierFast)
+	in, _, ok = yh.PriceManager().ResolveNodePrice(fastCtx, node, tierGroupTestModel)
+	require.True(t, ok)
+	assert.InDelta(t, 0.0025*0.9, in, 1e-9)
 
 	payload := []byte(`{"model":"` + tierGroupTestModel + `"}`)
 	_, err := yh.HandleRequest(fastCtx, owner, "conv-pinned-fast", payload, io.Discard, "openai")
@@ -175,25 +183,22 @@ func TestNodePinnedBillingGroupPricesBothTiers(t *testing.T) {
 	assert.Equal(t, "111", rt.lastNodeID)
 }
 
-// TestNodeWithoutPinnedGroupLeavesFastUnpriced documents the legacy behaviour the
-// pin replaces: the group the key actually bills in is unknown, so the fast tier
-// (which looks for a group literally named `fast`) is unpriced and the engine
-// refuses the request instead of silently selling it at a smart rate.
-func TestNodeWithoutPinnedGroupLeavesFastUnpriced(t *testing.T) {
-	owner := "tier-group-owner-legacy"
+// TestDetectedGroupPricesUntilAnAdminPinsOne: the group discovered from the
+// provider API (balance sync) is used when nothing is pinned, and an explicit pin
+// still wins.
+func TestDetectedGroupPricesUntilAnAdminPinsOne(t *testing.T) {
+	owner := "tier-group-owner-detected"
+	detected := NodeTierGroups(map[string]any{ExtraDetectedGroupName: "Azure-Gpt-6"})
 	node := &health.ExecutionNode{
-		NodeID:   "112",
-		Provider: "openlux",
-		State:    "healthy",
+		NodeID:     "112",
+		Provider:   "openlux",
+		State:      "healthy",
+		TierGroups: detected,
 	}
 	yh, _ := seedTierGroupTestPool(t, node, owner)
 	ctx := context.Background()
 
-	fastCtx := runtime.ContextWithTier(ctx, runtime.TierFast)
-	_, _, ok := yh.PriceManager().ResolveNodePrice(fastCtx, node, tierGroupTestModel)
-	assert.False(t, ok, "without a pinned group the fast tier stays unpriced")
-
-	payload := []byte(`{"model":"` + tierGroupTestModel + `"}`)
-	_, err := yh.HandleRequest(fastCtx, owner, "conv-unpinned-fast", payload, io.Discard, "openai")
-	require.ErrorIs(t, err, ErrNoPricingAvailable)
+	in, _, ok := yh.PriceManager().ResolveNodePrice(ctx, node, tierGroupTestModel)
+	require.True(t, ok)
+	assert.InDelta(t, 0.0025*0.9, in, 1e-9, "the detected group must be honoured")
 }
