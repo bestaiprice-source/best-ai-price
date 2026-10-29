@@ -65,11 +65,11 @@
             v-for="vendor in vendors"
             :key="vendor"
             type="button"
-            class="rounded-full px-3.5 py-1.5 text-sm font-medium capitalize transition-colors"
+            class="rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors"
             :class="activeVendor === vendor ? 'bg-gray-900 text-white dark:bg-white dark:text-gray-900' : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-dark-700 dark:text-gray-300'"
             @click="activeVendor = activeVendor === vendor ? '' : vendor"
           >
-            {{ vendor }} ({{ vendorCounts[vendor] || 0 }})
+            {{ vendorLabel(vendor) }} ({{ vendorCounts[vendor] || 0 }})
           </button>
         </div>
       </div>
@@ -173,7 +173,7 @@
       <div v-else class="mt-6 space-y-6">
         <div v-for="group in groupedByVendor" :key="group.vendor">
           <div class="flex items-center gap-2">
-            <h3 class="text-sm font-semibold capitalize text-gray-900 dark:text-white">{{ group.vendor }}</h3>
+            <h3 class="text-sm font-semibold text-gray-900 dark:text-white">{{ vendorLabel(group.vendor) }}</h3>
             <span class="text-xs text-gray-400">({{ group.models.length }})</span>
           </div>
           <div class="mt-2 flex flex-wrap gap-1.5">
@@ -259,11 +259,90 @@ function copyModelName(model: PublicModelPricing) {
   void copyToClipboard(model.model_id || model.canonical_model_id || '', t('common.copiedToClipboard'))
 }
 
+/**
+ * Human-readable vendor names. The chip / group key is the canonical prefix
+ * (`anthropic/claude-…` -> `anthropic`); rendering that raw key relied on CSS
+ * `text-transform: capitalize`, which prints brand names wrong ("Openai",
+ * "Xai", "Zhipu"). Known vendors therefore get their real brand casing plus the
+ * product name users recognise (Zhipu -> GLM, Moonshot -> KIMI, Kuaishou ->
+ * Kling). Deliberately not translated: a brand name is a proper noun, same as a
+ * model id.
+ */
+const VENDOR_LABELS: Record<string, string> = {
+  anthropic: 'Anthropic',
+  openai: 'OpenAI',
+  google: 'Google',
+  qwen: 'Qwen',
+  kuaishou: 'Kling',
+  zhipu: 'GLM',
+  xai: 'xAI',
+  meta: 'Meta',
+  deepseek: 'DeepSeek',
+  moonshot: 'KIMI',
+  minimax: 'MiniMax',
+  baai: 'BAAI',
+  'netease-youdao': 'Youdao',
+  // Vendors recovered from the gateway's generic `other/` bucket (see below).
+  bytedance: 'ByteDance',
+  midjourney: 'Midjourney',
+  pixverse: 'PixVerse',
+  happyhorse: 'HappyHorse',
+  vidu: 'Vidu',
+  alibaba: 'Alibaba',
+  iflytek: 'iFlytek',
+  xiaomi: 'Xiaomi',
+  suno: 'Suno',
+  'black-forest': 'Black Forest',
+  other: 'Other'
+}
+
+/**
+ * The gateway canonicalizes any model it does not recognise under the generic
+ * `other/` prefix, which used to collapse dozens of unrelated vendors into one
+ * unhelpful "Other (94)" chip. Recover the real vendor from the slug for the
+ * families we actually carry, so each is grouped and counted on its own.
+ * Patterns match the lowercased slug (the part after `other/`).
+ */
+const OTHER_SLUG_VENDORS: Array<{ match: RegExp; vendor: string }> = [
+  { match: /^aigc-image-kling/, vendor: 'kuaishou' },
+  { match: /^aigc-video-hailuo/, vendor: 'minimax' },
+  { match: /^doubao/, vendor: 'bytedance' },
+  { match: /^mj[-_]/, vendor: 'midjourney' },
+  { match: /^pixverse/, vendor: 'pixverse' },
+  { match: /^happyhorse/, vendor: 'happyhorse' },
+  { match: /^speech[-_]?\d/, vendor: 'minimax' },
+  { match: /^vidu/, vendor: 'vidu' },
+  { match: /^wan\d/, vendor: 'alibaba' },
+  { match: /^z[-_]image/, vendor: 'alibaba' },
+  { match: /^sparkdesk/, vendor: 'iflytek' },
+  { match: /^mimo/, vendor: 'xiaomi' },
+  { match: /^veo[-_]?\d/, vendor: 'google' },
+  { match: /^qwq/, vendor: 'qwen' },
+  { match: /^flux/, vendor: 'black-forest' },
+  { match: /^suno/, vendor: 'suno' }
+]
+
+/** Display name for a vendor key, falling back to the raw key. */
+function vendorLabel(vendor: string): string {
+  return VENDOR_LABELS[vendor] ?? vendor
+}
+
 /** Vendor = the canonical prefix (`anthropic/claude-…` -> `anthropic`). */
 function vendorOf(model: PublicModelPricing): string {
   const id = model.canonical_model_id || model.model_id || ''
   const slash = id.indexOf('/')
-  return slash > 0 ? id.slice(0, slash).toLowerCase() : 'other'
+  if (slash <= 0) return 'other'
+  const prefix = id.slice(0, slash).toLowerCase()
+  if (prefix !== 'other') return prefix
+  // Generic bucket: recover the vendor from the slug instead of lumping every
+  // unrecognised model into one "Other" chip.
+  const slug = id.slice(slash + 1).toLowerCase()
+  for (const rule of OTHER_SLUG_VENDORS) {
+    if (rule.match.test(slug)) return rule.vendor
+  }
+  // Unknown: fall back to the leading slug token so it still gets its own
+  // group rather than merging into a giant bucket.
+  return slug.split(/[-_.]/)[0] || 'other'
 }
 
 /** Model slug without the vendor prefix. */
