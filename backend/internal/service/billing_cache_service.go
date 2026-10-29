@@ -522,6 +522,20 @@ func (s *BillingCacheService) InvalidateSubscription(ctx context.Context, userID
 // API Key 限速缓存方法
 // ============================================
 
+// CheckAPIKeyRateLimitEligibility enforces the API key's 5h / 1d / 7d USD spend
+// windows. It is the exported form of checkAPIKeyRateLimits for call sites that
+// perform their own admission checks before the shared validation block — the
+// Yunwu/hypervisor dispatch paths branch out of the gateway handlers before
+// CheckBillingEligibility runs, so without this call those windows were never
+// enforced for unofficial-provider keys. A key with no windows configured is a
+// no-op (HasRateLimits), which keeps the non-limited traffic path unchanged.
+func (s *BillingCacheService) CheckAPIKeyRateLimitEligibility(ctx context.Context, apiKey *APIKey) error {
+	if s == nil || apiKey == nil || !apiKey.HasRateLimits() {
+		return nil
+	}
+	return s.checkAPIKeyRateLimits(ctx, apiKey)
+}
+
 // checkAPIKeyRateLimits checks rate limit windows for an API key.
 // It loads usage from Redis cache (falling back to DB on cache miss),
 // resets expired windows in-memory and triggers async DB reset,

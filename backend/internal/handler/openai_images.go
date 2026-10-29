@@ -553,9 +553,13 @@ func (h *OpenAIGatewayHandler) billYunwuResult(c gatewayctx.GatewayContext, apiK
 	subscription, _ := middleware2.GetSubscriptionFromGatewayContext(c)
 	userAgent := c.HeaderValue("User-Agent")
 	clientIP := ip.GetClientIPContext(c)
+	// Billing must survive the client closing the connection after the body was
+	// flushed (see detachedBillingContext).
+	billingCtx, cancelBilling := detachedBillingContext(c.Context())
+	defer cancelBilling()
 
 	if meta.MediaCostMicroUSD > 0 {
-		if err := h.gatewayService.RecordYunwuMediaUsage(c.Context(), &service.RecordYunwuMediaUsageInput{
+		if err := h.gatewayService.RecordYunwuMediaUsage(billingCtx, &service.RecordYunwuMediaUsageInput{
 			APIKey:               apiKey,
 			User:                 apiKey.User,
 			AccountID:            meta.NodeID,
@@ -575,7 +579,7 @@ func (h *OpenAIGatewayHandler) billYunwuResult(c gatewayctx.GatewayContext, apiK
 
 	if meta.InputTokens > 0 || meta.OutputTokens > 0 {
 		result := service.BuildYunwuOpenAIForwardResult("", model, meta.InputTokens, meta.OutputTokens, stream, requestStart)
-		if err := h.gatewayService.RecordYunwuUsage(c.Context(), &service.OpenAIRecordYunwuUsageInput{
+		if err := h.gatewayService.RecordYunwuUsage(billingCtx, &service.OpenAIRecordYunwuUsageInput{
 			Result:        result,
 			APIKey:        apiKey,
 			User:          apiKey.User,

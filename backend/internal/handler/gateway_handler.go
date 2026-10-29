@@ -205,6 +205,17 @@ func (h *GatewayHandler) handleHypervisorMessages(c *gin.Context) {
 		platform = forcePlat
 	}
 
+	// The hypervisor dispatch happens before the shared validation block, so the
+	// API-key model allowlist and the per-window spend limits must be enforced
+	// here explicitly (see checkHypervisorRequestGuards).
+	if apiKey != nil {
+		if err := checkHypervisorRequestGuards(c.Request.Context(), h.billingCacheService, apiKey, requestedModel); err != nil {
+			status, code, message := hypervisorGuardStatus(err)
+			h.errorResponseGateway(transportCtx, status, code, message)
+			return
+		}
+	}
+
 	slog.Info("[GatewayHandler] Routing request via Hypervisor",
 		"platform", platform,
 		"owner_id", ownerID,
@@ -231,7 +242,11 @@ func (h *GatewayHandler) handleHypervisorMessages(c *gin.Context) {
 	if meta != nil && apiKey != nil && apiKey.User != nil {
 		subscription, _ := middleware2.GetSubscriptionFromGatewayContext(transportCtx)
 		result := service.BuildYunwuForwardResult("", requestedModel, meta.InputTokens, meta.OutputTokens, isStream, requestStart)
-		if billedErr := h.gatewayService.RecordYunwuUsage(c.Request.Context(), &service.RecordYunwuUsageInput{
+		// Billing must survive the client closing the connection after the body
+		// was flushed (see detachedBillingContext).
+		billingCtx, cancelBilling := detachedBillingContext(c.Request.Context())
+		defer cancelBilling()
+		if billedErr := h.gatewayService.RecordYunwuUsage(billingCtx, &service.RecordYunwuUsageInput{
 			Result:        result,
 			APIKey:        apiKey,
 			User:          apiKey.User,

@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log/slog"
 	"strconv"
 	"strings"
@@ -119,21 +121,36 @@ func resetYunwuProviderScopeCache() {
 	yunwuScopeMu.Unlock()
 }
 
-// recordYunwuAccount loads the yunwu account that served a request, used as the
-// billing account. The hypervisor identifies the executing node by account ID.
-func (s *GatewayService) recordYunwuAccount(ctx context.Context, accountID string) *Account {
-	if s == nil || s.accountRepo == nil {
-		return nil
+// lookupYunwuExecutionAccount resolves the execution node id reported by the
+// hypervisor to the account row that served the request. It preserves the
+// underlying error so a lookup failure (a cancelled context, a DB error) is
+// never silently mistaken for a missing account — billing is skipped entirely in
+// that case, so a hidden error means free traffic and no audit trail.
+func lookupYunwuExecutionAccount(ctx context.Context, repo AccountRepository, accountID string) (*Account, error) {
+	if repo == nil {
+		return nil, errors.New("account repository is not wired")
 	}
 	id, err := strconv.ParseInt(strings.TrimSpace(accountID), 10, 64)
 	if err != nil || id <= 0 {
-		return nil
+		return nil, fmt.Errorf("invalid execution node id %q", accountID)
 	}
-	acc, err := s.accountRepo.GetByID(ctx, id)
-	if err != nil || acc == nil {
-		return nil
+	acc, err := repo.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
 	}
-	return acc
+	if acc == nil {
+		return nil, ErrAccountNotFound
+	}
+	return acc, nil
+}
+
+// recordYunwuAccount loads the yunwu account that served a request, used as the
+// billing account. The hypervisor identifies the executing node by account ID.
+func (s *GatewayService) recordYunwuAccount(ctx context.Context, accountID string) (*Account, error) {
+	if s == nil {
+		return nil, errors.New("gateway service is nil")
+	}
+	return lookupYunwuExecutionAccount(ctx, s.accountRepo, accountID)
 }
 
 // RecordYunwuUsage records usage and deducts the end-user balance for a request
@@ -142,12 +159,13 @@ func (s *GatewayService) RecordYunwuUsage(ctx context.Context, input *RecordYunw
 	if s == nil || input == nil || input.Result == nil || input.APIKey == nil || input.User == nil {
 		return nil
 	}
-	account := s.recordYunwuAccount(ctx, input.AccountID)
+	account, accountErr := s.recordYunwuAccount(ctx, input.AccountID)
 	if account == nil {
-		slog.Warn("[YunwuBilling] Skipping usage billing: execution account not found",
+		slog.Warn("[YunwuBilling] Skipping usage billing: execution account unavailable",
 			"account_id", input.AccountID,
 			"model", input.Result.Model,
 			"user_id", input.User.ID,
+			"error", accountErr,
 		)
 		return nil
 	}
@@ -188,19 +206,13 @@ func (s *OpenAIGatewayService) RecordYunwuUsage(ctx context.Context, input *Open
 	if s == nil || input == nil || input.Result == nil || input.APIKey == nil || input.User == nil {
 		return nil
 	}
-	if s.accountRepo == nil {
-		return nil
-	}
-	id, err := strconv.ParseInt(strings.TrimSpace(input.AccountID), 10, 64)
-	if err != nil || id <= 0 {
-		return nil
-	}
-	account, err := s.accountRepo.GetByID(ctx, id)
-	if err != nil || account == nil {
-		slog.Warn("[YunwuBilling] Skipping OpenAI usage billing: execution account not found",
+	account, accountErr := lookupYunwuExecutionAccount(ctx, s.accountRepo, input.AccountID)
+	if account == nil {
+		slog.Warn("[YunwuBilling] Skipping OpenAI usage billing: execution account unavailable",
 			"account_id", input.AccountID,
 			"model", input.Result.Model,
 			"user_id", input.User.ID,
+			"error", accountErr,
 		)
 		return nil
 	}
@@ -370,17 +382,10 @@ func recordYunwuMediaUsage(ctx context.Context, deps *billingDeps, billRepo Usag
 	if in == nil || deps == nil || in.APIKey == nil || in.User == nil {
 		return nil
 	}
-	if deps.accountRepo == nil {
-		return nil
-	}
-	id, err := strconv.ParseInt(strings.TrimSpace(in.AccountID), 10, 64)
-	if err != nil || id <= 0 {
-		return nil
-	}
-	account, err := deps.accountRepo.GetByID(ctx, id)
-	if err != nil || account == nil {
-		slog.Warn("[YunwuBilling] Skipping media billing: execution account not found",
-			"account_id", in.AccountID, "model", in.Model, "user_id", in.User.ID)
+	account, accountErr := lookupYunwuExecutionAccount(ctx, deps.accountRepo, in.AccountID)
+	if account == nil {
+		slog.Warn("[YunwuBilling] Skipping media billing: execution account unavailable",
+			"account_id", in.AccountID, "model", in.Model, "user_id", in.User.ID, "error", accountErr)
 		return nil
 	}
 	if multiplier <= 0 {

@@ -654,6 +654,14 @@ func (h *GatewayHandler) GeminiV1BetaModelsGateway(transportCtx gatewayctx.Gatew
 		return
 	}
 
+	// The Yunwu dispatch happens before the shared validation block, so the
+	// per-window spend limits must be enforced here explicitly.
+	if err := checkHypervisorRequestGuards(transportCtx.Context(), h.billingCacheService, apiKey, modelName); err != nil {
+		status, _, message := hypervisorGuardStatus(err)
+		googleErrorContext(transportCtx, status, message)
+		return
+	}
+
 	stream := action == "streamGenerateContent"
 	reqLog = reqLog.With(zap.String("model", modelName), zap.String("action", action), zap.Bool("stream", stream))
 
@@ -704,8 +712,12 @@ func (h *GatewayHandler) GeminiV1BetaModelsGateway(transportCtx gatewayctx.Gatew
 		// Bill the end user for the completed Unofficial-provider request.
 		if meta != nil && apiKey.User != nil {
 			sub, _ := middleware.GetSubscriptionFromGatewayContext(transportCtx)
+			// Billing must survive the client closing the connection after the
+			// body was flushed (see detachedBillingContext).
+			billingCtx, cancelBilling := detachedBillingContext(transportCtx.Context())
+			defer cancelBilling()
 			if meta.MediaCostMicroUSD > 0 {
-				if billedErr := h.gatewayService.RecordYunwuMediaUsage(transportCtx.Context(), &service.RecordYunwuMediaUsageInput{
+				if billedErr := h.gatewayService.RecordYunwuMediaUsage(billingCtx, &service.RecordYunwuMediaUsageInput{
 					APIKey:               apiKey,
 					User:                 apiKey.User,
 					AccountID:            meta.NodeID,
@@ -721,7 +733,7 @@ func (h *GatewayHandler) GeminiV1BetaModelsGateway(transportCtx gatewayctx.Gatew
 				}
 			} else if meta.InputTokens > 0 || meta.OutputTokens > 0 {
 				result := service.BuildYunwuForwardResult("", modelName, meta.InputTokens, meta.OutputTokens, stream, requestStart)
-				if billedErr := h.gatewayService.RecordYunwuUsage(transportCtx.Context(), &service.RecordYunwuUsageInput{
+				if billedErr := h.gatewayService.RecordYunwuUsage(billingCtx, &service.RecordYunwuUsageInput{
 					Result:        result,
 					APIKey:        apiKey,
 					User:          apiKey.User,
