@@ -243,6 +243,15 @@ func (w *StatsWorker) SyncNodeStats(ctx context.Context, node *health.ExecutionN
 		return nil, err
 	}
 
+	// Which billing group the key itself lives in decides the rate the provider
+	// charges us, so it is detected independently of which endpoint answers the
+	// balance question. Best effort: an empty answer simply leaves the resolution
+	// at the account's explicit pin (or the provider default).
+	detectedGroup := ""
+	if !strings.Contains(strings.ToLower(baseURL), "portdan") {
+		detectedGroup = w.detectKeyGroup(ctx, origin, apiPrefix, apiKey)
+	}
+
 	provider := ""
 	if node != nil {
 		provider = CanonicalProvider(node.Provider)
@@ -253,7 +262,7 @@ func (w *StatsWorker) SyncNodeStats(ctx context.Context, node *health.ExecutionN
 	if provider == ProviderPortdan || strings.Contains(strings.ToLower(baseURL), "portdan") {
 		sub2Grants, errSub2 := w.syncSub2APIUsage(ctx, origin, apiPrefix, apiKey)
 		if errSub2 == nil && sub2Grants != nil {
-			w.recordSyncedSnapshot(ctx, node, sub2Grants, "sub2api_usage")
+			w.recordSyncedSnapshotWithGroup(ctx, node, sub2Grants, "sub2api_usage", detectedGroup)
 			return sub2Grants, nil
 		}
 	}
@@ -261,14 +270,14 @@ func (w *StatsWorker) SyncNodeStats(ctx context.Context, node *health.ExecutionN
 	// Strategy 1: Primary OpenAI / DeepSeek credit_grants endpoint
 	grants, errGrants := w.syncCreditGrants(ctx, origin, apiPrefix, apiKey)
 	if errGrants == nil && grants != nil && (grants.TotalAvailable > 0 || grants.TotalGranted > 0) {
-		w.recordSyncedSnapshot(ctx, node, grants, "credit_grants")
+		w.recordSyncedSnapshotWithGroup(ctx, node, grants, "credit_grants", detectedGroup)
 		return grants, nil
 	}
 
 	// Strategy 2: Direct subscription available balance (e.g. OpenLux / OpenAI with explicit total_available)
 	subGrants, errSub := w.syncSubscriptionUsage(ctx, origin, apiPrefix, apiKey)
 	if errSub == nil && subGrants != nil && subGrants.Object == "subscription_direct" && subGrants.TotalAvailable > 0 {
-		w.recordSyncedSnapshot(ctx, node, subGrants, "subscription")
+		w.recordSyncedSnapshotWithGroup(ctx, node, subGrants, "subscription", detectedGroup)
 		return subGrants, nil
 	}
 
@@ -278,7 +287,7 @@ func (w *StatsWorker) SyncNodeStats(ctx context.Context, node *health.ExecutionN
 	// If the token has a limited quota (even if 0 balance), it is authoritative.
 	tokenGrants, errToken := w.syncNewAPITokenUsage(ctx, origin, apiPrefix, apiKey)
 	if errToken == nil && tokenGrants != nil {
-		w.recordSyncedSnapshot(ctx, node, tokenGrants, "token_usage")
+		w.recordSyncedSnapshotWithGroup(ctx, node, tokenGrants, "token_usage", detectedGroup)
 		return tokenGrants, nil
 	}
 
@@ -287,53 +296,53 @@ func (w *StatsWorker) SyncNodeStats(ctx context.Context, node *health.ExecutionN
 	// before relying on unverified hard limits.
 	userGrants, errUser := w.syncUserSelf(ctx, origin, apiPrefix, apiKey)
 	if errUser == nil && userGrants != nil && (userGrants.TotalAvailable > 0 || userGrants.TotalGranted > 0) {
-		w.recordSyncedSnapshot(ctx, node, userGrants, "user_self")
+		w.recordSyncedSnapshotWithGroup(ctx, node, userGrants, "user_self", detectedGroup)
 		return userGrants, nil
 	}
 
 	// Strategy 5: Subscription with usage subtraction calculation (when total_available wasn't direct)
 	if errSub == nil && subGrants != nil && (subGrants.TotalAvailable > 0 || subGrants.TotalGranted > 0) {
-		w.recordSyncedSnapshot(ctx, node, subGrants, "subscription")
+		w.recordSyncedSnapshotWithGroup(ctx, node, subGrants, "subscription", detectedGroup)
 		return subGrants, nil
 	}
 
 	// Strategy 6: Gateway usage endpoint (/v1/usage, /usage)
 	sub2Grants, errSub2 := w.syncSub2APIUsage(ctx, origin, apiPrefix, apiKey)
 	if errSub2 == nil && sub2Grants != nil && (sub2Grants.TotalAvailable > 0 || sub2Grants.TotalGranted > 0) {
-		w.recordSyncedSnapshot(ctx, node, sub2Grants, "sub2api_usage")
+		w.recordSyncedSnapshotWithGroup(ctx, node, sub2Grants, "sub2api_usage", detectedGroup)
 		return sub2Grants, nil
 	}
 
 	// Strategy 7: Fallback endpoint scanner (token list, simple balance, etc.)
 	fallbackGrants, errFallback := w.syncNodeStatsFallback(ctx, node, apiKey, origin)
 	if errFallback == nil && fallbackGrants != nil && (fallbackGrants.TotalAvailable > 0 || fallbackGrants.TotalGranted > 0) {
-		w.recordSyncedSnapshot(ctx, node, fallbackGrants, "fallback")
+		w.recordSyncedSnapshotWithGroup(ctx, node, fallbackGrants, "fallback", detectedGroup)
 		return fallbackGrants, nil
 	}
 
 	// If we got a valid response even if 0 available balance
 	if tokenGrants != nil {
-		w.recordSyncedSnapshot(ctx, node, tokenGrants, "token_usage_zero")
+		w.recordSyncedSnapshotWithGroup(ctx, node, tokenGrants, "token_usage_zero", detectedGroup)
 		return tokenGrants, nil
 	}
 	if userGrants != nil {
-		w.recordSyncedSnapshot(ctx, node, userGrants, "user_self_zero")
+		w.recordSyncedSnapshotWithGroup(ctx, node, userGrants, "user_self_zero", detectedGroup)
 		return userGrants, nil
 	}
 	if sub2Grants != nil {
-		w.recordSyncedSnapshot(ctx, node, sub2Grants, "sub2api_usage_zero")
+		w.recordSyncedSnapshotWithGroup(ctx, node, sub2Grants, "sub2api_usage_zero", detectedGroup)
 		return sub2Grants, nil
 	}
 	if fallbackGrants != nil {
-		w.recordSyncedSnapshot(ctx, node, fallbackGrants, "fallback_zero")
+		w.recordSyncedSnapshotWithGroup(ctx, node, fallbackGrants, "fallback_zero", detectedGroup)
 		return fallbackGrants, nil
 	}
 	if subGrants != nil {
-		w.recordSyncedSnapshot(ctx, node, subGrants, "subscription_zero")
+		w.recordSyncedSnapshotWithGroup(ctx, node, subGrants, "subscription_zero", detectedGroup)
 		return subGrants, nil
 	}
 	if grants != nil {
-		w.recordSyncedSnapshot(ctx, node, grants, "credit_grants_zero")
+		w.recordSyncedSnapshotWithGroup(ctx, node, grants, "credit_grants_zero", detectedGroup)
 		return grants, nil
 	}
 
@@ -692,8 +701,12 @@ func (w *StatsWorker) syncNewAPITokenUsage(ctx context.Context, origin, apiPrefi
 		}
 
 		type tokenData struct {
-			Object         string  `json:"object"`
-			Name           string  `json:"name"`
+			Object string `json:"object"`
+			Name   string `json:"name"`
+			// The TOKEN's own billing group (New-API/One-API forks that expose it
+			// here). It is the authoritative group of the key we call with — more
+			// precise than the owner's group from /api/user/self.
+			Group          string  `json:"group"`
 			TotalGranted   float64 `json:"total_granted"`
 			TotalUsed      float64 `json:"total_used"`
 			TotalAvailable float64 `json:"total_available"`
@@ -759,11 +772,16 @@ func (w *StatsWorker) syncNewAPITokenUsage(ctx context.Context, origin, apiPrefi
 			grantedUSD = availUSD + usedUSD
 		}
 
+		group := strings.TrimSpace(td.Group)
+		if group == "" {
+			group = strings.TrimSpace(envelope.Group)
+		}
 		return &YunwuCreditGrantsResponse{
 			Object:         "token_usage",
 			TotalGranted:   grantedUSD,
 			TotalUsed:      usedUSD,
 			TotalAvailable: availUSD,
+			Group:          group,
 		}, nil
 	}
 	return nil, lastErr
@@ -1060,6 +1078,93 @@ func maxFloat64(a, b float64) float64 {
 		return a
 	}
 	return b
+}
+
+// recordSyncedSnapshotWithGroup records a synced snapshot, attaching the key's
+// detected billing group when the balance source that answered did not report one
+// itself (only /api/usage/token and /api/user/self expose a group).
+func (w *StatsWorker) recordSyncedSnapshotWithGroup(ctx context.Context, node *health.ExecutionNode, grants *YunwuCreditGrantsResponse, source, detectedGroup string) {
+	if grants != nil && strings.TrimSpace(grants.Group) == "" && detectedGroup != "" {
+		grants.Group = detectedGroup
+	}
+	w.recordSyncedSnapshot(ctx, node, grants, source)
+}
+
+// detectKeyGroup asks the provider which billing group OUR KEY belongs to. The
+// token endpoint is preferred (that is the key's own group); /api/user/self is
+// the fallback (the owner's group, which a key without its own group inherits).
+// Returns "" when the provider exposes neither.
+func (w *StatsWorker) detectKeyGroup(ctx context.Context, origin, apiPrefix, apiKey string) string {
+	if strings.TrimSpace(apiKey) == "" {
+		return ""
+	}
+	urls := []string{
+		origin + "/api/usage/token",
+		origin + apiPrefix + "/usage/token",
+		origin + "/v1/api/usage/token",
+		origin + apiPrefix + "/v1/usage/token",
+		origin + "/api/user/self",
+		origin + apiPrefix + "/user/self",
+		origin + "/v1/user/self",
+		origin + "/api/user/balance",
+	}
+	seen := make(map[string]bool, len(urls))
+	for _, u := range urls {
+		if u == "" || seen[u] {
+			continue
+		}
+		seen[u] = true
+		if group := w.fetchGroupFrom(ctx, u, apiKey); group != "" {
+			return group
+		}
+	}
+	return ""
+}
+
+// fetchGroupFrom reads the `group` field from one provider endpoint (either
+// `data.group` or a top-level `group`), tolerating the HTML/SPA and non-JSON
+// answers these endpoints sometimes return.
+func (w *StatsWorker) fetchGroupFrom(ctx context.Context, url, apiKey string) string {
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return ""
+	}
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+	req.Header.Set("x-api-key", apiKey)
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := w.httpClient.Do(req)
+	if err != nil {
+		return ""
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return ""
+	}
+	if contentType := resp.Header.Get("Content-Type"); contentType != "" && !strings.Contains(contentType, "json") {
+		return ""
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		return ""
+	}
+	trimmed := strings.TrimSpace(string(body))
+	if trimmed == "" || strings.HasPrefix(trimmed, "<") {
+		return ""
+	}
+	var envelope struct {
+		Group string `json:"group"`
+		Data  struct {
+			Group string `json:"group"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(trimmed), &envelope); err != nil {
+		return ""
+	}
+	if group := strings.TrimSpace(envelope.Data.Group); group != "" {
+		return group
+	}
+	return strings.TrimSpace(envelope.Group)
 }
 
 func (w *StatsWorker) recordSyncedSnapshot(ctx context.Context, node *health.ExecutionNode, grants *YunwuCreditGrantsResponse, source string) {

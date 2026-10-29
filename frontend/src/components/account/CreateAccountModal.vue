@@ -416,19 +416,24 @@
         <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
             <label class="input-label">{{ t('ui.createAccountModal.smartGroupName') }}</label>
-            <input v-model="yunwuSmartGroupName" type="text" class="input font-mono" placeholder="default" />
+            <select v-model="yunwuSmartGroupName" class="input" data-tour="account-smart-group">
+              <option value="">{{ t('ui.createAccountModal.groupOptionAuto') }}</option>
+              <option v-for="group in smartGroupOptions" :key="group.value" :value="group.value">
+                {{ group.label }}
+              </option>
+            </select>
           </div>
           <div>
             <label class="input-label">{{ t('ui.createAccountModal.fastGroupName') }}</label>
-            <input
-              v-model="yunwuFastGroupName"
-              type="text"
-              class="input font-mono"
-              :placeholder="yunwuSmartGroupName || 'fast'"
-            />
+            <select v-model="yunwuFastGroupName" class="input" data-tour="account-fast-group">
+              <option value="">{{ t('ui.createAccountModal.groupOptionSameAsSmart') }}</option>
+              <option v-for="group in fastGroupOptions" :key="group.value" :value="group.value">
+                {{ group.label }}
+              </option>
+            </select>
           </div>
         </div>
-        <p class="-mt-2 input-hint">{{ t('ui.createAccountModal.providerGroupHint') }}</p>
+        <p class="-mt-2 input-hint">{{ providerGroupsLoading ? t('ui.createAccountModal.groupOptionsLoading') : t('ui.createAccountModal.providerGroupHint') }}</p>
 
         <!-- Custom Model Mapping -->
         <div class="rounded-lg border border-gray-200 bg-white/70 p-3.5 dark:border-dark-700 dark:bg-dark-900/40">
@@ -3225,6 +3230,7 @@ import {
   isValidWildcardPattern
 } from '@/composables/useModelWhitelist'
 import { useAuthStore } from '@/stores/auth'
+import { useProviderBillingGroups } from '@/composables/useProviderBillingGroups'
 import { adminAPI } from '@/api/admin'
 import {
   useAccountOAuth,
@@ -3439,8 +3445,35 @@ const yunwuSupportedFamilies = ref<string[]>(['claude', 'gpt', 'gemini', 'kimi',
 // node advertises both tiers and every request uses its one key.
 const yunwuTieringDisabled = ref(false)
 // Provider billing groups the account's keys were issued in (prices the tier).
+// The options are the provider's OWN groups, loaded from its price list.
 const yunwuSmartGroupName = ref('')
 const yunwuFastGroupName = ref('')
+const {
+  loading: providerGroupsLoading,
+  load: loadProviderGroups,
+  optionsWith: providerGroupOptionsWith
+} = useProviderBillingGroups()
+const smartGroupOptions = computed(() => providerGroupOptionsWith(yunwuSmartGroupName.value))
+const fastGroupOptions = computed(() => providerGroupOptionsWith(yunwuFastGroupName.value))
+
+/** Load the groups of the selected provider (a custom one through its base_url). */
+const refreshProviderGroups = () => {
+  if (form.platform !== 'yunwu') return
+  const provider = yunwuProvider.value === 'custom'
+    ? (yunwuCustomProvider.value.trim() || 'custom')
+    : yunwuProvider.value
+  if (!provider) return
+  const baseUrl = yunwuProvider.value === 'custom' ? yunwuBaseUrl.value.trim() : undefined
+  if (yunwuProvider.value === 'custom' && !baseUrl) return
+  void loadProviderGroups(provider, baseUrl)
+}
+
+watch(
+  [() => props.show, () => form.platform, yunwuProvider, yunwuCustomProvider, yunwuBaseUrl],
+  ([show]) => {
+    if (show) refreshProviderGroups()
+  }
+)
 interface YunwuMappingRow {
   canonical: string
   upstream: string

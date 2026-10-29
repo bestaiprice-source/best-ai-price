@@ -378,6 +378,7 @@ func ExecutableAdminRoutes(h *handler.Handlers) []gatewayctx.RouteDef {
 			gatewayctx.RouteDef{Method: http.MethodPost, Path: "/api/v1/admin/providers/:id/test", Handler: h.Admin.Provider.TestConnectionGateway, Middleware: []string{"request_logger", "cors", "security_headers", "client_request_id", "admin_auth"}},
 			gatewayctx.RouteDef{Method: http.MethodPost, Path: "/api/v1/admin/providers/sync-all", Handler: h.Admin.Provider.SyncAllBalancesGateway, Middleware: []string{"request_logger", "cors", "security_headers", "client_request_id", "admin_auth"}},
 			gatewayctx.RouteDef{Method: http.MethodPost, Path: "/api/v1/admin/providers/test", Handler: h.Admin.Provider.TestDraftConnectionGateway, Middleware: []string{"request_logger", "cors", "security_headers", "client_request_id", "admin_auth"}},
+			gatewayctx.RouteDef{Method: http.MethodGet, Path: "/api/v1/admin/providers/groups", Handler: h.Admin.Provider.ListBillingGroupsGateway, Middleware: []string{"request_logger", "cors", "security_headers", "client_request_id", "admin_auth"}},
 			gatewayctx.RouteDef{Method: http.MethodGet, Path: "/api/v1/admin/model-routes", Handler: h.Admin.Provider.ModelRoutesGateway, Middleware: []string{"request_logger", "cors", "security_headers", "client_request_id", "admin_auth"}},
 		)
 	}
@@ -552,6 +553,8 @@ func registerProviderRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	{
 		providers.GET("", h.Admin.Provider.List)
 		providers.POST("", h.Admin.Provider.Create)
+		// Registered before /:id so the static path is never read as an id.
+		providers.GET("/groups", h.Admin.Provider.ListBillingGroups)
 		providers.GET("/:id", h.Admin.Provider.GetByID)
 		providers.PUT("/:id", h.Admin.Provider.Update)
 		providers.DELETE("/:id", h.Admin.Provider.Delete)

@@ -234,3 +234,26 @@ export async function getModelRoutes(filters?: { group_id?: number; model?: stri
   const { data } = await apiClient.get<ModelRoutesResponse>('/admin/model-routes', { params: filters })
   return data
 }
+
+/**
+ * The billing groups a provider's price list exposes — the dropdown source for
+ * the key-group fields of an account.
+ */
+export interface ProviderBillingGroup {
+  name: string
+  ratio: number
+  models: number
+}
+
+export interface ProviderBillingGroupsResponse {
+  provider: string
+  groups: ProviderBillingGroup[]
+}
+
+export async function getBillingGroups(params: {
+  provider?: string
+  base_url?: string
+}): Promise<ProviderBillingGroupsResponse> {
+  const { data } = await apiClient.get<ProviderBillingGroupsResponse>('/admin/providers/groups', { params })
+  return data
+}

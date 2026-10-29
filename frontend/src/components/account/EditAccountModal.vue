@@ -191,24 +191,24 @@
           <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
               <label class="input-label">{{ t('ui.editAccountModal.smartGroupName') }}</label>
-              <input
-                v-model="yunwuSmartGroupName"
-                type="text"
-                class="input font-mono"
-                placeholder="default"
-              />
+              <select v-model="yunwuSmartGroupName" class="input" data-tour="account-smart-group">
+                <option value="">{{ t('ui.editAccountModal.groupOptionAuto') }}</option>
+                <option v-for="group in smartGroupOptions" :key="group.value" :value="group.value">
+                  {{ group.label }}
+                </option>
+              </select>
             </div>
             <div>
               <label class="input-label">{{ t('ui.editAccountModal.fastGroupName') }}</label>
-              <input
-                v-model="yunwuFastGroupName"
-                type="text"
-                class="input font-mono"
-                :placeholder="yunwuSmartGroupName || 'fast'"
-              />
+              <select v-model="yunwuFastGroupName" class="input" data-tour="account-fast-group">
+                <option value="">{{ t('ui.editAccountModal.groupOptionSameAsSmart') }}</option>
+                <option v-for="group in fastGroupOptions" :key="group.value" :value="group.value">
+                  {{ group.label }}
+                </option>
+              </select>
             </div>
           </div>
-          <p class="-mt-2 input-hint">{{ t('ui.editAccountModal.providerGroupHint') }}</p>
+          <p class="-mt-2 input-hint">{{ providerGroupsLoading ? t('ui.editAccountModal.groupOptionsLoading') : t('ui.editAccountModal.providerGroupHint') }}</p>
 
           <!-- Protocol & Alert Threshold -->
           <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -1946,6 +1946,7 @@ import { ref, reactive, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
+import { useProviderBillingGroups } from '@/composables/useProviderBillingGroups'
 import { adminAPI } from '@/api/admin'
 import type { Account, Proxy, AdminGroup, CheckMixedChannelResponse } from '@/types'
 import BaseDialog from '@/components/common/BaseDialog.vue'
@@ -2067,8 +2068,29 @@ const yunwuSupportedFamilies = ref<string[]>(['claude', 'gpt', 'gemini', 'kimi',
 // through its one key, so the tier stops influencing that node's routing.
 const yunwuTieringDisabled = ref(false)
 // Provider billing groups the account's keys were issued in (prices the tier).
+// The options are the provider's OWN groups, loaded from its price list.
 const yunwuSmartGroupName = ref('')
 const yunwuFastGroupName = ref('')
+const {
+  loading: providerGroupsLoading,
+  load: loadProviderGroups,
+  optionsWith: providerGroupOptionsWith
+} = useProviderBillingGroups()
+const smartGroupOptions = computed(() => providerGroupOptionsWith(yunwuSmartGroupName.value))
+const fastGroupOptions = computed(() => providerGroupOptionsWith(yunwuFastGroupName.value))
+
+/** Reload the provider's groups for the account being edited (a custom endpoint
+ *  is read through its own base_url). */
+const refreshProviderGroups = () => {
+  if (props.account?.platform !== 'yunwu') return
+  const provider = yunwuProvider.value === 'custom'
+    ? (yunwuCustomProvider.value.trim() || 'custom')
+    : yunwuProvider.value
+  if (!provider) return
+  const baseUrl = yunwuProvider.value === 'custom' ? editBaseUrl.value.trim() : undefined
+  if (yunwuProvider.value === 'custom' && !baseUrl) return
+  void loadProviderGroups(provider, baseUrl)
+}
 
 const YUNWU_PROVIDER_DEFAULTS: Record<string, string> = {
   openlux: 'https://api.openlux.ai/v1',
@@ -2358,6 +2380,7 @@ const syncFormFromAccount = (newAccount: Account | null) => {
     yunwuTieringDisabled.value = extra?.tiering_disabled === true
     yunwuSmartGroupName.value = typeof extra?.smart_group_name === 'string' ? extra.smart_group_name : ''
     yunwuFastGroupName.value = typeof extra?.fast_group_name === 'string' ? extra.fast_group_name : ''
+    refreshProviderGroups()
   } else {
     yunwuProvider.value = 'openlux'
     yunwuCustomProvider.value = ''

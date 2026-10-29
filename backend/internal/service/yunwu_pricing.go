@@ -9,6 +9,7 @@ import (
 	"math"
 	"net/http"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -624,6 +625,79 @@ func (s *YunwuPricingService) ResolveModelCandidates(modelName string) []string 
 // model-health read model joins monitored upstream ids onto catalog ids with it.
 func ModelNameCandidates(modelName string, aliases map[string]string) []string {
 	return yunwu.ModelNameCandidates(modelName, aliases)
+}
+
+// ProviderBillingGroup is one billing group a provider's price list exposes: a
+// group a key can be issued in plus its discount multiplier and how many models
+// it can serve. The admin panel offers these as a dropdown, so the group a key
+// lives in is picked by name instead of typed from memory.
+type ProviderBillingGroup struct {
+	Name   string  `json:"name"`
+	Ratio  float64 `json:"ratio"`
+	Models int     `json:"models"`
+}
+
+// AvailableBillingGroups lists the billing groups a provider advertises, cheapest
+// first. The provider's own price list is the source, so the dropdown can only
+// offer groups that really exist (and the ratio shown is the one that will be
+// charged). `default` is always included: it is the group a key gets when none
+// was chosen, and a provider that does not list it bills it at the official rate.
+func (s *YunwuPricingService) AvailableBillingGroups(ctx context.Context, provider string) []ProviderBillingGroup {
+	if s == nil {
+		return nil
+	}
+	prices, err := s.FetchPricingForProvider(ctx, provider)
+	if err != nil || len(prices) == 0 {
+		return nil
+	}
+	ratios := make(map[string]float64)
+	models := make(map[string]int)
+	for _, item := range prices {
+		if item == nil {
+			continue
+		}
+		for _, group := range item.EnableGroups {
+			group = strings.TrimSpace(group)
+			if group != "" {
+				models[group]++
+			}
+		}
+		// Every item carries the provider's full group_ratio map.
+		for name, ratio := range item.GroupRatios {
+			name = strings.TrimSpace(name)
+			if name == "" || ratio <= 0 {
+				continue
+			}
+			if _, seen := ratios[name]; !seen {
+				ratios[name] = ratio
+			}
+		}
+	}
+	// A model can be enabled for a group the ratio map omits: such a group bills
+	// at the official rate, so it is offered as 1.0 rather than hidden.
+	for name := range models {
+		if _, seen := ratios[name]; !seen {
+			ratios[name] = 1.0
+		}
+	}
+	if _, seen := ratios[yunwu.DefaultProviderGroupName]; !seen {
+		ratios[yunwu.DefaultProviderGroupName] = 1.0
+	}
+
+	out := make([]ProviderBillingGroup, 0, len(ratios))
+	for name, ratio := range ratios {
+		out = append(out, ProviderBillingGroup{Name: name, Ratio: ratio, Models: models[name]})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Ratio != out[j].Ratio {
+			return out[i].Ratio < out[j].Ratio
+		}
+		if out[i].Models != out[j].Models {
+			return out[i].Models > out[j].Models
+		}
+		return out[i].Name < out[j].Name
+	})
+	return out
 }
 
 // GetModelPricingForProvider resolves model pricing for a specific provider.

@@ -857,3 +857,74 @@ func TestSyncNodeStatsApiTopEndToEnd(t *testing.T) {
 		assert.InDelta(t, 197.0, grants.TotalUsed, 0.001)
 	})
 }
+
+// The provider billing group must come from OUR KEY when the provider exposes it
+// there: the token endpoint describes the key, /api/user/self only the owner.
+func TestDetectKeyGroupPrefersTheTokenEndpoint(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("token endpoint wins", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			switch r.URL.Path {
+			case "/api/usage/token":
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"data": map[string]any{"group": "Azure-Gpt-6"},
+				})
+			case "/api/user/self":
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"data": map[string]any{"group": "owner-group"},
+				})
+			default:
+				http.NotFound(w, r)
+			}
+		}))
+		defer server.Close()
+
+		sw := NewStatsWorker(nil)
+		sw.httpClient = server.Client()
+		assert.Equal(t, "Azure-Gpt-6", sw.detectKeyGroup(ctx, server.URL, "", "sk-key"))
+	})
+
+	t.Run("falls back to the owner's group", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == "/api/user/self" {
+				w.Header().Set("Content-Type", "application/json")
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"data": map[string]any{"group": "default"},
+				})
+				return
+			}
+			http.NotFound(w, r)
+		}))
+		defer server.Close()
+
+		sw := NewStatsWorker(nil)
+		sw.httpClient = server.Client()
+		assert.Equal(t, "default", sw.detectKeyGroup(ctx, server.URL, "", "sk-key"))
+	})
+
+	t.Run("no group anywhere", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"balance": 3.0}})
+		}))
+		defer server.Close()
+
+		sw := NewStatsWorker(nil)
+		sw.httpClient = server.Client()
+		assert.Equal(t, "", sw.detectKeyGroup(ctx, server.URL, "", "sk-key"))
+	})
+
+	t.Run("html spa answers are ignored", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "text/html")
+			_, _ = w.Write([]byte("<!DOCTYPE html><html></html>"))
+		}))
+		defer server.Close()
+
+		sw := NewStatsWorker(nil)
+		sw.httpClient = server.Client()
+		assert.Equal(t, "", sw.detectKeyGroup(ctx, server.URL, "", "sk-key"))
+	})
+}

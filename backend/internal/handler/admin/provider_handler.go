@@ -1335,6 +1335,52 @@ func (h *ProviderHandler) TestDraftConnectionGateway(c gatewayctx.GatewayContext
 	response.SuccessContext(gatewayJSONResponder{ctx: c}, res)
 }
 
+// ListBillingGroupsGateway returns the billing groups a provider's price list
+// exposes — the dropdown source for the account form's key-group fields.
+// GET /api/v1/admin/providers/groups?provider=openlux&base_url=...
+func (h *ProviderHandler) ListBillingGroupsGateway(c gatewayctx.GatewayContext) {
+	ctx := c.Request().Context()
+	provider := strings.TrimSpace(c.QueryValue("provider"))
+	if provider == "" {
+		provider = "openlux"
+	}
+	if baseURL := strings.TrimSpace(c.QueryValue("base_url")); baseURL != "" && h.yunwuPricing != nil {
+		// A draft or custom endpoint: register it under the provider key so its own
+		// price list (and therefore its own group names) is what we read.
+		if endpoint := providerPricingEndpoint(baseURL); endpoint != "" {
+			h.yunwuPricing.SetProviderPricingURL(provider, endpoint)
+		}
+	}
+	var groups []service.ProviderBillingGroup
+	if h.yunwuPricing != nil {
+		groups = h.yunwuPricing.AvailableBillingGroups(ctx, provider)
+	}
+	response.SuccessContext(gatewayJSONResponder{ctx: c}, map[string]any{
+		"provider": service.CanonicalPricingProvider(provider),
+		"groups":   groups,
+	})
+}
+
+// ListBillingGroups is the gin form of ListBillingGroupsGateway.
+func (h *ProviderHandler) ListBillingGroups(c *gin.Context) {
+	h.ListBillingGroupsGateway(gatewayctx.FromGin(c))
+}
+
+// providerPricingEndpoint turns a provider base URL into its price-list endpoint
+// (`<base>/api/pricing`), the One-API/New-API convention these providers follow.
+func providerPricingEndpoint(baseURL string) string {
+	base := strings.TrimSpace(baseURL)
+	if base == "" {
+		return ""
+	}
+	base = strings.TrimRight(base, "/")
+	base = strings.TrimSuffix(base, "/v1")
+	if strings.HasSuffix(base, "/api/pricing") {
+		return base
+	}
+	return base + "/api/pricing"
+}
+
 // performConnectionTest executes an HTTP test request to upstream base_url/v1/models and measures latency.
 func (h *ProviderHandler) performConnectionTest(ctx context.Context, baseURL, apiKey string) TestConnectionResponse {
 	cleanBase := strings.TrimRight(strings.TrimSuffix(strings.TrimRight(baseURL, "/"), "/v1"), "/")
