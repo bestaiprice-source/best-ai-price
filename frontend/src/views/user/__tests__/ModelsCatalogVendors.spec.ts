@@ -25,7 +25,11 @@ vi.mock('@/api/publicModels', () => ({
     { canonical_model_id: 'other/doubao-seedream-5-0-260128', native_price_usd: 0.018, native_price_unit: 'request' },
     { canonical_model_id: 'other/mj_imagine', native_price_usd: 0.048, native_price_unit: 'request' },
     { canonical_model_id: 'other/speech-02-hd', native_price_usd: 0.0012, native_price_unit: 'request' },
-    { canonical_model_id: 'other/veo_3_1', native_price_usd: 0.12, native_price_unit: 'request' }
+    { canonical_model_id: 'other/veo_3_1', native_price_usd: 0.12, native_price_unit: 'request' },
+    // Provider model names carrying no vendor prefix: TypeSafe AI's "jev" and
+    // Tencent's Hunyuan "hy4" (verified against the provider's own metadata).
+    { canonical_model_id: 'other/jev-1.14.0', native_price_usd: 0.0021, native_price_unit: 'request' },
+    { canonical_model_id: 'other/hy4-preview', native_price_usd: 0.0021, native_price_unit: 'request' }
   ])
 }))
 
@@ -90,6 +94,18 @@ describe('ModelsCatalogView vendor labels', () => {
     expect(texts.some((t: string) => t.startsWith('Other '))).toBe(false)
   })
 
+  it('names the vendors the provider leaves without a prefix', async () => {
+    const wrapper = await mountView()
+    const texts = chips(wrapper)
+
+    // `jev-*` is TypeSafe AI's System One; `hy4-preview` is Tencent's Hunyuan Hy4.
+    expect(texts).toContain('TypeSafe (1)')
+    expect(texts).toContain('Tencent (1)')
+    // The raw slug token must never be used as a label.
+    expect(wrapper.text()).not.toContain('Jev')
+    expect(wrapper.text()).not.toContain('Hy4')
+  })
+
   it('orders the pinned vendors first, then the rest by count then name', async () => {
     const wrapper = await mountView()
 
@@ -101,6 +117,8 @@ describe('ModelsCatalogView vendor labels', () => {
       'Midjourney (1)',
       'MiniMax (1)',
       'KIMI (1)',
+      'Tencent (1)',
+      'TypeSafe (1)',
       'xAI (1)',
       'GLM (1)'
     ])

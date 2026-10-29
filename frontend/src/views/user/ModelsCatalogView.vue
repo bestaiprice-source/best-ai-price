@@ -292,6 +292,8 @@ const VENDOR_LABELS: Record<string, string> = {
   iflytek: 'iFlytek',
   xiaomi: 'Xiaomi',
   suno: 'Suno',
+  tencent: 'Tencent',
+  typesafe: 'TypeSafe',
   'black-forest': 'Black Forest',
   other: 'Other'
 }
@@ -316,10 +318,18 @@ const OTHER_SLUG_VENDORS: Array<{ match: RegExp; vendor: string }> = [
   { match: /^z[-_]image/, vendor: 'alibaba' },
   { match: /^sparkdesk/, vendor: 'iflytek' },
   { match: /^mimo/, vendor: 'xiaomi' },
+  // 混元 Hy4 -> Tencent Hunyuan (provider group `hunyuan-1`).
+  { match: /^hy\d/, vendor: 'tencent' },
+  { match: /^hunyuan/, vendor: 'tencent' },
+  // TypeSafe AI "System One" structured-decision models (provider group `jev-1`).
+  { match: /^jev[-_]/, vendor: 'typesafe' },
   { match: /^veo[-_]?\d/, vendor: 'google' },
+  // Gemini image models; the provider lists them without a vendor prefix.
+  { match: /^nano[-_]banana/, vendor: 'google' },
   { match: /^qwq/, vendor: 'qwen' },
   { match: /^flux/, vendor: 'black-forest' },
-  { match: /^suno/, vendor: 'suno' }
+  { match: /^suno/, vendor: 'suno' },
+  { match: /^codex/, vendor: 'openai' }
 ]
 
 /** Display name for a vendor key, falling back to the raw key. */

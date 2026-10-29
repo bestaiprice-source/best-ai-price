@@ -1243,6 +1243,7 @@
 	import { useOnboardingStore } from '@/stores/onboarding'
 	import { useClipboard } from '@/composables/useClipboard'
 import { getPersistedPageSize } from '@/composables/usePersistedPageSize'
+import { useKeyTier } from '@/composables/useKeyTier'
 
 const { t } = useI18n()
 import { keysAPI, authAPI, usageAPI, userGroupsAPI } from '@/api'
@@ -1973,13 +1974,11 @@ const handleCreateKeyClick = async () => {
     await loadGroups()
   }
   if (!showEditModal.value) {
-    if (!isAdmin.value && hasTierGroups.value && !groups.value.some((g) => g.name.toLowerCase() === 'smart')) {
-      userTier.value = 'fast'
-    }
+    syncTierDefault()
     // Regular users do not pick an arbitrary group: they pick a billing tier and
     // the key is bound to that tier's group (default: smart), so the model
     // allowlist can resolve the group's platforms.
-    formData.value.group_ids = isAdmin.value ? [] : (selectedUserGroupId.value ? [selectedUserGroupId.value] : [])
+    formData.value.group_ids = isAdmin.value ? [] : (selectedGroupId.value ? [selectedGroupId.value] : [])
   }
   showCreateModal.value = true
 }
@@ -1996,28 +1995,14 @@ const defaultUserGroupId = computed<number | null>(() => {
   return yunwuGroup ? yunwuGroup.id : null
 })
 
-// Billing tiers for unofficial providers: the provider issues its keys inside two
-// groups — "fast" and "smart" — which differ in speed and price. A regular user
-// picks one at creation (smart by default); the key is bound to that group and
-// the gateway then uses the matching provider key and price.
-const TIER_GROUP_NAMES = ['smart', 'fast'] as const
-type UserTier = (typeof TIER_GROUP_NAMES)[number]
-const userTier = ref<UserTier>('smart')
-
-/** Tier groups the user may pick (admin-created groups literally named smart/fast). */
-const tierGroups = computed(() =>
-  TIER_GROUP_NAMES.filter((name) => groups.value.some((g) => g.name.toLowerCase() === name))
+// Billing tiers (fast / smart): a regular user picks one at creation and the key
+// is bound to that tier's group, so the gateway uses the matching provider key
+// and price. Rules live in composables/useKeyTier.ts.
+const { userTier, tierGroups, hasTierGroups, selectedGroupId, syncTierDefault } = useKeyTier(
+  groups,
+  isAdmin,
+  defaultUserGroupId
 )
-const hasTierGroups = computed(() => tierGroups.value.length > 0)
-
-/** Group the key will be bound to: the picked tier group, else the default group. */
-const selectedUserGroupId = computed<number | null>(() => {
-  if (!isAdmin.value && hasTierGroups.value) {
-    const match = groups.value.find((g) => g.name.toLowerCase() === userTier.value)
-    if (match) return match.id
-  }
-  return defaultUserGroupId.value
-})
 
 // Key management for regular users: label, expiration, batch quantity, quota
 // (unlimited or a USD cap), model allowlist and IP allowlist. Admin-only fields
@@ -2063,7 +2048,7 @@ const submitUserKey = async () => {
       })
       appStore.showSuccess(t('keys.keyUpdatedSuccess'))
     } else {
-      const gid = selectedUserGroupId.value
+      const gid = selectedGroupId.value
       // Batch creation: 1..99 keys, each name gets a random suffix when >1.
       const quantity = Math.min(Math.max(Math.trunc(Number(formData.value.quantity)) || 1, 1), 99)
       const created: string[] = []
