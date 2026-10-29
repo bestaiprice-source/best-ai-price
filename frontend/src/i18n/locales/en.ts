@@ -499,6 +499,22 @@ export default {
       unknown: 'No data'
     }
   },
+  // API speed test: one real minimal completion (max_tokens 1), measured.
+  speedTest: {
+    title: 'API speed',
+    subtitle: 'Runs one real request (max_tokens 1) and measures the time to the first token.',
+    model: 'Model',
+    run: 'Speed test',
+    running: 'Measuring…',
+    idle: 'No measurement yet — run a test to see your latency.',
+    ttft: 'to first token',
+    total: 'Total',
+    tokens: 'Tokens in / out',
+    servedBy: 'Served by',
+    loadingModels: 'Loading models…',
+    modelsFailed: 'Failed to load the model list',
+    failed: 'Speed test failed'
+  },
   modelsCatalog: {
     discountTitle: '-{percent}% from the official price',
     title: 'Models & Pricing',

@@ -67,6 +67,13 @@ func ExecutableUserRoutes(h *handler.Handlers) []gatewayctx.RouteDef {
 			gatewayctx.RouteDef{Method: http.MethodPost, Path: "/api/v1/usage/dashboard/api-keys-usage", Handler: h.Usage.DashboardAPIKeysUsageGateway, Middleware: []string{"request_logger", "cors", "security_headers", "client_request_id", "jwt_auth", "backend_mode_user_guard"}},
 		)
 	}
+	if h.Gateway != nil {
+		out = append(out,
+			// Runs one minimal REAL completion on the caller's own key and reports
+			// the latency; billed like any other request.
+			gatewayctx.RouteDef{Method: http.MethodPost, Path: "/api/v1/usage/speed-test", Handler: h.Gateway.ModelSpeedTestGateway, Middleware: []string{"request_logger", "cors", "security_headers", "client_request_id", "jwt_auth", "backend_mode_user_guard"}},
+		)
+	}
 	if h.Totp != nil {
 		out = append(out,
 			gatewayctx.RouteDef{Method: http.MethodGet, Path: "/api/v1/user/totp/status", Handler: h.Totp.GetStatusGateway, Middleware: []string{"request_logger", "cors", "security_headers", "client_request_id", "jwt_auth", "backend_mode_user_guard"}},
@@ -141,6 +148,8 @@ func RegisterUserRoutes(
 			usage.GET("/dashboard/trend", h.Usage.DashboardTrend)
 			usage.GET("/dashboard/models", h.Usage.DashboardModels)
 			usage.POST("/dashboard/api-keys-usage", h.Usage.DashboardAPIKeysUsage)
+			// Real minimal completion for the speed test (runs on the caller's key).
+			usage.POST("/speed-test", h.Gateway.ModelSpeedTest)
 		}
 
 		// 公告（用户可见）

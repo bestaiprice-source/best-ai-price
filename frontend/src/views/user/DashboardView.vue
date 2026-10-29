@@ -62,6 +62,9 @@
         <!-- Per-model probe health (channel monitors) — not gated on `stats`. -->
         <UserDashboardModelHealth />
 
+        <!-- API speed: one real minimal completion, measured. -->
+        <UserDashboardSpeedTest />
+
         <template v-if="stats">
           <!-- Core & Token Stats -->
           <UserDashboardStats
@@ -108,6 +111,7 @@ import AppLayout from '@/components/layout/AppLayout.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import UserDashboardOnboarding from '@/components/user/dashboard/UserDashboardOnboarding.vue'
 import UserDashboardModelHealth from '@/components/user/dashboard/UserDashboardModelHealth.vue'
+import UserDashboardSpeedTest from '@/components/user/dashboard/UserDashboardSpeedTest.vue'
 import UserDashboardStats from '@/components/user/dashboard/UserDashboardStats.vue'
 import UserDashboardCharts from '@/components/user/dashboard/UserDashboardCharts.vue'
 import UserDashboardRecentUsage from '@/components/user/dashboard/UserDashboardRecentUsage.vue'

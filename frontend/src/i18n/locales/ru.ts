@@ -499,6 +499,22 @@ export default {
       unknown: 'Нет данных'
     }
   },
+  // API speed test: one real minimal completion (max_tokens 1), measured.
+  speedTest: {
+    title: 'Скорость API',
+    subtitle: 'Делает один реальный запрос (max_tokens 1) и меряет время до первого токена.',
+    model: 'Модель',
+    run: 'Speed Test',
+    running: 'Измеряем…',
+    idle: 'Замера ещё нет — запусти тест, чтобы увидеть задержку.',
+    ttft: 'до первого токена',
+    total: 'Всего',
+    tokens: 'Токенов вход / выход',
+    servedBy: 'Обслужил',
+    loadingModels: 'Загружаем модели…',
+    modelsFailed: 'Не удалось загрузить список моделей',
+    failed: 'Speed Test не удался'
+  },
   modelsCatalog: {
     discountTitle: '-{percent}% от официальной цены',
     title: 'Модели и цены',
