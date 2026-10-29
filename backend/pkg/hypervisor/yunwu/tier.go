@@ -3,6 +3,7 @@ package yunwu
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/runtime"
 )
@@ -77,6 +78,160 @@ func TierGroupName(tier string) string {
 		return normalized
 	}
 	return runtime.TierSmart
+}
+
+// Extra keys that pin the provider billing group an account's keys were issued
+// in. They are account-level (`account.Extra`) settings, set in the admin panel
+// next to the fast key.
+const (
+	ExtraSmartGroupName = "smart_group_name"
+	ExtraFastGroupName  = "fast_group_name"
+)
+
+// TierGroupNames is the provider billing group each of an account's keys lives
+// in. Both fields are optional: an empty value keeps the legacy behaviour (the
+// smart tier falls back to the provider's cheapest enabled group, the fast tier
+// to the literal "fast" group).
+//
+// This exists because the group a key was issued in decides what the provider
+// actually charges us: providers name their groups freely (`Azure-Gpt-1`, `kiro`,
+// `Claude-满血`, or a group the pricing payload does not even list, which the
+// provider bills at the official rate). Deriving the tier's rate from the tier
+// NAME alone silently mispriced every account whose keys are not in a group
+// literally called `fast`.
+type TierGroupNames struct {
+	Smart string
+	Fast  string
+}
+
+// ParseTierGroupNames reads the pinned groups from an account's extra map.
+func ParseTierGroupNames(extra map[string]any) TierGroupNames {
+	return TierGroupNames{
+		Smart: extraString(extra, ExtraSmartGroupName),
+		Fast:  extraString(extra, ExtraFastGroupName),
+	}
+}
+
+// For returns the pinned group name for a tier. The fast tier falls back to the
+// smart group: providers commonly issue both keys inside the same group, so
+// configuring it once is enough.
+func (g TierGroupNames) For(tier string) string {
+	if runtime.NormalizeTier(tier) == runtime.TierFast {
+		if g.Fast != "" {
+			return g.Fast
+		}
+		return g.Smart
+	}
+	return g.Smart
+}
+
+// IsZero reports whether nothing is pinned, i.e. the legacy derivation applies.
+func (g TierGroupNames) IsZero() bool {
+	return g.Smart == "" && g.Fast == ""
+}
+
+// Merge keeps the receiver's values and fills the gaps from other — used when
+// deriving the provider-level group names of a provider's accounts (the first
+// configured value wins).
+func (g TierGroupNames) Merge(other TierGroupNames) TierGroupNames {
+	out := g
+	if out.Smart == "" {
+		out.Smart = other.Smart
+	}
+	if out.Fast == "" {
+		out.Fast = other.Fast
+	}
+	return out
+}
+
+// Map renders the pinned groups as a tier→group-name map, skipping empty ones.
+// The scheduler's node struct carries the groups this way.
+func (g TierGroupNames) Map() map[string]string {
+	out := make(map[string]string, 2)
+	if g.Smart != "" {
+		out[runtime.TierSmart] = g.Smart
+	}
+	if g.Fast != "" {
+		out[runtime.TierFast] = g.Fast
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+// ParseTierGroupMap reads a node's tier→group-name map (empty string values are
+// dropped).
+func ParseTierGroupMap(raw map[string]string) TierGroupNames {
+	if len(raw) == 0 {
+		return TierGroupNames{}
+	}
+	out := TierGroupNames{}
+	for tier, name := range raw {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			continue
+		}
+		switch runtime.NormalizeTier(tier) {
+		case runtime.TierFast:
+			out.Fast = name
+		case runtime.TierSmart:
+			out.Smart = name
+		}
+	}
+	return out
+}
+
+// GroupNameForTier returns the pinned group for a tier out of a node's
+// tier→group-name map, with the fast→smart fallback of TierGroupNames.For.
+func GroupNameForTier(groups map[string]string, tier string) string {
+	return ParseTierGroupMap(groups).For(tier)
+}
+
+func extraString(extra map[string]any, key string) string {
+	if len(extra) == 0 {
+		return ""
+	}
+	raw, ok := extra[key]
+	if !ok || raw == nil {
+		return ""
+	}
+	if s, isString := raw.(string); isString {
+		return strings.TrimSpace(s)
+	}
+	return ""
+}
+
+// ResolveTierGroupRatioForGroup resolves the discount multiplier for a tier,
+// honouring the provider group the account's key was pinned to.
+//
+// With a pinned group the answer mirrors how the provider itself bills that key:
+//
+//   - the group's ratio when the provider publishes one;
+//   - the OFFICIAL rate (1.0) when the provider prices per group but does not
+//     list the pinned group — that is what One-API/New-API charge for a group
+//     missing from `group_ratio` (and what a group named `default` gets);
+//   - the provider's single rate when it does not price per group at all.
+//
+// Without a pinned group the legacy behaviour applies (see ResolveTierGroupRatio).
+func ResolveTierGroupRatioForGroup(groupRatios map[string]float64, cheapest float64, tier, groupName string) (float64, bool) {
+	groupName = strings.TrimSpace(groupName)
+	if groupName == "" {
+		return ResolveTierGroupRatio(groupRatios, cheapest, tier)
+	}
+	if len(groupRatios) == 0 {
+		// The provider does not price per group: its single rate already is the
+		// price of whatever key we hold.
+		if cheapest > 0 {
+			return cheapest, true
+		}
+		return 1.0, true
+	}
+	if ratio, ok := groupRatios[groupName]; ok && ratio > 0 {
+		return ratio, true
+	}
+	// Pinned group is not listed: the provider bills it at the official rate.
+	return 1.0, true
 }
 
 // ResolveTierGroupRatio picks the discount multiplier (group_ratio) a request

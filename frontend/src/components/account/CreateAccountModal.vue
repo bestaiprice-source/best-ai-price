@@ -409,6 +409,27 @@
           </span>
         </label>
 
+        <!-- The provider billing groups the keys were issued in. The gateway
+             prices each tier with the rate of the group its key bills in, so
+             this must be the REAL group name from the provider console (e.g.
+             `default`) — not a tier name. Empty keeps the legacy derivation. -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label class="input-label">{{ t('ui.createAccountModal.smartGroupName') }}</label>
+            <input v-model="yunwuSmartGroupName" type="text" class="input font-mono" placeholder="default" />
+          </div>
+          <div>
+            <label class="input-label">{{ t('ui.createAccountModal.fastGroupName') }}</label>
+            <input
+              v-model="yunwuFastGroupName"
+              type="text"
+              class="input font-mono"
+              :placeholder="yunwuSmartGroupName || 'fast'"
+            />
+          </div>
+        </div>
+        <p class="-mt-2 input-hint">{{ t('ui.createAccountModal.providerGroupHint') }}</p>
+
         <!-- Custom Model Mapping -->
         <div class="rounded-lg border border-gray-200 bg-white/70 p-3.5 dark:border-dark-700 dark:bg-dark-900/40">
           <div class="flex items-center justify-between mb-2">
@@ -3417,6 +3438,9 @@ const yunwuSupportedFamilies = ref<string[]>(['claude', 'gpt', 'gemini', 'kimi',
 // billing tiers, so splitting it into fast/smart adds nothing. With this on the
 // node advertises both tiers and every request uses its one key.
 const yunwuTieringDisabled = ref(false)
+// Provider billing groups the account's keys were issued in (prices the tier).
+const yunwuSmartGroupName = ref('')
+const yunwuFastGroupName = ref('')
 interface YunwuMappingRow {
   canonical: string
   upstream: string
@@ -4225,6 +4249,8 @@ const resetForm = () => {
   yunwuMinBalance.value = 20
   yunwuSupportedFamilies.value = ['claude', 'gpt', 'gemini', 'kimi', 'other']
   yunwuTieringDisabled.value = false
+  yunwuSmartGroupName.value = ''
+  yunwuFastGroupName.value = ''
   yunwuModelMappings.value = []
   tempUnschedEnabled.value = false
   tempUnschedRules.value = []
@@ -4424,6 +4450,16 @@ const handleSubmit = async () => {
     // Only written when ON, so an untouched form keeps the previous extra shape.
     if (yunwuTieringDisabled.value) {
       extra.tiering_disabled = true
+    }
+    // The real provider billing group of each key: the charged rate follows it
+    // (a group the provider does not list bills at the official rate).
+    const smartGroupName = yunwuSmartGroupName.value.trim()
+    const fastGroupName = yunwuFastGroupName.value.trim()
+    if (smartGroupName) {
+      extra.smart_group_name = smartGroupName
+    }
+    if (fastGroupName) {
+      extra.fast_group_name = fastGroupName
     }
     const mappingObj: Record<string, string> = {}
     for (const row of yunwuModelMappings.value) {

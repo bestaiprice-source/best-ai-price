@@ -196,8 +196,8 @@ func (ppm *ProviderPriceManager) lookupModelInPricesMatch(prices map[string]Prov
 // pricedForTier turns a matched price into the request's tier price plus the
 // provider-side model name, failing closed when the provider prices per group
 // but publishes no rate for the request's tier.
-func (ppm *ProviderPriceManager) pricedForTier(ctx context.Context, p ProviderModelPrice, matchedModel string) (float64, float64, string, bool) {
-	in, out, ok := ppm.priceForTier(ctx, p)
+func (ppm *ProviderPriceManager) pricedForTier(ctx context.Context, p ProviderModelPrice, matchedModel string, groups map[string]string) (float64, float64, string, bool) {
+	in, out, ok := ppm.priceForTier(ctx, p, groups)
 	if !ok {
 		return 0, 0, "", false
 	}
@@ -434,11 +434,13 @@ func (ppm *ProviderPriceManager) fetchProviderPrices(ctx context.Context, endpoi
 }
 
 // priceForTier resolves a parsed provider price for the request's billing tier.
-// The provider charges per key group, so a fast request must be priced with the
-// fast group's rate. Returns ok=false when the provider prices per group but has
-// no rate for this tier's group (fail closed, never another group's rate).
-func (ppm *ProviderPriceManager) priceForTier(ctx context.Context, p ProviderModelPrice) (float64, float64, bool) {
-	ratio, ok := ResolveTierGroupRatio(p.GroupRatios, p.CheapestGroupRatio, TierFromContext(ctx))
+// The provider charges per key group, so a request must be priced with the rate
+// of the group its key was issued in — the group pinned on the node when one is
+// configured, otherwise the legacy derivation (cheapest enabled group for smart,
+// the literal `fast` group for fast, fail closed when it is unknown).
+func (ppm *ProviderPriceManager) priceForTier(ctx context.Context, p ProviderModelPrice, groups map[string]string) (float64, float64, bool) {
+	tier := TierFromContext(ctx)
+	ratio, ok := ResolveTierGroupRatioForGroup(p.GroupRatios, p.CheapestGroupRatio, tier, GroupNameForTier(groups, tier))
 	if !ok {
 		return 0, 0, false
 	}
@@ -501,7 +503,7 @@ func (ppm *ProviderPriceManager) ResolveNodePriceMatch(ctx context.Context, node
 			if !hasExp || time.Now().Before(exp) {
 				if p, matched, found := ppm.lookupModelInPricesMatch(prices, model); found {
 					ppm.mu.RUnlock()
-					return ppm.pricedForTier(ctx, p, matched)
+					return ppm.pricedForTier(ctx, p, matched, node.TierGroups)
 				}
 			}
 		}
@@ -583,7 +585,7 @@ func (ppm *ProviderPriceManager) ResolveNodePriceMatch(ctx context.Context, node
 			if !hasExp || time.Now().Before(exp) {
 				ppm.mu.RUnlock()
 				if p, matched, found := ppm.lookupModelInPricesMatch(prices, model); found {
-					return ppm.pricedForTier(ctx, p, matched)
+					return ppm.pricedForTier(ctx, p, matched, node.TierGroups)
 				}
 				return 0, 0, "", false
 			}
@@ -608,7 +610,7 @@ func (ppm *ProviderPriceManager) ResolveNodePriceMatch(ctx context.Context, node
 			ppm.mu.Unlock()
 
 			if p, matched, found := ppm.lookupModelInPricesMatch(fetchedPrices, model); found {
-				return ppm.pricedForTier(ctx, p, matched)
+				return ppm.pricedForTier(ctx, p, matched, node.TierGroups)
 			}
 			return 0, 0, "", false
 		}
@@ -619,7 +621,7 @@ func (ppm *ProviderPriceManager) ResolveNodePriceMatch(ctx context.Context, node
 		if prices, ok := ppm.cache[pricingURL]; ok {
 			ppm.mu.RUnlock()
 			if p, matched, found := ppm.lookupModelInPricesMatch(prices, model); found {
-				return ppm.pricedForTier(ctx, p, matched)
+				return ppm.pricedForTier(ctx, p, matched, node.TierGroups)
 			}
 		} else {
 			ppm.mu.RUnlock()
@@ -635,7 +637,7 @@ func (ppm *ProviderPriceManager) ResolveNodePriceMatch(ctx context.Context, node
 			if !hasExp || time.Now().Before(exp) {
 				if p, matched, found := ppm.lookupModelInPricesMatch(prices, model); found {
 					ppm.mu.RUnlock()
-					return ppm.pricedForTier(ctx, p, matched)
+					return ppm.pricedForTier(ctx, p, matched, node.TierGroups)
 				}
 			}
 		}

@@ -10,25 +10,31 @@ import (
 )
 
 type ExecutionNode struct {
-	NodeID       string    `json:"node_id"`
-	AccountName  string    `json:"account_name"`
-	Provider     string    `json:"provider"`
-	State        string    `json:"state"` // healthy, busy, limited, unavailable, cooldown
-	Capabilities []string  `json:"capabilities"`
-	Tiers        []string  `json:"tiers,omitempty"` // billing tiers the node holds a key for (smart/fast)
-	Priority     int       `json:"priority"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	NodeID       string   `json:"node_id"`
+	AccountName  string   `json:"account_name"`
+	Provider     string   `json:"provider"`
+	State        string   `json:"state"` // healthy, busy, limited, unavailable, cooldown
+	Capabilities []string `json:"capabilities"`
+	Tiers        []string `json:"tiers,omitempty"` // billing tiers the node holds a key for (smart/fast)
+	// TierGroups maps a billing tier to the upstream provider billing group that
+	// tier's key was issued in (account.Extra smart_group_name/fast_group_name).
+	// Empty means "not configured" — the price then follows the legacy
+	// derivation. The engine prices a candidate node with its own groups, so a
+	// pinned group must travel with the node.
+	TierGroups map[string]string `json:"tier_groups,omitempty"`
+	Priority   int               `json:"priority"`
+	UpdatedAt  time.Time         `json:"updated_at"`
 }
 
 type NodeRuntimeState struct {
-	NodeID             string     `json:"node_id"`
-	SuccessRate        float64    `json:"success_rate"`
-	AvgLatencyMs       int64      `json:"avg_latency_ms"`
-	QueueDepth         int        `json:"queue_depth"`
-	Recent429          int        `json:"recent_429"`
-	RecentTimeouts     int        `json:"recent_timeouts"`
-	UsedTokens         int64      `json:"used_tokens"`
-	TotalRequests      int64      `json:"total_requests"`
+	NodeID               string     `json:"node_id"`
+	SuccessRate          float64    `json:"success_rate"`
+	AvgLatencyMs         int64      `json:"avg_latency_ms"`
+	QueueDepth           int        `json:"queue_depth"`
+	Recent429            int        `json:"recent_429"`
+	RecentTimeouts       int        `json:"recent_timeouts"`
+	UsedTokens           int64      `json:"used_tokens"`
+	TotalRequests        int64      `json:"total_requests"`
 	SuccessfulRequests   int64      `json:"successful_requests"`
 	ConsecutiveSuccesses int        `json:"consecutive_successes"`
 	LastSuccessAt        *time.Time `json:"last_success_at,omitempty"`

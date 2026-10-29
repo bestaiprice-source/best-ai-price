@@ -183,6 +183,33 @@
             </p>
           </div>
 
+          <!-- The provider billing groups the two keys were issued in. The
+               gateway prices each tier with the rate of the group its key bills
+               in, so this must be the REAL group name from the provider console
+               (e.g. `default`, `Azure-Gpt-6`) — not a tier name. Leave empty to
+               keep the legacy derivation. -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label class="input-label">{{ t('ui.editAccountModal.smartGroupName') }}</label>
+              <input
+                v-model="yunwuSmartGroupName"
+                type="text"
+                class="input font-mono"
+                placeholder="default"
+              />
+            </div>
+            <div>
+              <label class="input-label">{{ t('ui.editAccountModal.fastGroupName') }}</label>
+              <input
+                v-model="yunwuFastGroupName"
+                type="text"
+                class="input font-mono"
+                :placeholder="yunwuSmartGroupName || 'fast'"
+              />
+            </div>
+          </div>
+          <p class="-mt-2 input-hint">{{ t('ui.editAccountModal.providerGroupHint') }}</p>
+
           <!-- Protocol & Alert Threshold -->
           <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
@@ -2039,6 +2066,9 @@ const yunwuSupportedFamilies = ref<string[]>(['claude', 'gpt', 'gemini', 'kimi',
 // Single-key mode (see CreateAccountModal): the node serves both billing tiers
 // through its one key, so the tier stops influencing that node's routing.
 const yunwuTieringDisabled = ref(false)
+// Provider billing groups the account's keys were issued in (prices the tier).
+const yunwuSmartGroupName = ref('')
+const yunwuFastGroupName = ref('')
 
 const YUNWU_PROVIDER_DEFAULTS: Record<string, string> = {
   openlux: 'https://api.openlux.ai/v1',
@@ -2326,6 +2356,8 @@ const syncFormFromAccount = (newAccount: Account | null) => {
       yunwuSupportedFamilies.value = ['claude', 'gpt', 'gemini', 'kimi', 'other']
     }
     yunwuTieringDisabled.value = extra?.tiering_disabled === true
+    yunwuSmartGroupName.value = typeof extra?.smart_group_name === 'string' ? extra.smart_group_name : ''
+    yunwuFastGroupName.value = typeof extra?.fast_group_name === 'string' ? extra.fast_group_name : ''
   } else {
     yunwuProvider.value = 'openlux'
     yunwuCustomProvider.value = ''
@@ -2334,6 +2366,8 @@ const syncFormFromAccount = (newAccount: Account | null) => {
     yunwuBalance.value = 0
     yunwuSupportedFamilies.value = ['claude', 'gpt', 'gemini', 'kimi', 'other']
     yunwuTieringDisabled.value = false
+    yunwuSmartGroupName.value = ''
+    yunwuFastGroupName.value = ''
   }
 
   // Load OpenAI passthrough toggle (OpenAI OAuth/API Key)
@@ -2601,6 +2635,8 @@ const syncFormFromAccount = (newAccount: Account | null) => {
   }
   editApiKey.value = ''
   editYunwuApiKeyFast.value = ''
+  yunwuSmartGroupName.value = ''
+  yunwuFastGroupName.value = ''
 }
 
 watch(
@@ -3487,6 +3523,20 @@ const handleSubmit = async () => {
         newExtra.tiering_disabled = true
       } else {
         delete newExtra.tiering_disabled
+      }
+      // The real provider billing group of each key: the charged rate follows it
+      // (a group the provider does not list bills at the official rate).
+      const smartGroupName = yunwuSmartGroupName.value.trim()
+      const fastGroupName = yunwuFastGroupName.value.trim()
+      if (smartGroupName) {
+        newExtra.smart_group_name = smartGroupName
+      } else {
+        delete newExtra.smart_group_name
+      }
+      if (fastGroupName) {
+        newExtra.fast_group_name = fastGroupName
+      } else {
+        delete newExtra.fast_group_name
       }
       updatePayload.extra = applyIgnorePauseSchedulingErrorsUpdate(newExtra)
     }

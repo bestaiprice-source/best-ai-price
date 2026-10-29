@@ -1460,6 +1460,7 @@ func (yh *YunwuHypervisor) getAllYunwuNodes(ctx context.Context) ([]health.Execu
 		families := ParseNodeModelFamilies(acc.Extra)
 		provider := ParseNodeProvider(acc.Extra)
 		tiers := SupportedTiersForAccount(acc.Credentials, acc.Extra)
+		tierGroups := ParseTierGroupNames(acc.Extra).Map()
 		if err != nil || node == nil {
 			node = &health.ExecutionNode{
 				NodeID:       nodeID,
@@ -1468,6 +1469,7 @@ func (yh *YunwuHypervisor) getAllYunwuNodes(ctx context.Context) ([]health.Execu
 				State:        "healthy",
 				Capabilities: families,
 				Tiers:        tiers,
+				TierGroups:   tierGroups,
 				Priority:     acc.Priority,
 				UpdatedAt:    time.Now(),
 			}
@@ -1477,6 +1479,7 @@ func (yh *YunwuHypervisor) getAllYunwuNodes(ctx context.Context) ([]health.Execu
 			node.Capabilities = families
 			node.Provider = provider
 			node.Tiers = tiers
+			node.TierGroups = tierGroups
 			node.Priority = acc.Priority
 		}
 		list = append(list, *node)
