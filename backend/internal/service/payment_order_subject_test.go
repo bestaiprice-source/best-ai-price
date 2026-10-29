@@ -40,11 +40,11 @@ func TestBuildPaymentSubjectUsesTheChargedCurrency(t *testing.T) {
 	cfg := &PaymentConfig{}
 
 	// The regression: a USD order used to be described as "100.00 CNY".
-	require.Equal(t, "BestAIPrices 100.00 USD", svc.buildPaymentSubject(nil, 100, cfg, "USD"))
-	require.Equal(t, "BestAIPrices 100.00 CNY", svc.buildPaymentSubject(nil, 100, cfg, "CNY"))
+	require.Equal(t, "BestAIPrice 100.00 USD", svc.buildPaymentSubject(nil, 100, cfg, "USD"))
+	require.Equal(t, "BestAIPrice 100.00 CNY", svc.buildPaymentSubject(nil, 100, cfg, "CNY"))
 
 	// An empty currency must never produce a dangling amount.
-	require.Equal(t, "BestAIPrices 100.00 USD", svc.buildPaymentSubject(nil, 100, cfg, ""))
+	require.Equal(t, "BestAIPrice 100.00 USD", svc.buildPaymentSubject(nil, 100, cfg, ""))
 
 	// A configured product-name prefix/suffix still wins outright.
 	suffixed := &PaymentConfig{ProductNamePrefix: "BestAIPrice"}

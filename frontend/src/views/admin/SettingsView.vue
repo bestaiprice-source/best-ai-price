@@ -2509,7 +2509,7 @@ const form = reactive<SettingsForm>({
   default_subscriptions: [],
   site_name: BRAND_NAME,
   site_logo: '',
-  site_subtitle: 'Subscription to API Conversion Platform',
+  site_subtitle: 'AI API gateway — Claude, GPT, Gemini, Kimi and more behind one key',
   api_base_url: '',
   contact_info: '',
   doc_url: '',

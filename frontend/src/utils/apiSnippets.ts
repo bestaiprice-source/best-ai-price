@@ -21,8 +21,8 @@ export const SNIPPET_PROMPT = 'Hello, please introduce yourself in one sentence.
 
 /** One model per protocol that the gateway is guaranteed to price. */
 export const SNIPPET_MODELS = {
-  openai: 'gpt-5.2-pro',
-  anthropic: 'claude-sonnet-4-5',
+  openai: 'gpt-4o',
+  anthropic: 'claude-sonnet-5',
   gemini: 'gemini-2.5-flash'
 } as const
 

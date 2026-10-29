@@ -51,7 +51,7 @@ func RunCLI() error {
 
 	fmt.Println()
 	fmt.Println("╔═══════════════════════════════════════════╗")
-	fmt.Println("║       BestAIPrices Installation Wizard    ║")
+	fmt.Println("║       BestAIPrice Installation Wizard    ║")
 	fmt.Println("╚═══════════════════════════════════════════╝")
 	fmt.Println()
 

@@ -197,8 +197,8 @@ export default {
 
   // Setup Wizard
   setup: {
-    title: 'Настройка BestAIPrices',
-    description: 'Настройте ваш экземпляр BestAIPrices',
+    title: 'Настройка BestAIPrice',
+    description: 'Настройте ваш экземпляр BestAIPrice',
     database: {
       title: 'Конфигурация базы данных',
       description: 'Подключение к вашей базе данных PostgreSQL',
@@ -2502,7 +2502,7 @@ export default {
         antigravityOauth: 'Antigravity OAuth',
         antigravityApikey: 'Подключение через Base URL + API Key',
         soraApiKey: 'API Key / апстрим',
-        soraApiKeyHint: 'Подключение к другому экземпляру BestAIPrices или совместимому API',
+        soraApiKeyHint: 'Подключение к другому экземпляру BestAIPrice или совместимому API',
         soraBaseUrlRequired: 'Для аккаунта Sora API Key требуется Base URL',
         soraBaseUrlInvalidScheme: 'Base URL должен начинаться с http:// или https://',
         upstream: 'Апстрим',
@@ -3339,7 +3339,7 @@ export default {
       imageTestMode: 'Режим: проверка генерации изображений',
       imagePreview: 'Сгенерированные изображения:',
       imageReceived: 'Получено тестовое изображение #{count}',
-      soraUpstreamBaseUrlHint: 'URL апстрим-сервиса Sora (другой экземпляр BestAIPrices или совместимый API)',
+      soraUpstreamBaseUrlHint: 'URL апстрим-сервиса Sora (другой экземпляр BestAIPrice или совместимый API)',
       soraTestHint: 'Проверка Sora выполняет проверки подключения и возможностей (/backend/me, подписка, приглашение в Sora2 и оставшаяся квота).',
       soraTestTarget: 'Цель: возможности аккаунта Sora',
       soraTestMode: 'Режим: проверки подключения и возможностей',
@@ -4960,7 +4960,7 @@ export default {
         secretKeyConfiguredHint: 'Секретный ключ настроен. Оставьте пустым, чтобы сохранить текущее значение.'      },
       linuxdo: {
         title: 'Вход через LinuxDo Connect',
-        description: 'Настройка OAuth LinuxDo Connect для входа конечных пользователей BestAIPrices',
+        description: 'Настройка OAuth LinuxDo Connect для входа конечных пользователей BestAIPrice',
         enable: 'Включить вход через LinuxDo',
         enableHint: 'Показывать вход через LinuxDo на страницах входа и регистрации',
         clientId: 'ID клиента',
@@ -5036,10 +5036,10 @@ export default {
         backendModeDescription:
           'Disables user registration, public site, and self-service features. Only admin can log in and manage the platform.',
         siteName: 'Название сайта',
-        siteNamePlaceholder: 'BestAIPrices',
+        siteNamePlaceholder: 'BestAIPrice',
         siteNameHint: 'Отображается в письмах и заголовках страниц',
         siteSubtitle: 'Подзаголовок сайта',
-        siteSubtitlePlaceholder: 'Платформа конвертации подписок в API',
+        siteSubtitlePlaceholder: 'AI-шлюз к API — Claude, GPT, Gemini, Kimi и другие через один ключ',
         siteSubtitleHint: 'Отображается на страницах входа и регистрации',
         apiBaseUrl: 'Базовый URL API',
         apiBaseUrlPlaceholder: 'https://api.example.com',
@@ -5124,7 +5124,7 @@ export default {
         fromEmail: 'Email отправителя',
         fromEmailPlaceholder: "noreply{'@'}example.com",
         fromName: 'Имя отправителя',
-        fromNamePlaceholder: 'BestAIPrices',
+        fromNamePlaceholder: 'BestAIPrice',
         useTls: 'Использовать TLS',
         useTlsHint: 'Включить шифрование TLS для соединения SMTP'
       },
@@ -5629,14 +5629,14 @@ export default {
     // Admin tour steps
     admin: {
       welcome: {
-        title: '👋 Добро пожаловать в BestAIPrices',
-        description: '<div style="line-height: 1.8;"><p style="margin-bottom: 16px;">BestAIPrices — это мощная платформа-шлюз для AI-сервисов, помогающая легко управлять AI-сервисами и распределять их.</p><p style="margin-bottom: 12px;"><b>🎯 Ключевые возможности:</b></p><ul style="margin-left: 20px; margin-bottom: 16px;"><li>📦 <b>Управление группами</b> — создание уровней обслуживания (VIP, пробный доступ и т. д.)</li><li>🔗 <b>Пул аккаунтов</b> — подключение нескольких аккаунтов апстримов</li><li>🔑 <b>Выдача ключей</b> — генерация отдельных API-ключей для пользователей</li><li>💰 <b>Управление биллингом</b> — гибкое управление тарифами и квотами</li></ul><p style="color: #10b981; font-weight: 600;">Давайте завершим первоначальную настройку за 3 минуты →</p></div>',
+        title: '👋 Добро пожаловать в BestAIPrice',
+        description: '<div style="line-height: 1.8;"><p style="margin-bottom: 16px;">BestAIPrice — это мощная платформа-шлюз для AI-сервисов, помогающая легко управлять AI-сервисами и распределять их.</p><p style="margin-bottom: 12px;"><b>🎯 Ключевые возможности:</b></p><ul style="margin-left: 20px; margin-bottom: 16px;"><li>📦 <b>Управление группами</b> — создание уровней обслуживания (VIP, пробный доступ и т. д.)</li><li>🔗 <b>Пул аккаунтов</b> — подключение нескольких аккаунтов апстримов</li><li>🔑 <b>Выдача ключей</b> — генерация отдельных API-ключей для пользователей</li><li>💰 <b>Управление биллингом</b> — гибкое управление тарифами и квотами</li></ul><p style="color: #10b981; font-weight: 600;">Давайте завершим первоначальную настройку за 3 минуты →</p></div>',
         nextBtn: 'Начать настройку 🚀',
         prevBtn: 'Пропустить'
       },
       groupManage: {
         title: '📦 Шаг 1. Управление группами',
-        description: '<div style="line-height: 1.7;"><p style="margin-bottom: 12px;"><b>Что такое группа?</b></p><p style="margin-bottom: 12px;">Группы — ключевая концепция BestAIPrices, своего рода "пакет услуг":</p><ul style="margin-left: 20px; margin-bottom: 12px; font-size: 13px;"><li>🎯 Каждая группа может содержать несколько аккаунтов апстримов</li><li>💰 У каждой группы свой множитель биллинга</li><li>👥 Может быть публичной или закрытой</li></ul><p style="margin-top: 12px; padding: 8px 12px; background: #f0fdf4; border-left: 3px solid #10b981; border-radius: 4px; font-size: 13px;"><b>💡 Пример:</b> можно создать группы "VIP Premium" (высокий тариф) и "Free Trial" (низкий тариф)</p><p style="margin-top: 16px; color: #10b981; font-weight: 600;">👉 Нажмите "Управление группами" на левой боковой панели</p></div>'
+        description: '<div style="line-height: 1.7;"><p style="margin-bottom: 12px;"><b>Что такое группа?</b></p><p style="margin-bottom: 12px;">Группы — ключевая концепция BestAIPrice, своего рода "пакет услуг":</p><ul style="margin-left: 20px; margin-bottom: 12px; font-size: 13px;"><li>🎯 Каждая группа может содержать несколько аккаунтов апстримов</li><li>💰 У каждой группы свой множитель биллинга</li><li>👥 Может быть публичной или закрытой</li></ul><p style="margin-top: 12px; padding: 8px 12px; background: #f0fdf4; border-left: 3px solid #10b981; border-radius: 4px; font-size: 13px;"><b>💡 Пример:</b> можно создать группы "VIP Premium" (высокий тариф) и "Free Trial" (низкий тариф)</p><p style="margin-top: 16px; color: #10b981; font-weight: 600;">👉 Нажмите "Управление группами" на левой боковой панели</p></div>'
       },
       createGroup: {
         title: '➕ Создание новой группы',
@@ -5729,8 +5729,8 @@ export default {
     // User tour steps
     user: {
       welcome: {
-        title: '👋 Добро пожаловать в BestAIPrices',
-        description: '<div style="line-height: 1.8;"><p style="margin-bottom: 16px;">Здравствуйте! Добро пожаловать на платформу AI-сервисов BestAIPrices.</p><p style="margin-bottom: 12px;"><b>🎯 Быстрый старт:</b></p><ul style="margin-left: 20px; margin-bottom: 16px;"><li>🔑 Создайте API-ключ</li><li>📋 Скопируйте ключ в своё приложение</li><li>🚀 Начните пользоваться AI-сервисами</li></ul><p style="color: #10b981; font-weight: 600;">Всего 1 минута — начнём →</p></div>',
+        title: '👋 Добро пожаловать в BestAIPrice',
+        description: '<div style="line-height: 1.8;"><p style="margin-bottom: 16px;">Здравствуйте! Добро пожаловать на платформу AI-сервисов BestAIPrice.</p><p style="margin-bottom: 12px;"><b>🎯 Быстрый старт:</b></p><ul style="margin-left: 20px; margin-bottom: 16px;"><li>🔑 Создайте API-ключ</li><li>📋 Скопируйте ключ в своё приложение</li><li>🚀 Начните пользоваться AI-сервисами</li></ul><p style="color: #10b981; font-weight: 600;">Всего 1 минута — начнём →</p></div>',
         nextBtn: 'Начать 🚀',
         prevBtn: 'Пропустить'
       },
@@ -6197,7 +6197,7 @@ export default {
     },
     authLayout: {
       logo: 'Логотип',
-      subscriptionToApiConversionPlatform: 'Платформа превращения подписок в API'
+      subscriptionToApiConversionPlatform: 'AI-шлюз к API — Claude, GPT, Gemini, Kimi и другие через один ключ'
     },
     authStore: {
       notAuthenticated: 'Не выполнена авторизация'

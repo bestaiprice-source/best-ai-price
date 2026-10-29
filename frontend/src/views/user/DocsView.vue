@@ -349,7 +349,7 @@ client = Anthropic(
     api_key=os.environ.get("BESTAIPRICE_API_KEY"),
 )
 msg = client.messages.create(
-    model="claude-3-7-sonnet",
+    model="claude-sonnet-5",
     max_tokens=256,
     messages=[{"role": "user", "content": "Hello Claude!"}],
 )
@@ -412,7 +412,7 @@ import os, sys
 
 client = OpenAI(base_url="${base}/v1", api_key=os.environ["BESTAIPRICE_API_KEY"])
 stream = client.chat.completions.create(
-    model="deepseek-chat",
+    model="gpt-4o",
     messages=[{"role": "user", "content": "Stream a story"}],
     stream=True,
 )
@@ -446,7 +446,7 @@ for chunk in stream:
   -H "anthropic-version: 2023-06-01" \\
   -H "content-type: application/json" \\
   -d '{
-    "model": "claude-3-7-sonnet",
+    "model": "claude-sonnet-5",
     "max_tokens": 256,
     "messages": [{"role": "user", "content": "Hello!"}]
   }'`,

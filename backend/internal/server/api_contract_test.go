@@ -520,7 +520,7 @@ func TestAPIContracts(t *testing.T) {
 						"ops_realtime_monitoring_enabled": true,
 						"ops_query_mode_default": "auto",
 						"ops_metrics_interval_seconds": 60,
-						"site_name": "BestAIPrices",
+						"site_name": "BestAIPrice",
 						"site_logo": "",
 						"site_subtitle": "Subtitle",
 						"api_base_url": "https://api.example.com",
@@ -1950,6 +1950,7 @@ func TestPublicSettingsPublishTheBrand(t *testing.T) {
 		want  string
 	}{
 		{name: "legacy stored value publishes the brand", store: "Sub2API", want: service.DefaultSiteName},
+		{name: "previous brand spelling publishes the corrected one", store: service.LegacyBrandSpelling, want: service.DefaultSiteName},
 		{name: "unset publishes the brand", store: "", want: service.DefaultSiteName},
 		{name: "configured value wins", store: "My Gateway", want: "My Gateway"},
 	}
@@ -1966,4 +1967,49 @@ func TestPublicSettingsPublishTheBrand(t *testing.T) {
 			require.Contains(t, body, `"site_name":"`+tc.want+`"`)
 		})
 	}
+}
+
+// Same rule for the subtitle: a wizard-seeded installation has the upstream
+// fork's tagline persisted, and it must not be what the cabinet publishes.
+func TestPublicSettingsPublishTheSubtitle(t *testing.T) {
+	cases := []struct {
+		name  string
+		store string
+		want  string
+	}{
+		{name: "legacy stored tagline publishes ours", store: service.LegacySiteSubtitle, want: service.DefaultSiteSubtitle},
+		{name: "unset publishes ours", store: "", want: service.DefaultSiteSubtitle},
+		{name: "configured value wins", store: "My Tagline", want: "My Tagline"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			deps := newContractDeps(t)
+			deps.settingRepo.SetAll(map[string]string{service.SettingKeySiteSubtitle: tc.store})
+
+			status, body := doRequest(t, deps.router, http.MethodGet, "/api/v1/settings/public", "", nil)
+
+			require.Equal(t, http.StatusOK, status)
+			require.NotContains(t, body, `"site_subtitle":"`+service.LegacySiteSubtitle+`"`)
+			require.Contains(t, body, `"site_subtitle":"`+tc.want+`"`)
+		})
+	}
+}
+
+// The upstream fork's promo/redeem codes and Chinese OAuth rails are not offered
+// here, so the public settings must not advertise them even when the database
+// (seeded by the upstream setup wizard) still has the flags switched on.
+func TestPublicSettingsDoNotAdvertiseLegacyForkFeatures(t *testing.T) {
+	deps := newContractDeps(t)
+	deps.settingRepo.SetAll(map[string]string{
+		service.SettingKeyPromoCodeEnabled:      "true",
+		service.SettingKeyLinuxDoConnectEnabled: "true",
+	})
+
+	status, body := doRequest(t, deps.router, http.MethodGet, "/api/v1/settings/public", "", nil)
+
+	require.Equal(t, http.StatusOK, status)
+	require.Contains(t, body, `"promo_code_enabled":false`)
+	require.Contains(t, body, `"linuxdo_oauth_enabled":false`)
+	require.Contains(t, body, `"wechat_oauth_enabled":false`)
 }

@@ -388,11 +388,23 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		oidcProviderName = value
 	}
 
+	// Legacy Chinese-fork feature flags are deliberately published as OFF.
+	// The upstream Sub2API shipped promo/redeem codes and the Chinese OAuth
+	// providers (LinuxDo Connect, WeChat) as first-class sign-in options, and an
+	// installation seeded by its setup wizard keeps them enabled in the DB
+	// (`promo_code_enabled`, `linuxdo_connect_enabled`, `wechat_*`). We neither
+	// issue redeem codes nor offer those rails, so the PUBLIC settings must not
+	// advertise them — this is the read-site where the value is resolved, exactly
+	// like NormalizeSiteName for the brand. Admin-side configuration is left
+	// intact (the same settings still load and save on the admin screen), so the
+	// decision is reversible in one place.
+	const legacyForkFeaturesEnabled = false
+
 	return &PublicSettings{
 		RegistrationEnabled:                  settings[SettingKeyRegistrationEnabled] == "true",
 		EmailVerifyEnabled:                   emailVerifyEnabled,
 		RegistrationEmailSuffixWhitelist:     registrationEmailSuffixWhitelist,
-		PromoCodeEnabled:                     settings[SettingKeyPromoCodeEnabled] == "true",
+		PromoCodeEnabled:                     legacyForkFeaturesEnabled && settings[SettingKeyPromoCodeEnabled] == "true",
 		PasswordResetEnabled:                 passwordResetEnabled,
 		InvitationCodeEnabled:                settings[SettingKeyInvitationCodeEnabled] == "true",
 		TotpEnabled:                          settings[SettingKeyTotpEnabled] == "true",
@@ -400,7 +412,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		TurnstileSiteKey:                     settings[SettingKeyTurnstileSiteKey],
 		SiteName:                             NormalizeSiteName(s.getStringOrDefault(settings, SettingKeySiteName, DefaultSiteName)),
 		SiteLogo:                             settings[SettingKeySiteLogo],
-		SiteSubtitle:                         s.getStringOrDefault(settings, SettingKeySiteSubtitle, "Subscription to API Conversion Platform"),
+		SiteSubtitle:                         NormalizeSiteSubtitle(s.getStringOrDefault(settings, SettingKeySiteSubtitle, DefaultSiteSubtitle)),
 		APIBaseURL:                           settings[SettingKeyAPIBaseURL],
 		ContactInfo:                          settings[SettingKeyContactInfo],
 		DocURL:                               settings[SettingKeyDocURL],
@@ -411,11 +423,11 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		PaymentEnabled:                       settings[SettingPaymentEnabled] == "true",
 		SoraClientEnabled:                    settings[SettingKeySoraClientEnabled] == "true",
 		CustomMenuItems:                      settings[SettingKeyCustomMenuItems],
-		LinuxDoOAuthEnabled:                  linuxDoEnabled,
-		WeChatOAuthEnabled:                   weChatOAuth.Enabled,
-		WeChatOAuthOpenEnabled:               weChatOAuth.OpenEnabled,
-		WeChatOAuthMPEnabled:                 weChatOAuth.MPEnabled,
-		WeChatOAuthMobileEnabled:             weChatOAuth.MobileEnabled,
+		LinuxDoOAuthEnabled:                  legacyForkFeaturesEnabled && linuxDoEnabled,
+		WeChatOAuthEnabled:                   legacyForkFeaturesEnabled && weChatOAuth.Enabled,
+		WeChatOAuthOpenEnabled:               legacyForkFeaturesEnabled && weChatOAuth.OpenEnabled,
+		WeChatOAuthMPEnabled:                 legacyForkFeaturesEnabled && weChatOAuth.MPEnabled,
+		WeChatOAuthMobileEnabled:             legacyForkFeaturesEnabled && weChatOAuth.MobileEnabled,
 		OIDCOAuthEnabled:                     oidcEnabled,
 		OIDCOAuthProviderName:                oidcProviderName,
 		ChannelMonitorEnabled:                settings[settingKeyChannelMonitorEnabled] == "true",
@@ -738,7 +750,9 @@ func (s *SettingService) UpdateSettings(ctx context.Context, settings *SystemSet
 	// upstream default: an empty or "Sub2API" submission stores the brand.
 	updates[SettingKeySiteName] = NormalizeSiteName(settings.SiteName)
 	updates[SettingKeySiteLogo] = settings.SiteLogo
-	updates[SettingKeySiteSubtitle] = settings.SiteSubtitle
+	// Same normalization as the brand: a save can never re-persist the legacy
+	// upstream tagline.
+	updates[SettingKeySiteSubtitle] = NormalizeSiteSubtitle(settings.SiteSubtitle)
 	updates[SettingKeyAPIBaseURL] = settings.APIBaseURL
 	updates[SettingKeyContactInfo] = settings.ContactInfo
 	updates[SettingKeyDocURL] = settings.DocURL
@@ -1342,7 +1356,7 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 		TurnstileSecretKeyConfigured:     settings[SettingKeyTurnstileSecretKey] != "",
 		SiteName:                         NormalizeSiteName(s.getStringOrDefault(settings, SettingKeySiteName, DefaultSiteName)),
 		SiteLogo:                         settings[SettingKeySiteLogo],
-		SiteSubtitle:                     s.getStringOrDefault(settings, SettingKeySiteSubtitle, "Subscription to API Conversion Platform"),
+		SiteSubtitle:                     NormalizeSiteSubtitle(s.getStringOrDefault(settings, SettingKeySiteSubtitle, DefaultSiteSubtitle)),
 		APIBaseURL:                       settings[SettingKeyAPIBaseURL],
 		ContactInfo:                      settings[SettingKeyContactInfo],
 		DocURL:                           settings[SettingKeyDocURL],
