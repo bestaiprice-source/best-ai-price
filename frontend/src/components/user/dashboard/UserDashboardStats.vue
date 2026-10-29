@@ -82,6 +82,11 @@
           {{ t('dashboard.day') }}
         </span>
       </div>
+      <!-- Sparkline + "vs yesterday", from the 7-day trend the dashboard already loads. -->
+      <div v-if="requestsSpark.length > 1" class="mt-3 flex items-center justify-between gap-3">
+        <SparkLine :values="requestsSpark" class="h-[24px] w-full text-[#4791ff]" />
+        <StatDelta :delta="requestsDelta" :format="formatNumber" />
+      </div>
       <div class="mt-4 flex items-center justify-between border-t border-black/[0.04] pt-3 text-xs text-gray-500 dark:border-white/[0.06] dark:text-gray-400">
         <span>{{ t('common.total') }}: <span class="font-mono font-medium text-gray-900 dark:text-white">{{ formatNumber(stats?.total_requests || 0) }}</span></span>
         <router-link to="/usage" class="font-medium text-[#4791ff] hover:underline">
@@ -115,6 +120,11 @@
           {{ t('dashboard.actual') }}
         </span>
       </div>
+      <!-- Rising spend is not "good", hence the inverse colour polarity. -->
+      <div v-if="costSpark.length > 1" class="mt-3 flex items-center justify-between gap-3">
+        <SparkLine :values="costSpark" class="h-[24px] w-full text-purple-500" />
+        <StatDelta :delta="costDelta" :format="formatCost" inverse />
+      </div>
       <div class="mt-4 flex items-center justify-between border-t border-black/[0.04] pt-3 text-xs text-gray-500 dark:border-white/[0.06] dark:text-gray-400">
         <span>{{ t('common.total') }}: <span class="font-mono font-medium text-purple-600 dark:text-purple-400">${{ formatCost(stats?.total_actual_cost || 0) }}</span></span>
         <span class="font-mono text-gray-400 dark:text-gray-500">${{ formatCost(stats?.total_cost || 0) }}</span>
@@ -139,6 +149,10 @@
           </p>
         </div>
       </div>
+      <div v-if="tokensSpark.length > 1" class="mt-3 flex items-center justify-between gap-3">
+        <SparkLine :values="tokensSpark" class="h-[24px] w-full text-amber-500" />
+        <StatDelta :delta="tokensDelta" :format="formatTokens" />
+      </div>
       <div class="mt-4 flex items-center justify-between border-t border-black/[0.04] pt-3 font-mono text-xs text-gray-500 dark:border-white/[0.06] dark:text-gray-400">
         <span>In: <strong class="text-gray-900 dark:text-white">{{ formatTokens(stats?.today_input_tokens || 0) }}</strong></span>
         <span>{{ t('ui.userDashboardStats.out') }} <strong class="text-gray-900 dark:text-white">{{ formatTokens(stats?.today_output_tokens || 0) }}</strong></span>
@@ -159,6 +173,10 @@
             {{ formatTokens(stats?.total_tokens || 0) }}
           </p>
         </div>
+      </div>
+      <!-- Cumulative curve: a running total has no meaningful day-over-day delta. -->
+      <div v-if="cumulativeTokensSpark.length > 1" class="mt-3 flex items-center">
+        <SparkLine :values="cumulativeTokensSpark" class="h-[24px] w-full text-sky-500" />
       </div>
       <div class="mt-4 flex items-center justify-between border-t border-black/[0.04] pt-3 font-mono text-xs text-gray-500 dark:border-white/[0.06] dark:text-gray-400">
         <span>In: <strong class="text-gray-900 dark:text-white">{{ formatTokens(stats?.total_input_tokens || 0) }}</strong></span>
@@ -219,14 +237,24 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Icon from '@/components/icons/Icon.vue'
+import SparkLine from './SparkLine.vue'
+import StatDelta from './StatDelta.vue'
+import { cumulativeSeries, deltaVsPreviousDay, metricSeries } from '@/utils/dashboardTrend'
 import type { UserDashboardStats as UserStatsType } from '@/api/usage'
+import type { TrendDataPoint } from '@/types'
 
-defineProps<{
+const props = defineProps<{
   stats: UserStatsType
   balance: number
   isSimple: boolean
+  /**
+   * Daily usage trend already fetched by the dashboard. Only the metrics the
+   * trend aggregates per day get a sparkline; cards without a series stay plain.
+   */
+  trend?: TrendDataPoint[]
 }>()
 const { t } = useI18n()
 
@@ -244,4 +272,13 @@ const formatTokens = (t: number) => {
   return t.toString()
 }
 const formatDuration = (ms: number) => (ms >= 1000 ? `${(ms / 1000).toFixed(2)}s` : `${ms.toFixed(0)}ms`)
+
+// Sparkline series + "vs yesterday" deltas, derived from the loaded trend.
+const requestsSpark = computed(() => metricSeries(props.trend, 'requests'))
+const requestsDelta = computed(() => deltaVsPreviousDay(props.trend, 'requests'))
+const costSpark = computed(() => metricSeries(props.trend, 'actual_cost'))
+const costDelta = computed(() => deltaVsPreviousDay(props.trend, 'actual_cost'))
+const tokensSpark = computed(() => metricSeries(props.trend, 'total_tokens'))
+const tokensDelta = computed(() => deltaVsPreviousDay(props.trend, 'total_tokens'))
+const cumulativeTokensSpark = computed(() => cumulativeSeries(metricSeries(props.trend, 'total_tokens')))
 </script>

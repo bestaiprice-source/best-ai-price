@@ -6792,7 +6792,8 @@ export default {
       optimal: 'Оптимально',
       out: 'Вывод:',
       out2: 'Вывод:',
-      throughput: 'Пропускная способность:'
+      throughput: 'Пропускная способность:',
+      vsYesterday: 'vs вчера'
     },
     userdashboardView: {
       gatewayOperational: 'Шлюз работает'

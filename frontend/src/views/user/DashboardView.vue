@@ -65,6 +65,7 @@
             :stats="stats"
             :balance="user?.balance || 0"
             :is-simple="authStore.isSimpleMode"
+            :trend="trendData"
           />
 
           <!-- Charts (Model Distribution & Token Usage Trend) -->

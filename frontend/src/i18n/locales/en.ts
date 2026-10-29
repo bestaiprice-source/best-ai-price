@@ -6792,7 +6792,8 @@ export default {
       optimal: 'Optimal',
       out: 'Out:',
       out2: 'Out:',
-      throughput: 'Throughput:'
+      throughput: 'Throughput:',
+      vsYesterday: 'vs yesterday'
     },
     userdashboardView: {
       gatewayOperational: 'Gateway Operational'
