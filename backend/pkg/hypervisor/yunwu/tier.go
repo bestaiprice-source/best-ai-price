@@ -136,3 +136,10 @@ func ContextWithTier(ctx context.Context, tier string) context.Context {
 func TierFromGroupNames(names []string) string {
 	return runtime.TierFromGroupNames(names)
 }
+
+// NormalizeTier maps a tier name onto TierSmart / TierFast (case-insensitive,
+// trimmed) and returns "" for anything else, so callers can tell "unset/invalid"
+// from a real tier. Thin re-export of runtime.NormalizeTier.
+func NormalizeTier(tier string) string {
+	return runtime.NormalizeTier(tier)
+}

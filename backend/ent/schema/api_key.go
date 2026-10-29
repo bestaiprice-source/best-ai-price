@@ -47,6 +47,12 @@ func (APIKey) Fields() []ent.Field {
 		field.String("status").
 			MaxLen(20).
 			Default(domain.StatusActive),
+		// Billing tier for unofficial (yunwu) providers: "" = not set (derive
+		// from the key's group names), "smart" or "fast" = explicit choice.
+		field.String("tier").
+			MaxLen(16).
+			Default("").
+			Comment("Yunwu billing tier of this API key (empty = derive from group names)"),
 		field.Time("last_used_at").
 			Optional().
 			Nillable().

@@ -29,17 +29,22 @@ func IsWindowExpired(windowStart *time.Time, duration time.Duration) bool {
 }
 
 type APIKey struct {
-	ID            int64
-	UserID        int64
-	Key           string
+	ID     int64
+	UserID int64
+	Key    string
 	// HasFullKey reports whether the key has a recoverable (encrypted) copy
 	// stored, i.e. it can be revealed to its owner. Legacy hash-only keys are
 	// false and remain irrecoverable, but keep authenticating normally.
-	HasFullKey    bool
-	Name          string
-	GroupID       *int64
-	GroupIDs      []int64
-	Status        string
+	HasFullKey bool
+	Name       string
+	GroupID    *int64
+	GroupIDs   []int64
+	Status     string
+	// Tier is the yunwu billing tier chosen for this key ("smart" / "fast").
+	// Empty means "not set": the tier is then derived from the key's group
+	// names, so keys created before the column existed keep working (see
+	// WithYunwuTier).
+	Tier          string
 	AllowedModels []string
 	IPWhitelist   []string
 	IPBlacklist   []string

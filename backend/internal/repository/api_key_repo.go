@@ -74,6 +74,7 @@ func (r *apiKeyRepository) Create(ctx context.Context, key *service.APIKey) erro
 		SetKey(hashAPIKeyForStorage(plaintextKey)).
 		SetName(key.Name).
 		SetStatus(key.Status).
+		SetTier(key.Tier).
 		SetAllowedModels(service.NormalizeAPIKeyAllowedModels(key.AllowedModels)).
 		SetNillableGroupID(key.GroupID).
 		SetNillableLastUsedAt(key.LastUsedAt).
@@ -173,6 +174,7 @@ func (r *apiKeyRepository) GetByKeyForAuth(ctx context.Context, key string) (*se
 			apikey.FieldGroupID,
 			apikey.FieldAllowedModels,
 			apikey.FieldStatus,
+			apikey.FieldTier,
 			apikey.FieldIPWhitelist,
 			apikey.FieldIPBlacklist,
 			apikey.FieldQuota,
@@ -250,6 +252,7 @@ func (r *apiKeyRepository) Update(ctx context.Context, key *service.APIKey) erro
 		Where(apikey.IDEQ(key.ID), apikey.DeletedAtIsNil()).
 		SetName(key.Name).
 		SetStatus(key.Status).
+		SetTier(key.Tier).
 		SetAllowedModels(service.NormalizeAPIKeyAllowedModels(key.AllowedModels)).
 		SetQuota(key.Quota).
 		SetQuotaUsed(key.QuotaUsed).
@@ -886,6 +889,7 @@ func apiKeyEntityToService(m *dbent.APIKey) *service.APIKey {
 		UserID:        m.UserID,
 		Key:           m.Key,
 		Name:          m.Name,
+		Tier:          m.Tier,
 		AllowedModels: service.NormalizeAPIKeyAllowedModels(m.AllowedModels),
 		Status:        m.Status,
 		IPWhitelist:   m.IPWhitelist,

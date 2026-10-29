@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
 
@@ -78,7 +78,16 @@ const byText = (wrapper: any, text: string) =>
   wrapper.findAll('button').find((b: any) => b.text() === text)
 
 describe('KeysView billing tier picker', () => {
+  beforeEach(() => {
+    createKey.mockClear()
+    getAvailableGroups.mockReset()
+  })
+
   it('offers Smart and Fast when the admin created those groups, Smart selected first', async () => {
+    getAvailableGroups.mockResolvedValue([
+      { id: 5, name: 'smart', platform: 'yunwu' },
+      { id: 6, name: 'fast', platform: 'yunwu' }
+    ])
     const wrapper = await mountView()
     await byText(wrapper, 'keys.createKey').trigger('click')
     await nextTick()
@@ -93,7 +102,26 @@ describe('KeysView billing tier picker', () => {
     wrapper.unmount()
   })
 
-  it('binds a created key to the picked tier group', async () => {
+  it('offers both tiers even when the deployment created no tier group', async () => {
+    // Only an ordinary group exists: the tier is a property of the key, so the
+    // picker must still be there.
+    getAvailableGroups.mockResolvedValue([{ id: 9, name: 'standard', platform: 'standard' }])
+    const wrapper = await mountView()
+    await byText(wrapper, 'keys.createKey').trigger('click')
+    await nextTick()
+
+    expect(wrapper.find('.dlg').exists()).toBe(true)
+    expect(byText(wrapper, 'keys.tierSmart')).toBeTruthy()
+    expect(byText(wrapper, 'keys.tierFast')).toBeTruthy()
+    expect(byText(wrapper, 'keys.tierSmart').classes().join(' ')).toContain('border-primary-500')
+    wrapper.unmount()
+  })
+
+  it('binds a created key to the picked tier group and sends the tier', async () => {
+    getAvailableGroups.mockResolvedValue([
+      { id: 5, name: 'smart', platform: 'yunwu' },
+      { id: 6, name: 'fast', platform: 'yunwu' }
+    ])
     const wrapper = await mountView()
     await byText(wrapper, 'keys.createKey').trigger('click')
     await nextTick()
@@ -106,10 +134,33 @@ describe('KeysView billing tier picker', () => {
     await new Promise((resolve) => setTimeout(resolve, 0))
 
     expect(createKey).toHaveBeenCalledTimes(1)
-    const [name, groupId, groupIds] = createKey.mock.calls[0]
+    const [name, groupId, groupIds, , , , , , , , , tier] = createKey.mock.calls[0]
     expect(name).toBe('My fast key')
     expect(groupId).toBe(6)
     expect(groupIds).toEqual([6])
+    expect(tier).toBe('fast')
+    wrapper.unmount()
+  })
+
+  it('sends the picked tier with the default group when there is no tier group', async () => {
+    getAvailableGroups.mockResolvedValue([{ id: 9, name: 'standard', platform: 'standard' }])
+    const wrapper = await mountView()
+    await byText(wrapper, 'keys.createKey').trigger('click')
+    await nextTick()
+
+    await byText(wrapper, 'keys.tierFast').trigger('click')
+    await nextTick()
+
+    await wrapper.find('input[data-tour="key-form-name"]').setValue('My fast key')
+    await wrapper.find('#key-form').trigger('submit')
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(createKey).toHaveBeenCalledTimes(1)
+    const [name, groupId, groupIds, , , , , , , , , tier] = createKey.mock.calls[0]
+    expect(name).toBe('My fast key')
+    expect(groupId).toBe(9)
+    expect(groupIds).toEqual([9])
+    expect(tier).toBe('fast')
     wrapper.unmount()
   })
 })

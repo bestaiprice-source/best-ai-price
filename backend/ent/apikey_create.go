@@ -113,6 +113,20 @@ func (_c *APIKeyCreate) SetNillableStatus(v *string) *APIKeyCreate {
 	return _c
 }
 
+// SetTier sets the "tier" field.
+func (_c *APIKeyCreate) SetTier(v string) *APIKeyCreate {
+	_c.mutation.SetTier(v)
+	return _c
+}
+
+// SetNillableTier sets the "tier" field if the given value is not nil.
+func (_c *APIKeyCreate) SetNillableTier(v *string) *APIKeyCreate {
+	if v != nil {
+		_c.SetTier(*v)
+	}
+	return _c
+}
+
 // SetLastUsedAt sets the "last_used_at" field.
 func (_c *APIKeyCreate) SetLastUsedAt(v time.Time) *APIKeyCreate {
 	_c.mutation.SetLastUsedAt(v)
@@ -393,6 +407,10 @@ func (_c *APIKeyCreate) defaults() error {
 		v := apikey.DefaultStatus
 		_c.mutation.SetStatus(v)
 	}
+	if _, ok := _c.mutation.Tier(); !ok {
+		v := apikey.DefaultTier
+		_c.mutation.SetTier(v)
+	}
 	if _, ok := _c.mutation.Quota(); !ok {
 		v := apikey.DefaultQuota
 		_c.mutation.SetQuota(v)
@@ -461,6 +479,14 @@ func (_c *APIKeyCreate) check() error {
 	if v, ok := _c.mutation.Status(); ok {
 		if err := apikey.StatusValidator(v); err != nil {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "APIKey.status": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.Tier(); !ok {
+		return &ValidationError{Name: "tier", err: errors.New(`ent: missing required field "APIKey.tier"`)}
+	}
+	if v, ok := _c.mutation.Tier(); ok {
+		if err := apikey.TierValidator(v); err != nil {
+			return &ValidationError{Name: "tier", err: fmt.Errorf(`ent: validator failed for field "APIKey.tier": %w`, err)}
 		}
 	}
 	if _, ok := _c.mutation.Quota(); !ok {
@@ -540,6 +566,10 @@ func (_c *APIKeyCreate) createSpec() (*APIKey, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(apikey.FieldStatus, field.TypeString, value)
 		_node.Status = value
+	}
+	if value, ok := _c.mutation.Tier(); ok {
+		_spec.SetField(apikey.FieldTier, field.TypeString, value)
+		_node.Tier = value
 	}
 	if value, ok := _c.mutation.LastUsedAt(); ok {
 		_spec.SetField(apikey.FieldLastUsedAt, field.TypeTime, value)
@@ -800,6 +830,18 @@ func (u *APIKeyUpsert) SetStatus(v string) *APIKeyUpsert {
 // UpdateStatus sets the "status" field to the value that was provided on create.
 func (u *APIKeyUpsert) UpdateStatus() *APIKeyUpsert {
 	u.SetExcluded(apikey.FieldStatus)
+	return u
+}
+
+// SetTier sets the "tier" field.
+func (u *APIKeyUpsert) SetTier(v string) *APIKeyUpsert {
+	u.Set(apikey.FieldTier, v)
+	return u
+}
+
+// UpdateTier sets the "tier" field to the value that was provided on create.
+func (u *APIKeyUpsert) UpdateTier() *APIKeyUpsert {
+	u.SetExcluded(apikey.FieldTier)
 	return u
 }
 
@@ -1245,6 +1287,20 @@ func (u *APIKeyUpsertOne) SetStatus(v string) *APIKeyUpsertOne {
 func (u *APIKeyUpsertOne) UpdateStatus() *APIKeyUpsertOne {
 	return u.Update(func(s *APIKeyUpsert) {
 		s.UpdateStatus()
+	})
+}
+
+// SetTier sets the "tier" field.
+func (u *APIKeyUpsertOne) SetTier(v string) *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.SetTier(v)
+	})
+}
+
+// UpdateTier sets the "tier" field to the value that was provided on create.
+func (u *APIKeyUpsertOne) UpdateTier() *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.UpdateTier()
 	})
 }
 
@@ -1904,6 +1960,20 @@ func (u *APIKeyUpsertBulk) SetStatus(v string) *APIKeyUpsertBulk {
 func (u *APIKeyUpsertBulk) UpdateStatus() *APIKeyUpsertBulk {
 	return u.Update(func(s *APIKeyUpsert) {
 		s.UpdateStatus()
+	})
+}
+
+// SetTier sets the "tier" field.
+func (u *APIKeyUpsertBulk) SetTier(v string) *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.SetTier(v)
+	})
+}
+
+// UpdateTier sets the "tier" field to the value that was provided on create.
+func (u *APIKeyUpsertBulk) UpdateTier() *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.UpdateTier()
 	})
 }
 

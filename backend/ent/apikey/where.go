@@ -95,6 +95,11 @@ func Status(v string) predicate.APIKey {
 	return predicate.APIKey(sql.FieldEQ(FieldStatus, v))
 }
 
+// Tier applies equality check predicate on the "tier" field. It's identical to TierEQ.
+func Tier(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldEQ(FieldTier, v))
+}
+
 // LastUsedAt applies equality check predicate on the "last_used_at" field. It's identical to LastUsedAtEQ.
 func LastUsedAt(v time.Time) predicate.APIKey {
 	return predicate.APIKey(sql.FieldEQ(FieldLastUsedAt, v))
@@ -533,6 +538,71 @@ func StatusEqualFold(v string) predicate.APIKey {
 // StatusContainsFold applies the ContainsFold predicate on the "status" field.
 func StatusContainsFold(v string) predicate.APIKey {
 	return predicate.APIKey(sql.FieldContainsFold(FieldStatus, v))
+}
+
+// TierEQ applies the EQ predicate on the "tier" field.
+func TierEQ(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldEQ(FieldTier, v))
+}
+
+// TierNEQ applies the NEQ predicate on the "tier" field.
+func TierNEQ(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldNEQ(FieldTier, v))
+}
+
+// TierIn applies the In predicate on the "tier" field.
+func TierIn(vs ...string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldIn(FieldTier, vs...))
+}
+
+// TierNotIn applies the NotIn predicate on the "tier" field.
+func TierNotIn(vs ...string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldNotIn(FieldTier, vs...))
+}
+
+// TierGT applies the GT predicate on the "tier" field.
+func TierGT(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldGT(FieldTier, v))
+}
+
+// TierGTE applies the GTE predicate on the "tier" field.
+func TierGTE(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldGTE(FieldTier, v))
+}
+
+// TierLT applies the LT predicate on the "tier" field.
+func TierLT(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldLT(FieldTier, v))
+}
+
+// TierLTE applies the LTE predicate on the "tier" field.
+func TierLTE(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldLTE(FieldTier, v))
+}
+
+// TierContains applies the Contains predicate on the "tier" field.
+func TierContains(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldContains(FieldTier, v))
+}
+
+// TierHasPrefix applies the HasPrefix predicate on the "tier" field.
+func TierHasPrefix(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldHasPrefix(FieldTier, v))
+}
+
+// TierHasSuffix applies the HasSuffix predicate on the "tier" field.
+func TierHasSuffix(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldHasSuffix(FieldTier, v))
+}
+
+// TierEqualFold applies the EqualFold predicate on the "tier" field.
+func TierEqualFold(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldEqualFold(FieldTier, v))
+}
+
+// TierContainsFold applies the ContainsFold predicate on the "tier" field.
+func TierContainsFold(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldContainsFold(FieldTier, v))
 }
 
 // LastUsedAtEQ applies the EQ predicate on the "last_used_at" field.

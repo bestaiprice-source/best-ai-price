@@ -28,6 +28,7 @@ var (
 	ErrAPIKeyInvalidChars   = infraerrors.BadRequest("API_KEY_INVALID_CHARS", "api key can only contain letters, numbers, underscores, and hyphens")
 	ErrAPIKeyRateLimited    = infraerrors.TooManyRequests("API_KEY_RATE_LIMITED", "too many failed attempts, please try again later")
 	ErrInvalidIPPattern     = infraerrors.BadRequest("INVALID_IP_PATTERN", "invalid IP or CIDR pattern")
+	ErrInvalidAPIKeyTier    = infraerrors.BadRequest("INVALID_API_KEY_TIER", "invalid api key tier: expected \"smart\", \"fast\" or an empty value")
 	// ErrAPIKeyExpired        = infraerrors.Forbidden("API_KEY_EXPIRED", "api key has expired")
 	ErrAPIKeyExpired = infraerrors.Forbidden("API_KEY_EXPIRED", "api key 已过期")
 	// ErrAPIKeyQuotaExhausted = infraerrors.TooManyRequests("API_KEY_QUOTA_EXHAUSTED", "api key quota exhausted")
@@ -157,6 +158,8 @@ type CreateAPIKeyRequest struct {
 	CustomKey     *string  `json:"custom_key"`   // 可选的自定义key
 	IPWhitelist   []string `json:"ip_whitelist"` // IP 白名单
 	IPBlacklist   []string `json:"ip_blacklist"` // IP 黑名单
+	// Tier is the yunwu billing tier of the key: "", "smart" or "fast".
+	Tier string `json:"tier"`
 
 	// Quota fields
 	Quota         float64 `json:"quota"`           // Quota limit in USD (0 = unlimited)
@@ -177,6 +180,8 @@ type UpdateAPIKeyRequest struct {
 	Status        *string   `json:"status"`
 	IPWhitelist   []string  `json:"ip_whitelist"` // IP 白名单（空数组清空）
 	IPBlacklist   []string  `json:"ip_blacklist"` // IP 黑名单（空数组清空）
+	// Tier changes the yunwu billing tier of the key (nil = no change).
+	Tier *string `json:"tier"`
 
 	// Quota fields
 	Quota           *float64   `json:"quota"`       // Quota limit in USD (nil = no change, 0 = unlimited)
@@ -395,6 +400,10 @@ func (s *APIKeyService) Create(ctx context.Context, userID int64, req CreateAPIK
 	}
 	primaryGroupID := PrimaryAPIKeyGroupID(requestedGroupIDs)
 	allowedModels := NormalizeAPIKeyAllowedModels(req.AllowedModels)
+	tier, err := NormalizeAPIKeyTier(req.Tier)
+	if err != nil {
+		return nil, err
+	}
 
 	var key string
 
@@ -444,6 +453,7 @@ func (s *APIKeyService) Create(ctx context.Context, userID int64, req CreateAPIK
 		GroupIDs:      requestedGroupIDs,
 		AllowedModels: allowedModels,
 		Status:        StatusActive,
+		Tier:          tier,
 		IPWhitelist:   req.IPWhitelist,
 		IPBlacklist:   req.IPBlacklist,
 		Quota:         req.Quota,
@@ -666,6 +676,16 @@ func (s *APIKeyService) Update(ctx context.Context, id int64, userID int64, req 
 	// 更新 IP 限制（空数组会清空设置）
 	apiKey.IPWhitelist = req.IPWhitelist
 	apiKey.IPBlacklist = req.IPBlacklist
+
+	// Billing tier of the key ("smart"/"fast"); an empty value clears the
+	// explicit choice and falls back to the group-name derivation.
+	if req.Tier != nil {
+		tier, err := NormalizeAPIKeyTier(*req.Tier)
+		if err != nil {
+			return nil, err
+		}
+		apiKey.Tier = tier
+	}
 
 	// Update rate limit configuration
 	if req.RateLimit5h != nil {

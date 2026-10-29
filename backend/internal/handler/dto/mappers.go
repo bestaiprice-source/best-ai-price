@@ -82,6 +82,7 @@ func APIKeyFromService(k *service.APIKey) *APIKey {
 		GroupIDs:      append([]int64(nil), k.GroupIDs...),
 		AllowedModels: append([]string{}, k.AllowedModels...),
 		Status:        k.Status,
+		Tier:          k.Tier,
 		IPWhitelist:   k.IPWhitelist,
 		IPBlacklist:   k.IPBlacklist,
 		LastUsedAt:    k.LastUsedAt,

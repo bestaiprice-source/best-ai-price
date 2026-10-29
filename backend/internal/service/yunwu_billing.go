@@ -335,16 +335,46 @@ func apiKeyGroupNames(apiKey *APIKey) []string {
 	return names
 }
 
-// WithYunwuTier resolves the billing tier (smart/fast) from the groups the API
-// key is bound to and attaches it to the context. The Yunwu engine then keeps
-// only nodes holding a key for that tier and the runtime uses that tier's
-// provider key — so a fast request is never served or billed with the cheaper
-// smart key. A key with no tier group (every key today) stays on smart.
+// NormalizeAPIKeyTier validates the yunwu billing tier a caller asked for:
+// "" (unset — derive from the key's groups later), "smart" or "fast". Anything
+// else is rejected rather than silently dropped onto smart, so a typo cannot
+// quietly serve a fast request with the cheaper key.
+func NormalizeAPIKeyTier(raw string) (string, error) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return "", nil
+	}
+	tier := yunwu.NormalizeTier(trimmed)
+	if tier == "" {
+		return "", ErrInvalidAPIKeyTier
+	}
+	return tier, nil
+}
+
+// EffectiveYunwuTier resolves the billing tier of an API key: the tier chosen
+// for the key when one was stored, otherwise the legacy derivation from the
+// key's group names (so keys created before the tier column, and deployments
+// that express the tier through `smart`/`fast` groups, keep working unchanged).
+func EffectiveYunwuTier(apiKey *APIKey) string {
+	if apiKey != nil {
+		if tier := yunwu.NormalizeTier(apiKey.Tier); tier != "" {
+			return tier
+		}
+	}
+	return yunwu.TierFromGroupNames(apiKeyGroupNames(apiKey))
+}
+
+// WithYunwuTier resolves the billing tier (smart/fast) of an API key and
+// attaches it to the context. The Yunwu engine then keeps only nodes holding a
+// key for that tier and the runtime uses that tier's provider key — so a fast
+// request is never served or billed with the cheaper smart key. The tier is the
+// key's own attribute (see EffectiveYunwuTier); a key without one stays on
+// smart, exactly as before.
 func WithYunwuTier(ctx context.Context, apiKey *APIKey) context.Context {
 	if ctx == nil || apiKey == nil {
 		return ctx
 	}
-	return yunwu.ContextWithTier(ctx, yunwu.TierFromGroupNames(apiKeyGroupNames(apiKey)))
+	return yunwu.ContextWithTier(ctx, EffectiveYunwuTier(apiKey))
 }
 
 // RecordYunwuMediaUsageInput carries the information needed to bill a completed

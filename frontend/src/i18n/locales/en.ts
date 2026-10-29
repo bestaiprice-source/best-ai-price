@@ -874,7 +874,7 @@ export default {
     tierLabel: 'Billing tier',
     tierSmart: 'Smart',
     tierFast: 'Fast',
-    tierHint: 'Fast is quicker and priced higher; Smart is cheaper. The key uses that tier\'s provider key and price.',
+    tierHint: 'Fast is quicker and priced higher; Smart is cheaper. The tier decides which provider key and price every request on this key uses — pick Fast only when fast capacity is available, otherwise the request fails with an explicit error instead of silently downgrading.',
     expiresIn: 'Expires',
     neverExpires: 'Never expires',
     copyAllKeys: 'Copy all',

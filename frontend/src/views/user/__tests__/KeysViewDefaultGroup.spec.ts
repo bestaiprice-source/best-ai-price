@@ -87,16 +87,20 @@ describe('KeysView default group for regular users', () => {
     await byText(wrapper, 'keys.createKey').trigger('click')
     await nextTick()
 
-    // No billing tiers configured here, so the picker is not offered.
-    expect(wrapper.text()).not.toContain('keys.tierLabel')
+    // The tier is a property of the key, so the picker is offered even without
+    // tier groups; the key still binds to the published "standard" group.
+    expect(wrapper.text()).toContain('keys.tierLabel')
+    expect(byText(wrapper, 'keys.tierSmart')).toBeTruthy()
+    expect(byText(wrapper, 'keys.tierFast')).toBeTruthy()
 
     await wrapper.find('input[data-tour="key-form-name"]').setValue('My key')
     await wrapper.find('#key-form').trigger('submit')
     await new Promise((resolve) => setTimeout(resolve, 0))
 
     expect(createKey).toHaveBeenCalledTimes(1)
-    const [, , groupIds] = createKey.mock.calls[0]
+    const [, , groupIds, , , , , , , , , tier] = createKey.mock.calls[0]
     expect(groupIds).toEqual([11])
+    expect(tier).toBe('smart')
     wrapper.unmount()
   })
 })

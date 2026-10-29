@@ -62,9 +62,13 @@ export async function create(
   quota?: number,
   expiresInDays?: number,
   rateLimitData?: { rate_limit_5h?: number; rate_limit_1d?: number; rate_limit_7d?: number },
-  userId?: number
+  userId?: number,
+  tier?: string
 ): Promise<ApiKey> {
   const payload: CreateApiKeyRequest = { name }
+  if (tier) {
+    payload.tier = tier
+  }
   if (userId) {
     payload.user_id = userId
   }

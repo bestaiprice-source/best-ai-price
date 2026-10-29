@@ -52,12 +52,14 @@ func NewAPIKeyHandler(apiKeyService *service.APIKeyService) *APIKeyHandler {
 type CreateAPIKeyRequest struct {
 	UserID        *int64   `json:"user_id"` // admin-only field to specify owner
 	Name          string   `json:"name" binding:"required"`
-	GroupID       *int64   `json:"group_id"`        // nullable
-	GroupIDs      []int64  `json:"group_ids"`       // optional multi-group binding
-	AllowedModels []string `json:"allowed_models"`  // optional model allowlist
-	CustomKey     *string  `json:"custom_key"`      // 可选的自定义key
-	IPWhitelist   []string `json:"ip_whitelist"`    // IP 白名单
-	IPBlacklist   []string `json:"ip_blacklist"`    // IP 黑名单
+	GroupID       *int64   `json:"group_id"`       // nullable
+	GroupIDs      []int64  `json:"group_ids"`      // optional multi-group binding
+	AllowedModels []string `json:"allowed_models"` // optional model allowlist
+	CustomKey     *string  `json:"custom_key"`     // 可选的自定义key
+	IPWhitelist   []string `json:"ip_whitelist"`   // IP 白名单
+	IPBlacklist   []string `json:"ip_blacklist"`   // IP 黑名单
+	// Tier selects the yunwu billing tier of the key: "", "smart" or "fast".
+	Tier          string   `json:"tier"`
 	Quota         *float64 `json:"quota"`           // 配额限制 (USD)
 	ExpiresInDays *int     `json:"expires_in_days"` // 过期天数
 
@@ -76,6 +78,7 @@ type UpdateAPIKeyRequest struct {
 	Status        string    `json:"status" binding:"omitempty,oneof=active inactive"`
 	IPWhitelist   []string  `json:"ip_whitelist"` // IP 白名单
 	IPBlacklist   []string  `json:"ip_blacklist"` // IP 黑名单
+	Tier          *string   `json:"tier"`         // yunwu billing tier: "", "smart" or "fast"
 	Quota         *float64  `json:"quota"`        // 配额限制 (USD), 0=无限制
 	ExpiresAt     *string   `json:"expires_at"`   // 过期时间 (ISO 8601)
 	ResetQuota    *bool     `json:"reset_quota"`  // 重置已用配额
@@ -224,6 +227,7 @@ func (h *APIKeyHandler) CreateGateway(c gatewayctx.GatewayContext) {
 		IPWhitelist:   req.IPWhitelist,
 		IPBlacklist:   req.IPBlacklist,
 		ExpiresInDays: req.ExpiresInDays,
+		Tier:          req.Tier,
 	}
 	if req.Quota != nil {
 		svcReq.Quota = *req.Quota
@@ -288,6 +292,7 @@ func (h *APIKeyHandler) UpdateGateway(c gatewayctx.GatewayContext) {
 		RateLimit1d:         req.RateLimit1d,
 		RateLimit7d:         req.RateLimit7d,
 		ResetRateLimitUsage: req.ResetRateLimitUsage,
+		Tier:                req.Tier,
 	}
 	if req.Name != "" {
 		svcReq.Name = &req.Name

@@ -104,3 +104,21 @@ func TestResolveTierGroupRatio(t *testing.T) {
 		t.Fatal("fast ratio on a group-priced provider without a fast group must be unpriced")
 	}
 }
+
+func TestNormalizeTierReExport(t *testing.T) {
+	cases := map[string]string{
+		"":        "",
+		"  ":      "",
+		"smart":   runtime.TierSmart,
+		"SMART":   runtime.TierSmart,
+		" fast ":  runtime.TierFast,
+		"Fast":    runtime.TierFast,
+		"turbo":   "",
+		"fastest": "",
+	}
+	for in, want := range cases {
+		if got := NormalizeTier(in); got != want {
+			t.Fatalf("NormalizeTier(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

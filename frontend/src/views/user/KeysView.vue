@@ -116,6 +116,13 @@
                 class="min-w-0 whitespace-normal break-words text-base font-medium text-gray-900 dark:text-white"
                 :title="value"
               >{{ value }}</span>
+              <!-- Only the non-default tier is called out: a fast key is served
+                   by the provider's fast key and priced accordingly. -->
+              <span
+                v-if="effectiveTierForKey(row) === 'fast'"
+                class="shrink-0 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
+                :title="t('keys.tierHint')"
+              >{{ t('keys.tierFast') }}</span>
               <Icon
                 v-if="row.ip_whitelist?.length > 0 || row.ip_blacklist?.length > 0"
                 name="shield"
@@ -465,13 +472,14 @@
           <p class="input-hint">{{ t('keys.newQuantityHint') }}</p>
         </div>
 
-        <!-- Billing tier (unofficial providers): fast or smart. The key is bound
-             to the picked tier's group; smart is the default. -->
-        <div v-if="!isAdmin && !showEditModal && hasTierGroups">
+        <!-- Billing tier (unofficial providers): smart or fast. It is a property
+             of the key itself, so the choice is always offered; when the admin
+             created a group with that name the key is bound to it too. -->
+        <div v-if="!isAdmin">
           <label class="input-label">{{ t('keys.tierLabel') }}</label>
           <div class="flex gap-2">
             <button
-              v-for="tier in tierGroups"
+              v-for="tier in tierOptions"
               :key="tier"
               type="button"
               class="rounded-lg border px-3 py-2 text-sm font-medium transition-colors"
@@ -1804,6 +1812,9 @@ const editKey = (key: ApiKey) => {
     expiration_preset: 'custom',
     expiration_date: key.expires_at ? formatDateTimeLocal(key.expires_at) : ''
   }
+  // The tier shown in the picker is the key's effective one (its stored tier,
+  // or the legacy derivation from its group names).
+  userTier.value = effectiveTierForKey(key)
   showEditModal.value = true
 }
 
@@ -1999,10 +2010,10 @@ const defaultUserGroupId = computed<number | null>(() => {
   return standardGroup ? standardGroup.id : null
 })
 
-// Billing tiers (fast / smart): a regular user picks one at creation and the key
-// is bound to that tier's group, so the gateway uses the matching provider key
-// and price. Rules live in composables/useKeyTier.ts.
-const { userTier, tierGroups, hasTierGroups, selectedGroupId, syncTierDefault } = useKeyTier(
+// Billing tiers (fast / smart): the tier is a property of the key (it picks the
+// provider key the yunwu nodes use and the price charged), so it is always
+// offered. Rules live in composables/useKeyTier.ts.
+const { userTier, tierOptions, selectedGroupId, syncTierDefault, effectiveTierForKey } = useKeyTier(
   groups,
   isAdmin,
   defaultUserGroupId
@@ -2048,7 +2059,10 @@ const submitUserKey = async () => {
         quota,
         expires_at: formData.value.enable_expiration && formData.value.expiration_date
           ? new Date(formData.value.expiration_date).toISOString()
-          : ''
+          : '',
+        // The tier is the key's own attribute: editing it here switches the
+        // provider key and price the gateway uses.
+        tier: userTier.value
       })
       appStore.showSuccess(t('keys.keyUpdatedSuccess'))
     } else {
@@ -2068,7 +2082,9 @@ const submitUserKey = async () => {
           ipBlacklist,
           quota,
           expiresInDays,
-          { rate_limit_5h: 0, rate_limit_1d: 0, rate_limit_7d: 0 }
+          { rate_limit_5h: 0, rate_limit_1d: 0, rate_limit_7d: 0 },
+          undefined,
+          userTier.value
         )
         created.push(newKey.key)
       }

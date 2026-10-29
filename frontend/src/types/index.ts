@@ -470,6 +470,9 @@ export interface ApiKey {
   group_ids?: number[]
   allowed_models?: string[]
   status: 'active' | 'inactive' | 'quota_exhausted' | 'expired'
+  // Billing tier for unofficial (yunwu) providers: '' = derive from the key's
+  // groups (legacy), otherwise 'smart' or 'fast'.
+  tier?: string
   ip_whitelist: string[]
   ip_blacklist: string[]
   last_used_at: string | null
@@ -503,6 +506,8 @@ export interface CreateApiKeyRequest {
   custom_key?: string // Optional custom API Key
   ip_whitelist?: string[]
   ip_blacklist?: string[]
+  // Yunwu billing tier of the key: 'smart' (default) or 'fast'.
+  tier?: string
   quota?: number // Quota limit in USD (0 = unlimited)
   expires_in_days?: number // Days until expiry (null = never expires)
   rate_limit_5h?: number
@@ -516,6 +521,8 @@ export interface UpdateApiKeyRequest {
   group_ids?: number[]
   allowed_models?: string[]
   status?: 'active' | 'inactive'
+  // Yunwu billing tier of the key: '' clears it (legacy group derivation).
+  tier?: string
   ip_whitelist?: string[]
   ip_blacklist?: string[]
   quota?: number // Quota limit in USD (null = no change, 0 = unlimited)
