@@ -2576,8 +2576,8 @@ export default {
           normal: 'RPM normal',
           tieredNormal: 'RPM limit (Tiered) - Normal',
           tieredWarning: 'RPM limit (Tiered) - Approaching limit',
-          tieredStickyOnly: 'RPM limit (Tiered) - Sticky only | Buffer: {buffer}',
-          tieredBlocked: 'RPM limit (Tiered) - Blocked | Buffer: {buffer}',
+          tieredStickyOnly: 'RPM limit (Tiered) - Sticky only {\'|\'} Buffer: {buffer}',
+          tieredBlocked: 'RPM limit (Tiered) - Blocked {\'|\'} Buffer: {buffer}',
           stickyExemptNormal: 'RPM limit (Sticky Exempt) - Normal',
           stickyExemptWarning: 'RPM limit (Sticky Exempt) - Approaching limit',
           stickyExemptOver: 'RPM limit (Sticky Exempt) - Over limit, sticky only'
@@ -5390,7 +5390,7 @@ export default {
         botTokenPlaceholder: '123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ',
         botTokenHint: "Token received from {'@'}BotFather",
         channelId: 'Broadcast Channel / Chat ID (Optional)',
-        channelIdPlaceholder: '-1001234567890 or @alerts_channel',
+        channelIdPlaceholder: '-1001234567890 or {\'@\'}alerts_channel',
         channelIdHint: 'Channel or group chat ID to broadcast administrator alerts to (in addition to whitelisted users)',
         alertsEnabled: 'Administrative Alerts',
         alertsEnabledHint: 'Automatically send Telegram notifications when provider balance drops below threshold',
@@ -6819,7 +6819,7 @@ export default {
       0x4AAAAAAA2: '0x4AAAAAAA...'
     },
     setupWizardView: {
-      adminexamplecom: 'admin@example.com',
+      adminexamplecom: 'admin{\'@\'}example.com',
       connectionFailed: 'Connection failed',
       installationFailed: 'Installation failed',
       localhost: 'localhost',

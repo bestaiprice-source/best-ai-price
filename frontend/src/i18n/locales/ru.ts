@@ -2576,8 +2576,8 @@ export default {
           normal: 'RPM в норме',
           tieredNormal: 'Лимит RPM (по уровням) — норма',
           tieredWarning: 'Лимит RPM (по уровням) — приближение к лимиту',
-          tieredStickyOnly: 'Лимит RPM (по уровням) — только закреплённые | Буфер: {buffer}',
-          tieredBlocked: 'Лимит RPM (по уровням) — заблокировано | Буфер: {buffer}',
+          tieredStickyOnly: 'Лимит RPM (по уровням) — только закреплённые {\'|\'} Буфер: {buffer}',
+          tieredBlocked: 'Лимит RPM (по уровням) — заблокировано {\'|\'} Буфер: {buffer}',
           stickyExemptNormal: 'Лимит RPM (исключение для закреплённых) — норма',
           stickyExemptWarning: 'Лимит RPM (исключение для закреплённых) — приближение к лимиту',
           stickyExemptOver: 'Лимит RPM (исключение для закреплённых) — превышение лимита, только закреплённые'
@@ -5390,7 +5390,7 @@ export default {
         botTokenPlaceholder: '123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ',
         botTokenHint: "Токен, полученный от {'@'}BotFather",
         channelId: 'Канал рассылки / ID чата (необязательно)',
-        channelIdPlaceholder: '-1001234567890 или @alerts_channel',
+        channelIdPlaceholder: '-1001234567890 или {\'@\'}alerts_channel',
         channelIdHint: 'ID канала или группового чата для рассылки административных алертов (в дополнение к пользователям из белого списка)',
         alertsEnabled: 'Административные алерты',
         alertsEnabledHint: 'Автоматически отправлять уведомления в Telegram, когда баланс провайдера опускается ниже порога',
@@ -6819,7 +6819,7 @@ export default {
       0x4AAAAAAA2: '0x4AAAAAAA...'
     },
     setupWizardView: {
-      adminexamplecom: 'admin@example.com',
+      adminexamplecom: 'admin{\'@\'}example.com',
       connectionFailed: 'Не удалось подключиться',
       installationFailed: 'Установка не удалась',
       localhost: 'localhost',
