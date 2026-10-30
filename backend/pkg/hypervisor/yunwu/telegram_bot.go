@@ -40,10 +40,18 @@ type TelegramBot struct {
 	threshold    float64
 	allowedUsers []string
 	recipients   map[int64]TelegramRecipient
+	lastReload   time.Time
 
 	stopCh  chan struct{}
 	running bool
 }
+
+// TelegramSettingsRefreshInterval is how often the running long-polling bot
+// re-reads the Telegram settings. The whitelist used to be loaded once at
+// construction only, so a username added to the whitelist afterwards was
+// rejected by IsUserAllowed and could never register as a recipient (its /start
+// was dropped silently) until the whole process restarted.
+const TelegramSettingsRefreshInterval = 60 * time.Second
 
 func NewTelegramBot(store *storage.Storage, cfg *config.HypervisorConfig, sw *StatsWorker) *TelegramBot {
 	bot := &TelegramBot{
@@ -156,6 +164,22 @@ func (b *TelegramBot) Reload(ctx context.Context) {
 	b.enabled = enabled
 	b.threshold = threshold
 	b.allowedUsers = allowedUsers
+	b.lastReload = time.Now()
+}
+
+// refreshSettingsIfStale re-reads the Telegram settings (bot token, enabled
+// flag, whitelist, active recipients) at most once per
+// TelegramSettingsRefreshInterval. Without it an administrator adding a
+// username to the whitelist had to restart the process before that user's
+// /start was accepted and the user registered as an alert recipient.
+func (b *TelegramBot) refreshSettingsIfStale(ctx context.Context) {
+	b.mu.RLock()
+	stale := time.Since(b.lastReload) >= TelegramSettingsRefreshInterval
+	b.mu.RUnlock()
+	if !stale {
+		return
+	}
+	b.Reload(ctx)
 }
 
 func parseAllowedUsers(raw string) []string {
@@ -356,6 +380,9 @@ func (b *TelegramBot) pollLoop(ctx context.Context) {
 				continue
 			}
 		}
+
+		// Pick up whitelist / token / enabled changes made after startup.
+		b.refreshSettingsIfStale(ctx)
 
 		updates, nextOffset, err := b.fetchUpdates(ctx, client, baseURL, token, offset)
 		if err != nil {

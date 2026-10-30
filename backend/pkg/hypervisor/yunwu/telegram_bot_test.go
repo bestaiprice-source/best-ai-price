@@ -273,6 +273,54 @@ func TestTelegramBot_PollingLifecycle(t *testing.T) {
 	assert.GreaterOrEqual(t, atomic.LoadInt32(&pollCount), int32(1))
 }
 
+// A username added to the whitelist after the process started must be able to
+// register (by sending /start) without a restart: the running bot re-reads the
+// whitelist periodically.
+func TestTelegramBot_NewlyWhitelistedUserCanRegister(t *testing.T) {
+	ctx := context.Background()
+	cfg := &config.HypervisorConfig{
+		TelegramBotToken:      "test-bot-token",
+		TelegramAllowedUsers:  []string{"@first_admin"},
+		TelegramAlertsEnabled: true,
+	}
+	bot := NewTelegramBot(nil, cfg, nil)
+
+	msg := &tgMessage{
+		MessageID: 1,
+		From:      &tgUser{ID: 555000111, UserName: "second_admin"},
+		Chat:      tgChat{ID: 555000111},
+		Text:      "/start",
+	}
+
+	// Startup whitelist: the second profile is not there yet, so it is dropped.
+	bot.handleMessage(ctx, msg)
+	require.Empty(t, bot.GetActiveRecipients())
+
+	// The refresh is throttled: an immediate call does not re-read settings.
+	cfg.TelegramAllowedUsers = []string{"@first_admin", "@second_admin"}
+	bot.refreshSettingsIfStale(ctx)
+	assert.False(t, bot.IsUserAllowed(555000111, "second_admin"),
+		"settings refresh must be throttled between poll iterations")
+
+	// Once the cached settings expire, the running bot adopts the new whitelist.
+	forceSettingsRefreshDue(bot)
+	bot.refreshSettingsIfStale(ctx)
+	require.True(t, bot.IsUserAllowed(555000111, "second_admin"))
+
+	// The newly whitelisted profile can now register and will receive alerts.
+	bot.handleMessage(ctx, msg)
+	recipients := bot.GetActiveRecipients()
+	require.Len(t, recipients, 1)
+	assert.Equal(t, int64(555000111), recipients[0].ChatID)
+	assert.Equal(t, "second_admin", recipients[0].Username)
+}
+
+func forceSettingsRefreshDue(bot *TelegramBot) {
+	bot.mu.Lock()
+	bot.lastReload = time.Now().Add(-TelegramSettingsRefreshInterval - time.Second)
+	bot.mu.Unlock()
+}
+
 func TestParseAllowedUsers(t *testing.T) {
 	assert.Nil(t, parseAllowedUsers(""))
 	assert.Nil(t, parseAllowedUsers("   "))
