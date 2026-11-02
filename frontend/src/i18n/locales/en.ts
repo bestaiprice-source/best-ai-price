@@ -866,6 +866,17 @@ export default {
     nameLabel: 'Name',
     modelAllowlist: 'Model allowlist',
     modelAllowlistHint: 'Allow this key to call only the selected models (empty = all models).',
+    modelPickerPlaceholder: 'Model',
+    modelPickerSearch: 'Search models...',
+    modelPickerNoResults: 'No matching models',
+    modelPickerSelected: '{count} models selected',
+    modelPickerClear: 'Clear',
+    modelPresetsTitle: 'Quick presets',
+    modelPresets: {
+      codex: 'Codex',
+      anthropic: 'Anthropic',
+      gemini: 'Gemini'
+    },
     quotaSettingsHint: 'Set the token quota available to this key',
     unlimitedQuota: 'Unlimited quota',
     unlimitedQuotaHint: 'No spending cap — the key can use your whole balance.',

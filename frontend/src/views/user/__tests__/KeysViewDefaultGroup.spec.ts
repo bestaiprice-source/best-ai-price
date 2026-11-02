@@ -45,6 +45,13 @@ vi.mock('@/stores/auth', () => ({
 }))
 vi.mock('@/composables/useClipboard', () => ({ useClipboard: () => ({ copyToClipboard: vi.fn() }) }))
 vi.mock('@/composables/usePersistedPageSize', () => ({ getPersistedPageSize: () => 20 }))
+vi.mock('@/api/publicModels', () => ({
+  getPublicModels: vi.fn().mockResolvedValue([
+    { model_id: 'claude-sonnet-5' },
+    { model_id: 'gpt-5.3-codex' },
+    { model_id: 'gemini-2.5-flash' }
+  ])
+}))
 
 import KeysView from '../KeysView.vue'
 

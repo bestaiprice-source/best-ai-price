@@ -866,6 +866,17 @@ export default {
     nameLabel: 'Название',
     modelAllowlist: 'Список разрешённых моделей',
     modelAllowlistHint: 'Разрешить этому ключу вызывать только выбранные модели (пусто = все модели).',
+    modelPickerPlaceholder: 'Модель',
+    modelPickerSearch: 'Поиск моделей...',
+    modelPickerNoResults: 'Нет подходящих моделей',
+    modelPickerSelected: 'Выбрано моделей: {count}',
+    modelPickerClear: 'Очистить',
+    modelPresetsTitle: 'Быстрые пресеты',
+    modelPresets: {
+      codex: 'Codex',
+      anthropic: 'Anthropic',
+      gemini: 'Gemini'
+    },
     quotaSettingsHint: 'Задайте квоту токенов, доступную этому ключу',
     unlimitedQuota: 'Без ограничения квоты',
     unlimitedQuotaHint: 'Без лимита расходов — ключ может использовать весь ваш баланс.',

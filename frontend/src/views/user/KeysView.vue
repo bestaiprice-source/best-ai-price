@@ -561,7 +561,10 @@
           <div v-if="formData.enable_model_restriction" class="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-dark-600 dark:bg-dark-800">
             <ModelWhitelistSelector
               v-model="formData.allowed_models"
+              variant="select"
               :platforms="selectedGroupPlatforms"
+              :options="modelPickerOptions"
+              :presets="modelPresets"
             />
             <p class="mt-2 text-xs text-gray-500">
               {{
@@ -1272,6 +1275,9 @@ import QuickStart from '@/components/keys/QuickStart.vue'
 	import GroupBadge from '@/components/common/GroupBadge.vue'
 	import GroupOptionItem from '@/components/common/GroupOptionItem.vue'
 	import ModelWhitelistSelector from '@/components/account/ModelWhitelistSelector.vue'
+	import { getModelsByPlatform } from '@/composables/useModelWhitelist'
+	import { buildAllowlistPresets } from '@/composables/useModelAllowlistPresets'
+	import { getPublicModels } from '@/api/publicModels'
 	import type { ApiKey, Group, PublicSettings } from '@/types'
 import type { Column } from '@/components/common/types'
 import type { BatchApiKeyUsageStats } from '@/api/usage'
@@ -1567,6 +1573,52 @@ const selectedGroupPlatforms = computed(() => {
   return Array.from(platforms)
 })
 
+// --- Model allowlist picker (key form) -------------------------------------
+// A key may be restricted to the models we actually serve, so the picker's
+// option pool is the LIVE public catalog (the same feed the price list and
+// billing are built from) merged with the curated per-platform lists — the
+// catalog alone would leave the list empty while it loads, and the curated list
+// alone is what used to show Claude models for a pooled-provider group.
+const catalogModelIds = ref<string[]>([])
+let catalogModelsRequested = false
+
+const loadCatalogModels = async () => {
+  if (catalogModelsRequested) return
+  catalogModelsRequested = true
+  try {
+    const models = await getPublicModels()
+    catalogModelIds.value = Array.from(
+      new Set(
+        models
+          .map(m => (m.model_id || m.canonical_model_id || '').trim())
+          .filter(Boolean)
+      )
+    )
+  } catch (e) {
+    // Best effort: the curated lists still give a usable picker.
+    catalogModelsRequested = false
+    console.warn('[KeysView] public model catalog unavailable, falling back to the curated lists', e)
+  }
+}
+
+const curatedPlatformModels = computed(() => {
+  const out = new Set<string>()
+  for (const platform of selectedGroupPlatforms.value) {
+    const key = (platform || '').trim().toLowerCase()
+    // The pooled-provider platform spans every vendor family, so the catalog
+    // (not a single curated list) is the honest source there.
+    if (!key || key === 'yunwu' || key === 'custom' || key === 'standard') continue
+    for (const model of getModelsByPlatform(key)) out.add(model)
+  }
+  return Array.from(out)
+})
+
+const modelPickerOptions = computed(() =>
+  Array.from(new Set([...catalogModelIds.value, ...curatedPlatformModels.value]))
+)
+
+const modelPresets = computed(() => buildAllowlistPresets(modelPickerOptions.value, key => t(key)))
+
 // Group dropdown search
 const groupSearchQuery = ref('')
 const filteredGroupOptions = computed(() => {
@@ -1784,6 +1836,7 @@ const handlePageSizeChange = (pageSize: number) => {
 
 const editKey = (key: ApiKey) => {
   selectedKey.value = key
+  void loadCatalogModels()
   const hasIPRestriction = (key.ip_whitelist?.length > 0) || (key.ip_blacklist?.length > 0)
   const hasExpiration = !!key.expires_at
   formData.value = {
@@ -1991,6 +2044,9 @@ const handleCreateKeyClick = async () => {
     // allowlist can resolve the group's platforms.
     formData.value.group_ids = isAdmin.value ? [] : (selectedGroupId.value ? [selectedGroupId.value] : [])
   }
+  // Warm the model picker's catalog (best-effort; the curated lists render
+  // immediately while it loads).
+  void loadCatalogModels()
   showCreateModal.value = true
 }
 
