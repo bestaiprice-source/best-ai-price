@@ -1100,7 +1100,7 @@ func formatZeroBalanceMessage(provider, accountName, nodeID string, threshold fl
 
 func formatProviderDownDegradedMessage(provider, nodeID, accountName, status, reason string) string {
 	return fmt.Sprintf(
-		"🔴 <b>[АВАРИЯ] Провайдер недоступен / деградировал</b>\n\n"+
+		"🔴 <b>Провайдер недоступен / деградировал</b>\n\n"+
 			"• <b>Провайдер:</b> %s\n"+
 			"• <b>Аккаунт:</b> %s\n"+
 			"• <b>Node ID:</b> <code>%s</code>\n"+
@@ -1118,7 +1118,7 @@ func formatProviderDownDegradedMessage(provider, nodeID, accountName, status, re
 
 func formatUpstreamKeyInvalidMessage(provider, nodeID, accountName, keyMasked, reason string) string {
 	return fmt.Sprintf(
-		"🚫 <b>[АВАРИЯ] Ключ API провайдера недействителен / отключён</b>\n\n"+
+		"🚫 <b>Ключ API провайдера недействителен / отключён</b>\n\n"+
 			"• <b>Провайдер:</b> %s\n"+
 			"• <b>Аккаунт:</b> %s\n"+
 			"• <b>Node ID:</b> <code>%s</code>\n"+
@@ -1137,7 +1137,7 @@ func formatUpstreamKeyInvalidMessage(provider, nodeID, accountName, keyMasked, r
 
 func formatBothProvidersUnavailableMessage(modelID, primaryProvider, backupProvider, reason string) string {
 	return fmt.Sprintf(
-		"🚨 <b>[КРИТИЧЕСКИЙ СБОЙ] Оба провайдера модели недоступны</b>\n\n"+
+		"🚨 <b>Оба провайдера модели недоступны</b>\n\n"+
 			"• <b>Модель:</b> <code>%s</code>\n"+
 			"• <b>Основной провайдер:</b> %s (недоступен)\n"+
 			"• <b>Резервный провайдер:</b> %s (недоступен)\n"+
@@ -1154,7 +1154,7 @@ func formatBothProvidersUnavailableMessage(modelID, primaryProvider, backupProvi
 
 func formatFailoverRateExceededMessage(modelID string, failoverRate, thresholdRate float64, totalRequests, failoverCount int64) string {
 	return fmt.Sprintf(
-		"⚠️ <b>[ВНИМАНИЕ] Высокая частота переключений для модели</b>\n\n"+
+		"⚠️ <b>Высокая частота переключений для модели</b>\n\n"+
 			"• <b>Модель:</b> <code>%s</code>\n"+
 			"• <b>Частота переключений:</b> %.1f%%\n"+
 			"• <b>Порог оповещения:</b> %.1f%%\n"+
@@ -1173,7 +1173,7 @@ func formatFailoverRateExceededMessage(modelID string, failoverRate, thresholdRa
 
 func formatErrorSpikeMessage(scope string, count429, count5xx int64, windowMinutes int, reason string) string {
 	return fmt.Sprintf(
-		"📈 <b>[ВСПЛЕСК ОШИБОК] Резкий рост ошибок 429 / 5xx</b>\n\n"+
+		"📈 <b>Резкий рост ошибок 429 / 5xx</b>\n\n"+
 			"• <b>Область / контекст:</b> %s\n"+
 			"• <b>Ошибки 429 (лимит):</b> %d\n"+
 			"• <b>Ошибки 5xx (сервер):</b> %d\n"+
@@ -1195,7 +1195,7 @@ func formatCheaperProviderFoundMessage(family, modelName, currentProvider string
 		cardLink = fmt.Sprintf("\n• <b>Карточка BestAIPrice:</b> <a href=\"%s\">Открыть</a>", html.EscapeString(providerCardURL))
 	}
 	return fmt.Sprintf(
-		"💡 <b>[ОПТИМИЗАЦИЯ РАСХОДОВ] Найден более дешёвый провайдер</b>\n\n"+
+		"💡 <b>Найден более дешёвый провайдер</b>\n\n"+
 			"• <b>Семейство:</b> %s\n"+
 			"• <b>Модель:</b> <code>%s</code>\n"+
 			"• <b>Текущий провайдер:</b> %s ($%.4f/1M)\n"+
@@ -1222,7 +1222,7 @@ func formatPriceChangedSignificantlyMessage(provider, modelName string, oldInput
 		sign = ""
 	}
 	return fmt.Sprintf(
-		"📊 <b>[ИЗМЕНЕНИЕ ЦЕН] Значительное изменение цен провайдера</b>\n\n"+
+		"📊 <b>Значительное изменение цен провайдера</b>\n\n"+
 			"• <b>Провайдер:</b> %s\n"+
 			"• <b>Модель:</b> <code>%s</code>\n"+
 			"• <b>Цена входа:</b> $%.4f → $%.4f\n"+
@@ -1242,7 +1242,7 @@ func formatPriceChangedSignificantlyMessage(provider, modelName string, oldInput
 
 func formatUnprofitableRequestMessage(provider, modelName, leg string, chargedUSD, costUSD float64) string {
 	return fmt.Sprintf(
-		"🚨 <b>[УБЫТОК] Невыгодный запрос — продали дешевле себестоимости маршрута</b>\n\n"+
+		"🚨 <b>Невыгодный запрос — продали дешевле себестоимости маршрута</b>\n\n"+
 			"• <b>Обслуживающий провайдер:</b> %s\n"+
 			"• <b>Модель:</b> <code>%s</code>\n"+
 			"• <b>База списания:</b> %s\n"+
@@ -1265,7 +1265,7 @@ func formatUnprofitableRequestMessage(provider, modelName, leg string, chargedUS
 
 func formatCatalogPriceMismatchMessage(provider, modelName, leg string, publishedUSD, chargedUSD, diffPercent float64) string {
 	return fmt.Sprintf(
-		"⚠️ <b>[РАСХОЖДЕНИЕ ЦЕН] Опубликованная в каталоге цена ≠ списанная с пользователя</b>\n\n"+
+		"⚠️ <b>Опубликованная в каталоге цена ≠ списанная с пользователя</b>\n\n"+
 			"• <b>Провайдер:</b> %s\n"+
 			"• <b>Модель:</b> <code>%s</code>\n"+
 			"• <b>Позиция тарифа:</b> %s\n"+

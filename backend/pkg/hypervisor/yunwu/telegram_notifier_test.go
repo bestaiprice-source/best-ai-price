@@ -1141,7 +1141,7 @@ func TestTelegramNotifier_CatalogPriceMismatch(t *testing.T) {
 
 	mu.Lock()
 	require.Len(t, sentMessages, 1)
-	assert.Contains(t, sentMessages[0].Text, "РАСХОЖДЕНИЕ ЦЕН")
+	assert.Contains(t, sentMessages[0].Text, "Опубликованная в каталоге цена")
 	assert.Contains(t, sentMessages[0].Text, "openlux")
 	assert.Contains(t, sentMessages[0].Text, "claude-sonnet-5")
 	assert.Contains(t, sentMessages[0].Text, "$2.200000")
