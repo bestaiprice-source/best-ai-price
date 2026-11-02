@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"strconv"
 	"strings"
 	"sync"
@@ -800,6 +801,86 @@ func alertIfUnprofitableYunwuRequest(ctx context.Context, bs *BillingService, pr
 	if notifier := yunwu.GetDefaultNotifier(); notifier != nil {
 		if _, err := notifier.NotifyUnprofitableRequest(ctx, provider, model, margin.Leg, margin.ChargedUSD, margin.CostUSD); err != nil {
 			slog.Warn("[YunwuBilling] failed to send unprofitable-request alert", "error", err)
+		}
+	}
+}
+
+// DefaultCatalogParityTolerancePercent is how far the per-unit price actually
+// charged for a request may differ from the price the public catalog publishes
+// for the same model before the catalog↔charge parity alert fires. It absorbs
+// display rounding (the catalog rounds its per-1M prices) while still catching a
+// genuine basis or markup divergence.
+const DefaultCatalogParityTolerancePercent = 5.0
+
+// alertIfYunwuCatalogPriceMismatch emits a Telegram alert when the per-unit price
+// basis billing actually applied for a request differs from the price basis the
+// public catalog publishes for the same model — i.e. the price list and the
+// amount deducted from the user's balance no longer agree. The published basis
+// comes from the same resolver the catalog uses
+// (`GetYunwuPrimaryModelPricing`), so a divergence means the provider scope (or
+// the resolved rate) used for the charge differs from the published one; the
+// retail markup itself is applied identically on both sides and legitimately
+// varies per user/group, so it is not what is compared. Only token rates are
+// compared; media (fixed per-unit) models are billed from the published per-unit
+// price directly.
+func alertIfYunwuCatalogPriceMismatch(
+	ctx context.Context,
+	bs *BillingService,
+	provider, model string,
+	tokens UsageTokens,
+	cost *CostBreakdown,
+	multiplier float64,
+) {
+	if bs == nil || bs.yunwuPricing == nil || cost == nil || strings.TrimSpace(model) == "" {
+		return
+	}
+	published, err := bs.GetYunwuPrimaryModelPricing(ctx, model)
+	if err != nil || published == nil {
+		return
+	}
+	// A long-context model legitimately charges above the list rate once the
+	// session grows past its threshold; that is not a mismatch.
+	if published.LongContextInputMultiplier > 1 &&
+		published.LongContextInputThreshold > 0 &&
+		tokens.InputTokens >= published.LongContextInputThreshold {
+		return
+	}
+	if multiplier <= 0 {
+		multiplier = 1.0
+	}
+
+	// Report only the worst leg so one request can never fire two alerts.
+	// Both sides are expressed as the price shown/charged per 1M tokens under the
+	// SAME retail multiplier, so the comparison isolates the PRICE BASIS (the
+	// provider and rate we publish vs the one we charged). The markup itself
+	// legitimately varies per user/group and is therefore not what is compared.
+	worstLeg := ""
+	worstPublished, worstCharged, worstDiff := 0.0, 0.0, 0.0
+	consider := func(leg string, publishedPerToken, costUSD float64, tokenCount int) {
+		if publishedPerToken <= 0 || tokenCount <= 0 || costUSD <= 0 {
+			return
+		}
+		publishedPer1M := publishedPerToken * 1_000_000 * multiplier
+		chargedPer1M := costUSD * multiplier / float64(tokenCount) * 1_000_000
+		diff := (chargedPer1M - publishedPer1M) / publishedPer1M * 100
+		if math.Abs(diff) <= math.Abs(worstDiff) {
+			return
+		}
+		worstLeg, worstPublished, worstCharged, worstDiff = leg, publishedPer1M, chargedPer1M, diff
+	}
+	consider("input", published.InputPricePerToken, cost.InputCost, tokens.InputTokens)
+	consider("output", published.OutputPricePerToken, cost.OutputCost, tokens.OutputTokens)
+
+	if worstLeg == "" || math.Abs(worstDiff) < DefaultCatalogParityTolerancePercent {
+		return
+	}
+	slog.Warn("[YunwuBilling] catalog/charge price mismatch: charged price differs from the published catalog price",
+		"provider", provider, "model", model, "leg", worstLeg,
+		"published_usd_per_1m", worstPublished, "charged_usd_per_1m", worstCharged,
+		"diff_percent", worstDiff)
+	if notifier := yunwu.GetDefaultNotifier(); notifier != nil {
+		if _, err := notifier.NotifyCatalogPriceMismatch(ctx, provider, model, worstLeg, worstPublished, worstCharged, worstDiff); err != nil {
+			slog.Warn("[YunwuBilling] failed to send catalog price mismatch alert", "error", err)
 		}
 	}
 }

@@ -168,11 +168,14 @@ const eventTypes = [
   { key: 'provider_down_degraded', name: 'Provider Down / Degraded', desc: 'Node or pool failed health checks or entered cooldown.', cooldown: '30 min' },
   { key: 'upstream_key_invalid', name: 'Upstream API key invalid/disabled', desc: 'Upstream returned 401/403 or a disabled-key error.', cooldown: '1 h' },
   { key: 'balance_low', name: 'Provider balance low', desc: 'Provider credit dropped below its threshold.', cooldown: '12 h' },
+  { key: 'balance_zero', name: 'Provider balance depleted (0)', desc: 'Provider credit is fully exhausted — requests to it will start failing.', cooldown: '6 h' },
   { key: 'both_providers_unavailable', name: 'Both providers unavailable', desc: 'No compatible candidate node could serve the model.', cooldown: '30 min' },
   { key: 'failover_rate_exceeded', name: 'Failover rate exceeded', desc: 'Model failover rate crossed the threshold in the window.', cooldown: '30 min' },
   { key: 'error_spike_429_5xx', name: 'Surge in 429 / 5xx errors', desc: 'Error rate crossed the threshold in the window.', cooldown: '15 min' },
   { key: 'cheaper_provider_found', name: 'Cheaper provider found', desc: 'A cheaper alternative provider was detected.', cooldown: '24 h' },
-  { key: 'price_changed_significantly', name: 'Provider price changed significantly', desc: 'Upstream price moved enough to require a retail recalculation.', cooldown: '24 h' }
+  { key: 'price_changed_significantly', name: 'Provider price changed significantly', desc: 'Upstream price moved enough to require a retail recalculation.', cooldown: '24 h' },
+  { key: 'unprofitable_request', name: 'Unprofitable request (sold below cost)', desc: 'A request was served by a provider more expensive than the price we charged.', cooldown: '1 h' },
+  { key: 'catalog_price_mismatch', name: 'Catalog vs charged price mismatch', desc: 'The price the catalog publishes differs from the price actually deducted.', cooldown: '1 h' }
 ]
 
 const formatTime = (v?: string) => (v ? new Date(v).toLocaleString() : '—')

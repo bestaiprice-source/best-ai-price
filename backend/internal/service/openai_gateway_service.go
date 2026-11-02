@@ -5949,6 +5949,11 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 			).Error("openai.calculate_cost_failed_using_failsafe_pricing")
 			cost = s.billingService.CalculateFailSafeCost(billingModel, tokens, multiplier)
 		}
+		// Catalog↔charge parity guard: the per-unit price we deduct must equal the
+		// price the public catalog publishes for the same model.
+		if YunwuPrimaryPricingFromContext(ctx) {
+			alertIfYunwuCatalogPriceMismatch(ctx, s.billingService, yunwu.ParseNodeProvider(account.Extra), billingModel, tokens, cost, multiplier)
+		}
 	}
 
 	// Loss-making request guard: the provider that actually served the request may

@@ -588,7 +588,7 @@ func (s *CheaperProviderService) CheckOpportunities(ctx context.Context) ([]mode
 			}
 
 			if len(grp.models) > 8 {
-				modelLines = append(modelLines, fmt.Sprintf("• <i>... and %d more models</i>", len(grp.models)-8))
+				modelLines = append(modelLines, fmt.Sprintf("• <i>... и ещё %d моделей</i>", len(grp.models)-8))
 			}
 
 			firstOpp := grp.models[0]
@@ -603,17 +603,17 @@ func (s *CheaperProviderService) CheckOpportunities(ctx context.Context) ([]mode
 			familyNameDisplay := formatFamilyName(grp.family)
 			currentDisplay := strings.Join(currentProvidersList, ", ")
 			if currentDisplay == "" {
-				currentDisplay = "Not specified"
+				currentDisplay = "Не указано"
 			}
 
 			tgMsg := fmt.Sprintf(
-				"💡 <b>Found cheaper provider for family %s!</b>\n\n"+
-					"<b>Family:</b> %s\n"+
-					"<b>Current providers:</b> %s (avg price: %s / 1M)\n"+
-					"<b>Best candidate:</b> %s (%s) (avg price: %s / 1M)\n"+
-					"<b>Family average savings:</b> 🟢 <b>-%.1f%%</b>\n\n"+
-					"<b>Models (%d):</b>\n%s\n\n"+
-					"<b>Provider card:</b> <a href=\"%s\">%s</a>",
+				"💡 <b>Найден более дешёвый провайдер для семейства %s!</b>\n\n"+
+					"<b>Семейство:</b> %s\n"+
+					"<b>Текущие провайдеры:</b> %s (средняя цена: %s / 1M)\n"+
+					"<b>Лучший кандидат:</b> %s (%s) (средняя цена: %s / 1M)\n"+
+					"<b>Средняя экономия по семейству:</b> 🟢 <b>-%.1f%%</b>\n\n"+
+					"<b>Модели (%d):</b>\n%s\n\n"+
+					"<b>Карточка провайдера:</b> <a href=\"%s\">%s</a>",
 				familyNameDisplay,
 				familyNameDisplay,
 				currentDisplay, formatPriceUSD(grp.currentAvg),

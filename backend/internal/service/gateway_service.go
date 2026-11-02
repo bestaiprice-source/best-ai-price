@@ -8272,6 +8272,12 @@ func (s *GatewayService) RecordUsage(ctx context.Context, input *RecordUsageInpu
 			).Error("gateway.calculate_cost_failed_using_failsafe_pricing")
 			cost = s.billingService.CalculateFailSafeCost(billingModel, tokens, multiplier)
 		}
+		// Catalog↔charge parity guard: the per-unit price we actually deduct from
+		// the user must equal the price the public catalog publishes for the same
+		// model. A divergence means the price list no longer matches the charge.
+		if YunwuPrimaryPricingFromContext(ctx) {
+			alertIfYunwuCatalogPriceMismatch(ctx, s.billingService, yunwu.ParseNodeProvider(account.Extra), billingModel, tokens, cost, multiplier)
+		}
 	}
 
 	// Loss-making request guard: the provider that actually served the request may

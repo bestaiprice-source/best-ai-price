@@ -31,12 +31,14 @@ const (
 	EventProviderDownDegraded      TelegramEventType = "provider_down_degraded"
 	EventUpstreamKeyInvalid        TelegramEventType = "upstream_key_invalid"
 	EventProviderBalanceLow        TelegramEventType = "balance_low"
+	EventProviderBalanceZero       TelegramEventType = "balance_zero"
 	EventBothProvidersUnavailable  TelegramEventType = "both_providers_unavailable"
 	EventFailoverRateExceeded      TelegramEventType = "failover_rate_exceeded"
 	EventErrorSpike                TelegramEventType = "error_spike_429_5xx"
 	EventCheaperProviderFound      TelegramEventType = "cheaper_provider_found"
 	EventPriceChangedSignificantly TelegramEventType = "price_changed_significantly"
 	EventUnprofitableRequest       TelegramEventType = "unprofitable_request"
+	EventCatalogPriceMismatch      TelegramEventType = "catalog_price_mismatch"
 )
 
 const (
@@ -52,6 +54,14 @@ const (
 	// loss alert is repeated. Content deduplication additionally suppresses an
 	// unchanged message, so this only gates genuine repeats.
 	DefaultCooldownUnprofitableRequest = 1 * time.Hour
+	// DefaultCooldownProviderBalanceZero is the depletion (balance = 0) cooldown.
+	// It is deliberately shorter than the low-balance window and lives under its
+	// OWN dedup key: a node whose balance has hit zero is a full outage, and the
+	// 12h low-balance cooldown must never swallow it.
+	DefaultCooldownProviderBalanceZero = 6 * time.Hour
+	// DefaultCooldownCatalogPriceMismatch bounds how often the same
+	// provider+model catalog↔charge divergence is repeated.
+	DefaultCooldownCatalogPriceMismatch = 1 * time.Hour
 
 	DefaultFailoverThresholdRate = 0.20 // 20%
 	DefaultFailoverMinRequests   = 5
@@ -103,6 +113,13 @@ type TelegramNotifier struct {
 
 func alertKey(nodeID string) string {
 	return "ash:yunwu:alerted:balance_low:" + nodeID
+}
+
+// zeroBalanceAlertKey is the dedup key for the depletion (balance = 0) alert. It
+// is intentionally separate from alertKey so a node whose balance has hit zero
+// always fires, even while the 12h low-balance cooldown is still live.
+func zeroBalanceAlertKey(nodeID string) string {
+	return "ash:yunwu:alerted:balance_zero:" + nodeID
 }
 
 func cooldownKey(eventType TelegramEventType, entityID string) string {
@@ -408,6 +425,8 @@ func (n *TelegramNotifier) CheckCooldownAndNotify(
 			cooldown = DefaultCooldownUpstreamKeyInvalid
 		case EventProviderBalanceLow:
 			cooldown = DefaultCooldownProviderBalanceLow
+		case EventProviderBalanceZero:
+			cooldown = DefaultCooldownProviderBalanceZero
 		case EventBothProvidersUnavailable:
 			cooldown = DefaultCooldownBothProvidersUnavailable
 		case EventFailoverRateExceeded:
@@ -418,6 +437,8 @@ func (n *TelegramNotifier) CheckCooldownAndNotify(
 			cooldown = DefaultCooldownCheaperProviderFound
 		case EventPriceChangedSignificantly:
 			cooldown = DefaultCooldownPriceChangedSignificantly
+		case EventCatalogPriceMismatch:
+			cooldown = DefaultCooldownCatalogPriceMismatch
 		default:
 			cooldown = 15 * time.Minute
 		}
@@ -538,6 +559,53 @@ func (n *TelegramNotifier) NotifyProviderBalanceLow(
 	return true, nil
 }
 
+// 3b. NotifyProviderBalanceZero dispatches a critical alert when a provider's
+// balance is fully depleted (<= 0): upstream requests will start failing. It
+// uses its own dedup key and cooldown so the low-balance window can never
+// suppress it.
+func (n *TelegramNotifier) NotifyProviderBalanceZero(
+	ctx context.Context,
+	provider, nodeID, accountName string,
+	thresholdUSD float64,
+) (bool, error) {
+	dedupKey := zeroBalanceAlertKey(nodeID)
+	if !n.checkAndSetCooldown(ctx, dedupKey, DefaultCooldownProviderBalanceZero) {
+		return false, nil
+	}
+
+	nCfg := n.resolveNotifierConfig(ctx)
+	if !nCfg.enabled || strings.TrimSpace(nCfg.botToken) == "" {
+		return false, nil
+	}
+	targetChatIDs := n.resolveTargetChatIDs(nCfg)
+	if len(targetChatIDs) == 0 {
+		return false, nil
+	}
+
+	msg := formatZeroBalanceMessage(provider, accountName, nodeID, thresholdUSD)
+	sentCount := 0
+	var lastErr error
+	for _, chatID := range targetChatIDs {
+		if err := n.sendTelegramMessage(ctx, nCfg.botToken, chatID, msg); err != nil {
+			lastErr = err
+		} else {
+			sentCount++
+		}
+	}
+
+	if sentCount == 0 && lastErr != nil {
+		n.clearCooldown(ctx, dedupKey)
+		return false, lastErr
+	}
+	slog.Info("[TelegramNotifier] Successfully sent Telegram zero balance alert",
+		"node_id", nodeID,
+		"provider", provider,
+		"threshold", thresholdUSD,
+		"recipients_count", sentCount,
+	)
+	return true, nil
+}
+
 // 4. NotifyBothProvidersUnavailable dispatches critical alert when all providers for a model are unavailable.
 func (n *TelegramNotifier) NotifyBothProvidersUnavailable(
 	ctx context.Context,
@@ -614,6 +682,21 @@ func (n *TelegramNotifier) NotifyUnprofitableRequest(
 	})
 }
 
+// 10. NotifyCatalogPriceMismatch dispatches an alert when the per-unit price
+// billing actually applied for a request differs from the price the public
+// catalog publishes for the same model — i.e. users are charged a price that no
+// longer matches the published price list.
+func (n *TelegramNotifier) NotifyCatalogPriceMismatch(
+	ctx context.Context,
+	provider, modelName, leg string,
+	publishedUSD, chargedUSD, diffPercent float64,
+) (bool, error) {
+	entityID := fmt.Sprintf("%s:%s", provider, modelName)
+	return n.CheckCooldownAndNotify(ctx, EventCatalogPriceMismatch, entityID, DefaultCooldownCatalogPriceMismatch, func() string {
+		return formatCatalogPriceMismatchMessage(provider, modelName, leg, publishedUSD, chargedUSD, diffPercent)
+	})
+}
+
 // Backward-compatible CheckAndNotify used by StatsWorker and manual balance sync.
 func (n *TelegramNotifier) CheckAndNotify(ctx context.Context, nodeID, accountName, provider string, availableUSD float64) (bool, error) {
 	if strings.TrimSpace(nodeID) == "" {
@@ -663,9 +746,16 @@ func (n *TelegramNotifier) CheckAndNotify(ctx context.Context, nodeID, accountNa
 		}
 	}
 
+	// A fully depleted balance is a harder failure than a low balance: requests to
+	// the provider stop entirely. It gets its own event, cooldown and dedup key so
+	// the low-balance window can never swallow it.
+	if availableUSD <= 0 {
+		return n.NotifyProviderBalanceZero(ctx, provider, nodeID, accountName, threshold)
+	}
+
 	// Replenished above threshold: reset alert state
 	if availableUSD > threshold {
-		if n.IsAlerted(ctx, nodeID) {
+		if n.IsAlerted(ctx, nodeID) || n.IsZeroAlerted(ctx, nodeID) {
 			n.clearAlerted(ctx, nodeID)
 			slog.Info("[TelegramNotifier] Yunwu node balance replenished above threshold, alert state reset",
 				"node_id", nodeID,
@@ -686,6 +776,7 @@ func (n *TelegramNotifier) markAlerted(ctx context.Context, nodeID string) (bool
 
 func (n *TelegramNotifier) clearAlerted(ctx context.Context, nodeID string) {
 	n.clearCooldown(ctx, alertKey(nodeID))
+	n.clearCooldown(ctx, zeroBalanceAlertKey(nodeID))
 	n.mu.Lock()
 	delete(n.memAlerted, nodeID)
 	n.mu.Unlock()
@@ -693,6 +784,12 @@ func (n *TelegramNotifier) clearAlerted(ctx context.Context, nodeID string) {
 
 func (n *TelegramNotifier) IsAlerted(ctx context.Context, nodeID string) bool {
 	return n.isCooldownActive(ctx, alertKey(nodeID))
+}
+
+// IsZeroAlerted reports whether the depletion (balance = 0) alert is currently
+// armed for a node.
+func (n *TelegramNotifier) IsZeroAlerted(ctx context.Context, nodeID string) bool {
+	return n.isCooldownActive(ctx, zeroBalanceAlertKey(nodeID))
 }
 
 // Metrics recording: Model Requests & Failovers
@@ -948,7 +1045,7 @@ func (n *TelegramNotifier) sendTelegramMessage(ctx context.Context, botToken, ch
 	return nil
 }
 
-// Message Formatters
+// Message Formatters (Russian — all operator-facing Telegram alerts).
 
 func formatAlertMessage(provider, accountName, nodeID string, balance, threshold float64) string {
 	if strings.TrimSpace(provider) == "" {
@@ -958,14 +1055,14 @@ func formatAlertMessage(provider, accountName, nodeID string, balance, threshold
 		accountName = nodeID
 	}
 	return fmt.Sprintf(
-		"⚠️ <b>Low Provider Balance: %s</b>\n\n"+
-			"• <b>Provider:</b> %s\n"+
-			"• <b>Account:</b> %s\n"+
+		"⚠️ <b>Низкий баланс провайдера: %s</b>\n\n"+
+			"• <b>Провайдер:</b> %s\n"+
+			"• <b>Аккаунт:</b> %s\n"+
 			"• <b>Node ID:</b> <code>%s</code>\n"+
-			"• <b>Current Balance:</b> $%.2f\n"+
-			"• <b>Alert Threshold:</b> $%.2f\n"+
-			"• <b>Status:</b> Recharge required\n"+
-			"• <b>Time:</b> %s",
+			"• <b>Текущий баланс:</b> $%.2f\n"+
+			"• <b>Порог оповещения:</b> $%.2f\n"+
+			"• <b>Статус:</b> Требуется пополнение\n"+
+			"• <b>Время:</b> %s",
 		html.EscapeString(provider),
 		html.EscapeString(provider),
 		html.EscapeString(accountName),
@@ -976,15 +1073,40 @@ func formatAlertMessage(provider, accountName, nodeID string, balance, threshold
 	)
 }
 
+func formatZeroBalanceMessage(provider, accountName, nodeID string, threshold float64) string {
+	if strings.TrimSpace(provider) == "" {
+		provider = "Yunwu"
+	}
+	if strings.TrimSpace(accountName) == "" {
+		accountName = nodeID
+	}
+	return fmt.Sprintf(
+		"🛑 <b>БАЛАНС ПРОВАЙДЕРА ИСЧЕРПАН: %s</b>\n\n"+
+			"• <b>Провайдер:</b> %s\n"+
+			"• <b>Аккаунт:</b> %s\n"+
+			"• <b>Node ID:</b> <code>%s</code>\n"+
+			"• <b>Текущий баланс:</b> $0.00 (исчерпан)\n"+
+			"• <b>Порог оповещения:</b> $%.2f\n"+
+			"• <b>Статус:</b> ⛔ КРИТИЧНО — запросы к провайдеру прекратятся. Требуется срочное пополнение\n"+
+			"• <b>Время:</b> %s",
+		html.EscapeString(provider),
+		html.EscapeString(provider),
+		html.EscapeString(accountName),
+		html.EscapeString(nodeID),
+		threshold,
+		time.Now().UTC().Format("2006-01-02 15:04:05 UTC"),
+	)
+}
+
 func formatProviderDownDegradedMessage(provider, nodeID, accountName, status, reason string) string {
 	return fmt.Sprintf(
-		"🔴 <b>[ALARM] Provider Down / Degraded</b>\n\n"+
-			"• <b>Provider:</b> %s\n"+
-			"• <b>Account:</b> %s\n"+
+		"🔴 <b>[АВАРИЯ] Провайдер недоступен / деградировал</b>\n\n"+
+			"• <b>Провайдер:</b> %s\n"+
+			"• <b>Аккаунт:</b> %s\n"+
 			"• <b>Node ID:</b> <code>%s</code>\n"+
-			"• <b>Status:</b> %s\n"+
-			"• <b>Reason:</b> %s\n"+
-			"• <b>Time:</b> %s",
+			"• <b>Статус:</b> %s\n"+
+			"• <b>Причина:</b> %s\n"+
+			"• <b>Время:</b> %s",
 		html.EscapeString(provider),
 		html.EscapeString(accountName),
 		html.EscapeString(nodeID),
@@ -996,14 +1118,14 @@ func formatProviderDownDegradedMessage(provider, nodeID, accountName, status, re
 
 func formatUpstreamKeyInvalidMessage(provider, nodeID, accountName, keyMasked, reason string) string {
 	return fmt.Sprintf(
-		"🚫 <b>[ALARM] Upstream API Key Invalid / Disabled</b>\n\n"+
-			"• <b>Provider:</b> %s\n"+
-			"• <b>Account:</b> %s\n"+
+		"🚫 <b>[АВАРИЯ] Ключ API провайдера недействителен / отключён</b>\n\n"+
+			"• <b>Провайдер:</b> %s\n"+
+			"• <b>Аккаунт:</b> %s\n"+
 			"• <b>Node ID:</b> <code>%s</code>\n"+
-			"• <b>Key:</b> <code>%s</code>\n"+
-			"• <b>Reason:</b> %s\n"+
-			"• <b>Action:</b> Key replacement or reactivation required\n"+
-			"• <b>Time:</b> %s",
+			"• <b>Ключ:</b> <code>%s</code>\n"+
+			"• <b>Причина:</b> %s\n"+
+			"• <b>Действие:</b> Требуется замена или повторная активация ключа\n"+
+			"• <b>Время:</b> %s",
 		html.EscapeString(provider),
 		html.EscapeString(accountName),
 		html.EscapeString(nodeID),
@@ -1015,13 +1137,13 @@ func formatUpstreamKeyInvalidMessage(provider, nodeID, accountName, keyMasked, r
 
 func formatBothProvidersUnavailableMessage(modelID, primaryProvider, backupProvider, reason string) string {
 	return fmt.Sprintf(
-		"🚨 <b>[CRITICAL FAILURE] Both Model Providers Unavailable</b>\n\n"+
-			"• <b>Model:</b> <code>%s</code>\n"+
-			"• <b>Primary Provider:</b> %s (unavailable)\n"+
-			"• <b>Backup Provider:</b> %s (unavailable)\n"+
-			"• <b>Reason:</b> %s\n"+
-			"• <b>Status:</b> Requests to model are rejected\n"+
-			"• <b>Time:</b> %s",
+		"🚨 <b>[КРИТИЧЕСКИЙ СБОЙ] Оба провайдера модели недоступны</b>\n\n"+
+			"• <b>Модель:</b> <code>%s</code>\n"+
+			"• <b>Основной провайдер:</b> %s (недоступен)\n"+
+			"• <b>Резервный провайдер:</b> %s (недоступен)\n"+
+			"• <b>Причина:</b> %s\n"+
+			"• <b>Статус:</b> Запросы к модели отклоняются\n"+
+			"• <b>Время:</b> %s",
 		html.EscapeString(modelID),
 		html.EscapeString(primaryProvider),
 		html.EscapeString(backupProvider),
@@ -1032,14 +1154,14 @@ func formatBothProvidersUnavailableMessage(modelID, primaryProvider, backupProvi
 
 func formatFailoverRateExceededMessage(modelID string, failoverRate, thresholdRate float64, totalRequests, failoverCount int64) string {
 	return fmt.Sprintf(
-		"⚠️ <b>[WARNING] High Model Failover Rate</b>\n\n"+
-			"• <b>Model:</b> <code>%s</code>\n"+
-			"• <b>Failover Rate:</b> %.1f%%\n"+
-			"• <b>Alert Threshold:</b> %.1f%%\n"+
-			"• <b>Total Requests (Window):</b> %d\n"+
-			"• <b>Failover Switches:</b> %d\n"+
-			"• <b>Action:</b> Check primary provider stability\n"+
-			"• <b>Time:</b> %s",
+		"⚠️ <b>[ВНИМАНИЕ] Высокая частота переключений для модели</b>\n\n"+
+			"• <b>Модель:</b> <code>%s</code>\n"+
+			"• <b>Частота переключений:</b> %.1f%%\n"+
+			"• <b>Порог оповещения:</b> %.1f%%\n"+
+			"• <b>Всего запросов (окно):</b> %d\n"+
+			"• <b>Переключений (failover):</b> %d\n"+
+			"• <b>Действие:</b> Проверьте стабильность основного провайдера\n"+
+			"• <b>Время:</b> %s",
 		html.EscapeString(modelID),
 		failoverRate,
 		thresholdRate,
@@ -1051,13 +1173,13 @@ func formatFailoverRateExceededMessage(modelID string, failoverRate, thresholdRa
 
 func formatErrorSpikeMessage(scope string, count429, count5xx int64, windowMinutes int, reason string) string {
 	return fmt.Sprintf(
-		"📈 <b>[ERROR SPIKE] Rapid Growth of 429 / 5xx Errors</b>\n\n"+
-			"• <b>Scope / Context:</b> %s\n"+
-			"• <b>429 Errors (Rate Limit):</b> %d\n"+
-			"• <b>5xx Errors (Server Error):</b> %d\n"+
-			"• <b>Observation Window:</b> %d min.\n"+
-			"• <b>Reason / Details:</b> %s\n"+
-			"• <b>Time:</b> %s",
+		"📈 <b>[ВСПЛЕСК ОШИБОК] Резкий рост ошибок 429 / 5xx</b>\n\n"+
+			"• <b>Область / контекст:</b> %s\n"+
+			"• <b>Ошибки 429 (лимит):</b> %d\n"+
+			"• <b>Ошибки 5xx (сервер):</b> %d\n"+
+			"• <b>Окно наблюдения:</b> %d мин.\n"+
+			"• <b>Причина / детали:</b> %s\n"+
+			"• <b>Время:</b> %s",
 		html.EscapeString(scope),
 		count429,
 		count5xx,
@@ -1070,17 +1192,17 @@ func formatErrorSpikeMessage(scope string, count429, count5xx int64, windowMinut
 func formatCheaperProviderFoundMessage(family, modelName, currentProvider string, currentPrice float64, candidateProvider, candidateDomain string, candidatePrice, savingsPercent float64, providerCardURL string) string {
 	cardLink := ""
 	if strings.TrimSpace(providerCardURL) != "" {
-		cardLink = fmt.Sprintf("\n• <b>BestAIPrice Card:</b> <a href=\"%s\">Open</a>", html.EscapeString(providerCardURL))
+		cardLink = fmt.Sprintf("\n• <b>Карточка BestAIPrice:</b> <a href=\"%s\">Открыть</a>", html.EscapeString(providerCardURL))
 	}
 	return fmt.Sprintf(
-		"💡 <b>[COST OPTIMIZATION] More Cost-Effective Provider Found</b>\n\n"+
-			"• <b>Family:</b> %s\n"+
-			"• <b>Model:</b> <code>%s</code>\n"+
-			"• <b>Current Provider:</b> %s ($%.4f/1M)\n"+
-			"• <b>Candidate:</b> %s (%s)\n"+
-			"• <b>Candidate Price:</b> $%.4f/1M\n"+
-			"• <b>Savings:</b> -%.1f%%%s\n"+
-			"• <b>Time:</b> %s",
+		"💡 <b>[ОПТИМИЗАЦИЯ РАСХОДОВ] Найден более дешёвый провайдер</b>\n\n"+
+			"• <b>Семейство:</b> %s\n"+
+			"• <b>Модель:</b> <code>%s</code>\n"+
+			"• <b>Текущий провайдер:</b> %s ($%.4f/1M)\n"+
+			"• <b>Кандидат:</b> %s (%s)\n"+
+			"• <b>Цена кандидата:</b> $%.4f/1M\n"+
+			"• <b>Экономия:</b> -%.1f%%%s\n"+
+			"• <b>Время:</b> %s",
 		html.EscapeString(family),
 		html.EscapeString(modelName),
 		html.EscapeString(currentProvider),
@@ -1100,14 +1222,14 @@ func formatPriceChangedSignificantlyMessage(provider, modelName string, oldInput
 		sign = ""
 	}
 	return fmt.Sprintf(
-		"📊 <b>[PRICE CHANGE] Significant Provider Price Change</b>\n\n"+
-			"• <b>Provider:</b> %s\n"+
-			"• <b>Model:</b> <code>%s</code>\n"+
-			"• <b>Input Price:</b> $%.4f → $%.4f\n"+
-			"• <b>Output Price:</b> $%.4f → $%.4f\n"+
-			"• <b>Change:</b> %s%.1f%% (threshold: %.1f%%)\n"+
-			"• <b>Attention:</b> Retail pricing recalculation required\n"+
-			"• <b>Time:</b> %s",
+		"📊 <b>[ИЗМЕНЕНИЕ ЦЕН] Значительное изменение цен провайдера</b>\n\n"+
+			"• <b>Провайдер:</b> %s\n"+
+			"• <b>Модель:</b> <code>%s</code>\n"+
+			"• <b>Цена входа:</b> $%.4f → $%.4f\n"+
+			"• <b>Цена выхода:</b> $%.4f → $%.4f\n"+
+			"• <b>Изменение:</b> %s%.1f%% (порог: %.1f%%)\n"+
+			"• <b>Внимание:</b> Требуется пересчёт розничных цен\n"+
+			"• <b>Время:</b> %s",
 		html.EscapeString(provider),
 		html.EscapeString(modelName),
 		oldInput, newInput,
@@ -1120,23 +1242,45 @@ func formatPriceChangedSignificantlyMessage(provider, modelName string, oldInput
 
 func formatUnprofitableRequestMessage(provider, modelName, leg string, chargedUSD, costUSD float64) string {
 	return fmt.Sprintf(
-		"🚨 <b>[LOSS] Unprofitable Request — sold below route cost</b>\n\n"+
-			"• <b>Serving provider:</b> %s\n"+
-			"• <b>Model:</b> <code>%s</code>\n"+
-			"• <b>Billing basis:</b> %s\n"+
-			"• <b>Charged (primary × markup):</b> $%.6f per unit\n"+
-			"• <b>Route cost:</b> $%.6f per unit\n"+
-			"• <b>Loss:</b> $%.6f per unit\n"+
-			"• <b>Cause:</b> the request was served by a more expensive provider than the\n"+
-			"  primary (cheapest) provider whose price is published/charged. Consider\n"+
-			"  restricting the primary to providers with active accounts or raising the markup.\n"+
-			"• <b>Time:</b> %s",
+		"🚨 <b>[УБЫТОК] Невыгодный запрос — продали дешевле себестоимости маршрута</b>\n\n"+
+			"• <b>Обслуживающий провайдер:</b> %s\n"+
+			"• <b>Модель:</b> <code>%s</code>\n"+
+			"• <b>База списания:</b> %s\n"+
+			"• <b>Списано (основной × наценка):</b> $%.6f за единицу\n"+
+			"• <b>Себестоимость маршрута:</b> $%.6f за единицу\n"+
+			"• <b>Убыток:</b> $%.6f за единицу\n"+
+			"• <b>Причина:</b> запрос обслужил более дорогой провайдер, чем основной\n"+
+			"  (самый дешёвый), чья цена публикуется и списывается. Ограничьте основной\n"+
+			"  маршрут провайдерами с активными аккаунтами или повысьте наценку.\n"+
+			"• <b>Время:</b> %s",
 		html.EscapeString(provider),
 		html.EscapeString(modelName),
 		html.EscapeString(leg),
 		chargedUSD,
 		costUSD,
 		costUSD-chargedUSD,
+		time.Now().UTC().Format("2006-01-02 15:04:05 UTC"),
+	)
+}
+
+func formatCatalogPriceMismatchMessage(provider, modelName, leg string, publishedUSD, chargedUSD, diffPercent float64) string {
+	return fmt.Sprintf(
+		"⚠️ <b>[РАСХОЖДЕНИЕ ЦЕН] Опубликованная в каталоге цена ≠ списанная с пользователя</b>\n\n"+
+			"• <b>Провайдер:</b> %s\n"+
+			"• <b>Модель:</b> <code>%s</code>\n"+
+			"• <b>Позиция тарифа:</b> %s\n"+
+			"• <b>Цена в каталоге:</b> $%.6f за 1M токенов\n"+
+			"• <b>Списано с пользователя:</b> $%.6f за 1M токенов\n"+
+			"• <b>Расхождение:</b> %.1f%%\n"+
+			"• <b>Причина:</b> тариф, применённый при списании, отличается от опубликованного\n"+
+			"  (разошлись наценка или базис провайдера). Проверьте наценку и скоуп провайдеров.\n"+
+			"• <b>Время:</b> %s",
+		html.EscapeString(provider),
+		html.EscapeString(modelName),
+		html.EscapeString(leg),
+		publishedUSD,
+		chargedUSD,
+		diffPercent,
 		time.Now().UTC().Format("2006-01-02 15:04:05 UTC"),
 	)
 }

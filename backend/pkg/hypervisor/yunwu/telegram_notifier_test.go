@@ -438,7 +438,7 @@ func TestTelegramNotifier_ProviderDownDegraded(t *testing.T) {
 
 	mu.Lock()
 	require.Len(t, sentMessages, 1)
-	assert.Contains(t, sentMessages[0].Text, "Provider Down / Degraded")
+	assert.Contains(t, sentMessages[0].Text, "Провайдер недоступен / деградировал")
 	assert.Contains(t, sentMessages[0].Text, "openlux")
 	assert.Contains(t, sentMessages[0].Text, "node-501")
 	assert.Contains(t, sentMessages[0].Text, "degraded")
@@ -487,7 +487,7 @@ func TestTelegramNotifier_UpstreamKeyInvalid(t *testing.T) {
 
 	mu.Lock()
 	require.Len(t, sentMessages, 1)
-	assert.Contains(t, sentMessages[0].Text, "Upstream API Key Invalid / Disabled")
+	assert.Contains(t, sentMessages[0].Text, "Ключ API провайдера недействителен / отключён")
 	assert.Contains(t, sentMessages[0].Text, "portdan")
 	assert.Contains(t, sentMessages[0].Text, "sk-12...9999")
 	mu.Unlock()
@@ -531,7 +531,7 @@ func TestTelegramNotifier_BothProvidersUnavailable(t *testing.T) {
 
 	mu.Lock()
 	require.Len(t, sentMessages, 1)
-	assert.Contains(t, sentMessages[0].Text, "Both Model Providers Unavailable")
+	assert.Contains(t, sentMessages[0].Text, "Оба провайдера модели недоступны")
 	assert.Contains(t, sentMessages[0].Text, "claude-3-7-sonnet")
 	assert.Contains(t, sentMessages[0].Text, "openlux")
 	assert.Contains(t, sentMessages[0].Text, "portdan")
@@ -591,7 +591,7 @@ func TestTelegramNotifier_FailoverRateExceeded(t *testing.T) {
 
 	mu.Lock()
 	require.Len(t, sentMessages, 1)
-	assert.Contains(t, sentMessages[0].Text, "High Model Failover Rate")
+	assert.Contains(t, sentMessages[0].Text, "Высокая частота переключений для модели")
 	assert.Contains(t, sentMessages[0].Text, "gpt-4o")
 	assert.Contains(t, sentMessages[0].Text, "30.0%")
 	mu.Unlock()
@@ -648,7 +648,7 @@ func TestTelegramNotifier_ErrorSpike429_5xx(t *testing.T) {
 
 	mu.Lock()
 	require.Len(t, sentMessages, 1)
-	assert.Contains(t, sentMessages[0].Text, "Rapid Growth of 429 / 5xx Errors")
+	assert.Contains(t, sentMessages[0].Text, "Резкий рост ошибок 429 / 5xx")
 	assert.Contains(t, sentMessages[0].Text, "openlux")
 	assert.Contains(t, sentMessages[0].Text, "10")
 	assert.Contains(t, sentMessages[0].Text, "6")
@@ -701,7 +701,7 @@ func TestTelegramNotifier_CheaperProviderFound(t *testing.T) {
 
 	mu.Lock()
 	require.Len(t, sentMessages, 1)
-	assert.Contains(t, sentMessages[0].Text, "More Cost-Effective Provider Found")
+	assert.Contains(t, sentMessages[0].Text, "Найден более дешёвый провайдер")
 	assert.Contains(t, sentMessages[0].Text, "claude-3-5-sonnet")
 	assert.Contains(t, sentMessages[0].Text, "top-api")
 	assert.Contains(t, sentMessages[0].Text, "-26.7%")
@@ -763,11 +763,11 @@ func TestTelegramNotifier_PriceChangedSignificantly(t *testing.T) {
 
 	mu.Lock()
 	require.Len(t, sentMessages, 1)
-	assert.Contains(t, sentMessages[0].Text, "Significant Provider Price Change")
+	assert.Contains(t, sentMessages[0].Text, "Значительное изменение цен провайдера")
 	assert.Contains(t, sentMessages[0].Text, "openlux")
 	assert.Contains(t, sentMessages[0].Text, "gpt-4o")
 	assert.Contains(t, sentMessages[0].Text, "+28.0%")
-	assert.Contains(t, sentMessages[0].Text, "Retail pricing recalculation required")
+	assert.Contains(t, sentMessages[0].Text, "Требуется пересчёт розничных цен")
 	mu.Unlock()
 
 	// Cooldown suppresses
@@ -950,11 +950,14 @@ func TestTelegramNotifier_EdgeCasesAndCoverage(t *testing.T) {
 		EventProviderDownDegraded,
 		EventUpstreamKeyInvalid,
 		EventProviderBalanceLow,
+		EventProviderBalanceZero,
 		EventBothProvidersUnavailable,
 		EventFailoverRateExceeded,
 		EventErrorSpike,
 		EventCheaperProviderFound,
 		EventPriceChangedSignificantly,
+		EventUnprofitableRequest,
+		EventCatalogPriceMismatch,
 		TelegramEventType("unknown_custom"),
 	}
 	for _, ev := range events {
@@ -1023,7 +1026,7 @@ func TestTelegramNotifier_UnprofitableRequest(t *testing.T) {
 
 	mu.Lock()
 	require.Len(t, sentMessages, 1)
-	assert.Contains(t, sentMessages[0].Text, "Unprofitable Request")
+	assert.Contains(t, sentMessages[0].Text, "Невыгодный запрос")
 	assert.Contains(t, sentMessages[0].Text, "x-llm")
 	assert.Contains(t, sentMessages[0].Text, "moonshot/kimi-k2.6")
 	assert.Contains(t, sentMessages[0].Text, "input")
@@ -1035,4 +1038,120 @@ func TestTelegramNotifier_UnprofitableRequest(t *testing.T) {
 	assert.False(t, notified)
 
 	assert.Equal(t, time.Hour, DefaultCooldownUnprofitableRequest)
+}
+
+// A depleted (balance = 0) provider must fire its OWN alert, and it must not be
+// swallowed by the low-balance cooldown that is already armed for the node.
+func TestTelegramNotifier_ZeroBalance(t *testing.T) {
+	ctx := context.Background()
+	var sentMessages []telegramSendMessagePayload
+	var mu sync.Mutex
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		var payload telegramSendMessagePayload
+		body, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(body, &payload)
+		mu.Lock()
+		sentMessages = append(sentMessages, payload)
+		mu.Unlock()
+		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
+	}))
+	defer server.Close()
+
+	cfg := &config.HypervisorConfig{
+		TelegramBotToken:          "test-token",
+		TelegramChatID:            "-100123456789",
+		TelegramAlertThresholdUSD: 20.0,
+		TelegramAlertsEnabled:     true,
+	}
+
+	notifier := NewTelegramNotifier(nil, cfg)
+	notifier.SetBaseURL(server.URL)
+	notifier.SetHTTPClient(server.Client())
+
+	// 1. Low balance arms the (12h) low-balance alert.
+	notified, err := notifier.CheckAndNotify(ctx, "node-zero-1", "OpenLux-Account", "openlux", 18.50)
+	require.NoError(t, err)
+	require.True(t, notified)
+	assert.True(t, notifier.IsAlerted(ctx, "node-zero-1"))
+
+	// 2. The balance drops to zero: the depletion alert must still be delivered.
+	notified, err = notifier.CheckAndNotify(ctx, "node-zero-1", "OpenLux-Account", "openlux", 0)
+	require.NoError(t, err)
+	assert.True(t, notified, "zero-balance alert must not be suppressed by the low-balance cooldown")
+	assert.True(t, notifier.IsZeroAlerted(ctx, "node-zero-1"))
+
+	mu.Lock()
+	require.Len(t, sentMessages, 2)
+	assert.Contains(t, sentMessages[1].Text, "БАЛАНС ПРОВАЙДЕРА ИСЧЕРПАН")
+	assert.Contains(t, sentMessages[1].Text, "OpenLux-Account")
+	assert.Contains(t, sentMessages[1].Text, "node-zero-1")
+	assert.Contains(t, sentMessages[1].Text, "$20.00")
+	mu.Unlock()
+
+	// 3. Repeated zero readings are deduplicated by the depletion cooldown.
+	notified, err = notifier.CheckAndNotify(ctx, "node-zero-1", "OpenLux-Account", "openlux", 0)
+	require.NoError(t, err)
+	assert.False(t, notified)
+
+	// 4. Replenishment clears both alert states.
+	notified, err = notifier.CheckAndNotify(ctx, "node-zero-1", "OpenLux-Account", "openlux", 40.0)
+	require.NoError(t, err)
+	assert.False(t, notified)
+	assert.False(t, notifier.IsAlerted(ctx, "node-zero-1"))
+	assert.False(t, notifier.IsZeroAlerted(ctx, "node-zero-1"))
+
+	assert.Equal(t, 6*time.Hour, DefaultCooldownProviderBalanceZero)
+}
+
+// Alert 10: the price the catalog publishes diverging from the price actually
+// deducted must notify once and be suppressed by the cooldown after.
+func TestTelegramNotifier_CatalogPriceMismatch(t *testing.T) {
+	ctx := context.Background()
+	var sentMessages []telegramSendMessagePayload
+	var mu sync.Mutex
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		var payload telegramSendMessagePayload
+		body, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(body, &payload)
+		mu.Lock()
+		sentMessages = append(sentMessages, payload)
+		mu.Unlock()
+		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
+	}))
+	defer server.Close()
+
+	cfg := &config.HypervisorConfig{
+		TelegramBotToken:      "test-token",
+		TelegramAllowedUsers:  []string{"123456"},
+		TelegramAlertsEnabled: true,
+	}
+
+	notifier := NewTelegramNotifier(nil, cfg)
+	notifier.SetBaseURL(server.URL)
+	notifier.SetHTTPClient(server.Client())
+
+	// Catalog shows $2.20/1M, the request was billed $2.64/1M (+20%).
+	notified, err := notifier.NotifyCatalogPriceMismatch(ctx, "openlux", "claude-sonnet-5", "input", 2.20, 2.64, 20.0)
+	require.NoError(t, err)
+	assert.True(t, notified)
+
+	mu.Lock()
+	require.Len(t, sentMessages, 1)
+	assert.Contains(t, sentMessages[0].Text, "РАСХОЖДЕНИЕ ЦЕН")
+	assert.Contains(t, sentMessages[0].Text, "openlux")
+	assert.Contains(t, sentMessages[0].Text, "claude-sonnet-5")
+	assert.Contains(t, sentMessages[0].Text, "$2.200000")
+	assert.Contains(t, sentMessages[0].Text, "$2.640000")
+	mu.Unlock()
+
+	// Cooldown (and unchanged content) suppresses an immediate repeat.
+	notified, err = notifier.NotifyCatalogPriceMismatch(ctx, "openlux", "claude-sonnet-5", "input", 2.20, 2.64, 20.0)
+	require.NoError(t, err)
+	assert.False(t, notified)
+
+	assert.Equal(t, time.Hour, DefaultCooldownCatalogPriceMismatch)
 }

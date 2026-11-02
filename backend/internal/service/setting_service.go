@@ -3384,9 +3384,9 @@ func (s *SettingService) TestTelegramNotification(ctx context.Context) (int, err
 	}
 
 	msg := fmt.Sprintf(
-		"🧪 <b>Test Notification: AI Gateway</b>\n\n"+
-			"Telegram bot is successfully connected and configured to monitor provider balances.\n"+
-			"Time: %s",
+		"🧪 <b>Тестовое уведомление: AI Gateway</b>\n\n"+
+			"Telegram-бот успешно подключён и настроен на мониторинг балансов провайдеров.\n"+
+			"Время: %s",
 		time.Now().UTC().Format("2006-01-02 15:04:05 UTC"),
 	)
 
