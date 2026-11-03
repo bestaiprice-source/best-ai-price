@@ -452,9 +452,14 @@ func (ppm *ProviderPriceManager) priceForTier(ctx context.Context, p ProviderMod
 			observed = node.ObservedGroupRatioFast
 		}
 	}
-	// Priced by the group this key bills in, then corrected by what the provider is
-	// known to charge (option 2: never sell below the observed cost).
-	ratio := ApplyObservedFloor(ResolveTierGroupRatioForGroup(p.GroupRatios, tier, GroupNameForTier(groups, tier)), observed)
+	// Priced by the group this key bills in. When the provider reported no group
+	// for the key, the cheapest group the MODEL is enabled for is assumed (a model
+	// lives in several groups), and the rate is then corrected by what the provider
+	// is measured to charge — in both directions.
+	ratio := ApplyObservedCorrection(
+		ResolveModelGroupRatio(p.GroupRatios, tier, GroupNameForTier(groups, tier), p.CheapestGroupRatio),
+		observed,
+	)
 	if len(p.GroupRatios) == 0 {
 		// The provider does not price per group: the stored price already is the
 		// only (and therefore tier-independent) price.

@@ -1040,6 +1040,57 @@ func TestTelegramNotifier_UnprofitableRequest(t *testing.T) {
 	assert.Equal(t, time.Hour, DefaultCooldownUnprofitableRequest)
 }
 
+// TestTelegramNotifier_CostCheckUnverified: a request whose cost could not be
+// compared must be reported (and deduplicated by the cooldown) — "unknown" is
+// never treated as "profitable".
+func TestTelegramNotifier_CostCheckUnverified(t *testing.T) {
+	ctx := context.Background()
+	var sentMessages []telegramSendMessagePayload
+	var mu sync.Mutex
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		var payload telegramSendMessagePayload
+		body, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(body, &payload)
+		mu.Lock()
+		sentMessages = append(sentMessages, payload)
+		mu.Unlock()
+		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
+	}))
+	defer server.Close()
+
+	cfg := &config.HypervisorConfig{
+		TelegramBotToken:      "test-token",
+		TelegramAllowedUsers:  []string{"123456"},
+		TelegramAlertsEnabled: true,
+	}
+
+	notifier := NewTelegramNotifier(nil, cfg)
+	notifier.SetBaseURL(server.URL)
+	notifier.SetHTTPClient(server.Client())
+
+	const reason = "no price for the model on the serving provider"
+	notified, err := notifier.NotifyCostCheckUnverified(ctx, "yuanqiaoyun", "claude-sonnet-5", reason)
+	require.NoError(t, err)
+	assert.True(t, notified)
+
+	mu.Lock()
+	require.Len(t, sentMessages, 1)
+	assert.Contains(t, sentMessages[0].Text, "Проверка запроса на убыток не выполнена")
+	assert.Contains(t, sentMessages[0].Text, "yuanqiaoyun")
+	assert.Contains(t, sentMessages[0].Text, "claude-sonnet-5")
+	assert.Contains(t, sentMessages[0].Text, reason)
+	mu.Unlock()
+
+	// The cooldown suppresses an immediate repeat of the same provider+model.
+	notified, err = notifier.NotifyCostCheckUnverified(ctx, "yuanqiaoyun", "claude-sonnet-5", reason)
+	require.NoError(t, err)
+	assert.False(t, notified)
+
+	assert.Equal(t, time.Hour, DefaultCooldownCostCheckUnverified)
+}
+
 // A depleted (balance = 0) provider must fire its OWN alert, and it must not be
 // swallowed by the low-balance cooldown that is already armed for the node.
 func TestTelegramNotifier_ZeroBalance(t *testing.T) {

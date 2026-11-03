@@ -133,8 +133,8 @@ func TierDefaultGroupRatio(tier string) float64 {
 // (OpenLux "smart routing" ignores the token's group when picking a channel), so
 // the group a key is issued in is not always what the provider bills. ok=false
 // means "no usable sample": nothing was spent, we have no cost to compare with,
-// or the ratio is outside a sane range (0.01..10) — a garbage reading must never
-// set a price.
+// or the ratio is outside the usable range — a garbage reading must never set a
+// price.
 func ObservedGroupRatio(providerUsedUSDStart, providerUsedUSDEnd, ourOfficialCostUSD float64) (float64, bool) {
 	if ourOfficialCostUSD <= 0 {
 		return 0, false
@@ -144,26 +144,53 @@ func ObservedGroupRatio(providerUsedUSDStart, providerUsedUSDEnd, ourOfficialCos
 		return 0, false
 	}
 	ratio := providerDelta / ourOfficialCostUSD
-	if ratio < 0.01 || ratio > 10 {
+	if ratio < MinObservedCorrection || ratio > MaxObservedCorrection {
 		return 0, false
 	}
 	return ratio, true
 }
 
-// ApplyObservedFloor applies the measured correction factor on top of a resolved
-// group ratio. The factor is defined against the cost basis we billed at, so the
-// corrected price is `ratio × correction` — and it only ever LIFTS: a correction
-// at or below 1 (nothing measured, or a cheaper reading) leaves the price alone,
-// because never selling below the observed cost is the point, not chasing a
-// cheaper number.
-func ApplyObservedFloor(ratio, correction float64) float64 {
-	if correction <= 1 || correction > MaxObservedCorrection || math.IsNaN(correction) || math.IsInf(correction, 0) {
+// ApplyObservedCorrection scales a resolved group ratio by the correction the
+// provider's own accounting implies (its real charge ÷ the rate we billed at).
+//
+// It moves BOTH ways — that is the whole point: a measurement showing the
+// provider charges less than assumed lowers the price, one showing it charges
+// more raises it. A one-way "floor" could never repair a wrong group assumption
+// (the gap between an advertised discount and what the key is really billed at
+// reaches ~11x), so the gateway would silently sell below cost forever.
+//
+// A missing (<=0 / exactly 1) or out-of-range correction leaves the ratio
+// untouched: garbage, or the absence of evidence, must never set a price.
+func ApplyObservedCorrection(ratio, correction float64) float64 {
+	if ratio <= 0 || math.IsNaN(ratio) || math.IsInf(ratio, 0) {
 		return ratio
 	}
-	if ratio <= 0 {
+	if math.IsNaN(correction) || math.IsInf(correction, 0) || correction <= 0 || correction == 1 {
+		return ratio
+	}
+	if correction < MinObservedCorrection || correction > MaxObservedCorrection {
 		return ratio
 	}
 	return ratio * correction
+}
+
+// ResolveModelGroupRatio resolves the multiplier a model bills at on a node.
+//
+// The group the provider API reported for the key wins. When the provider
+// reports none (or the key sits in the unlisted `default` group), the cheapest
+// group the MODEL is enabled for is assumed — a model is available in several
+// groups, so this is a per-model decision, not a per-account one. The measured
+// correction then moves that assumption to what the provider is really charging.
+// Nothing known ⇒ the official rate (never cheaper than reality for an unlisted
+// group).
+func ResolveModelGroupRatio(groupRatios map[string]float64, tier, groupName string, cheapestForModel float64) float64 {
+	if strings.TrimSpace(groupName) != "" && !isDefaultGroupName(groupName) {
+		return ResolveTierGroupRatioForGroup(groupRatios, tier, groupName)
+	}
+	if cheapestForModel > 0 {
+		return cheapestForModel
+	}
+	return TierDefaultGroupRatio(tier)
 }
 
 // ObservedGroupRatioFromExtra reads the reconciliation floor stored on an account.
@@ -209,11 +236,16 @@ type TierGroupNames struct {
 	Detected string
 }
 
-// ParseTierGroupNames reads the pinned groups from an account's extra map.
+// ParseTierGroupNames reads the billing-group inputs from an account's extra map.
+//
+// The group is not picked by hand: the gateway prices a tier with the group the
+// provider API reports for the account's key (`detected_group_name`, written by
+// the balance sync), and falls back to the official rate when the provider
+// reports nothing. Legacy `smart_group_name` / `fast_group_name` pins are
+// deliberately ignored so a stale value can never keep driving a price behind
+// the operator's back.
 func ParseTierGroupNames(extra map[string]any) TierGroupNames {
 	return TierGroupNames{
-		Smart:    extraString(extra, ExtraSmartGroupName),
-		Fast:     extraString(extra, ExtraFastGroupName),
 		Detected: extraString(extra, ExtraDetectedGroupName),
 	}
 }
@@ -221,25 +253,44 @@ func ParseTierGroupNames(extra map[string]any) TierGroupNames {
 // For returns the pinned group name for a tier. The fast tier falls back to the
 // smart group: providers commonly issue both keys inside the same group, so
 // configuring it once is enough.
+//
+// The literal `default` pin is treated as "not pinned": it is the dropdown's
+// "official rate, auto-detected" placeholder (and a group a provider may not even
+// list), so it must not shadow the group the balance sync actually detected.
 func (g TierGroupNames) For(tier string) string {
 	if runtime.NormalizeTier(tier) == runtime.TierFast {
-		if g.Fast != "" {
-			return g.Fast
+		if pinned := realGroupName(g.Fast); pinned != "" {
+			return pinned
 		}
-		if g.Smart != "" {
-			return g.Smart
-		}
-	} else if g.Smart != "" {
-		return g.Smart
+	}
+	if pinned := realGroupName(g.Smart); pinned != "" {
+		return pinned
 	}
 	if g.Detected != "" {
 		return g.Detected
 	}
-	// Nothing is pinned: the provider's default group. One-API/New-API bill a
+	// Nothing usable: the provider's default group. One-API/New-API bill a
 	// group that is not in their price list at the official rate, so this is the
 	// honest (never cheaper than reality) assumption — pinning the real group
 	// lowers the price when the provider really does discount it.
 	return DefaultProviderGroupName
+}
+
+// realGroupName returns a pinned value that names a real provider group, and ""
+// for the `default` placeholder — which means "let the detected group decide"
+// (falling back to the official rate), so it must not shadow it.
+func realGroupName(name string) string {
+	name = strings.TrimSpace(name)
+	if name == "" || isDefaultGroupName(name) {
+		return ""
+	}
+	return name
+}
+
+// isDefaultGroupName reports whether a pinned value is the `default` placeholder
+// rather than a real provider group name.
+func isDefaultGroupName(name string) bool {
+	return strings.EqualFold(strings.TrimSpace(name), DefaultProviderGroupName)
 }
 
 // IsZero reports whether nothing is pinned, i.e. the legacy derivation applies.

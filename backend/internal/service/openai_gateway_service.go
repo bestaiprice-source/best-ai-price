@@ -5941,6 +5941,9 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		// Use the request context so the yunwu retail basis (primary-provider
 		// pricing) is honored — CalculateCostWithServiceTier drops the context.
 		cost, err = s.billingService.CalculateCostWithContext(ctx, billingModel, tokens, multiplier, serviceTier)
+		// Record how the request was priced so the loss observer re-prices with the
+		// SAME method (service tier) rather than a generic one.
+		ctx = ContextWithRecostParams(ctx, 0, 0, serviceTier)
 		if err != nil {
 			logger.L().With(
 				zap.String("component", "service.openai_gateway"),
@@ -5958,9 +5961,10 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 
 	// Loss-making request guard: the provider that actually served the request may
 	// be more expensive than the primary (cheapest) provider whose price we
-	// publish and charge.
+	// publish and charge. The observer re-prices such a request at the serving
+	// provider's own cost (never sell below cost) and alerts.
 	if account != nil && YunwuPrimaryPricingFromContext(ctx) {
-		alertIfUnprofitableYunwuRequest(ctx, s.billingService, yunwu.ParseNodeProvider(account.Extra), billingModel, multiplier)
+		observeYunwuRequestCost(ctx, s.billingService, yunwu.ParseNodeProvider(account.Extra), billingModel, multiplier, cost, s.billingService.recostAtProvider(ctx, billingModel, tokens, multiplier))
 	}
 
 	// Determine billing type
@@ -5991,6 +5995,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		CacheCreationTokens:   result.Usage.CacheCreationInputTokens,
 		CacheReadTokens:       result.Usage.CacheReadInputTokens,
 		InputCost:             cost.InputCost,
+		SoldAtCost:            cost.SoldAtCost,
 		OutputCost:            cost.OutputCost,
 		CacheCreationCost:     cost.CacheCreationCost,
 		CacheReadCost:         cost.CacheReadCost,

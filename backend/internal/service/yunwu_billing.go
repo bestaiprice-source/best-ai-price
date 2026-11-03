@@ -570,10 +570,25 @@ func recordYunwuMediaUsage(ctx context.Context, deps *billingDeps, billRepo Usag
 	if !ok {
 		return nil
 	}
+	// Never sell a media request below the serving provider's cost either: when that
+	// provider charges more per unit than the primary basis we publish, charge its own
+	// per-unit price instead.
+	servingProvider := yunwu.ParseNodeProvider(account.Extra)
+	soldAtCost := false
+	if servingUnit, ok := yunwuServingUnitPrice(ctx, bs, servingProvider, in.Model); ok {
+		if servingTotal := servingUnit * float64(in.Units); servingTotal > total {
+			slog.Warn("[YunwuBilling] media request re-priced at the serving provider's cost to avoid a loss",
+				"provider", servingProvider, "model", in.Model,
+				"charged_usd", total, "cost_usd", servingTotal, "units", in.Units)
+			total = servingTotal
+			soldAtCost = true
+		}
+	}
 	cost := &CostBreakdown{
 		InputCost:  total,
 		TotalCost:  total,
 		ActualCost: total * multiplier,
+		SoldAtCost: soldAtCost,
 	}
 
 	isSubscriptionBilling := in.Subscription != nil && in.APIKey.Group != nil && in.APIKey.Group.IsSubscriptionType()
@@ -593,6 +608,7 @@ func recordYunwuMediaUsage(ctx context.Context, deps *billingDeps, billRepo Usag
 		Model:                 in.Model,
 		RequestedModel:        in.Model,
 		InputCost:             cost.InputCost,
+		SoldAtCost:            cost.SoldAtCost,
 		TotalCost:             cost.TotalCost,
 		ActualCost:            cost.ActualCost,
 		RateMultiplier:        multiplier,
@@ -675,6 +691,23 @@ func yunwuMediaTotal(unitPriceUSD float64, units int64, upstreamCostMicroUSD int
 	default:
 		return 0, false
 	}
+}
+
+// yunwuServingUnitPrice resolves the per-unit price the provider that ACTUALLY
+// served a media request charges for the model. It is the media counterpart of the
+// text loss observer: the published price comes from the primary (cheapest)
+// provider, so a request served by a dearer provider must be billed at that
+// provider's own per-unit price instead of at a loss. Reports false when the
+// provider prices the model per token (or has no price for it).
+func yunwuServingUnitPrice(ctx context.Context, bs *BillingService, provider, model string) (float64, bool) {
+	if bs == nil || bs.yunwuPricing == nil || strings.TrimSpace(provider) == "" || strings.TrimSpace(model) == "" {
+		return 0, false
+	}
+	pricing, ok := bs.yunwuPricing.GetModelPricingForProvider(ctx, provider, model)
+	if !ok || pricing == nil || pricing.FixedPricePerRequest <= 0 {
+		return 0, false
+	}
+	return pricing.FixedPricePerRequest, true
 }
 
 // RecordYunwuMediaUsage bills a flat-rate / per-unit Unofficial-provider media
@@ -801,6 +834,111 @@ func alertIfUnprofitableYunwuRequest(ctx context.Context, bs *BillingService, pr
 	if notifier := yunwu.GetDefaultNotifier(); notifier != nil {
 		if _, err := notifier.NotifyUnprofitableRequest(ctx, provider, model, margin.Leg, margin.ChargedUSD, margin.CostUSD); err != nil {
 			slog.Warn("[YunwuBilling] failed to send unprofitable-request alert", "error", err)
+		}
+	}
+}
+
+// recostParams carries HOW a request was priced, so the per-request loss observer
+// can re-price it at another provider with EXACTLY the same billing method (long
+// context and service tier included) instead of a generic one — otherwise the
+// "cost" it verifies against would not be the cost we actually incur.
+type recostParams struct {
+	longContextThreshold  int
+	longContextMultiplier float64
+	longContext           bool
+	serviceTier           string
+}
+
+type recostParamsKey struct{}
+
+// ContextWithRecostParams records the pricing method of the current request.
+func ContextWithRecostParams(ctx context.Context, longContextThreshold int, longContextMultiplier float64, serviceTier string) context.Context {
+	return context.WithValue(ctx, recostParamsKey{}, recostParams{
+		longContextThreshold:  longContextThreshold,
+		longContextMultiplier: longContextMultiplier,
+		longContext:           longContextThreshold > 0 || longContextMultiplier > 0,
+		serviceTier:           serviceTier,
+	})
+}
+
+func recostParamsFromContext(ctx context.Context) recostParams {
+	if params, ok := ctx.Value(recostParamsKey{}).(recostParams); ok {
+		return params
+	}
+	return recostParams{}
+}
+
+// recostAtProvider builds the re-pricing function the loss observer uses: the same
+// billing method the original charge used, applied to another provider's rate.
+func (s *BillingService) recostAtProvider(ctx context.Context, model string, tokens UsageTokens, multiplier float64) func(context.Context) (*CostBreakdown, error) {
+	params := recostParamsFromContext(ctx)
+	return func(c context.Context) (*CostBreakdown, error) {
+		if params.longContext {
+			return s.CalculateCostWithLongContextAndContext(c, model, tokens, multiplier, params.longContextThreshold, params.longContextMultiplier)
+		}
+		return s.CalculateCostWithContext(c, model, tokens, multiplier, params.serviceTier)
+	}
+}
+
+// observeYunwuRequestCost is the per-request loss observer for text billing: it
+// checks EVERY completed request against the cost of the provider that actually
+// served it, and when the request would be sold below that cost it is re-priced
+// at the serving provider's own rate (via recost, so the re-price uses exactly the
+// same billing method as the original charge — long-context and service tiers
+// included) keeping the same user markup. The request then carries our normal
+// margin instead of a loss. It still alerts: a correction means the published
+// basis no longer matches what the provider takes.
+//
+// It returns true when the cost had to be lifted. A request whose cost cannot be
+// compared (the serving provider prices the model differently, or has no price for
+// it at all) is left untouched and reported as UNVERIFIED — never silently assumed
+// to be profitable.
+func observeYunwuRequestCost(ctx context.Context, bs *BillingService, provider, model string, multiplier float64, cost *CostBreakdown, recost func(context.Context) (*CostBreakdown, error)) (lifted bool) {
+	if bs == nil || bs.yunwuPricing == nil || cost == nil || recost == nil ||
+		strings.TrimSpace(provider) == "" || strings.TrimSpace(model) == "" {
+		return false
+	}
+	serving, ok := bs.yunwuPricing.GetModelPricingForProvider(ctx, provider, model)
+	if !ok || serving == nil {
+		alertYunwuLossUnverified(ctx, provider, model, "no price for the model on the serving provider")
+		return false
+	}
+	primary, err := bs.GetYunwuPrimaryModelPricing(ctx, model)
+	if err != nil || primary == nil {
+		alertYunwuLossUnverified(ctx, provider, model, "the published (primary) price could not be resolved")
+		return false
+	}
+	margin := computeYunwuMargin(serving, primary, multiplier)
+	if !margin.Unprofitable {
+		return false
+	}
+	// Re-price at the serving provider's own rate, keeping the same user markup, so
+	// the charge covers what that provider really bills us.
+	servedCost, priceErr := recost(ContextWithPricingProvider(ctx, provider))
+	if priceErr != nil || servedCost == nil || servedCost.TotalCost <= cost.TotalCost {
+		alertYunwuLossUnverified(ctx, provider, model, "the request could not be re-priced at the serving provider's rate")
+		alertIfUnprofitableYunwuRequest(ctx, bs, provider, model, multiplier)
+		return false
+	}
+	*cost = *servedCost
+	cost.SoldAtCost = true
+	slog.Warn("[YunwuBilling] request re-priced at the serving provider's cost to avoid a loss",
+		"provider", provider, "model", model, "leg", margin.Leg,
+		"charged_usd", margin.ChargedUSD, "cost_usd", margin.CostUSD,
+		"re-priced_total", servedCost.TotalCost)
+	alertIfUnprofitableYunwuRequest(ctx, bs, provider, model, multiplier)
+	return true
+}
+
+// alertYunwuLossUnverified reports a request whose loss check could not be run —
+// the gateway must never treat "unknown" as "profitable". Telegram-alerted
+// (deduplicated/rate-limited per provider+model by the notifier).
+func alertYunwuLossUnverified(ctx context.Context, provider, model, reason string) {
+	slog.Warn("[YunwuBilling] unverified request cost — the loss check could not be performed",
+		"provider", provider, "model", model, "reason", reason)
+	if notifier := yunwu.GetDefaultNotifier(); notifier != nil {
+		if _, err := notifier.NotifyCostCheckUnverified(ctx, provider, model, reason); err != nil {
+			slog.Warn("[YunwuBilling] failed to send unverified-cost alert", "error", err)
 		}
 	}
 }

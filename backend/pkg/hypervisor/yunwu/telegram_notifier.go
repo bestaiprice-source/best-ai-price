@@ -39,6 +39,10 @@ const (
 	EventPriceChangedSignificantly TelegramEventType = "price_changed_significantly"
 	EventUnprofitableRequest       TelegramEventType = "unprofitable_request"
 	EventCatalogPriceMismatch      TelegramEventType = "catalog_price_mismatch"
+	// EventCostCheckUnverified fires when a completed request's cost could NOT be
+	// compared against the serving provider — "unknown" must never pass as
+	// "profitable".
+	EventCostCheckUnverified TelegramEventType = "cost_check_unverified"
 )
 
 const (
@@ -54,6 +58,9 @@ const (
 	// loss alert is repeated. Content deduplication additionally suppresses an
 	// unchanged message, so this only gates genuine repeats.
 	DefaultCooldownUnprofitableRequest = 1 * time.Hour
+	// DefaultCooldownCostCheckUnverified bounds how often an unverifiable request
+	// cost is reported for the same provider+model.
+	DefaultCooldownCostCheckUnverified = 1 * time.Hour
 	// DefaultCooldownProviderBalanceZero is the depletion (balance = 0) cooldown.
 	// It is deliberately shorter than the low-balance window and lives under its
 	// OWN dedup key: a node whose balance has hit zero is a full outage, and the
@@ -682,6 +689,20 @@ func (n *TelegramNotifier) NotifyUnprofitableRequest(
 	})
 }
 
+// 11. NotifyCostCheckUnverified dispatches an alert when a completed request's
+// loss check could not be performed (the serving provider has no price for the
+// model, the published basis could not be resolved, or the request could not be
+// re-priced). The gateway never assumes such a request was profitable.
+func (n *TelegramNotifier) NotifyCostCheckUnverified(
+	ctx context.Context,
+	provider, modelName, reason string,
+) (bool, error) {
+	entityID := fmt.Sprintf("%s:%s", provider, modelName)
+	return n.CheckCooldownAndNotify(ctx, EventCostCheckUnverified, entityID, DefaultCooldownCostCheckUnverified, func() string {
+		return formatCostCheckUnverifiedMessage(provider, modelName, reason)
+	})
+}
+
 // 10. NotifyCatalogPriceMismatch dispatches an alert when the per-unit price
 // billing actually applied for a request differs from the price the public
 // catalog publishes for the same model — i.e. users are charged a price that no
@@ -1259,6 +1280,25 @@ func formatUnprofitableRequestMessage(provider, modelName, leg string, chargedUS
 		chargedUSD,
 		costUSD,
 		costUSD-chargedUSD,
+		time.Now().UTC().Format("2006-01-02 15:04:05 UTC"),
+	)
+}
+
+// formatCostCheckUnverifiedMessage renders the alert for a request whose loss
+// check could not be performed.
+func formatCostCheckUnverifiedMessage(provider, modelName, reason string) string {
+	return fmt.Sprintf(
+		"❓ <b>Проверка запроса на убыток не выполнена</b>\n\n"+
+			"• <b>Обслуживающий провайдер:</b> %s\n"+
+			"• <b>Модель:</b> <code>%s</code>\n"+
+			"• <b>Причина:</b> %s\n"+
+			"• <b>Что это значит:</b> себестоимость запроса неизвестна, поэтому нельзя\n"+
+			"  подтвердить, что он продан не в убыток. Проверьте, есть ли цена для этой\n"+
+			"  модели у провайдера и доступен ли его прайс.\n"+
+			"• <b>Время:</b> %s",
+		html.EscapeString(provider),
+		html.EscapeString(modelName),
+		html.EscapeString(reason),
 		time.Now().UTC().Format("2006-01-02 15:04:05 UTC"),
 	)
 }

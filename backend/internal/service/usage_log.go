@@ -133,6 +133,10 @@ type UsageLog struct {
 	TotalCost         float64
 	ActualCost        float64
 	RateMultiplier    float64
+	// SoldAtCost marks a request that had to be billed at the SERVING provider's own
+	// cost because the published basis would have sold it below cost (see
+	// CostBreakdown.SoldAtCost). Visible in the usage history.
+	SoldAtCost bool `gorm:"column:sold_at_cost"`
 	// AccountRateMultiplier 账号计费倍率快照（nil 表示历史数据，按 1.0 处理）
 	AccountRateMultiplier *float64
 

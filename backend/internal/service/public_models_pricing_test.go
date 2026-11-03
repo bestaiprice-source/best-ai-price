@@ -1005,17 +1005,18 @@ func TestGetPublicModelsPricing_PublishesDiscountVsOfficial(t *testing.T) {
 		return nil
 	}
 
-	// Nothing pinned: the default group is not in the price list, so the official
-	// rate applies and there is no discount to advertise.
+	// Nothing was REPORTED for the key (only a legacy pin, which is no longer read
+	// at all), so the cheapest group the model is enabled for prices the request —
+	// and that discount is what gets advertised.
 	item := find(context.Background())
 	require.NotNil(t, item)
 	require.NotNil(t, item.InputPricePer1M)
 	require.NotNil(t, item.OfficialInputPricePer1M)
 	assert.InDelta(t, 3.0, *item.OfficialInputPricePer1M, 1e-4, "official list price")
-	assert.InDelta(t, 3.0*1.10, *item.InputPricePer1M, 1e-4, "retail = official cost x markup")
-	if item.DiscountPercent != nil {
-		assert.Equal(t, 0, *item.DiscountPercent, "no discount badge when selling at the official rate")
-	}
+	assert.InDelta(t, 3.0*0.1*1.10, *item.InputPricePer1M, 1e-4,
+		"retail = cheapest enabled group x markup")
+	require.NotNil(t, item.DiscountPercent)
+	assert.Equal(t, 89, *item.DiscountPercent, "the advertised discount follows the charged basis")
 
 	// Pinned to the discounted group the key lives in: the discount is real again.
 	pinned := ContextWithYunwuTierGroups(context.Background(), map[string]yunwu.TierGroupNames{

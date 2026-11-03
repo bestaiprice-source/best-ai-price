@@ -13,29 +13,29 @@ import (
 )
 
 // The catalog and the charge must price a tier with the billing group the key
-// actually lives in. The groups are pinned per account (`smart_group_name` /
-// `fast_group_name`) and surfaced through the provider scope, so both paths read
-// the same value.
-func TestComputeYunwuScopeCollectsPinnedTierGroups(t *testing.T) {
+// actually lives in. The group is the one the PROVIDER reports (surfaced through
+// the provider scope); manual pins are no longer read, so both paths read the same
+// value from the provider itself.
+func TestComputeYunwuScopeCollectsTheDetectedGroup(t *testing.T) {
 	repo := &mockAccountRepoForPricing{schedulable: []Account{
 		{
 			Platform:      PlatformYunwu,
 			AccountGroups: []AccountGroup{{AccountID: 1, GroupID: 7}},
 			Extra: map[string]any{
-				"provider":                "openlux",
-				yunwu.ExtraSmartGroupName: "default",
+				"provider":                   "openlux",
+				yunwu.ExtraDetectedGroupName: "Claude-满血",
 			},
 		},
 	}}
 
 	scope, pricing := computeYunwuScope(context.Background(), repo)
 	require.NotEmpty(t, scope, "the account must widen the family scope")
-	require.Equal(t, yunwu.TierGroupNames{Smart: "default"}, pricing.TierGroups["openlux"])
+	require.Equal(t, yunwu.TierGroupNames{Detected: "Claude-满血"}, pricing.TierGroups["openlux"])
 
 	ctx := ContextWithYunwuTierGroups(context.Background(), pricing.TierGroups)
-	require.Equal(t, "default", yunwuTierGroupForProvider(ctx, "openlux", runtime.TierSmart))
+	require.Equal(t, "Claude-满血", yunwuTierGroupForProvider(ctx, "openlux", runtime.TierSmart))
 	// Both keys of the account live in the same group: the fast tier inherits it.
-	require.Equal(t, "default", yunwuTierGroupForProvider(ctx, "openlux", runtime.TierFast))
+	require.Equal(t, "Claude-满血", yunwuTierGroupForProvider(ctx, "openlux", runtime.TierFast))
 	// A provider that pinned nothing keeps the legacy derivation.
 	require.Equal(t, "", yunwuTierGroupForProvider(ctx, "api-top", runtime.TierFast))
 	require.Equal(t, "", yunwuTierGroupForProvider(context.Background(), "openlux", runtime.TierSmart))
@@ -70,18 +70,16 @@ func TestComputeYunwuScopeCollectsTheObservedRatioFloor(t *testing.T) {
 			Platform:      PlatformYunwu,
 			AccountGroups: []AccountGroup{{AccountID: 1, GroupID: 7}},
 			Extra: map[string]any{
-				"provider":                      "openlux",
-				yunwu.ExtraObservedRatioEnabled: true,
-				yunwu.ExtraObservedGroupRatio:   1.25,
+				"provider":                    "openlux",
+				yunwu.ExtraObservedGroupRatio: 1.25,
 			},
 		},
 		{
 			Platform:      PlatformYunwu,
 			AccountGroups: []AccountGroup{{AccountID: 2, GroupID: 7}},
 			Extra: map[string]any{
-				"provider":                      "openlux",
-				yunwu.ExtraObservedRatioEnabled: true,
-				yunwu.ExtraObservedGroupRatio:   1.4,
+				"provider":                    "openlux",
+				yunwu.ExtraObservedGroupRatio: 1.4,
 			},
 		},
 	}}
@@ -91,7 +89,8 @@ func TestComputeYunwuScopeCollectsTheObservedRatioFloor(t *testing.T) {
 	require.Zero(t, pricing.Observed["openlux"]["fast"],
 		"a fast correction is only used when it was measured on the fast key")
 
-	// A node that did NOT opt in contributes nothing, even with a value stored.
+	// The reconciliation is unconditional: a stored measurement counts even
+	// without any per-node flag (the opt-in was retired).
 	repoOff := &mockAccountRepoForPricing{schedulable: []Account{
 		{
 			Platform:      PlatformYunwu,
@@ -100,7 +99,7 @@ func TestComputeYunwuScopeCollectsTheObservedRatioFloor(t *testing.T) {
 		},
 	}}
 	_, off := computeYunwuScope(context.Background(), repoOff)
-	require.Empty(t, off.Observed, "the reconciliation is opt-in per node")
+	require.InDelta(t, 3.0, off.Observed["openlux"]["smart"], 1e-9)
 
 	ctx := ContextWithYunwuPricingScope(context.Background(), pricing)
 	require.InDelta(t, 1.4, yunwuObservedRatioForProvider(ctx, "openlux", yunwu.TierSmartName), 1e-9)
@@ -109,7 +108,7 @@ func TestComputeYunwuScopeCollectsTheObservedRatioFloor(t *testing.T) {
 	require.InDelta(t, 0.0, yunwuObservedRatioForProvider(context.Background(), "openlux", yunwu.TierSmartName), 1e-9)
 }
 
-func TestWithYunwuProviderScopeCarriesThePinnedGroups(t *testing.T) {
+func TestWithYunwuProviderScopeCarriesTheDetectedGroup(t *testing.T) {
 	resetYunwuProviderScopeCache()
 	t.Cleanup(resetYunwuProviderScopeCache)
 
@@ -118,16 +117,16 @@ func TestWithYunwuProviderScopeCarriesThePinnedGroups(t *testing.T) {
 			Platform:      PlatformYunwu,
 			AccountGroups: []AccountGroup{{AccountID: 1, GroupID: 7}},
 			Extra: map[string]any{
-				"provider":                "openlux",
-				yunwu.ExtraSmartGroupName: "default",
-				yunwu.ExtraFastGroupName:  "Azure-Gpt-6",
+				"provider":                   "openlux",
+				yunwu.ExtraDetectedGroupName: "Azure-Gpt-6",
 			},
 		},
 	}}
 
 	ctx := withYunwuProviderScope(context.Background(), repo)
-	require.Equal(t, "default", yunwuTierGroupForProvider(ctx, "openlux", runtime.TierSmart))
-	require.Equal(t, "Azure-Gpt-6", yunwuTierGroupForProvider(ctx, "openlux", runtime.TierFast))
+	require.Equal(t, "Azure-Gpt-6", yunwuTierGroupForProvider(ctx, "openlux", runtime.TierSmart))
+	require.Equal(t, "Azure-Gpt-6", yunwuTierGroupForProvider(ctx, "openlux", runtime.TierFast),
+		"one reported group serves both tiers")
 	require.Equal(t, "Azure-Gpt-6", yunwuTierGroupForProvider(ctx, "OpenLux", runtime.TierFast),
 		"the provider key is canonicalized")
 }

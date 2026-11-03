@@ -409,49 +409,11 @@
           </span>
         </label>
 
-        <!-- The provider billing groups the keys were issued in. The gateway
-             prices each tier with the rate of the group its key bills in, so
-             this must be the REAL group name from the provider console (e.g.
-             `default`) — not a tier name. Empty keeps the legacy derivation. -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div>
-            <label class="input-label">{{ t('ui.createAccountModal.smartGroupName') }}</label>
-            <select v-model="yunwuSmartGroupName" class="input" data-tour="account-smart-group">
-              <option value="">{{ t('ui.createAccountModal.groupOptionAuto') }}</option>
-              <option v-for="group in smartGroupOptions" :key="group.value" :value="group.value">
-                {{ group.label }}
-              </option>
-            </select>
-          </div>
-          <div>
-            <label class="input-label">{{ t('ui.createAccountModal.fastGroupName') }}</label>
-            <select v-model="yunwuFastGroupName" class="input" data-tour="account-fast-group">
-              <option value="">{{ t('ui.createAccountModal.groupOptionSameAsSmart') }}</option>
-              <option v-for="group in fastGroupOptions" :key="group.value" :value="group.value">
-                {{ group.label }}
-              </option>
-            </select>
-          </div>
-        </div>
-        <p class="-mt-2 input-hint">{{ providerGroupsLoading ? t('ui.createAccountModal.groupOptionsLoading') : t('ui.createAccountModal.providerGroupHint') }}</p>
-        <!-- Reconciliation floor (option 2): price by what the provider is MEASURED
-             to charge, not only by the group selected above. Off by default. -->
-        <label class="flex cursor-pointer items-start gap-2 rounded-lg border border-gray-200 p-3 dark:border-dark-600">
-          <input
-            type="checkbox"
-            v-model="yunwuObservedRatioEnabled"
-            class="mt-0.5 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 dark:border-dark-500"
-          />
-          <span>
-            <span class="text-sm font-medium text-gray-800 dark:text-gray-200">
-              {{ t('ui.createAccountModal.observedRatioEnabled') }}
-            </span>
-            <span class="block text-[11px] text-gray-500 dark:text-gray-400">
-              {{ t('ui.createAccountModal.observedRatioHint') }}
-            </span>
-          </span>
-        </label>
-
+        <!-- The billing group is not chosen by hand: the gateway prices each tier
+             with the group the provider API reports for the key
+             (`detected_group_name`, written by the balance sync) and falls back to
+             the official rate. Pricing is also corrected by what the provider is
+             MEASURED to charge on every balance sync. -->
 
         <!-- Custom Model Mapping -->
         <div class="rounded-lg border border-gray-200 bg-white/70 p-3.5 dark:border-dark-700 dark:bg-dark-900/40">
@@ -3248,7 +3210,6 @@ import {
   isValidWildcardPattern
 } from '@/composables/useModelWhitelist'
 import { useAuthStore } from '@/stores/auth'
-import { useProviderBillingGroups } from '@/composables/useProviderBillingGroups'
 import { adminAPI } from '@/api/admin'
 import {
   useAccountOAuth,
@@ -3462,38 +3423,10 @@ const yunwuSupportedFamilies = ref<string[]>(['claude', 'gpt', 'gemini', 'kimi',
 // billing tiers, so splitting it into fast/smart adds nothing. With this on the
 // node advertises both tiers and every request uses its one key.
 const yunwuTieringDisabled = ref(false)
-// Reconciliation floor (option 2) — off unless the node opts in.
-const yunwuObservedRatioEnabled = ref(false)
-// Provider billing groups the account's keys were issued in (prices the tier).
-// The options are the provider's OWN groups, loaded from its price list.
-const yunwuSmartGroupName = ref('')
-const yunwuFastGroupName = ref('')
-const {
-  loading: providerGroupsLoading,
-  load: loadProviderGroups,
-  optionsWith: providerGroupOptionsWith
-} = useProviderBillingGroups()
-const smartGroupOptions = computed(() => providerGroupOptionsWith(yunwuSmartGroupName.value))
-const fastGroupOptions = computed(() => providerGroupOptionsWith(yunwuFastGroupName.value))
+// The billing group is not picked here: it is detected from the provider API
+// (`detected_group_name`, written by the balance sync) and corrected by the
+// charge the provider is measured to take on every sync.
 
-/** Load the groups of the selected provider (a custom one through its base_url). */
-const refreshProviderGroups = () => {
-  if (form.platform !== 'yunwu') return
-  const provider = yunwuProvider.value === 'custom'
-    ? (yunwuCustomProvider.value.trim() || 'custom')
-    : yunwuProvider.value
-  if (!provider) return
-  const baseUrl = yunwuProvider.value === 'custom' ? yunwuBaseUrl.value.trim() : undefined
-  if (yunwuProvider.value === 'custom' && !baseUrl) return
-  void loadProviderGroups(provider, baseUrl)
-}
-
-watch(
-  [() => props.show, () => form.platform, yunwuProvider, yunwuCustomProvider, yunwuBaseUrl],
-  ([show]) => {
-    if (show) refreshProviderGroups()
-  }
-)
 interface YunwuMappingRow {
   canonical: string
   upstream: string
@@ -4302,9 +4235,6 @@ const resetForm = () => {
   yunwuMinBalance.value = 20
   yunwuSupportedFamilies.value = ['claude', 'gpt', 'gemini', 'kimi', 'other']
   yunwuTieringDisabled.value = false
-  yunwuObservedRatioEnabled.value = false
-  yunwuSmartGroupName.value = ''
-  yunwuFastGroupName.value = ''
   yunwuModelMappings.value = []
   tempUnschedEnabled.value = false
   tempUnschedRules.value = []
@@ -4505,21 +4435,8 @@ const handleSubmit = async () => {
     if (yunwuTieringDisabled.value) {
       extra.tiering_disabled = true
     }
-    // Reconciliation floor (option 2): written only when ON, so an untouched form
-    // keeps billing exactly as before — strictly by the group selected above.
-    if (yunwuObservedRatioEnabled.value) {
-      extra.observed_ratio_enabled = true
-    }
-    // The real provider billing group of each key: the charged rate follows it
-    // (a group the provider does not list bills at the official rate).
-    const smartGroupName = yunwuSmartGroupName.value.trim()
-    const fastGroupName = yunwuFastGroupName.value.trim()
-    if (smartGroupName) {
-      extra.smart_group_name = smartGroupName
-    }
-    if (fastGroupName) {
-      extra.fast_group_name = fastGroupName
-    }
+    // The billing group is detected automatically (and corrected by the measured
+    // charge), so no group keys are written here.
     const mappingObj: Record<string, string> = {}
     for (const row of yunwuModelMappings.value) {
       const c = row.canonical.trim()

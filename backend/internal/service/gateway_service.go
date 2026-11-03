@@ -8209,6 +8209,9 @@ func (s *GatewayService) RecordUsage(ctx context.Context, input *RecordUsageInpu
 	}
 
 	var cost *CostBreakdown
+	// Hoisted so the per-request loss observer can see the token usage of the
+	// branch that actually priced the request (empty for media/fixed pricing).
+	var tokens UsageTokens
 	billingModel := forwardResultBillingModel(result.Model, result.UpstreamModel)
 
 	// §7: a markup configured specifically for this model overrides the base
@@ -8248,7 +8251,7 @@ func (s *GatewayService) RecordUsage(ctx context.Context, input *RecordUsageInpu
 		cost = s.billingService.CalculateImageCost(billingModel, result.ImageSize, result.ImageCount, groupConfig, multiplier)
 	} else {
 		// Token 计费
-		tokens := UsageTokens{
+		tokens = UsageTokens{
 			InputTokens:           result.Usage.InputTokens,
 			OutputTokens:          result.Usage.OutputTokens,
 			CacheCreationTokens:   result.Usage.CacheCreationInputTokens,
@@ -8282,9 +8285,10 @@ func (s *GatewayService) RecordUsage(ctx context.Context, input *RecordUsageInpu
 
 	// Loss-making request guard: the provider that actually served the request may
 	// be more expensive than the primary (cheapest) provider whose price we
-	// publish and charge.
+	// publish and charge. The observer re-prices such a request at the serving
+	// provider's own cost (never sell below cost) and alerts.
 	if account != nil && YunwuPrimaryPricingFromContext(ctx) {
-		alertIfUnprofitableYunwuRequest(ctx, s.billingService, yunwu.ParseNodeProvider(account.Extra), billingModel, multiplier)
+		observeYunwuRequestCost(ctx, s.billingService, yunwu.ParseNodeProvider(account.Extra), billingModel, multiplier, cost, s.billingService.recostAtProvider(ctx, billingModel, tokens, multiplier))
 	}
 
 	// 判断计费方式：订阅模式 vs 余额模式
@@ -8324,6 +8328,7 @@ func (s *GatewayService) RecordUsage(ctx context.Context, input *RecordUsageInpu
 		CacheCreation5mTokens: result.Usage.CacheCreation5mTokens,
 		CacheCreation1hTokens: result.Usage.CacheCreation1hTokens,
 		InputCost:             cost.InputCost,
+		SoldAtCost:            cost.SoldAtCost,
 		OutputCost:            cost.OutputCost,
 		CacheCreationCost:     cost.CacheCreationCost,
 		CacheReadCost:         cost.CacheReadCost,
@@ -8446,6 +8451,9 @@ func (s *GatewayService) RecordUsageWithLongContext(ctx context.Context, input *
 	}
 
 	var cost *CostBreakdown
+	// Hoisted so the per-request loss observer can see the token usage of the
+	// branch that actually priced the request (empty for media/fixed pricing).
+	var tokens UsageTokens
 	billingModel := forwardResultBillingModel(result.Model, result.UpstreamModel)
 
 	// §7: a markup configured specifically for this model overrides the base
@@ -8468,7 +8476,7 @@ func (s *GatewayService) RecordUsageWithLongContext(ctx context.Context, input *
 		cost = s.billingService.CalculateImageCost(billingModel, result.ImageSize, result.ImageCount, groupConfig, multiplier)
 	} else {
 		// Token 计费（使用长上下文计费方法）
-		tokens := UsageTokens{
+		tokens = UsageTokens{
 			InputTokens:           result.Usage.InputTokens,
 			OutputTokens:          result.Usage.OutputTokens,
 			CacheCreationTokens:   result.Usage.CacheCreationInputTokens,
@@ -8484,6 +8492,9 @@ func (s *GatewayService) RecordUsageWithLongContext(ctx context.Context, input *
 			billingCtx = ContextWithPricingProvider(billingCtx, "openlux")
 		}
 		cost, err = s.billingService.CalculateCostWithLongContextAndContext(billingCtx, billingModel, tokens, multiplier, input.LongContextThreshold, input.LongContextMultiplier)
+		// Record how the request was priced so the loss observer re-prices with the
+		// SAME method (long-context billing) rather than a generic one.
+		ctx = ContextWithRecostParams(ctx, input.LongContextThreshold, input.LongContextMultiplier, "")
 		if err != nil {
 			logger.L().With(
 				zap.String("component", "service.gateway"),
@@ -8496,9 +8507,10 @@ func (s *GatewayService) RecordUsageWithLongContext(ctx context.Context, input *
 
 	// Loss-making request guard: the provider that actually served the request may
 	// be more expensive than the primary (cheapest) provider whose price we
-	// publish and charge.
+	// publish and charge. The observer re-prices such a request at the serving
+	// provider's own cost (never sell below cost) and alerts.
 	if account != nil && YunwuPrimaryPricingFromContext(ctx) {
-		alertIfUnprofitableYunwuRequest(ctx, s.billingService, yunwu.ParseNodeProvider(account.Extra), billingModel, multiplier)
+		observeYunwuRequestCost(ctx, s.billingService, yunwu.ParseNodeProvider(account.Extra), billingModel, multiplier, cost, s.billingService.recostAtProvider(ctx, billingModel, tokens, multiplier))
 	}
 
 	// 判断计费方式：订阅模式 vs 余额模式
@@ -8534,6 +8546,7 @@ func (s *GatewayService) RecordUsageWithLongContext(ctx context.Context, input *
 		CacheCreation5mTokens: result.Usage.CacheCreation5mTokens,
 		CacheCreation1hTokens: result.Usage.CacheCreation1hTokens,
 		InputCost:             cost.InputCost,
+		SoldAtCost:            cost.SoldAtCost,
 		OutputCost:            cost.OutputCost,
 		CacheCreationCost:     cost.CacheCreationCost,
 		CacheReadCost:         cost.CacheReadCost,

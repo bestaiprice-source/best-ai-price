@@ -183,50 +183,11 @@
             </p>
           </div>
 
-          <!-- The provider billing groups the two keys were issued in. The
-               gateway prices each tier with the rate of the group its key bills
-               in, so this must be the REAL group name from the provider console
-               (e.g. `default`, `Azure-Gpt-6`) — not a tier name. Leave empty to
-               keep the legacy derivation. -->
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div>
-              <label class="input-label">{{ t('ui.editAccountModal.smartGroupName') }}</label>
-              <select v-model="yunwuSmartGroupName" class="input" data-tour="account-smart-group">
-                <option value="">{{ t('ui.editAccountModal.groupOptionAuto') }}</option>
-                <option v-for="group in smartGroupOptions" :key="group.value" :value="group.value">
-                  {{ group.label }}
-                </option>
-              </select>
-            </div>
-            <div>
-              <label class="input-label">{{ t('ui.editAccountModal.fastGroupName') }}</label>
-              <select v-model="yunwuFastGroupName" class="input" data-tour="account-fast-group">
-                <option value="">{{ t('ui.editAccountModal.groupOptionSameAsSmart') }}</option>
-                <option v-for="group in fastGroupOptions" :key="group.value" :value="group.value">
-                  {{ group.label }}
-                </option>
-              </select>
-            </div>
-          </div>
-          <p class="-mt-2 input-hint">{{ providerGroupsLoading ? t('ui.editAccountModal.groupOptionsLoading') : t('ui.editAccountModal.providerGroupHint') }}</p>
-        <!-- Reconciliation floor (option 2): price by what the provider is MEASURED
-             to charge, not only by the group selected above. Off by default. -->
-        <label class="flex cursor-pointer items-start gap-2 rounded-lg border border-gray-200 p-3 dark:border-dark-600">
-          <input
-            type="checkbox"
-            v-model="yunwuObservedRatioEnabled"
-            class="mt-0.5 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 dark:border-dark-500"
-          />
-          <span>
-            <span class="text-sm font-medium text-gray-800 dark:text-gray-200">
-              {{ t('ui.editAccountModal.observedRatioEnabled') }}
-            </span>
-            <span class="block text-[11px] text-gray-500 dark:text-gray-400">
-              {{ t('ui.editAccountModal.observedRatioHint') }}
-            </span>
-          </span>
-        </label>
-
+          <!-- The billing group is not chosen by hand: the gateway prices each
+               tier with the group the provider API reports for the key
+               (`detected_group_name`, written by the balance sync) and falls back
+               to the official rate. Pricing is also corrected by what the
+               provider is MEASURED to charge on every balance sync. -->
 
           <!-- Protocol & Alert Threshold -->
           <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -1964,7 +1925,6 @@ import { ref, reactive, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
-import { useProviderBillingGroups } from '@/composables/useProviderBillingGroups'
 import { adminAPI } from '@/api/admin'
 import type { Account, Proxy, AdminGroup, CheckMixedChannelResponse } from '@/types'
 import BaseDialog from '@/components/common/BaseDialog.vue'
@@ -2085,32 +2045,9 @@ const yunwuSupportedFamilies = ref<string[]>(['claude', 'gpt', 'gemini', 'kimi',
 // Single-key mode (see CreateAccountModal): the node serves both billing tiers
 // through its one key, so the tier stops influencing that node's routing.
 const yunwuTieringDisabled = ref(false)
-// Reconciliation floor (option 2) — off unless the node opts in.
-const yunwuObservedRatioEnabled = ref(false)
-// Provider billing groups the account's keys were issued in (prices the tier).
-// The options are the provider's OWN groups, loaded from its price list.
-const yunwuSmartGroupName = ref('')
-const yunwuFastGroupName = ref('')
-const {
-  loading: providerGroupsLoading,
-  load: loadProviderGroups,
-  optionsWith: providerGroupOptionsWith
-} = useProviderBillingGroups()
-const smartGroupOptions = computed(() => providerGroupOptionsWith(yunwuSmartGroupName.value))
-const fastGroupOptions = computed(() => providerGroupOptionsWith(yunwuFastGroupName.value))
-
-/** Reload the provider's groups for the account being edited (a custom endpoint
- *  is read through its own base_url). */
-const refreshProviderGroups = () => {
-  if (props.account?.platform !== 'yunwu') return
-  const provider = yunwuProvider.value === 'custom'
-    ? (yunwuCustomProvider.value.trim() || 'custom')
-    : yunwuProvider.value
-  if (!provider) return
-  const baseUrl = yunwuProvider.value === 'custom' ? editBaseUrl.value.trim() : undefined
-  if (yunwuProvider.value === 'custom' && !baseUrl) return
-  void loadProviderGroups(provider, baseUrl)
-}
+// The billing group is not picked here: it is detected from the provider API
+// (`detected_group_name`, written by the balance sync) and corrected by the
+// charge the provider is measured to take on every sync.
 
 const YUNWU_PROVIDER_DEFAULTS: Record<string, string> = {
   openlux: 'https://api.openlux.ai/v1',
@@ -2398,10 +2335,6 @@ const syncFormFromAccount = (newAccount: Account | null) => {
       yunwuSupportedFamilies.value = ['claude', 'gpt', 'gemini', 'kimi', 'other']
     }
     yunwuTieringDisabled.value = extra?.tiering_disabled === true
-    yunwuObservedRatioEnabled.value = extra?.observed_ratio_enabled === true
-    yunwuSmartGroupName.value = typeof extra?.smart_group_name === 'string' ? extra.smart_group_name : ''
-    yunwuFastGroupName.value = typeof extra?.fast_group_name === 'string' ? extra.fast_group_name : ''
-    refreshProviderGroups()
   } else {
     yunwuProvider.value = 'openlux'
     yunwuCustomProvider.value = ''
@@ -2410,9 +2343,6 @@ const syncFormFromAccount = (newAccount: Account | null) => {
     yunwuBalance.value = 0
     yunwuSupportedFamilies.value = ['claude', 'gpt', 'gemini', 'kimi', 'other']
     yunwuTieringDisabled.value = false
-    yunwuObservedRatioEnabled.value = false
-    yunwuSmartGroupName.value = ''
-    yunwuFastGroupName.value = ''
   }
 
   // Load OpenAI passthrough toggle (OpenAI OAuth/API Key)
@@ -2680,8 +2610,6 @@ const syncFormFromAccount = (newAccount: Account | null) => {
   }
   editApiKey.value = ''
   editYunwuApiKeyFast.value = ''
-  yunwuSmartGroupName.value = ''
-  yunwuFastGroupName.value = ''
 }
 
 watch(
@@ -3569,27 +3497,8 @@ const handleSubmit = async () => {
       } else {
         delete newExtra.tiering_disabled
       }
-      // Reconciliation floor (option 2): explicitly removed when switched off, so a
-      // lingering `true` cannot keep lifting prices behind the operator's back.
-      if (yunwuObservedRatioEnabled.value) {
-        newExtra.observed_ratio_enabled = true
-      } else {
-        delete newExtra.observed_ratio_enabled
-      }
-      // The real provider billing group of each key: the charged rate follows it
-      // (a group the provider does not list bills at the official rate).
-      const smartGroupName = yunwuSmartGroupName.value.trim()
-      const fastGroupName = yunwuFastGroupName.value.trim()
-      if (smartGroupName) {
-        newExtra.smart_group_name = smartGroupName
-      } else {
-        delete newExtra.smart_group_name
-      }
-      if (fastGroupName) {
-        newExtra.fast_group_name = fastGroupName
-      } else {
-        delete newExtra.fast_group_name
-      }
+      // The billing group is detected automatically (and corrected by the
+      // measured charge), so no group keys are written here.
       updatePayload.extra = applyIgnorePauseSchedulingErrorsUpdate(newExtra)
     }
 

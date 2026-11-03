@@ -40,37 +40,21 @@ const (
 	// ExtraObservedGroupRatioFast is the FAST key's own measurement slot. A two-key
 	// node is measured per key, so the fast tier never reads the smart value.
 	ExtraObservedGroupRatioFast = "observed_group_ratio_fast"
-	// ExtraObservedRatioEnabled is the per-node opt-in for the whole reconciliation
-	// (checkbox in the account form). OFF — the default — keeps billing exactly as
-	// before: the group selected for the node, nothing else. ON — the price also
-	// respects what the provider is measured to charge, which is what makes a node
-	// whose key sits in the `default` group safe when the provider routes on its own.
+	// ExtraObservedRatioEnabled is a RETIRED per-node flag: the reconciliation used
+	// to be opt-in, and is now unconditional so a leftover value can never switch the
+	// pricing safety net off. The key is kept only so older rows stay readable.
 	ExtraObservedRatioEnabled = "observed_ratio_enabled"
 )
 
-// ObservedRatioEnabled reports whether a node opted into the reconciliation floor.
-// Accepts a real bool plus the string spellings an admin form or hand-edited JSON
-// may produce; anything unrecognised means OFF.
+// ObservedRatioEnabled reports whether the reconciliation applies to a node.
+//
+// It is UNCONDITIONAL now: the per-node opt-in was retired, because a leftover
+// `false` (or a missing key) must never be able to switch the pricing safety net
+// off. The parameter is kept so existing call sites stay explicit at the point of
+// use.
 func ObservedRatioEnabled(extra map[string]any) bool {
-	if len(extra) == 0 {
-		return false
-	}
-	switch v := extra[ExtraObservedRatioEnabled].(type) {
-	case bool:
-		return v
-	case string:
-		switch strings.ToLower(strings.TrimSpace(v)) {
-		case "true", "1", "yes", "on":
-			return true
-		}
-	case int:
-		return v != 0
-	case int64:
-		return v != 0
-	case float64:
-		return v != 0
-	}
-	return false
+	_ = extra
+	return true
 }
 
 // MinObservedSampleCostUSD is the smallest provider-cost basis a measurement may
@@ -78,23 +62,23 @@ func ObservedRatioEnabled(extra map[string]any) bool {
 // noise into a price), and the checkpoint stays so the next window is bigger.
 const MinObservedSampleCostUSD = 0.5
 
-// MaxObservedCorrection caps the correction factor. A larger reading means the
-// sample is not comparable (prices changed, traffic mixed across providers)
-// rather than that the provider is charging 5x, so it is refused instead of
-// multiplied into every price.
-const MaxObservedCorrection = 5.0
+// MinObservedCorrection is the smallest correction factor the reconciliation will
+// accept or apply — a reading below it is noise, not evidence about cost.
+const MinObservedCorrection = 0.01
+
+// MaxObservedCorrection caps the correction factor. It must be wide enough to
+// repair a wrong group ASSUMPTION: a model can be advertised in a group priced at
+// 0.088 while the key is really billed at 1.0 (OpenLux), i.e. an 11x gap, and a
+// cap below that would reject the very sample that proves the error — leaving the
+// gateway to sell below cost with no way to recover.
+const MaxObservedCorrection = 20.0
 
 // MeasureObservedCorrection turns two readings of the provider's cumulative usage
 // counter plus our cost basis for the same interval into a correction factor.
+// The range check lives in ObservedGroupRatio, so a reading that is not comparable
+// (prices changed, traffic mixed across providers) is refused here too.
 func MeasureObservedCorrection(providerUsedUSDStart, providerUsedUSDEnd, costBasisUSD float64) (float64, bool) {
-	ratio, ok := ObservedGroupRatio(providerUsedUSDStart, providerUsedUSDEnd, costBasisUSD)
-	if !ok {
-		return 0, false
-	}
-	if ratio > MaxObservedCorrection {
-		return 0, false
-	}
-	return ratio, true
+	return ObservedGroupRatio(providerUsedUSDStart, providerUsedUSDEnd, costBasisUSD)
 }
 
 // observedExtraKeys returns the extra-key set a tier's measurement lives under.

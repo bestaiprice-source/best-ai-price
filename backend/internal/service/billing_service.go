@@ -112,6 +112,11 @@ type CostBreakdown struct {
 	CacheReadCost     float64
 	TotalCost         float64
 	ActualCost        float64 // 应用倍率后的实际费用
+	// SoldAtCost marks a request that had to be re-priced at the SERVING provider's
+	// own cost because the published (primary-provider) basis would have sold it
+	// below cost. It travels into the usage_logs row so such requests are visible
+	// in the usage history instead of only in the alert.
+	SoldAtCost bool
 }
 
 // BillingService 计费服务

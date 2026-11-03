@@ -1,8 +1,8 @@
 package service
 
 import (
-	"crypto/tls"
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"net/http"

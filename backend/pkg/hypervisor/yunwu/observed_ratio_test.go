@@ -6,38 +6,20 @@ import (
 	"github.com/Wei-Shaw/sub2api/pkg/hypervisor/runtime"
 )
 
-func TestObservedRatioEnabledIsOptIn(t *testing.T) {
-	cases := []struct {
-		value any
-		want  bool
-	}{
-		{nil, false},
-		{true, true},
-		{false, false},
-		{"true", true},
-		{"TRUE", true},
-		{" on ", true},
-		{"1", true},
-		{"yes", true},
-		{"no", false},
-		{"", false},
-		{"maybe", false},
-		{1, true},
-		{0, false},
-		{1.0, true},
-		{0.0, false},
-	}
-	for _, tc := range cases {
-		extra := map[string]any{}
-		if tc.value != nil {
-			extra[ExtraObservedRatioEnabled] = tc.value
+func TestObservedRatioIsUnconditional(t *testing.T) {
+	// The per-node opt-in was retired: no extra map, and no stored value, may
+	// switch the pricing safety net off.
+	for _, extra := range []map[string]any{
+		nil,
+		{},
+		{ExtraObservedRatioEnabled: false},
+		{ExtraObservedRatioEnabled: "false"},
+		{ExtraObservedRatioEnabled: 0},
+		{ExtraObservedRatioEnabled: true},
+	} {
+		if !ObservedRatioEnabled(extra) {
+			t.Fatalf("ObservedRatioEnabled(%v) must be true — the reconciliation is unconditional", extra)
 		}
-		if got := ObservedRatioEnabled(extra); got != tc.want {
-			t.Fatalf("ObservedRatioEnabled(%v) = %v, want %v", tc.value, got, tc.want)
-		}
-	}
-	if ObservedRatioEnabled(nil) {
-		t.Fatal("a node without extra must not be opted in")
 	}
 }
 

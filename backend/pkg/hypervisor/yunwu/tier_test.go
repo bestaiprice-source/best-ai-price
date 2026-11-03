@@ -125,15 +125,53 @@ func TestObservedGroupRatioAndFloor(t *testing.T) {
 		t.Fatal("an absurd ratio must be refused")
 	}
 
-	// The floor lifts a price to the observed cost and never lowers it.
-	if got := ApplyObservedFloor(1.0, 1.15); got != 1.15 {
-		t.Fatalf("floor must lift 1.0 to 1.15, got %v", got)
+	// The correction moves the rate to what the provider is measured to charge —
+	// in BOTH directions (a one-way floor could never repair a wrong assumption).
+	if got := ApplyObservedCorrection(1.0, 1.15); got != 1.15 {
+		t.Fatalf("a dearer reading must lift 1.0 to 1.15, got %v", got)
 	}
-	if got := ApplyObservedFloor(1.1, 0.5); got != 1.1 {
-		t.Fatalf("floor must not lower a price, got %v", got)
+	if got := ApplyObservedCorrection(1.0, 0.088); got != 0.088 {
+		t.Fatalf("a cheaper reading must lower the rate, got %v", got)
 	}
-	if got := ApplyObservedFloor(1.1, 0); got != 1.1 {
+	if got := ApplyObservedCorrection(1.1, 0.5); got != 0.55 {
+		t.Fatalf("the correction must scale the ratio, got %v", got)
+	}
+	if got := ApplyObservedCorrection(1.1, 0); got != 1.1 {
 		t.Fatalf("no observation must leave the price alone, got %v", got)
+	}
+	if got := ApplyObservedCorrection(1.1, 1); got != 1.1 {
+		t.Fatalf("a neutral reading must leave the price alone, got %v", got)
+	}
+	if got := ApplyObservedCorrection(1.1, MaxObservedCorrection*2); got != 1.1 {
+		t.Fatalf("an out-of-range correction must be ignored, got %v", got)
+	}
+	// A realistic repair: the model is advertised in a group priced 0.088 while the
+	// key is really billed at 1.0 — roughly 11x, and it must still be usable.
+	if got := ApplyObservedCorrection(0.088, 11.36); got < 0.999 || got > 1.001 {
+		t.Fatalf("an 11x mispricing must be repairable, got %v", got)
+	}
+}
+
+func TestResolveModelGroupRatio(t *testing.T) {
+	ratios := map[string]float64{"kiro": 0.12, "Claude max企业": 1.4}
+
+	// No usable detected group ⇒ the cheapest group the MODEL is enabled for.
+	if got := ResolveModelGroupRatio(ratios, TierSmartName, DefaultProviderGroupName, 0.12); got != 0.12 {
+		t.Fatalf("cheapest enabled group = %v, want 0.12", got)
+	}
+	if got := ResolveModelGroupRatio(ratios, TierFastName, "", 0.12); got != 0.12 {
+		t.Fatalf("fast must use the same per-model basis, got %v", got)
+	}
+	// A group the provider really reported wins over the cheapest advertised one.
+	if got := ResolveModelGroupRatio(ratios, TierSmartName, "Claude max企业", 0.12); got != 1.4 {
+		t.Fatalf("a detected group must win, got %v", got)
+	}
+	// Nothing known at all ⇒ the official rate (never cheaper than reality).
+	if got := ResolveModelGroupRatio(ratios, TierSmartName, DefaultProviderGroupName, 0); got != DefaultSmartGroupRatio {
+		t.Fatalf("unknown group = %v, want %v", got, DefaultSmartGroupRatio)
+	}
+	if got := ResolveModelGroupRatio(nil, TierFastName, "", 0); got != DefaultFastGroupRatio {
+		t.Fatalf("unknown fast group = %v, want %v", got, DefaultFastGroupRatio)
 	}
 }
 
@@ -160,6 +198,22 @@ func TestTierGroupNamesForDefaults(t *testing.T) {
 	}
 	if got := (TierGroupNames{Fast: "Azure-Gpt-6", Smart: "Azure-Gpt-1"}).For(runtime.TierFast); got != "Azure-Gpt-6" {
 		t.Fatalf("explicit fast pin = %q, want Azure-Gpt-6", got)
+	}
+	// The `default` placeholder is NOT a pin: it must let the detected group
+	// decide instead of shadowing it.
+	defaultPin := TierGroupNames{Smart: "default", Detected: "Azure-Gpt-6"}
+	if got := defaultPin.For(runtime.TierSmart); got != "Azure-Gpt-6" {
+		t.Fatalf("default pin must defer to the detected group, got %q", got)
+	}
+	if got := defaultPin.For(runtime.TierFast); got != "Azure-Gpt-6" {
+		t.Fatalf("fast with a default pin must defer to the detected group, got %q", got)
+	}
+	if got := (TierGroupNames{Fast: "default", Smart: "Azure-Gpt-1"}).For(runtime.TierFast); got != "Azure-Gpt-1" {
+		t.Fatalf("a default fast pin must fall back to the smart pin, got %q", got)
+	}
+	// ... and with nothing detected it stays the official-rate group.
+	if got := (TierGroupNames{Smart: "default"}).For(runtime.TierSmart); got != DefaultProviderGroupName {
+		t.Fatalf("default pin without detection = %q, want %q", got, DefaultProviderGroupName)
 	}
 }
 

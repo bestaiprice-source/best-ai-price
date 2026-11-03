@@ -728,18 +728,14 @@ func (s *YunwuPricingService) GetModelPricingForProvider(ctx context.Context, pr
 
 	// The price must follow the billing tier the request is on: a fast request
 	// uses the fast key, which the provider prices with that key's billing group.
-	// The group is taken from the tier's pinned group when the account
-	// configures one (account.Extra smart_group_name/fast_group_name, surfaced
-	// through the provider scope), otherwise the legacy derivation applies. A
-	// missing tier price fails closed rather than being sold at another group's
-	// rate.
+	// The group comes from what the provider API reported for the key (surfaced
+	// through the provider scope); when it reports nothing, the cheapest group the
+	// MODEL is enabled for is assumed. Either way the measured correction then
+	// moves the rate to what the provider is really charging — in both directions.
 	tier := yunwu.TierFromContext(ctx)
 	groupName := yunwuTierGroupForProvider(ctx, provider, tier)
-	// The group the key bills in decides the rate; when that group is unknown the
-	// tier default applies (1.0 smart / 1.1 fast), floored at what the provider's
-	// own accounting shows it charges us (never sell below the observed cost).
-	groupRatio := yunwu.ApplyObservedFloor(
-		yunwu.ResolveTierGroupRatioForGroup(item.GroupRatios, tier, groupName),
+	groupRatio := yunwu.ApplyObservedCorrection(
+		yunwu.ResolveModelGroupRatio(item.GroupRatios, tier, groupName, item.GroupRatio),
 		yunwuObservedRatioForProvider(ctx, provider, tier),
 	)
 
