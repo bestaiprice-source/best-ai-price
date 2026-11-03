@@ -1895,7 +1895,7 @@
           </div>
         </div>
 
-        <!-- SMTP Settings: always visible — the same transport delivers balance and
+        <!-- Resend Settings: always visible — the same transport delivers balance and
              quota notifications even when email verification is disabled. -->
         <div class="card">
           <div
@@ -1903,19 +1903,19 @@
           >
             <div>
               <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
-                {{ t('admin.settings.smtp.title') }}
+                {{ t('admin.settings.resend.title') }}
               </h2>
               <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                {{ t('admin.settings.smtp.description') }}
+                {{ t('admin.settings.resend.description') }}
               </p>
             </div>
             <button
               type="button"
-              @click="testSmtpConnection"
-              :disabled="testingSmtp"
+              @click="testEmailConnection"
+              :disabled="testingEmail"
               class="btn btn-secondary btn-sm"
             >
-              <svg v-if="testingSmtp" class="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+              <svg v-if="testingEmail" class="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
                 <circle
                   class="opacity-25"
                   cx="12"
@@ -1931,110 +1931,62 @@
                 ></path>
               </svg>
               {{
-                testingSmtp
-                  ? t('admin.settings.smtp.testing')
-                  : t('admin.settings.smtp.testConnection')
+                testingEmail
+                  ? t('admin.settings.resend.testing')
+                  : t('admin.settings.resend.testConnection')
               }}
             </button>
           </div>
           <div class="space-y-6 p-6">
             <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
-              <div>
+              <div class="md:col-span-2">
                 <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  {{ t('admin.settings.smtp.host') }}
+                  {{ t('admin.settings.resend.apiKey') }}
                 </label>
                 <input
-                  v-model="form.smtp_host"
-                  type="text"
-                  class="input"
-                  :placeholder="t('admin.settings.smtp.hostPlaceholder')"
-                />
-              </div>
-              <div>
-                <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  {{ t('admin.settings.smtp.port') }}
-                </label>
-                <input
-                  v-model.number="form.smtp_port"
-                  type="number"
-                  min="1"
-                  max="65535"
-                  class="input"
-                  :placeholder="t('admin.settings.smtp.portPlaceholder')"
-                />
-              </div>
-              <div>
-                <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  {{ t('admin.settings.smtp.username') }}
-                </label>
-                <input
-                  v-model="form.smtp_username"
-                  type="text"
-                  class="input"
-                  :placeholder="t('admin.settings.smtp.usernamePlaceholder')"
-                />
-              </div>
-              <div>
-                <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  {{ t('admin.settings.smtp.password') }}
-                </label>
-                <input
-                  v-model="form.smtp_password"
+                  v-model="form.resend_api_key"
                   type="password"
                   class="input"
                   :placeholder="
-                    form.smtp_password_configured
-                      ? t('admin.settings.smtp.passwordConfiguredPlaceholder')
-                      : t('admin.settings.smtp.passwordPlaceholder')
+                    form.resend_api_key_configured
+                      ? t('admin.settings.resend.apiKeyConfiguredPlaceholder')
+                      : t('admin.settings.resend.apiKeyPlaceholder')
                   "
                 />
                 <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
                   {{
-                    form.smtp_password_configured
-                      ? t('admin.settings.smtp.passwordConfiguredHint')
-                      : t('admin.settings.smtp.passwordHint')
+                    form.resend_api_key_configured
+                      ? t('admin.settings.resend.apiKeyConfiguredHint')
+                      : t('admin.settings.resend.apiKeyHint')
                   }}
                 </p>
               </div>
               <div>
                 <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  {{ t('admin.settings.smtp.fromEmail') }}
+                  {{ t('admin.settings.resend.fromEmail') }}
                 </label>
                 <input
-                  v-model="form.smtp_from_email"
+                  v-model="form.email_from"
                   type="email"
                   class="input"
-                  :placeholder="t('admin.settings.smtp.fromEmailPlaceholder')"
+                  :placeholder="t('admin.settings.resend.fromEmailPlaceholder')"
                 />
+                <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                  {{ t('admin.settings.resend.fromEmailHint') }}
+                </p>
               </div>
               <div>
                 <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  {{ t('admin.settings.smtp.fromName') }}
+                  {{ t('admin.settings.resend.fromName') }}
                 </label>
                 <input
-                  v-model="form.smtp_from_name"
+                  v-model="form.email_from_name"
                   type="text"
                   class="input"
-                  :placeholder="t('admin.settings.smtp.fromNamePlaceholder')"
+                  :placeholder="t('admin.settings.resend.fromNamePlaceholder')"
                 />
               </div>
             </div>
-
-            <!-- Use TLS Toggle -->
-            <div
-              class="flex items-center justify-between border-t border-gray-100 pt-4 dark:border-dark-700"
-            >
-              <div>
-                <label class="font-medium text-gray-900 dark:text-white">{{
-                  t('admin.settings.smtp.useTls')
-                }}</label>
-                <p class="text-sm text-gray-500 dark:text-gray-400">
-                  {{ t('admin.settings.smtp.useTlsHint') }}
-                </p>
-              </div>
-              <Toggle v-model="form.smtp_use_tls" />
-            </div>
-
           </div>
         </div>
 
@@ -2389,7 +2341,7 @@ const { copyToClipboard } = useClipboard()
 
 const loading = ref(true)
 const saving = ref(false)
-const testingSmtp = ref(false)
+const testingEmail = ref(false)
 const sendingTestEmail = ref(false)
 const testEmailAddress = ref('')
 const registrationEmailSuffixWhitelistTags = ref<string[]>([])
@@ -2476,7 +2428,7 @@ interface DefaultSubscriptionGroupOption {
 // screen has no control for them: the setting is dropped from the editable form
 // (and from the update payload) rather than merely hidden.
 interface SettingsForm extends Omit<SystemSettings, 'promo_code_enabled'> {
-  smtp_password: string
+  resend_api_key: string
   turnstile_secret_key: string
   linuxdo_connect_client_secret: string
 }
@@ -2508,14 +2460,10 @@ const form = reactive<SettingsForm>({
   sora_client_enabled: false,
   custom_menu_items: [] as Array<{id: string; label: string; icon_svg: string; url: string; visibility: 'user' | 'admin'; sort_order: number}>,
   frontend_url: '',
-  smtp_host: '',
-  smtp_port: 587,
-  smtp_username: '',
-  smtp_password: '',
-  smtp_password_configured: false,
-  smtp_from_email: '',
-  smtp_from_name: '',
-  smtp_use_tls: true,
+  resend_api_key: '',
+  resend_api_key_configured: false,
+  email_from: '',
+  email_from_name: '',
   // Cloudflare Turnstile
   turnstile_enabled: false,
   turnstile_site_key: '',
@@ -2764,7 +2712,7 @@ async function loadSettings() {
       settings.registration_email_suffix_whitelist
     )
     registrationEmailSuffixWhitelistDraft.value = ''
-    form.smtp_password = ''
+    form.resend_api_key = ''
     form.turnstile_secret_key = ''
     form.linuxdo_connect_client_secret = ''
     modelMarkupRows.value = Object.entries(settings.model_markups || {}).map(([pattern, multiplier]) => ({
@@ -2895,13 +2843,9 @@ async function saveSettings() {
       sora_client_enabled: form.sora_client_enabled,
       custom_menu_items: form.custom_menu_items,
       frontend_url: form.frontend_url,
-      smtp_host: form.smtp_host,
-      smtp_port: form.smtp_port,
-      smtp_username: form.smtp_username,
-      smtp_password: form.smtp_password || undefined,
-      smtp_from_email: form.smtp_from_email,
-      smtp_from_name: form.smtp_from_name,
-      smtp_use_tls: form.smtp_use_tls,
+      resend_api_key: form.resend_api_key || undefined,
+      email_from: form.email_from,
+      email_from_name: form.email_from_name,
       turnstile_enabled: form.turnstile_enabled,
       turnstile_site_key: form.turnstile_site_key,
       turnstile_secret_key: form.turnstile_secret_key || undefined,
@@ -2929,7 +2873,7 @@ async function saveSettings() {
       updated.registration_email_suffix_whitelist
     )
     registrationEmailSuffixWhitelistDraft.value = ''
-    form.smtp_password = ''
+    form.resend_api_key = ''
     form.turnstile_secret_key = ''
     form.linuxdo_connect_client_secret = ''
     // Refresh cached settings so sidebar/header update immediately
@@ -2945,24 +2889,20 @@ async function saveSettings() {
   }
 }
 
-async function testSmtpConnection() {
-  testingSmtp.value = true
+async function testEmailConnection() {
+  testingEmail.value = true
   try {
-    const result = await adminAPI.settings.testSmtpConnection({
-      smtp_host: form.smtp_host,
-      smtp_port: form.smtp_port,
-      smtp_username: form.smtp_username,
-      smtp_password: form.smtp_password,
-      smtp_use_tls: form.smtp_use_tls
+    const result = await adminAPI.settings.testEmailConnection({
+      resend_api_key: form.resend_api_key
     })
     // API returns { message: "..." } on success, errors are thrown as exceptions
-    appStore.showSuccess(result.message || t('admin.settings.smtpConnectionSuccess'))
+    appStore.showSuccess(result.message || t('admin.settings.emailConnectionSuccess'))
   } catch (error: any) {
     appStore.showError(
-      t('admin.settings.failedToTestSmtp') + ': ' + (error.message || t('common.unknownError'))
+      t('admin.settings.failedToTestEmail') + ': ' + (error.message || t('common.unknownError'))
     )
   } finally {
-    testingSmtp.value = false
+    testingEmail.value = false
   }
 }
 
@@ -2976,13 +2916,9 @@ async function sendTestEmail() {
   try {
     const result = await adminAPI.settings.sendTestEmail({
       email: testEmailAddress.value,
-      smtp_host: form.smtp_host,
-      smtp_port: form.smtp_port,
-      smtp_username: form.smtp_username,
-      smtp_password: form.smtp_password,
-      smtp_from_email: form.smtp_from_email,
-      smtp_from_name: form.smtp_from_name,
-      smtp_use_tls: form.smtp_use_tls
+      resend_api_key: form.resend_api_key,
+      email_from: form.email_from,
+      email_from_name: form.email_from_name
     })
     // API returns { message: "..." } on success, errors are thrown as exceptions
     appStore.showSuccess(result.message || t('admin.settings.testEmailSent'))

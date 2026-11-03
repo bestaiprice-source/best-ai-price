@@ -102,13 +102,9 @@ func (h *SettingHandler) buildSystemSettingsDTO(settings *service.SystemSettings
 		InvitationCodeEnabled:                settings.InvitationCodeEnabled,
 		TotpEnabled:                          settings.TotpEnabled,
 		TotpEncryptionKeyConfigured:          h.settingService.IsTotpEncryptionKeyConfigured(),
-		SMTPHost:                             settings.SMTPHost,
-		SMTPPort:                             settings.SMTPPort,
-		SMTPUsername:                         settings.SMTPUsername,
-		SMTPPasswordConfigured:               settings.SMTPPasswordConfigured,
-		SMTPFrom:                             settings.SMTPFrom,
-		SMTPFromName:                         settings.SMTPFromName,
-		SMTPUseTLS:                           settings.SMTPUseTLS,
+		ResendAPIKeyConfigured:               settings.ResendAPIKeyConfigured,
+		EmailFrom:                            settings.EmailFrom,
+		EmailFromName:                        settings.EmailFromName,
 		TurnstileEnabled:                     settings.TurnstileEnabled,
 		TurnstileSiteKey:                     settings.TurnstileSiteKey,
 		TurnstileSecretKeyConfigured:         settings.TurnstileSecretKeyConfigured,
@@ -166,14 +162,10 @@ type UpdateSettingsRequest struct {
 	InvitationCodeEnabled            bool     `json:"invitation_code_enabled"`
 	TotpEnabled                      bool     `json:"totp_enabled"` // TOTP 双因素认证
 
-	// 邮件服务设置
-	SMTPHost     string `json:"smtp_host"`
-	SMTPPort     int    `json:"smtp_port"`
-	SMTPUsername string `json:"smtp_username"`
-	SMTPPassword string `json:"smtp_password"`
-	SMTPFrom     string `json:"smtp_from_email"`
-	SMTPFromName string `json:"smtp_from_name"`
-	SMTPUseTLS   bool   `json:"smtp_use_tls"`
+	// 邮件服务设置（Resend）
+	ResendAPIKey  string `json:"resend_api_key"`
+	EmailFrom     string `json:"email_from"`
+	EmailFromName string `json:"email_from_name"`
 
 	// Cloudflare Turnstile 设置
 	TurnstileEnabled   bool   `json:"turnstile_enabled"`
@@ -266,9 +258,6 @@ func (h *SettingHandler) UpdateSettingsGateway(c gatewayctx.GatewayContext) {
 	}
 	if req.DefaultRateMultiplier <= 0 {
 		req.DefaultRateMultiplier = 1.10
-	}
-	if req.SMTPPort <= 0 {
-		req.SMTPPort = 587
 	}
 	req.DefaultSubscriptions = normalizeDefaultSubscriptions(req.DefaultSubscriptions)
 
@@ -505,13 +494,9 @@ func (h *SettingHandler) UpdateSettingsGateway(c gatewayctx.GatewayContext) {
 		FrontendURL:                      req.FrontendURL,
 		InvitationCodeEnabled:            req.InvitationCodeEnabled,
 		TotpEnabled:                      req.TotpEnabled,
-		SMTPHost:                         req.SMTPHost,
-		SMTPPort:                         req.SMTPPort,
-		SMTPUsername:                     req.SMTPUsername,
-		SMTPPassword:                     req.SMTPPassword,
-		SMTPFrom:                         req.SMTPFrom,
-		SMTPFromName:                     req.SMTPFromName,
-		SMTPUseTLS:                       req.SMTPUseTLS,
+		ResendAPIKey:                     req.ResendAPIKey,
+		EmailFrom:                        req.EmailFrom,
+		EmailFromName:                    req.EmailFromName,
 		TurnstileEnabled:                 req.TurnstileEnabled,
 		TurnstileSiteKey:                 req.TurnstileSiteKey,
 		TurnstileSecretKey:               req.TurnstileSecretKey,
@@ -641,26 +626,14 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	if before.TotpEnabled != after.TotpEnabled {
 		changed = append(changed, "totp_enabled")
 	}
-	if before.SMTPHost != after.SMTPHost {
-		changed = append(changed, "smtp_host")
+	if req.ResendAPIKey != "" {
+		changed = append(changed, "resend_api_key")
 	}
-	if before.SMTPPort != after.SMTPPort {
-		changed = append(changed, "smtp_port")
+	if before.EmailFrom != after.EmailFrom {
+		changed = append(changed, "email_from")
 	}
-	if before.SMTPUsername != after.SMTPUsername {
-		changed = append(changed, "smtp_username")
-	}
-	if req.SMTPPassword != "" {
-		changed = append(changed, "smtp_password")
-	}
-	if before.SMTPFrom != after.SMTPFrom {
-		changed = append(changed, "smtp_from_email")
-	}
-	if before.SMTPFromName != after.SMTPFromName {
-		changed = append(changed, "smtp_from_name")
-	}
-	if before.SMTPUseTLS != after.SMTPUseTLS {
-		changed = append(changed, "smtp_use_tls")
+	if before.EmailFromName != after.EmailFromName {
+		changed = append(changed, "email_from_name")
 	}
 	if before.TurnstileEnabled != after.TurnstileEnabled {
 		changed = append(changed, "turnstile_enabled")
@@ -826,68 +799,49 @@ func equalDefaultSubscriptions(a, b []service.DefaultSubscriptionSetting) bool {
 	return true
 }
 
-// TestSMTPRequest 测试SMTP连接请求
-type TestSMTPRequest struct {
-	SMTPHost     string `json:"smtp_host" binding:"required"`
-	SMTPPort     int    `json:"smtp_port"`
-	SMTPUsername string `json:"smtp_username"`
-	SMTPPassword string `json:"smtp_password"`
-	SMTPUseTLS   bool   `json:"smtp_use_tls"`
+// TestEmailRequest 测试邮件服务连接请求
+type TestEmailRequest struct {
+	ResendAPIKey string `json:"resend_api_key"`
 }
 
-// TestSMTPConnection 测试SMTP连接
-// POST /api/v1/admin/settings/test-smtp
-func (h *SettingHandler) TestSMTPConnection(c *gin.Context) {
-	h.TestSMTPConnectionGateway(gatewayctx.FromGin(c))
+// TestEmailConnection 测试邮件服务（Resend）连接
+// POST /api/v1/admin/settings/test-email
+func (h *SettingHandler) TestEmailConnection(c *gin.Context) {
+	h.TestEmailConnectionGateway(gatewayctx.FromGin(c))
 }
 
-func (h *SettingHandler) TestSMTPConnectionGateway(c gatewayctx.GatewayContext) {
-	var req TestSMTPRequest
+func (h *SettingHandler) TestEmailConnectionGateway(c gatewayctx.GatewayContext) {
+	var req TestEmailRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
 		response.ErrorContext(gatewayJSONResponder{ctx: c}, http.StatusBadRequest, "Invalid request: "+err.Error())
 		return
 	}
 
-	if req.SMTPPort <= 0 {
-		req.SMTPPort = 587
-	}
-
-	// 如果未提供密码，从数据库获取已保存的密码
-	password := req.SMTPPassword
-	if password == "" {
-		savedConfig, err := h.emailService.GetSMTPConfig(c.Request().Context())
+	// 如果未提供 API Key，从数据库获取已保存的配置
+	apiKey := req.ResendAPIKey
+	if apiKey == "" {
+		savedConfig, err := h.emailService.GetEmailConfig(c.Request().Context())
 		if err == nil && savedConfig != nil {
-			password = savedConfig.Password
+			apiKey = savedConfig.APIKey
 		}
 	}
 
-	config := &service.SMTPConfig{
-		Host:     req.SMTPHost,
-		Port:     req.SMTPPort,
-		Username: req.SMTPUsername,
-		Password: password,
-		UseTLS:   req.SMTPUseTLS,
-	}
+	config := &service.EmailConfig{APIKey: apiKey}
 
-	err := h.emailService.TestSMTPConnectionWithConfig(config)
-	if err != nil {
-		response.ErrorContext(gatewayJSONResponder{ctx: c}, http.StatusBadRequest, "SMTP connection test failed: "+err.Error())
+	if err := h.emailService.TestConnectionWithConfig(config); err != nil {
+		response.ErrorContext(gatewayJSONResponder{ctx: c}, http.StatusBadRequest, "Email connection test failed: "+err.Error())
 		return
 	}
 
-	response.SuccessContext(gatewayJSONResponder{ctx: c}, map[string]any{"message": "SMTP connection successful"})
+	response.SuccessContext(gatewayJSONResponder{ctx: c}, map[string]any{"message": "Email connection successful"})
 }
 
 // SendTestEmailRequest 发送测试邮件请求
 type SendTestEmailRequest struct {
-	Email        string `json:"email" binding:"required,email"`
-	SMTPHost     string `json:"smtp_host" binding:"required"`
-	SMTPPort     int    `json:"smtp_port"`
-	SMTPUsername string `json:"smtp_username"`
-	SMTPPassword string `json:"smtp_password"`
-	SMTPFrom     string `json:"smtp_from_email"`
-	SMTPFromName string `json:"smtp_from_name"`
-	SMTPUseTLS   bool   `json:"smtp_use_tls"`
+	Email         string `json:"email" binding:"required,email"`
+	ResendAPIKey  string `json:"resend_api_key"`
+	EmailFrom     string `json:"email_from"`
+	EmailFromName string `json:"email_from_name"`
 }
 
 // SendTestEmail 发送测试邮件
@@ -903,27 +857,26 @@ func (h *SettingHandler) SendTestEmailGateway(c gatewayctx.GatewayContext) {
 		return
 	}
 
-	if req.SMTPPort <= 0 {
-		req.SMTPPort = 587
-	}
-
-	// 如果未提供密码，从数据库获取已保存的密码
-	password := req.SMTPPassword
-	if password == "" {
-		savedConfig, err := h.emailService.GetSMTPConfig(c.Request().Context())
-		if err == nil && savedConfig != nil {
-			password = savedConfig.Password
+	// 合并请求参数与数据库已保存配置（未提供的项回退到已保存值）
+	apiKey := req.ResendAPIKey
+	from := req.EmailFrom
+	fromName := req.EmailFromName
+	if savedConfig, err := h.emailService.GetEmailConfig(c.Request().Context()); err == nil && savedConfig != nil {
+		if apiKey == "" {
+			apiKey = savedConfig.APIKey
+		}
+		if from == "" {
+			from = savedConfig.From
+		}
+		if fromName == "" {
+			fromName = savedConfig.FromName
 		}
 	}
 
-	config := &service.SMTPConfig{
-		Host:     req.SMTPHost,
-		Port:     req.SMTPPort,
-		Username: req.SMTPUsername,
-		Password: password,
-		From:     req.SMTPFrom,
-		FromName: req.SMTPFromName,
-		UseTLS:   req.SMTPUseTLS,
+	config := &service.EmailConfig{
+		APIKey:   apiKey,
+		From:     from,
+		FromName: fromName,
 	}
 
 	siteName := h.settingService.GetSiteName(c.Request().Context())
@@ -950,7 +903,7 @@ func (h *SettingHandler) SendTestEmailGateway(c gatewayctx.GatewayContext) {
         <div class="content">
             <div class="success">✓</div>
             <h2>Email Configuration Successful!</h2>
-            <p>This is a test email to verify your SMTP settings are working correctly.</p>
+            <p>This is a test email to verify your email (Resend) settings are working correctly.</p>
         </div>
         <div class="footer">
             <p>This is an automated test message.</p>
@@ -960,7 +913,7 @@ func (h *SettingHandler) SendTestEmailGateway(c gatewayctx.GatewayContext) {
 </html>
 `
 
-	if err := h.emailService.SendEmailWithConfig(config, req.Email, subject, body); err != nil {
+	if err := h.emailService.SendEmailWithConfig(c.Request().Context(), config, req.Email, subject, body); err != nil {
 		response.ErrorContext(gatewayJSONResponder{ctx: c}, http.StatusBadRequest, "Failed to send test email: "+err.Error())
 		return
 	}

@@ -396,7 +396,7 @@ func ExecutableAdminRoutes(h *handler.Handlers) []gatewayctx.RouteDef {
 		out = append(out,
 			gatewayctx.RouteDef{Method: http.MethodGet, Path: "/api/v1/admin/settings", Handler: h.Admin.Setting.GetSettingsGateway, Middleware: []string{"request_logger", "cors", "security_headers", "client_request_id", "admin_auth"}},
 			gatewayctx.RouteDef{Method: http.MethodPut, Path: "/api/v1/admin/settings", Handler: h.Admin.Setting.UpdateSettingsGateway, Middleware: []string{"request_logger", "cors", "security_headers", "client_request_id", "admin_auth"}},
-			gatewayctx.RouteDef{Method: http.MethodPost, Path: "/api/v1/admin/settings/test-smtp", Handler: h.Admin.Setting.TestSMTPConnectionGateway, Middleware: []string{"request_logger", "cors", "security_headers", "client_request_id", "admin_auth"}},
+			gatewayctx.RouteDef{Method: http.MethodPost, Path: "/api/v1/admin/settings/test-email", Handler: h.Admin.Setting.TestEmailConnectionGateway, Middleware: []string{"request_logger", "cors", "security_headers", "client_request_id", "admin_auth"}},
 			gatewayctx.RouteDef{Method: http.MethodPost, Path: "/api/v1/admin/settings/send-test-email", Handler: h.Admin.Setting.SendTestEmailGateway, Middleware: []string{"request_logger", "cors", "security_headers", "client_request_id", "admin_auth"}},
 			gatewayctx.RouteDef{Method: http.MethodGet, Path: "/api/v1/admin/settings/admin-api-key", Handler: h.Admin.Setting.GetAdminAPIKeyGateway, Middleware: []string{"request_logger", "cors", "security_headers", "client_request_id", "admin_auth"}},
 			gatewayctx.RouteDef{Method: http.MethodPost, Path: "/api/v1/admin/settings/admin-api-key/regenerate", Handler: h.Admin.Setting.RegenerateAdminAPIKeyGateway, Middleware: []string{"request_logger", "cors", "security_headers", "client_request_id", "admin_auth"}},
@@ -883,7 +883,7 @@ func registerSettingsRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	{
 		adminSettings.GET("", h.Admin.Setting.GetSettings)
 		adminSettings.PUT("", h.Admin.Setting.UpdateSettings)
-		adminSettings.POST("/test-smtp", h.Admin.Setting.TestSMTPConnection)
+		adminSettings.POST("/test-email", h.Admin.Setting.TestEmailConnection)
 		adminSettings.POST("/send-test-email", h.Admin.Setting.SendTestEmail)
 		// Admin API Key 管理
 		adminSettings.GET("/admin-api-key", h.Admin.Setting.GetAdminAPIKey)

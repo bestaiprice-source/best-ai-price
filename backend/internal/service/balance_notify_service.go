@@ -432,7 +432,7 @@ func (s *BalanceNotifyService) sendQuotaAlertEmails(adminEmails []string, accoun
 	s.sendEmails(adminEmails, subject, body, "account", accountName, "dimension", dim.name)
 }
 
-// sanitizeEmailHeader removes CR/LF characters to prevent SMTP header injection.
+// sanitizeEmailHeader removes CR/LF characters to prevent email header injection.
 func sanitizeEmailHeader(s string) string {
 	return strings.NewReplacer("\r", "", "\n", "").Replace(s)
 }

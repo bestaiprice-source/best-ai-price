@@ -4872,7 +4872,7 @@ export default {
     // Settings
     settings: {
       title: 'Системные настройки',
-      description: 'Управление регистрацией, подтверждением email, значениями по умолчанию и настройками SMTP',
+      description: 'Управление регистрацией, подтверждением email, значениями по умолчанию и настройками email (Resend)',
       tabs: {
         general: 'Общие',
         security: 'Безопасность',
@@ -4940,7 +4940,7 @@ export default {
         systemInactive: 'Отключено (пользователи не могут оформить заказ)',
       },
       emailTabDisabledTitle: 'Подтверждение email не включено',
-      emailTabDisabledHint: 'Подтверждение email отключено, поэтому коды подтверждения не отправляются. Настройки SMTP ниже всё ещё используются для уведомлений о балансе и квоте — настройте их, чтобы доставлять эти письма.',
+      emailTabDisabledHint: 'Подтверждение email отключено, поэтому коды подтверждения не отправляются. Настройки email (Resend) ниже всё ещё используются для уведомлений о балансе и квоте — настройте их, чтобы доставлять эти письма.',
       registration: {
         title: 'Настройки регистрации',
         description: 'Управление регистрацией и подтверждением пользователей',
@@ -5125,32 +5125,26 @@ export default {
         moveUp: 'Переместить вверх',
         moveDown: 'Переместить вниз',
       },
-      smtp: {
-        title: 'Настройки SMTP',
-        description: 'Настройка отправки писем с кодами подтверждения',
+      resend: {
+        title: 'Настройки Resend (Email)',
+        description:
+          'Настройка доставки писем через Resend — используется для кодов подтверждения, сброса пароля и уведомлений',
         testConnection: 'Проверить соединение',
         testing: 'Проверка...',
-        host: 'Хост SMTP',
-        hostPlaceholder: 'smtp.gmail.com',
-        port: 'Порт SMTP',
-        portPlaceholder: '587',
-        username: 'Имя пользователя SMTP',
-        usernamePlaceholder: "your-email{'@'}gmail.com",
-        password: 'Пароль SMTP',
-        passwordPlaceholder: '********',
-        passwordHint: 'Оставьте пустым, чтобы сохранить текущий пароль',
-        passwordConfiguredPlaceholder: '********',
-        passwordConfiguredHint: 'Пароль настроен. Оставьте пустым, чтобы сохранить текущее значение.',
+        apiKey: 'API-ключ Resend',
+        apiKeyPlaceholder: 're_...',
+        apiKeyHint: 'Создайте API-ключ в панели Resend и вставьте его сюда.',
+        apiKeyConfiguredPlaceholder: '********',
+        apiKeyConfiguredHint: 'API-ключ настроен. Оставьте пустым, чтобы сохранить текущее значение.',
         fromEmail: 'Email отправителя',
-        fromEmailPlaceholder: "noreply{'@'}example.com",
+        fromEmailPlaceholder: "no-reply{'@'}bestaiprice.com",
+        fromEmailHint: 'Должен принадлежать домену, подтверждённому в Resend.',
         fromName: 'Имя отправителя',
-        fromNamePlaceholder: 'BestAIPrice',
-        useTls: 'Использовать TLS',
-        useTlsHint: 'Включить шифрование TLS для соединения SMTP'
+        fromNamePlaceholder: 'BestAIPrice'
       },
       testEmail: {
         title: 'Отправить тестовое письмо',
-        description: 'Отправьте тестовое письмо, чтобы проверить настройки SMTP',
+        description: 'Отправьте тестовое письмо, чтобы проверить настройки Resend',
         recipientEmail: 'Email получателя',
         recipientEmailPlaceholder: "test{'@'}example.com",
         sendTestEmail: 'Отправить тестовое письмо',
@@ -5427,11 +5421,11 @@ export default {
       saveSettings: 'Сохранить настройки',
       saving: 'Сохранение...',
       settingsSaved: 'Настройки успешно сохранены',
-      smtpConnectionSuccess: 'Соединение SMTP успешно',
+      emailConnectionSuccess: 'Соединение email успешно',
       testEmailSent: 'Тестовое письмо успешно отправлено',
       failedToLoad: 'Не удалось загрузить настройки',
       failedToSave: 'Не удалось сохранить настройки',
-      failedToTestSmtp: 'Проверка соединения SMTP не удалась',
+      failedToTestEmail: 'Проверка соединения email не удалась',
       failedToSendTestEmail: 'Не удалось отправить тестовое письмо'
     },
 

@@ -4872,7 +4872,7 @@ export default {
     // Settings
     settings: {
       title: 'System Settings',
-      description: 'Manage registration, email verification, default values, and SMTP settings',
+      description: 'Manage registration, email verification, default values, and email (Resend) settings',
       tabs: {
         general: 'General',
         security: 'Security',
@@ -4940,7 +4940,7 @@ export default {
         systemInactive: 'Disabled (Users cannot checkout)',
       },
       emailTabDisabledTitle: 'Email Verification Not Enabled',
-      emailTabDisabledHint: 'Email verification is off, so verification codes are not sent. The SMTP settings below are still used for balance and quota notifications — configure them to deliver those e-mails.',
+      emailTabDisabledHint: 'Email verification is off, so verification codes are not sent. The email (Resend) settings below are still used for balance and quota notifications — configure them to deliver those e-mails.',
       registration: {
         title: 'Registration Settings',
         description: 'Control user registration and verification',
@@ -5125,32 +5125,26 @@ export default {
         moveUp: 'Move Up',
         moveDown: 'Move Down',
       },
-      smtp: {
-        title: 'SMTP Settings',
-        description: 'Configure email sending for verification codes',
+      resend: {
+        title: 'Resend (Email) Settings',
+        description:
+          'Configure email delivery through Resend — used for verification codes, password resets and notifications',
         testConnection: 'Test Connection',
         testing: 'Testing...',
-        host: 'SMTP Host',
-        hostPlaceholder: 'smtp.gmail.com',
-        port: 'SMTP Port',
-        portPlaceholder: '587',
-        username: 'SMTP Username',
-        usernamePlaceholder: "your-email{'@'}gmail.com",
-        password: 'SMTP Password',
-        passwordPlaceholder: '********',
-        passwordHint: 'Leave empty to keep existing password',
-        passwordConfiguredPlaceholder: '********',
-        passwordConfiguredHint: 'Password configured. Leave empty to keep the current value.',
+        apiKey: 'Resend API Key',
+        apiKeyPlaceholder: 're_...',
+        apiKeyHint: 'Create an API key in the Resend dashboard and paste it here.',
+        apiKeyConfiguredPlaceholder: '********',
+        apiKeyConfiguredHint: 'API key configured. Leave empty to keep the current value.',
         fromEmail: 'From Email',
-        fromEmailPlaceholder: "noreply{'@'}example.com",
+        fromEmailPlaceholder: "no-reply{'@'}bestaiprice.com",
+        fromEmailHint: 'Must belong to a domain verified in Resend.',
         fromName: 'From Name',
-        fromNamePlaceholder: 'BestAIPrice',
-        useTls: 'Use TLS',
-        useTlsHint: 'Enable TLS encryption for SMTP connection'
+        fromNamePlaceholder: 'BestAIPrice'
       },
       testEmail: {
         title: 'Send Test Email',
-        description: 'Send a test email to verify your SMTP configuration',
+        description: 'Send a test email to verify your Resend configuration',
         recipientEmail: 'Recipient Email',
         recipientEmailPlaceholder: "test{'@'}example.com",
         sendTestEmail: 'Send Test Email',
@@ -5427,11 +5421,11 @@ export default {
       saveSettings: 'Save Settings',
       saving: 'Saving...',
       settingsSaved: 'Settings saved successfully',
-      smtpConnectionSuccess: 'SMTP connection successful',
+      emailConnectionSuccess: 'Email connection successful',
       testEmailSent: 'Test email sent successfully',
       failedToLoad: 'Failed to load settings',
       failedToSave: 'Failed to save settings',
-      failedToTestSmtp: 'SMTP connection test failed',
+      failedToTestEmail: 'Email connection test failed',
       failedToSendTestEmail: 'Failed to send test email'
     },
 

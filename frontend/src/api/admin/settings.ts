@@ -45,14 +45,10 @@ export interface SystemSettings {
   sora_client_enabled: boolean
   backend_mode_enabled: boolean
   custom_menu_items: CustomMenuItem[]
-  // SMTP settings
-  smtp_host: string
-  smtp_port: number
-  smtp_username: string
-  smtp_password_configured: boolean
-  smtp_from_email: string
-  smtp_from_name: string
-  smtp_use_tls: boolean
+  // Resend email settings
+  resend_api_key_configured: boolean
+  email_from: string
+  email_from_name: string
   // Cloudflare Turnstile settings
   turnstile_enabled: boolean
   turnstile_site_key: string
@@ -119,13 +115,9 @@ export interface UpdateSettingsRequest {
   sora_client_enabled?: boolean
   backend_mode_enabled?: boolean
   custom_menu_items?: CustomMenuItem[]
-  smtp_host?: string
-  smtp_port?: number
-  smtp_username?: string
-  smtp_password?: string
-  smtp_from_email?: string
-  smtp_from_name?: string
-  smtp_use_tls?: boolean
+  resend_api_key?: string
+  email_from?: string
+  email_from_name?: string
   turnstile_enabled?: boolean
   turnstile_site_key?: string
   turnstile_secret_key?: string
@@ -172,23 +164,19 @@ export async function updateSettings(settings: UpdateSettingsRequest): Promise<S
 }
 
 /**
- * Test SMTP connection request
+ * Test email connection request
  */
-export interface TestSmtpRequest {
-  smtp_host: string
-  smtp_port: number
-  smtp_username: string
-  smtp_password: string
-  smtp_use_tls: boolean
+export interface TestEmailRequest {
+  resend_api_key: string
 }
 
 /**
- * Test SMTP connection with provided config
- * @param config - SMTP configuration to test
+ * Test email (Resend) connection with provided config
+ * @param config - Resend configuration to test
  * @returns Test result message
  */
-export async function testSmtpConnection(config: TestSmtpRequest): Promise<{ message: string }> {
-  const { data } = await apiClient.post<{ message: string }>('/admin/settings/test-smtp', config)
+export async function testEmailConnection(config: TestEmailRequest): Promise<{ message: string }> {
+  const { data } = await apiClient.post<{ message: string }>('/admin/settings/test-email', config)
   return data
 }
 
@@ -197,18 +185,14 @@ export async function testSmtpConnection(config: TestSmtpRequest): Promise<{ mes
  */
 export interface SendTestEmailRequest {
   email: string
-  smtp_host: string
-  smtp_port: number
-  smtp_username: string
-  smtp_password: string
-  smtp_from_email: string
-  smtp_from_name: string
-  smtp_use_tls: boolean
+  resend_api_key: string
+  email_from: string
+  email_from_name: string
 }
 
 /**
- * Send test email with provided SMTP config
- * @param request - Email address and SMTP config
+ * Send test email with provided Resend config
+ * @param request - Email address and Resend config
  * @returns Test result message
  */
 export async function sendTestEmail(request: SendTestEmailRequest): Promise<{ message: string }> {
@@ -670,7 +654,7 @@ export async function testTelegramNotification(): Promise<{ sent_count: number; 
 export const settingsAPI = {
   getSettings,
   updateSettings,
-  testSmtpConnection,
+  testEmailConnection,
   sendTestEmail,
   getAdminApiKey,
   regenerateAdminApiKey,

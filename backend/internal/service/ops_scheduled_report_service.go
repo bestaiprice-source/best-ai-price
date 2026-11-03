@@ -313,7 +313,7 @@ func (s *OpsScheduledReportService) runReport(ctx context.Context, report *opsSc
 		ctx = context.Background()
 	}
 
-	// Mark as "run" up-front so a broken SMTP config doesn't spam retries every minute.
+	// Mark as "run" up-front so a broken email config doesn't spam retries every minute.
 	s.setLastRunAt(ctx, report.ReportType, now)
 
 	content, err := s.generateReportHTML(ctx, report, now)

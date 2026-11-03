@@ -719,16 +719,12 @@ func (s *SettingService) UpdateSettings(ctx context.Context, settings *SystemSet
 	updates[SettingKeyInvitationCodeEnabled] = strconv.FormatBool(settings.InvitationCodeEnabled)
 	updates[SettingKeyTotpEnabled] = strconv.FormatBool(settings.TotpEnabled)
 
-	// 邮件服务设置（只有非空才更新密码）
-	updates[SettingKeySMTPHost] = settings.SMTPHost
-	updates[SettingKeySMTPPort] = strconv.Itoa(settings.SMTPPort)
-	updates[SettingKeySMTPUsername] = settings.SMTPUsername
-	if settings.SMTPPassword != "" {
-		updates[SettingKeySMTPPassword] = settings.SMTPPassword
+	// 邮件服务设置（Resend，只有非空才更新 API Key）
+	if settings.ResendAPIKey != "" {
+		updates[SettingKeyResendAPIKey] = settings.ResendAPIKey
 	}
-	updates[SettingKeySMTPFrom] = settings.SMTPFrom
-	updates[SettingKeySMTPFromName] = settings.SMTPFromName
-	updates[SettingKeySMTPUseTLS] = strconv.FormatBool(settings.SMTPUseTLS)
+	updates[SettingKeyEmailFrom] = settings.EmailFrom
+	updates[SettingKeyEmailFromName] = settings.EmailFromName
 
 	// Cloudflare Turnstile 设置（只有非空才更新密钥）
 	updates[SettingKeyTurnstileEnabled] = strconv.FormatBool(settings.TurnstileEnabled)
@@ -1298,8 +1294,7 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeyAffiliateRebatePerInviteeCap:     strconv.FormatFloat(AffiliateRebatePerInviteeCapDefault, 'f', 2, 64),
 		SettingKeyAffiliateEnabled:                 "false",
 		SettingKeyDefaultSubscriptions:             "[]",
-		SettingKeySMTPPort:                         "587",
-		SettingKeySMTPUseTLS:                       "false",
+		SettingKeyEmailFrom:                        DefaultEmailFrom,
 		// Balance reminder: email the user when the balance drops below $3.
 		SettingKeyBalanceLowNotifyEnabled:   "true",
 		SettingKeyBalanceLowNotifyThreshold: strconv.FormatFloat(DefaultBalanceLowNotifyThresholdUSD, 'f', 2, 64),
@@ -1345,12 +1340,9 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 		FrontendURL:                      settings[SettingKeyFrontendURL],
 		InvitationCodeEnabled:            settings[SettingKeyInvitationCodeEnabled] == "true",
 		TotpEnabled:                      settings[SettingKeyTotpEnabled] == "true",
-		SMTPHost:                         settings[SettingKeySMTPHost],
-		SMTPUsername:                     settings[SettingKeySMTPUsername],
-		SMTPFrom:                         settings[SettingKeySMTPFrom],
-		SMTPFromName:                     settings[SettingKeySMTPFromName],
-		SMTPUseTLS:                       settings[SettingKeySMTPUseTLS] == "true",
-		SMTPPasswordConfigured:           settings[SettingKeySMTPPassword] != "",
+		ResendAPIKeyConfigured:           settings[SettingKeyResendAPIKey] != "",
+		EmailFrom:                        settings[SettingKeyEmailFrom],
+		EmailFromName:                    settings[SettingKeyEmailFromName],
 		TurnstileEnabled:                 settings[SettingKeyTurnstileEnabled] == "true",
 		TurnstileSiteKey:                 settings[SettingKeyTurnstileSiteKey],
 		TurnstileSecretKeyConfigured:     settings[SettingKeyTurnstileSecretKey] != "",
@@ -1370,12 +1362,6 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 	}
 
 	// 解析整数类型
-	if port, err := strconv.Atoi(settings[SettingKeySMTPPort]); err == nil {
-		result.SMTPPort = port
-	} else {
-		result.SMTPPort = 587
-	}
-
 	if concurrency, err := strconv.Atoi(settings[SettingKeyDefaultConcurrency]); err == nil {
 		result.DefaultConcurrency = concurrency
 	} else {
@@ -1422,7 +1408,6 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 	result.DefaultSubscriptions = parseDefaultSubscriptions(settings[SettingKeyDefaultSubscriptions])
 
 	// 敏感信息直接返回，方便测试连接时使用
-	result.SMTPPassword = settings[SettingKeySMTPPassword]
 	result.TurnstileSecretKey = settings[SettingKeyTurnstileSecretKey]
 
 	// LinuxDo Connect 设置：

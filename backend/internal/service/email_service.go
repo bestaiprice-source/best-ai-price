@@ -1,27 +1,30 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/subtle"
-	"crypto/tls"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"math/big"
-	"net/smtp"
+	"net/http"
 	"net/url"
-	"strconv"
+	"strings"
 	"time"
 
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 )
 
 var (
-	ErrEmailNotConfigured    = infraerrors.ServiceUnavailable("EMAIL_NOT_CONFIGURED", "email service not configured")
-	ErrInvalidVerifyCode     = infraerrors.BadRequest("INVALID_VERIFY_CODE", "invalid or expired verification code")
-	ErrVerifyCodeTooFrequent = infraerrors.TooManyRequests("VERIFY_CODE_TOO_FREQUENT", "please wait before requesting a new code")
-	ErrVerifyCodeMaxAttempts = infraerrors.TooManyRequests("VERIFY_CODE_MAX_ATTEMPTS", "too many failed attempts, please request a new code")
+	ErrEmailNotConfigured       = infraerrors.ServiceUnavailable("EMAIL_NOT_CONFIGURED", "email service not configured")
+	ErrEmailSenderNotConfigured = infraerrors.ServiceUnavailable("EMAIL_SENDER_NOT_CONFIGURED", "email sender address is not configured")
+	ErrInvalidVerifyCode        = infraerrors.BadRequest("INVALID_VERIFY_CODE", "invalid or expired verification code")
+	ErrVerifyCodeTooFrequent    = infraerrors.TooManyRequests("VERIFY_CODE_TOO_FREQUENT", "please wait before requesting a new code")
+	ErrVerifyCodeMaxAttempts    = infraerrors.TooManyRequests("VERIFY_CODE_MAX_ATTEMPTS", "too many failed attempts, please request a new code")
 
 	// Password reset errors
 	ErrInvalidResetToken = infraerrors.BadRequest("INVALID_RESET_TOKEN", "invalid or expired password reset token")
@@ -69,21 +72,25 @@ const (
 	passwordResetEmailCooldown = 30 * time.Second
 )
 
-// SMTPConfig SMTP配置
-type SMTPConfig struct {
-	Host     string
-	Port     int
-	Username string
-	Password string
+// ResendAPIEndpoint is the base endpoint for the Resend HTTP API.
+const ResendAPIEndpoint = "https://api.resend.com"
+
+// DefaultEmailFrom is the default sender address used when none is configured.
+// It must belong to a domain verified in Resend.
+const DefaultEmailFrom = "no-reply@bestaiprice.com"
+
+// EmailConfig 邮件发送配置（Resend HTTP API）
+type EmailConfig struct {
+	APIKey   string
 	From     string
 	FromName string
-	UseTLS   bool
 }
 
 // EmailService 邮件服务
 type EmailService struct {
 	settingRepo SettingRepository
 	cache       EmailCache
+	httpClient  *http.Client
 }
 
 // NewEmailService 创建邮件服务实例
@@ -91,131 +98,111 @@ func NewEmailService(settingRepo SettingRepository, cache EmailCache) *EmailServ
 	return &EmailService{
 		settingRepo: settingRepo,
 		cache:       cache,
+		httpClient:  &http.Client{Timeout: 30 * time.Second},
 	}
 }
 
-// GetSMTPConfig 从数据库获取SMTP配置
-func (s *EmailService) GetSMTPConfig(ctx context.Context) (*SMTPConfig, error) {
+// GetEmailConfig 从数据库获取邮件配置
+func (s *EmailService) GetEmailConfig(ctx context.Context) (*EmailConfig, error) {
 	keys := []string{
-		SettingKeySMTPHost,
-		SettingKeySMTPPort,
-		SettingKeySMTPUsername,
-		SettingKeySMTPPassword,
-		SettingKeySMTPFrom,
-		SettingKeySMTPFromName,
-		SettingKeySMTPUseTLS,
+		SettingKeyResendAPIKey,
+		SettingKeyEmailFrom,
+		SettingKeyEmailFromName,
 	}
 
 	settings, err := s.settingRepo.GetMultiple(ctx, keys)
 	if err != nil {
-		return nil, fmt.Errorf("get smtp settings: %w", err)
+		return nil, fmt.Errorf("get email settings: %w", err)
 	}
 
-	host := settings[SettingKeySMTPHost]
-	if host == "" {
+	apiKey := strings.TrimSpace(settings[SettingKeyResendAPIKey])
+	if apiKey == "" {
 		return nil, ErrEmailNotConfigured
 	}
 
-	port := 587 // 默认端口
-	if portStr := settings[SettingKeySMTPPort]; portStr != "" {
-		if p, err := strconv.Atoi(portStr); err == nil {
-			port = p
-		}
-	}
-
-	useTLS := settings[SettingKeySMTPUseTLS] == "true"
-
-	return &SMTPConfig{
-		Host:     host,
-		Port:     port,
-		Username: settings[SettingKeySMTPUsername],
-		Password: settings[SettingKeySMTPPassword],
-		From:     settings[SettingKeySMTPFrom],
-		FromName: settings[SettingKeySMTPFromName],
-		UseTLS:   useTLS,
+	return &EmailConfig{
+		APIKey:   apiKey,
+		From:     strings.TrimSpace(settings[SettingKeyEmailFrom]),
+		FromName: strings.TrimSpace(settings[SettingKeyEmailFromName]),
 	}, nil
 }
 
 // SendEmail 发送邮件（使用数据库中保存的配置）
 func (s *EmailService) SendEmail(ctx context.Context, to, subject, body string) error {
-	config, err := s.GetSMTPConfig(ctx)
+	config, err := s.GetEmailConfig(ctx)
 	if err != nil {
 		return err
 	}
-	return s.SendEmailWithConfig(config, to, subject, body)
+	return s.SendEmailWithConfig(ctx, config, to, subject, body)
 }
 
-// SendEmailWithConfig 使用指定配置发送邮件
-func (s *EmailService) SendEmailWithConfig(config *SMTPConfig, to, subject, body string) error {
-	from := config.From
-	if config.FromName != "" {
-		from = fmt.Sprintf("%s <%s>", config.FromName, config.From)
+// SendEmailWithConfig 使用指定配置通过 Resend 发送邮件
+func (s *EmailService) SendEmailWithConfig(ctx context.Context, config *EmailConfig, to, subject, body string) error {
+	if config == nil || strings.TrimSpace(config.APIKey) == "" {
+		return ErrEmailNotConfigured
+	}
+	if strings.TrimSpace(config.From) == "" {
+		return ErrEmailSenderNotConfigured
 	}
 
-	msg := fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: %s\r\nMIME-Version: 1.0\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n%s",
-		from, to, subject, body)
-
-	addr := fmt.Sprintf("%s:%d", config.Host, config.Port)
-	auth := smtp.PlainAuth("", config.Username, config.Password, config.Host)
-
-	if config.UseTLS {
-		return s.sendMailTLS(addr, auth, config.From, to, []byte(msg), config.Host)
+	payload := map[string]any{
+		"from":    formatFrom(config.From, config.FromName),
+		"to":      []string{to},
+		"subject": subject,
+		"html":    body,
 	}
-
-	return smtp.SendMail(addr, auth, config.From, []string{to}, []byte(msg))
-}
-
-// sendMailTLS 使用TLS发送邮件
-func (s *EmailService) sendMailTLS(addr string, auth smtp.Auth, from, to string, msg []byte, host string) error {
-	tlsConfig := &tls.Config{
-		ServerName: host,
-		// 强制 TLS 1.2+，避免协议降级导致的弱加密风险。
-		MinVersion: tls.VersionTLS12,
-	}
-
-	conn, err := tls.Dial("tcp", addr, tlsConfig)
+	raw, err := json.Marshal(payload)
 	if err != nil {
-		return fmt.Errorf("tls dial: %w", err)
+		return fmt.Errorf("encode resend payload: %w", err)
 	}
-	defer func() { _ = conn.Close() }()
 
-	client, err := smtp.NewClient(conn, host)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, ResendAPIEndpoint+"/emails", bytes.NewReader(raw))
 	if err != nil {
-		return fmt.Errorf("new smtp client: %w", err)
+		return fmt.Errorf("build resend request: %w", err)
 	}
-	defer func() { _ = client.Close() }()
+	req.Header.Set("Authorization", "Bearer "+config.APIKey)
+	req.Header.Set("Content-Type", "application/json")
 
-	if err = client.Auth(auth); err != nil {
-		return fmt.Errorf("smtp auth: %w", err)
-	}
-
-	if err = client.Mail(from); err != nil {
-		return fmt.Errorf("smtp mail: %w", err)
-	}
-
-	if err = client.Rcpt(to); err != nil {
-		return fmt.Errorf("smtp rcpt: %w", err)
-	}
-
-	w, err := client.Data()
+	resp, err := s.httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("smtp data: %w", err)
+		return fmt.Errorf("resend request failed: %w", err)
 	}
+	defer func() { _ = resp.Body.Close() }()
 
-	_, err = w.Write(msg)
-	if err != nil {
-		return fmt.Errorf("write msg: %w", err)
+	respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 8192))
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("resend api error (status %d): %s", resp.StatusCode, extractResendError(respBody))
 	}
-
-	err = w.Close()
-	if err != nil {
-		return fmt.Errorf("close writer: %w", err)
-	}
-
-	// Email is sent successfully after w.Close(), ignore Quit errors
-	// Some SMTP servers return non-standard responses on QUIT
-	_ = client.Quit()
 	return nil
+}
+
+// formatFrom 组装 RFC 5322 形式的发件人，如 `Name <addr@example.com>`。
+func formatFrom(from, fromName string) string {
+	if fromName == "" {
+		return from
+	}
+	return fmt.Sprintf("%s <%s>", fromName, from)
+}
+
+// extractResendError 从 Resend 的错误响应中提取可读信息。
+func extractResendError(body []byte) string {
+	var parsed struct {
+		Message string `json:"message"`
+		Error   string `json:"error"`
+	}
+	if err := json.Unmarshal(body, &parsed); err == nil {
+		if parsed.Message != "" {
+			return parsed.Message
+		}
+		if parsed.Error != "" {
+			return parsed.Error
+		}
+	}
+	msg := strings.TrimSpace(string(body))
+	if msg == "" {
+		return "unknown error"
+	}
+	return msg
 }
 
 // GenerateVerifyCode 生成6位数字验证码
@@ -341,49 +328,32 @@ func (s *EmailService) buildVerifyCodeEmailBody(code, siteName string) string {
 `, siteName, code)
 }
 
-// TestSMTPConnectionWithConfig 使用指定配置测试SMTP连接
-func (s *EmailService) TestSMTPConnectionWithConfig(config *SMTPConfig) error {
-	addr := fmt.Sprintf("%s:%d", config.Host, config.Port)
-
-	if config.UseTLS {
-		tlsConfig := &tls.Config{
-			ServerName: config.Host,
-			// 与发送逻辑一致，显式要求 TLS 1.2+。
-			MinVersion: tls.VersionTLS12,
-		}
-		conn, err := tls.Dial("tcp", addr, tlsConfig)
-		if err != nil {
-			return fmt.Errorf("tls connection failed: %w", err)
-		}
-		defer func() { _ = conn.Close() }()
-
-		client, err := smtp.NewClient(conn, config.Host)
-		if err != nil {
-			return fmt.Errorf("smtp client creation failed: %w", err)
-		}
-		defer func() { _ = client.Close() }()
-
-		auth := smtp.PlainAuth("", config.Username, config.Password, config.Host)
-		if err = client.Auth(auth); err != nil {
-			return fmt.Errorf("smtp authentication failed: %w", err)
-		}
-
-		return client.Quit()
+// TestConnectionWithConfig 使用指定配置测试 Resend 连接（校验 API Key 是否有效）
+func (s *EmailService) TestConnectionWithConfig(config *EmailConfig) error {
+	if config == nil || strings.TrimSpace(config.APIKey) == "" {
+		return ErrEmailNotConfigured
 	}
 
-	// 非TLS连接测试
-	client, err := smtp.Dial(addr)
+	req, err := http.NewRequest(http.MethodGet, ResendAPIEndpoint+"/domains", nil)
 	if err != nil {
-		return fmt.Errorf("smtp connection failed: %w", err)
+		return fmt.Errorf("build resend request: %w", err)
 	}
-	defer func() { _ = client.Close() }()
+	req.Header.Set("Authorization", "Bearer "+config.APIKey)
 
-	auth := smtp.PlainAuth("", config.Username, config.Password, config.Host)
-	if err = client.Auth(auth); err != nil {
-		return fmt.Errorf("smtp authentication failed: %w", err)
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("resend request failed: %w", err)
 	}
+	defer func() { _ = resp.Body.Close() }()
 
-	return client.Quit()
+	respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 8192))
+	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+		return fmt.Errorf("invalid Resend API key (status %d): %s", resp.StatusCode, extractResendError(respBody))
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("resend api error (status %d): %s", resp.StatusCode, extractResendError(respBody))
+	}
+	return nil
 }
 
 // GeneratePasswordResetToken generates a secure 32-byte random token (64 hex characters)
